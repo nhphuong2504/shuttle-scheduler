@@ -7,11 +7,13 @@ import { circleMethod, splitIntoPools } from "./pools";
 import { scheduleMatches, type SchedulableMatch } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
-async function ok<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
+async function ok<T>(
+  p: PromiseLike<{ data: T | null; error: { message: string } | null }>,
+): Promise<NonNullable<T>> {
   const { data, error } = await p;
   if (error) throw new Error(error.message);
   if (data == null) throw new Error("The record could not be found.");
-  return data;
+  return data as NonNullable<T>;
 }
 
 /* ---------------------------------- registration --------------------------------- */
@@ -288,7 +290,7 @@ export async function reportDrawMatch(matchId: string, games: GameScore[]) {
   const { error } = await supabase
     .from("draw_matches")
     .update({
-      games: games.map((g) => ({ a: g.a, b: g.b })),
+      games: JSON.parse(JSON.stringify(games)),
       winner_id: winner,
       status: "reported",
       reported_time: new Date().toISOString(),
