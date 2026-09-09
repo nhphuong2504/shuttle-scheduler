@@ -187,11 +187,15 @@ function Desk() {
                       "nothing queued"
                     )}
                   </p>
-                </div>
+                  <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {target ? "Tap to enter score" : ""}
+                  </p>
+                </button>
               );
             })}
           </div>
         </Panel>
+
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel title="Category progress">
