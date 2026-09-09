@@ -288,7 +288,7 @@ export async function reportDrawMatch(matchId: string, games: GameScore[]) {
   const { error } = await supabase
     .from("draw_matches")
     .update({
-      games,
+      games: games.map((g) => ({ a: g.a, b: g.b })),
       winner_id: winner,
       status: "reported",
       reported_time: new Date().toISOString(),
