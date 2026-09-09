@@ -119,7 +119,7 @@ export function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     reported: "bg-mint/15 text-foreground",
     walkover: "bg-mint/15 text-foreground",
-    in_progress: "bg-amber/25 text-foreground",
+    "in-progress": "bg-amber/25 text-foreground",
     scheduled: "bg-muted text-muted-foreground",
   };
   return (

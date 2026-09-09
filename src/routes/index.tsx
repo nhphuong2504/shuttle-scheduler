@@ -375,8 +375,13 @@ function CourtScoreDialog({
                 variant="outline"
                 disabled={!signedIn || busy}
                 onClick={async () => {
-                  await startMatch(table, match.id, match.courtId);
-                  onRefresh();
+                  try {
+                    await startMatch(table, match.id, match.courtId);
+                    toast.success("Match started");
+                    onRefresh();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Could not start the match");
+                  }
                 }}
               >
                 Start match
