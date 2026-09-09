@@ -33,10 +33,10 @@ export function splitIntoPools<T>(entrants: T[]): T[][] {
   let index = 0;
   let direction = 1;
   for (const entrant of entrants) {
-    pools[index].push(entrant);
-    if (pools[index].length > sizes[index]) {
+    pools[index]!.push(entrant);
+    if (pools[index]!.length > sizes[index]!) {
       // shouldn't happen, but guard against overflow
-      pools[index].pop();
+      pools[index]!.pop();
     }
     // advance to next pool that still has room
     let guard = 0;
@@ -50,7 +50,7 @@ export function splitIntoPools<T>(entrants: T[]): T[][] {
         direction = 1;
       }
       guard++;
-    } while (pools[index].length >= sizes[index] && guard <= pools.length * 2);
+    } while (pools[index]!.length >= sizes[index]! && guard <= pools.length * 2);
   }
   return pools;
 }
@@ -74,14 +74,14 @@ export function circleMethod<T>(entrants: T[]): RoundRobinPairing<T>[] {
 
   for (let round = 1; round <= list.length - 1; round++) {
     for (let i = 0; i < half; i++) {
-      const a = rotation[i];
-      const b = rotation[rotation.length - 1 - i];
+      const a = rotation[i] as T | null;
+      const b = rotation[rotation.length - 1 - i] as T | null;
       if (a !== null && b !== null) {
         pairings.push({ round, teamA: a, teamB: b });
       }
     }
     // rotate everything except the first element
-    const fixed = rotation[0];
+    const fixed = rotation[0] as T | null;
     const rest = rotation.slice(1);
     rest.unshift(rest.pop() as T | null);
     rotation.length = 0;

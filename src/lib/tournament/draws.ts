@@ -85,8 +85,8 @@ export function buildFirstRound(entrants: Entrant[]): {
 
   const pairs: BracketSlotPair[] = [];
   for (let i = 0; i < bracketSize; i += 2) {
-    const a = bySeed.get(order[i]) ?? null;
-    const b = bySeed.get(order[i + 1]) ?? null;
+    const a = bySeed.get(order[i]!) ?? null;
+    const b = bySeed.get(order[i + 1]!) ?? null;
     pairs.push({
       slot: i / 2 + 1,
       teamA: a?.teamId ?? null,
