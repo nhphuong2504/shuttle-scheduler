@@ -21,7 +21,7 @@ import {
   usePools,
   useTeams,
 } from "@/lib/tournament/data";
-import { minutesSince, timeLabel } from "@/lib/tournament/format";
+import { gamesLabel, minutesSince, parseGames, timeLabel } from "@/lib/tournament/format";
 import { poolIsComplete } from "@/lib/tournament/standings";
 
 export const Route = createFileRoute("/")({
