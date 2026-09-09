@@ -74,29 +74,36 @@ function Desk() {
   const catMap = useMemo(() => indexBy(categories), [categories]);
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
 
-  const allMatches = useMemo(
+  const allMatches = useMemo<DeskMatch[]>(
     () => [
       ...(poolMatches ?? []).map((m) => ({
         id: m.id,
+        kind: "pool" as const,
         courtId: m.court_id,
         status: m.status,
         startedAt: m.started_at,
         scheduled: m.scheduled_time,
         teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
         tag: catMap.get(m.category_id)?.code ?? "",
+        score: m.status === "reported" ? `${m.score_a}-${m.score_b}` : null,
       })),
       ...(drawMatches ?? []).map((m) => ({
         id: m.id,
+        kind: "draw" as const,
         courtId: m.court_id,
         status: m.status,
         startedAt: m.started_at,
         scheduled: m.scheduled_time,
         teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
         tag: `Draw ${(draws ?? []).find((d) => d.id === m.draw_id)?.tier ?? ""}`,
+        score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
       })),
     ],
     [poolMatches, drawMatches, draws, catMap],
   );
+
+  const refresh = () => qc.invalidateQueries();
+  const current = openMatch ? (allMatches.find((m) => m.id === openMatch.id) ?? openMatch) : null;
 
   const latePools = useMemo(() => {
     const now = Date.now();
