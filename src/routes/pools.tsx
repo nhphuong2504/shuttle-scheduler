@@ -40,7 +40,7 @@ export const Route = createFileRoute("/pools")({
 
 function PoolsPage() {
   const qc = useQueryClient();
-  const { signedIn } = useSession();
+  const { canGenerate, canScore } = useSession();
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -71,10 +71,13 @@ function PoolsPage() {
                 </h2>
                 <Button
                   size="sm"
-                  disabled={!signedIn || catTeams.length < 4}
+                  disabled={!canGenerate || catTeams.length < 4}
                   onClick={async () => {
                     try {
-                      await generatePoolsForCategory(c.id, catTeams);
+                      const force = catPools.length
+                        ? window.confirm("Regenerate pools and invalidate existing draws for this category?")
+                        : false;
+                      await generatePoolsForCategory(c.id, catTeams, force);
                       toast.success(`${c.code} pools generated`);
                       qc.invalidateQueries();
                     } catch (error) {
@@ -104,7 +107,10 @@ function PoolsPage() {
                       poolMatches,
                       overrides,
                     );
-                    const complete = poolIsComplete(poolMatches);
+                    const complete = poolIsComplete(
+                      poolEntries.map((e) => e.team_id),
+                      poolMatches,
+                    );
                     const played = poolMatches.filter((m) => m.status === "reported").length;
                     return (
                       <Panel
@@ -138,7 +144,7 @@ function PoolsPage() {
                                   </td>
                                   <td className="py-1.5 text-right font-score text-xs">{signed(s.diff)}</td>
                                   <td className="py-1.5 pl-2 text-right">
-                                    {signedIn && entry ? (
+                                    {canScore && entry ? (
                                       <button
                                         className="text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
                                         onClick={async () => {

@@ -28,12 +28,12 @@ export const Route = createFileRoute("/schedule")({
       { title: "Court Schedule | ShuttleNet Tournament Ops" },
       {
         name: "description",
-        content: "Build the two-day court schedule with a 30-minute player rest gap and court utilisation alerts.",
+        content: "Build the two-day court schedule with stage-specific rest gaps and overrun forecasts.",
       },
       { property: "og:title", content: "Court Schedule | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
-        content: "Build the two-day court schedule with a 30-minute player rest gap and court utilisation alerts.",
+        content: "Build the two-day court schedule with stage-specific rest gaps and overrun forecasts.",
       },
     ],
   }),
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/schedule")({
 
 function SchedulePage() {
   const qc = useQueryClient();
-  const { signedIn } = useSession();
+  const { canSchedule } = useSession();
   const { data: settings } = useSettings();
   const { data: courts } = useCourts();
   const { data: teams } = useTeams();
@@ -78,7 +78,7 @@ function SchedulePage() {
   };
 
   const slotMinutes = (kind: "group" | "knockout") =>
-    kind === "group" ? (settings?.group_slot_minutes ?? 15) : (settings?.knockout_slot_minutes ?? 25);
+    kind === "group" ? (settings?.group_slot_minutes ?? 20) : (settings?.knockout_slot_minutes ?? 25);
 
   const rows = useMemo(() => {
     const groupRows = (poolMatches ?? [])
@@ -113,7 +113,7 @@ function SchedulePage() {
           start: r.start,
           end: new Date(r.start.getTime() + slotMinutes(r.kind) * 60000),
         })),
-        settings?.rest_gap_minutes ?? 30,
+        Math.max(settings?.group_rest_gap_minutes ?? 10, settings?.knockout_rest_gap_minutes ?? 30),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, settings, teamMap],
@@ -131,6 +131,7 @@ function SchedulePage() {
         poolMatches ?? [],
         drawMatches ?? [],
         drawCategory,
+        new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
       );
       setSummary((prev) => ({ ...prev, [day]: result }));
       toast.success(`Day ${day} schedule built — ${result.placed} matches placed`);
@@ -145,13 +146,13 @@ function SchedulePage() {
   return (
     <AppShell
       title="Court schedule"
-      subtitle="Day 1 is group stage only, day 2 is knockouts only. Every player keeps a 30-minute gap between matches."
+      subtitle="Day 1 starts at 08:00 and continues until every group match is placed. 17:00 is a planning benchmark, not a cap."
       actions={
         <>
-          <Button disabled={!signedIn || busy} onClick={() => build(1)}>
+          <Button disabled={!canSchedule || busy || !settings || !(courts ?? []).length} onClick={() => build(1)}>
             Build day 1 (groups)
           </Button>
-          <Button variant="outline" disabled={!signedIn || busy} onClick={() => build(2)}>
+          <Button variant="outline" disabled={!canSchedule || busy || !settings || !(courts ?? []).length} onClick={() => build(2)}>
             Build day 2 (knockouts)
           </Button>
         </>
@@ -167,8 +168,14 @@ function SchedulePage() {
                 {s ? (
                   <div className="space-y-1 text-sm">
                     <p className="font-score">
-                      {s.placed} matches placed · {util}% court utilisation
+                      {s.placed} matches placed · {util}% of the 08:00–17:00 window
                     </p>
+                    {s.projectedFinish ? (
+                      <p className="text-xs text-muted-foreground">
+                        Projected finish {timeLabel(s.projectedFinish)}
+                        {s.overrunMinutes > 0 ? ` · ${s.overrunMinutes} min past 17:00` : ""}
+                      </p>
+                    ) : null}
                     {util != null && util > 90 ? (
                       <p className="rounded-md bg-warn-surface px-2 py-1 text-xs text-warn-foreground">
                         Above 90% utilisation — very little buffer for overruns.

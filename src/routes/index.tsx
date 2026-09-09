@@ -17,8 +17,11 @@ import {
   useDrawMatches,
   useDraws,
   usePlayers,
+  usePoolEntries,
   usePoolMatches,
   usePools,
+  useRealtimeRefresh,
+  useSettings,
   useTeams,
 } from "@/lib/tournament/data";
 import { gamesLabel, minutesSince, parseGames, timeLabel } from "@/lib/tournament/format";
@@ -58,7 +61,8 @@ type DeskMatch = {
 
 function Desk() {
   const qc = useQueryClient();
-  const { signedIn } = useSession();
+  const { canScore } = useSession();
+  useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const { data: categories } = useCategories();
   const { data: courts } = useCourts();
@@ -68,6 +72,8 @@ function Desk() {
   const { data: poolMatches } = usePoolMatches();
   const { data: draws } = useDraws();
   const { data: drawMatches } = useDrawMatches();
+  const { data: settings } = useSettings();
+  const { data: poolEntries } = usePoolEntries();
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -110,12 +116,16 @@ function Desk() {
     return (pools ?? []).filter((pool) => {
       if (!pool.scheduled_end) return false;
       const matches = (poolMatches ?? []).filter((m) => m.pool_id === pool.id);
-      if (poolIsComplete(matches)) return false;
+      const teamIds = (poolEntries ?? []).filter((e) => e.pool_id === pool.id).map((e) => e.team_id);
+      if (poolIsComplete(teamIds, matches)) return false;
       return now > new Date(pool.scheduled_end).getTime() + 15 * 60000;
     });
-  }, [pools, poolMatches]);
+  }, [pools, poolMatches, poolEntries]);
 
-  const overCap = allMatches.filter((m) => m.status === "in-progress" && (minutesSince(m.startedAt) ?? 0) > 25);
+  const overCap = allMatches.filter((m) => {
+    const cap = m.kind === "pool" ? (settings?.group_slot_minutes ?? 20) : (settings?.knockout_slot_minutes ?? 25);
+    return m.status === "in-progress" && (minutesSince(m.startedAt) ?? 0) > cap;
+  });
 
   return (
     <AppShell
@@ -206,7 +216,12 @@ function Desk() {
                 const done = catMatches.filter((m) => m.status === "reported").length;
                 const ready =
                   catPools.length > 0 &&
-                  catPools.every((p) => poolIsComplete(catMatches.filter((m) => m.pool_id === p.id)));
+                  catPools.every((p) =>
+                    poolIsComplete(
+                      (poolEntries ?? []).filter((e) => e.pool_id === p.id).map((e) => e.team_id),
+                      catMatches.filter((m) => m.pool_id === p.id),
+                    ),
+                  );
                 return (
                   <li key={c.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                     <span>
@@ -250,7 +265,7 @@ function Desk() {
               match={current}
               nameA={label(current.teams[0])}
               nameB={label(current.teams[1])}
-              signedIn={signedIn}
+              signedIn={canScore}
               onDone={() => {
                 refresh();
                 setOpenMatch(null);

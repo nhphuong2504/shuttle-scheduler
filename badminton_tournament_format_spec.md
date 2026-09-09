@@ -1,6 +1,6 @@
 # Badminton tournament format spec
 
-Venue: 8 courts, 2 days, 9am-5pm (16 court-hours/day, 128 total)
+Venue: 8 courts, 2 days, 8am start. 17:00 is a planning benchmark, not a hard cap. Group matches continue until placed.
 Based on 2025 turnout: 134 unique players, 4 categories after dropping WS
 
 ## Categories
@@ -50,7 +50,7 @@ Rules:
 
 | Stage | Format | Planned court slot |
 |---|---|---|
-| Group stage | Single game, race to 21 | 15 min (incl. changeover) |
+| Group stage | Single game, race to 21 | 20 min (incl. changeover) |
 | Knockout (A/B/C/D) | Best of 3, race to 21 | 20-25 min |
 
 A visible time-cap rule should trigger if a game runs long, to prevent cascading delays.
@@ -58,7 +58,7 @@ A visible time-cap rule should trigger if a game runs long, to prevent cascading
 ## Scheduling constraints
 
 1. **All pools within a category run in the same time block**, across as many courts as available — a category's Draw A-D can't be built until every one of its pools has finished, so staggering pools creates a bottleneck.
-2. **Minimum 30-minute rest gap** (or one full match round) between two matches for any player entered in 2 categories. Never schedule the same player on two courts in the same slot.
+2. **Minimum 10-minute rest gap in groups and 30 minutes in knockouts** between two matches for any player. Never schedule the same player on two courts in the same slot.
 3. **Day 1 = group stage only. Day 2 = knockout draws only.** Treated as a hard checkpoint — if groups overflow into day 2, it compresses knockout rounds and rest gaps.
 4. **Target utilization: 75-80% of theoretical court-hour capacity**, not 100%. This absorbs walkovers, disputes, and slow matches without delaying later rounds.
 5. Results must be reported to the control point **within 5 minutes** of a match ending — Draw A-D can't be seeded until every pool's results are in.
@@ -73,7 +73,7 @@ A visible time-cap rule should trigger if a game runs long, to prevent cascading
 | XD | 32 pairs | 8×4 | 48 | 28 | 76 | ~21.3 |
 | **Total** | | | **230** | **129** | **359** | **~100.5** |
 
-Against 128 available court-hours, this is **~78.5% utilization** — within the target buffer.
+Group occupancy at 20 minutes is `230 × 20 = 76.7` court-hours. The 08:00–17:00 benchmark on 8 courts is 72 court-hours, so the generated group day is expected to finish after 17:00 unless courts or match count change.
 
 ## Data entities to model (suggested starting point)
 
@@ -89,6 +89,6 @@ Against 128 available court-hours, this is **~78.5% utilization** — within the
 - **ScheduleSlot** — court_id, time_block, assigned match id, category, buffer flag
 
 Key computed rules your platform needs to enforce automatically:
-- Block a court assignment if it would violate the 30-minute rest-gap rule for either player in the match.
+- Block a court assignment if it would violate the 10-minute rest-gap rule for either player in the match.
 - Don't allow a Draw to be generated until all PoolStandings in that category are finalized.
 - Flag any pool that hasn't reported all match results within [pool's scheduled end time + 15 min] so control desk can chase it before it delays draw generation.

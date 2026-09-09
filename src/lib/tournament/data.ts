@@ -1,10 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Court = Database["public"]["Tables"]["courts"]["Row"];
-export type Player = Database["public"]["Tables"]["players"]["Row"];
+export type Player = {
+  id: string;
+  name: string;
+  gender: string | null;
+  email?: string | null;
+  phone?: string | null;
+  created_at?: string | undefined;
+};
 export type Team = Database["public"]["Tables"]["teams"]["Row"];
 export type Pool = Database["public"]["Tables"]["pools"]["Row"];
 export type PoolEntry = Database["public"]["Tables"]["pool_entries"]["Row"];
@@ -12,6 +20,8 @@ export type PoolMatch = Database["public"]["Tables"]["pool_matches"]["Row"];
 export type Draw = Database["public"]["Tables"]["draws"]["Row"];
 export type DrawMatch = Database["public"]["Tables"]["draw_matches"]["Row"];
 export type Settings = Database["public"]["Tables"]["tournament_settings"]["Row"];
+export type StaffRole = Database["public"]["Tables"]["staff_roles"]["Row"];
+export type StaffRoleName = "admin" | "registrar" | "scorer" | "scheduler";
 
 async function must<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await p;
@@ -30,6 +40,8 @@ export const keys = {
   draws: ["draws"] as const,
   drawMatches: ["draw_matches"] as const,
   settings: ["settings"] as const,
+  staffRole: ["staff_role"] as const,
+  staffRoles: ["staff_roles"] as const,
 };
 
 export function useCategories() {
@@ -49,7 +61,18 @@ export function useCourts() {
 export function usePlayers() {
   return useQuery({
     queryKey: keys.players,
-    queryFn: () => must<Player[]>(supabase.from("players").select("*").order("name")),
+    queryFn: async () => {
+      const full = await supabase.from("players").select("*").order("name");
+      if (!full.error && full.data) return full.data as Player[];
+      const { data, error } = await supabase.from("player_roster").select("*").order("name");
+      if (error) throw new Error(error.message);
+      const rows: Player[] = [];
+      for (const p of data ?? []) {
+        if (!p.id || !p.name) continue;
+        rows.push({ id: p.id, name: p.name, gender: p.gender, created_at: p.created_at ?? undefined });
+      }
+      return rows;
+    },
   });
 }
 
@@ -107,7 +130,28 @@ export function useSettings() {
   });
 }
 
-/** Convenience: player names for a team, in display order. */
+export function useStaffRoles() {
+  return useQuery({
+    queryKey: keys.staffRoles,
+    queryFn: () => must<StaffRole[]>(supabase.from("staff_roles").select("*").order("email")),
+  });
+}
+
+export function useRealtimeRefresh() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel("ops-live")
+      .on("postgres_changes", { event: "*", schema: "public" }, () => {
+        void qc.invalidateQueries();
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [qc]);
+}
+
 export function teamLabel(team: Team | undefined, players: Map<string, Player>): string {
   if (!team) return "TBC";
   const a = players.get(team.player_1_id)?.name ?? "Unknown";

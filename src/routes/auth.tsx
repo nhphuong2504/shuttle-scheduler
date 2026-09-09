@@ -13,8 +13,6 @@ export const Route = createFileRoute("/auth")({
     meta: [
       { title: "Desk Sign In | ShuttleNet Tournament Ops" },
       { name: "description", content: "Control desk sign in for ShuttleNet badminton tournament operations." },
-      { property: "og:title", content: "Desk Sign In | ShuttleNet Tournament Ops" },
-      { property: "og:description", content: "Control desk sign in for ShuttleNet badminton tournament operations." },
     ],
   }),
   component: AuthPage,
@@ -26,20 +24,12 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const run = async (mode: "in" | "up") => {
+  const signIn = async () => {
     setBusy(true);
     try {
-      const fn =
-        mode === "in"
-          ? supabase.auth.signInWithPassword({ email, password })
-          : supabase.auth.signUp({
-              email,
-              password,
-              options: { emailRedirectTo: `${window.location.origin}/` },
-            });
-      const { error } = await fn;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      toast.success(mode === "in" ? "Signed in" : "Desk account created");
+      toast.success("Signed in");
       navigate({ to: "/" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Sign in failed");
@@ -48,8 +38,28 @@ function AuthPage() {
     }
   };
 
+  const claimInvite = async () => {
+    setBusy(true);
+    try {
+      const { data: invited, error: inviteError } = await supabase.rpc("is_invited_email", { value: email });
+      if (inviteError) throw inviteError;
+      if (!invited) throw new Error("This email has not been invited. Ask an administrator.");
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/` },
+      });
+      if (error) throw error;
+      toast.success("Staff account created. Sign in if email confirmation is disabled.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the account");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <AppShell title="Control desk sign in" subtitle="Staff accounts can enter scores and run generation.">
+    <AppShell title="Control desk sign in" subtitle="Only invited staff accounts can operate the tournament.">
       <div className="max-w-md">
         <Panel title="Sign in">
           <div className="space-y-3">
@@ -64,15 +74,15 @@ function AuthPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && run("in")}
+                onKeyDown={(e) => e.key === "Enter" && void signIn()}
               />
             </div>
             <div className="flex gap-2 pt-1">
-              <Button disabled={busy || !email || !password} onClick={() => run("in")}>
+              <Button disabled={busy || !email || !password} onClick={() => void signIn()}>
                 Sign in
               </Button>
-              <Button variant="outline" disabled={busy || !email || !password} onClick={() => run("up")}>
-                Create desk account
+              <Button variant="outline" disabled={busy || !email || !password} onClick={() => void claimInvite()}>
+                Claim invite
               </Button>
             </div>
           </div>

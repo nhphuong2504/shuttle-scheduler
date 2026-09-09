@@ -1,34 +1,39 @@
 /**
- * Court/time scheduling with a hard 30-minute rest gap per player,
- * a day-1 groups / day-2 knockouts split, and per-category court blocks
- * so all pools in a category finish around the same time.
+ * Court/time scheduling with stage-specific rest gaps, category blocks,
+ * and no hard end-of-day cap. 17:00 is a planning benchmark only.
  */
 
 export interface SchedulableMatch {
   id: string;
   categoryId: string;
-  /** every player involved, both halves of a doubles pair */
+  categoryOrder?: number | undefined;
+  poolId?: string | null | undefined;
   playerIds: string[];
   kind: "group" | "knockout";
-  /** used to keep pool rounds in order */
   order: number;
+  earliestStart?: number | undefined;
+  fixed?: boolean;
+  start?: number | undefined;
+  end?: number | undefined;
+  courtNumber?: number | undefined;
 }
 
 export interface SchedulerOptions {
   dayStart: Date;
-  dayEnd: Date;
-  courtCount: number;
+  planningEnd: Date;
+  courts: { id: string; number: number }[];
   slotMinutes: number;
   restGapMinutes: number;
+  now?: Date;
 }
 
 export interface ScheduledSlot {
   matchId: string;
+  courtId: string;
   courtNumber: number;
   start: Date;
   end: Date;
   categoryId: string;
-  /** true when the match had to be placed after the planned day end */
   overrun: boolean;
 }
 
@@ -37,66 +42,8 @@ export interface ScheduleResult {
   unscheduled: string[];
   utilization: number;
   overrun: boolean;
-}
-
-const MINUTE = 60_000;
-
-export function scheduleMatches(matches: SchedulableMatch[], options: SchedulerOptions): ScheduleResult {
-  const { dayStart, dayEnd, courtCount, slotMinutes, restGapMinutes } = options;
-  const courtFreeAt: number[] = Array.from({ length: courtCount }, () => dayStart.getTime());
-  const playerFreeAt = new Map<string, number>();
-  const slots: ScheduledSlot[] = [];
-  const unscheduled: string[] = [];
-
-  // Group matches by category so a category's pools run in parallel blocks.
-  const ordered = [...matches].sort((a, b) => {
-    if (a.categoryId !== b.categoryId) return a.categoryId.localeCompare(b.categoryId);
-    return a.order - b.order;
-  });
-
-  const horizon = dayEnd.getTime() + 4 * 60 * MINUTE; // allow overrun placement, but flag it
-
-  for (const match of ordered) {
-    let best: { court: number; start: number } | null = null;
-
-    for (let court = 0; court < courtCount; court++) {
-      let start = courtFreeAt[court] ?? dayStart.getTime();
-      for (const playerId of match.playerIds) {
-        const free = playerFreeAt.get(playerId);
-        if (free != null && free > start) start = free;
-      }
-      if (start + slotMinutes * MINUTE > horizon) continue;
-      if (!best || start < best.start) best = { court, start };
-    }
-
-    if (!best) {
-      unscheduled.push(match.id);
-      continue;
-    }
-
-    const end = best.start + slotMinutes * MINUTE;
-    courtFreeAt[best.court] = end;
-    for (const playerId of match.playerIds) {
-      playerFreeAt.set(playerId, end + restGapMinutes * MINUTE);
-    }
-    slots.push({
-      matchId: match.id,
-      courtNumber: best.court + 1,
-      start: new Date(best.start),
-      end: new Date(end),
-      categoryId: match.categoryId,
-      overrun: end > dayEnd.getTime(),
-    });
-  }
-
-  const totalCourtMinutes = ((dayEnd.getTime() - dayStart.getTime()) / MINUTE) * courtCount;
-  const usedMinutes = slots.length * slotMinutes;
-  return {
-    slots: slots.sort((a, b) => a.start.getTime() - b.start.getTime()),
-    unscheduled,
-    utilization: totalCourtMinutes > 0 ? usedMinutes / totalCourtMinutes : 0,
-    overrun: slots.some((s) => s.overrun) || unscheduled.length > 0,
-  };
+  projectedFinish: Date | null;
+  overrunMinutes: number;
 }
 
 export interface RestGapViolation {
@@ -106,7 +53,103 @@ export interface RestGapViolation {
   gapMinutes: number;
 }
 
-/** Re-checks an existing (possibly hand-edited) schedule for rest-gap breaches. */
+const MINUTE = 60_000;
+
+export function scheduleMatches(matches: SchedulableMatch[], options: SchedulerOptions): ScheduleResult {
+  const { dayStart, planningEnd, courts, slotMinutes, restGapMinutes, now } = options;
+  if (!courts.length) throw new Error("No courts are available to schedule.");
+  const courtIds = [...courts].sort((a, b) => a.number - b.number);
+  const courtFreeAt = new Map<string, number>(courtIds.map((c) => [c.id, dayStart.getTime()]));
+  const playerFreeAt = new Map<string, number>();
+  const slots: ScheduledSlot[] = [];
+  const unscheduled: string[] = [];
+  const floor = Math.max(dayStart.getTime(), now?.getTime() ?? dayStart.getTime());
+
+  const fixed = matches.filter((m) => m.fixed && m.start != null && m.end != null && m.courtNumber != null);
+  for (const match of fixed) {
+    const court = courtIds.find((c) => c.number === match.courtNumber);
+    if (!court || match.start == null || match.end == null) continue;
+    const current = courtFreeAt.get(court.id) ?? dayStart.getTime();
+    courtFreeAt.set(court.id, Math.max(current, match.end));
+    for (const playerId of match.playerIds) {
+      playerFreeAt.set(playerId, Math.max(playerFreeAt.get(playerId) ?? 0, match.end + restGapMinutes * MINUTE));
+    }
+    slots.push({
+      matchId: match.id,
+      courtId: court.id,
+      courtNumber: court.number,
+      start: new Date(match.start),
+      end: new Date(match.end),
+      categoryId: match.categoryId,
+      overrun: match.end > planningEnd.getTime(),
+    });
+  }
+
+  const pending = matches.filter((m) => !m.fixed);
+  const grouped = new Map<string, SchedulableMatch[]>();
+  for (const match of pending) {
+    const list = grouped.get(match.categoryId) ?? [];
+    list.push(match);
+    grouped.set(match.categoryId, list);
+  }
+
+  const categories = [...grouped.entries()].sort((a, b) => {
+    const ao = a[1][0]?.categoryOrder ?? 0;
+    const bo = b[1][0]?.categoryOrder ?? 0;
+    if (ao !== bo) return ao - bo;
+    return a[0].localeCompare(b[0]);
+  });
+
+  for (const [, catMatches] of categories) {
+    const ordered = [...catMatches].sort((a, b) => a.order - b.order || (a.poolId ?? "").localeCompare(b.poolId ?? ""));
+    for (const match of ordered) {
+      if (!match.playerIds.length) {
+        unscheduled.push(match.id);
+        continue;
+      }
+      let best: { court: (typeof courtIds)[number]; start: number } | null = null;
+      for (const court of courtIds) {
+        let start = Math.max(courtFreeAt.get(court.id) ?? dayStart.getTime(), floor, match.earliestStart ?? 0);
+        for (const playerId of match.playerIds) {
+          const free = playerFreeAt.get(playerId);
+          if (free != null && free > start) start = free;
+        }
+        if (!best || start < best.start) best = { court, start };
+      }
+      if (!best) {
+        unscheduled.push(match.id);
+        continue;
+      }
+      const end = best.start + slotMinutes * MINUTE;
+      courtFreeAt.set(best.court.id, end);
+      for (const playerId of match.playerIds) {
+        playerFreeAt.set(playerId, end + restGapMinutes * MINUTE);
+      }
+      slots.push({
+        matchId: match.id,
+        courtId: best.court.id,
+        courtNumber: best.court.number,
+        start: new Date(best.start),
+        end: new Date(end),
+        categoryId: match.categoryId,
+        overrun: end > planningEnd.getTime(),
+      });
+    }
+  }
+
+  const windowMinutes = ((planningEnd.getTime() - dayStart.getTime()) / MINUTE) * courtIds.length;
+  const usedMinutes = slots.length * slotMinutes;
+  const last = slots.reduce<number | null>((acc, slot) => Math.max(acc ?? 0, slot.end.getTime()), null);
+  return {
+    slots: slots.sort((a, b) => a.start.getTime() - b.start.getTime() || a.courtNumber - b.courtNumber),
+    unscheduled,
+    utilization: windowMinutes > 0 ? usedMinutes / windowMinutes : 0,
+    overrun: slots.some((s) => s.overrun) || unscheduled.length > 0,
+    projectedFinish: last != null ? new Date(last) : null,
+    overrunMinutes: last != null ? Math.max(0, Math.round((last - planningEnd.getTime()) / MINUTE)) : 0,
+  };
+}
+
 export function findRestGapViolations(
   entries: { matchId: string; playerIds: string[]; start: Date; end: Date }[],
   restGapMinutes: number,
@@ -138,4 +181,8 @@ export function findRestGapViolations(
     }
   }
   return violations;
+}
+
+export function restGapForKind(kind: "group" | "knockout", groupMinutes: number, knockoutMinutes: number): number {
+  return kind === "group" ? groupMinutes : knockoutMinutes;
 }

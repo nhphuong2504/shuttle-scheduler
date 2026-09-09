@@ -140,7 +140,7 @@ across the weekend.
 
 ### Match format & timing
 
-- Group stage: single game, race to 21, 15-minute planned court slot (incl. changeover).
+- Group stage: single game, race to 21, 20-minute planned court slot (incl. changeover).
 
 - Knockout (Draw A/B/C/D): best of 3, race to 21, 20-25 minute planned court slot.
 
@@ -159,7 +159,7 @@ across the weekend.
 
   Draw A/B/C/D generation for that category — staggering pools creates a bottleneck).
 
-- **Minimum 30-minute rest gap** between two matches for any player who appears in both.
+- **Minimum 10-minute group rest gap and 30-minute knockout rest gap** between two matches for any player who appears in both.
 
   This applies whether it's two group matches, two knockout matches, or one of each, across
 
@@ -210,7 +210,7 @@ across the weekend.
 
 4. Draw A/B/C/D generator, gated on pool completion, with seeded bye assignment
 
-5. Court/time scheduling layer with the 30-minute rest-gap check across a player's up to
+5. Court/time scheduling layer with the 10-minute rest-gap check across a player's up to
 
    2 categories
 

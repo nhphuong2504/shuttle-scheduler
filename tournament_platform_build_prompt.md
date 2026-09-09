@@ -62,7 +62,7 @@ across the weekend.
 - Round 2+ pairings depend on round 1 results — don't pre-generate beyond one round ahead.
 
 ### Match format & timing
-- Group stage: single game, race to 21, 15-minute planned court slot (incl. changeover).
+- Group stage: single game, race to 21, 20-minute planned court slot (incl. changeover).
 - Knockout (Draw A/B/C/D): best of 3, race to 21, 20-25 minute planned court slot.
 - Support a visible match clock / time-cap flag so slow matches don't silently blow the
   schedule without the desk noticing.
@@ -71,7 +71,7 @@ across the weekend.
 - A category's pools should be scheduled to run in parallel across a dedicated block of
   courts, so all pools in that category finish around the same time (this is what unblocks
   Draw A/B/C/D generation for that category — staggering pools creates a bottleneck).
-- **Minimum 30-minute rest gap** between two matches for any player who appears in both.
+- **Minimum 10-minute group rest gap and 30-minute knockout rest gap** between two matches for any player who appears in both.
   This applies whether it's two group matches, two knockout matches, or one of each, across
   either of their two categories. The scheduler must actively check both members of a
   doubles team, not just the team as a unit.
@@ -95,7 +95,7 @@ across the weekend.
 2. Round-robin pool generator (circle method) with pool-size validation (no pools of 3)
 3. Match result entry + auto-computed pool standings with tie-break logic
 4. Draw A/B/C/D generator, gated on pool completion, with seeded bye assignment
-5. Court/time scheduling layer with the 30-minute rest-gap check across a player's up to
+5. Court/time scheduling layer with the 10-minute rest-gap check across a player's up to
    2 categories
 6. Live dashboard: court status board, pool standings, draw brackets, alerts for
    late-reporting pools or overrun risk

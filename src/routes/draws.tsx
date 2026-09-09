@@ -42,7 +42,7 @@ export const Route = createFileRoute("/draws")({
 
 function DrawsPage() {
   const qc = useQueryClient();
-  const { signedIn } = useSession();
+  const { canGenerate } = useSession();
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -65,7 +65,7 @@ function DrawsPage() {
         {(categories ?? []).map((c) => {
           const catPools = (pools ?? []).filter((p) => p.category_id === c.id);
           const catPoolMatches = (poolMatches ?? []).filter((m) => m.category_id === c.id);
-          const gate = drawGate(catPools, catPoolMatches);
+          const gate = drawGate(catPools, entries ?? [], catPoolMatches);
           const catDraws = (draws ?? []).filter((d) => d.category_id === c.id);
 
           return (
@@ -86,10 +86,13 @@ function DrawsPage() {
                   )}
                   <Button
                     size="sm"
-                    disabled={!signedIn || !gate.ready}
+                    disabled={!canGenerate || !gate.ready}
                     onClick={async () => {
                       try {
-                        await generateDrawsForCategory(c.id, catPools, entries ?? [], catPoolMatches);
+                        const force = catDraws.length
+                          ? window.confirm("Regenerate draws and discard existing knockout results?")
+                          : false;
+                        await generateDrawsForCategory(c.id, catPools, entries ?? [], catPoolMatches, force);
                         toast.success(`${c.code} draws generated`);
                         qc.invalidateQueries();
                       } catch (error) {
@@ -119,7 +122,7 @@ function DrawsPage() {
                         title={`Draw ${draw.tier}`}
                         right={
                           <span className="font-score text-[11px] text-muted-foreground">
-                            {draw.entrant_count} entrants · {draw.entrant_count - 1} matches
+                            {draw.entrant_count} entrants · {Math.max(draw.entrant_count - 1, 0)} playable matches
                           </span>
                         }
                       >

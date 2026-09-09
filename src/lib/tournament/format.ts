@@ -26,17 +26,27 @@ export function parseGames(value: unknown): GameScore[] {
     .map((g) => ({ a: Number(g.a), b: Number(g.b) }));
 }
 
+export function isLegalGameScore(a: number, b: number): boolean {
+  if (!Number.isInteger(a) || !Number.isInteger(b)) return false;
+  if (a < 0 || b < 0 || a === b) return false;
+  const high = Math.max(a, b);
+  const low = Math.min(a, b);
+  return high >= 21 && high - low >= 2;
+}
+
 export function gamesWinner(games: GameScore[]): "a" | "b" | null {
+  if (games.length < 2 || games.length > 3) return null;
   let a = 0;
   let b = 0;
-  for (const g of games) {
-    if (g.a > g.b) a++;
-    else if (g.b > g.a) b++;
+  for (let i = 0; i < games.length; i++) {
+    const game = games[i];
+    if (!game || !isLegalGameScore(game.a, game.b)) return null;
+    if (game.a > game.b) a++;
+    else b++;
+    if ((a >= 2 || b >= 2) && i < games.length - 1) return null;
   }
-  if (a >= 2) return "a";
-  if (b >= 2) return "b";
-  if (games.length === 1 && a === 1) return "a";
-  if (games.length === 1 && b === 1) return "b";
+  if (a === 2 && b < 2) return "a";
+  if (b === 2 && a < 2) return "b";
   return null;
 }
 

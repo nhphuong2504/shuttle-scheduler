@@ -75,10 +75,14 @@ export type Database = {
           scheduled_time: string | null
           slot: number
           started_at: string | null
+          ended_at: string | null
           status: string
           team_a_id: string | null
           team_b_id: string | null
           winner_id: string | null
+          parent_a_id: string | null
+          parent_b_id: string | null
+          is_bye: boolean
         }
         Insert: {
           court_id?: string | null
@@ -92,10 +96,14 @@ export type Database = {
           scheduled_time?: string | null
           slot: number
           started_at?: string | null
+          ended_at?: string | null
           status?: string
           team_a_id?: string | null
           team_b_id?: string | null
           winner_id?: string | null
+          parent_a_id?: string | null
+          parent_b_id?: string | null
+          is_bye?: boolean
         }
         Update: {
           court_id?: string | null
@@ -109,10 +117,14 @@ export type Database = {
           scheduled_time?: string | null
           slot?: number
           started_at?: string | null
+          ended_at?: string | null
           status?: string
           team_a_id?: string | null
           team_b_id?: string | null
           winner_id?: string | null
+          parent_a_id?: string | null
+          parent_b_id?: string | null
+          is_bye?: boolean
         }
         Relationships: [
           {
@@ -267,6 +279,7 @@ export type Database = {
           score_a: number | null
           score_b: number | null
           started_at: string | null
+          ended_at: string | null
           status: string
           team_a_id: string | null
           team_b_id: string | null
@@ -285,6 +298,7 @@ export type Database = {
           score_a?: number | null
           score_b?: number | null
           started_at?: string | null
+          ended_at?: string | null
           status?: string
           team_a_id?: string | null
           team_b_id?: string | null
@@ -303,6 +317,7 @@ export type Database = {
           score_a?: number | null
           score_b?: number | null
           started_at?: string | null
+          ended_at?: string | null
           status?: string
           team_a_id?: string | null
           team_b_id?: string | null
@@ -453,6 +468,10 @@ export type Database = {
           knockout_slot_minutes: number
           name: string
           rest_gap_minutes: number
+          group_rest_gap_minutes: number
+          knockout_rest_gap_minutes: number
+          venue_timezone: string
+          planning_end_time: string
         }
         Insert: {
           court_count?: number
@@ -466,6 +485,10 @@ export type Database = {
           knockout_slot_minutes?: number
           name?: string
           rest_gap_minutes?: number
+          group_rest_gap_minutes?: number
+          knockout_rest_gap_minutes?: number
+          venue_timezone?: string
+          planning_end_time?: string
         }
         Update: {
           court_count?: number
@@ -479,15 +502,75 @@ export type Database = {
           knockout_slot_minutes?: number
           name?: string
           rest_gap_minutes?: number
+          group_rest_gap_minutes?: number
+          knockout_rest_gap_minutes?: number
+          venue_timezone?: string
+          planning_end_time?: string
+        }
+        Relationships: []
+      }
+      staff_roles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          role: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          role: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          role?: string
+          user_id?: string | null
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      player_roster: {
+        Row: {
+          created_at: string | null
+          gender: string | null
+          id: string | null
+          name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      apply_day_schedule: {
+        Args: { p_day: number; p_slots: Json; p_pool_ends: Json }
+        Returns: undefined
+      }
+      apply_draw_generation: {
+        Args: { p_category_id: string; p_force: boolean; p_payload: Json }
+        Returns: undefined
+      }
+      apply_pool_generation: {
+        Args: { p_category_id: string; p_force: boolean; p_payload: Json }
+        Returns: undefined
+      }
+      current_staff_role: { Args: Record<string, never>; Returns: string }
+      has_staff_role: { Args: { needed: string[] }; Returns: boolean }
+      is_invited_email: { Args: { value: string }; Returns: boolean }
+      report_draw_result: { Args: { p_match_id: string; p_games: Json }; Returns: undefined }
+      report_pool_result: {
+        Args: { p_match_id: string; p_score_a: number; p_score_b: number }
+        Returns: undefined
+      }
+      reset_and_repair_match: { Args: { p_table: string; p_match_id: string }; Returns: undefined }
+      resolve_match_exception: {
+        Args: { p_table: string; p_match_id: string; p_status: string; p_winner_id: string; p_note: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -19,9 +19,10 @@ import {
   usePlayers,
   usePoolMatches,
   usePools,
+  useSettings,
   useTeams,
 } from "@/lib/tournament/data";
-import { gamesLabel, minutesSince, parseGames, timeLabel } from "@/lib/tournament/format";
+import { gamesLabel, gamesWinner, minutesSince, parseGames, timeLabel } from "@/lib/tournament/format";
 
 export const Route = createFileRoute("/matches")({
   head: () => ({
@@ -43,7 +44,8 @@ export const Route = createFileRoute("/matches")({
 
 function MatchesPage() {
   const qc = useQueryClient();
-  const { signedIn } = useSession();
+  const { canScore } = useSession();
+  const { data: settings } = useSettings();
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -104,7 +106,7 @@ function MatchesPage() {
                           <span className="font-score text-sm">
                             {m.score_a}-{m.score_b}
                           </span>
-                          {signedIn ? (
+                          {canScore ? (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -119,9 +121,10 @@ function MatchesPage() {
                         </span>
                       ) : (
                         <GroupScoreEntry
-                          disabled={!signedIn}
+                          disabled={!canScore}
                           inProgress={m.status === "in-progress"}
                           startedAt={m.started_at}
+                          capMinutes={settings?.group_slot_minutes ?? 20}
                           onStart={async () => {
                             await startMatch("pool_matches", m.id, m.court_id);
                             refresh();
@@ -185,7 +188,7 @@ function MatchesPage() {
                           <span className="font-score text-sm">
                             {m.note === "Bye" ? "Bye" : gamesLabel(parseGames(m.games))}
                           </span>
-                          {signedIn && m.note !== "Bye" ? (
+                          {canScore && m.note !== "Bye" ? (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -200,9 +203,10 @@ function MatchesPage() {
                         </span>
                       ) : (
                         <KnockoutScoreEntry
-                          disabled={!signedIn || !m.team_a_id || !m.team_b_id}
+                          disabled={!canScore || !m.team_a_id || !m.team_b_id}
                           inProgress={m.status === "in-progress"}
                           startedAt={m.started_at}
+                          capMinutes={settings?.knockout_slot_minutes ?? 25}
                           onStart={async () => {
                             await startMatch("draw_matches", m.id, m.court_id);
                             refresh();
@@ -235,10 +239,10 @@ function MatchesPage() {
   );
 }
 
-function Clock({ startedAt }: { startedAt: string | null }) {
+function Clock({ startedAt, capMinutes }: { startedAt: string | null; capMinutes: number }) {
   const mins = minutesSince(startedAt);
   if (mins == null) return null;
-  const late = mins > 20;
+  const late = mins > capMinutes;
   return (
     <span
       className={`font-score text-[11px] ${late ? "rounded bg-danger-surface px-1.5 py-0.5 text-danger-foreground" : "text-muted-foreground"}`}
@@ -252,12 +256,14 @@ function GroupScoreEntry({
   disabled,
   inProgress,
   startedAt,
+  capMinutes,
   onStart,
   onSubmit,
 }: {
   disabled: boolean;
   inProgress: boolean;
   startedAt: string | null;
+  capMinutes: number;
   onStart: () => void;
   onSubmit: (a: number, b: number) => void;
 }) {
@@ -265,7 +271,7 @@ function GroupScoreEntry({
   const [b, setB] = useState("");
   return (
     <span className="flex items-center gap-2">
-      {inProgress ? <Clock startedAt={startedAt} /> : null}
+      {inProgress ? <Clock startedAt={startedAt} capMinutes={capMinutes} /> : null}
       <Input
         className="h-8 w-14 font-score"
         inputMode="numeric"
@@ -298,12 +304,14 @@ function KnockoutScoreEntry({
   disabled,
   inProgress,
   startedAt,
+  capMinutes,
   onStart,
   onSubmit,
 }: {
   disabled: boolean;
   inProgress: boolean;
   startedAt: string | null;
+  capMinutes: number;
   onStart: () => void;
   onSubmit: (games: { a: number; b: number }[]) => void;
 }) {
@@ -322,7 +330,7 @@ function KnockoutScoreEntry({
 
   return (
     <span className="flex flex-wrap items-center gap-2">
-      {inProgress ? <Clock startedAt={startedAt} /> : null}
+      {inProgress ? <Clock startedAt={startedAt} capMinutes={capMinutes} /> : null}
       {values.map((row, i) => (
         <span key={i} className="flex items-center gap-1">
           <Input
@@ -343,7 +351,7 @@ function KnockoutScoreEntry({
           />
         </span>
       ))}
-      <Button size="sm" disabled={disabled || games.length === 0} onClick={() => onSubmit(games)}>
+      <Button size="sm" disabled={disabled || !gamesWinner(games)} onClick={() => onSubmit(games)}>
         Report
       </Button>
       {!inProgress ? (

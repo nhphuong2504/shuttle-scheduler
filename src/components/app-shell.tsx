@@ -25,7 +25,7 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { session, signedIn } = useSession();
+  const { session, signedIn, role, isAdmin } = useSession();
   const navigate = useNavigate();
 
   return (
@@ -36,7 +36,7 @@ export function AppShell({
             SHUTTLENET<span className="text-muted-foreground"> / ops</span>
           </Link>
           <nav className="flex flex-wrap items-center gap-1">
-            {NAV.map((item) => (
+            {[...NAV, ...(isAdmin ? [{ to: "/staff" as const, label: "Staff" }] : [])].map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
@@ -51,7 +51,10 @@ export function AppShell({
           <div className="ml-auto flex items-center gap-2 text-xs">
             {signedIn ? (
               <>
-                <span className="hidden text-muted-foreground sm:inline">{session?.userEmail}</span>
+                <span className="hidden text-muted-foreground sm:inline">
+                  {session?.userEmail}
+                  {role ? ` · ${role}` : ""}
+                </span>
                 <Button
                   size="sm"
                   variant="outline"

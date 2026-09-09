@@ -193,8 +193,8 @@ CREATE TABLE public.tournament_settings (
   day_2 date NOT NULL DEFAULT (current_date + 1),
   day_start_time time NOT NULL DEFAULT '09:00',
   day_end_time time NOT NULL DEFAULT '18:30',
-  rest_gap_minutes int NOT NULL DEFAULT 30,
-  group_slot_minutes int NOT NULL DEFAULT 15,
+  rest_gap_minutes int NOT NULL DEFAULT 10,
+  group_slot_minutes int NOT NULL DEFAULT 20,
   knockout_slot_minutes int NOT NULL DEFAULT 25,
   court_count int NOT NULL DEFAULT 8,
   created_at timestamptz NOT NULL DEFAULT now()

@@ -10,8 +10,12 @@ export function planPoolSizes(entrantCount: number): number[] {
   if (n < 4) {
     throw new Error("A category needs at least 4 entries to form a pool.");
   }
+  if (n === 6 || n === 7 || n === 11) {
+    throw new Error(
+      `${n} entries cannot be split into pools of 4 or 5. Add or withdraw entries so the count is representable.`,
+    );
+  }
 
-  // Solve 4a + 5b = n, maximising pools of 4.
   for (let fives = 0; fives * 5 <= n; fives++) {
     const remainder = n - fives * 5;
     if (remainder % 4 === 0) {
@@ -20,25 +24,16 @@ export function planPoolSizes(entrantCount: number): number[] {
     }
   }
 
-  // n = 6, 7 or 11 cannot be split into 4s and 5s without creating a pool of 3.
-  // Fall back to a single oversized pool (or 6 + 5 for 11) rather than breaking the rule.
-  if (n === 11) return [6, 5];
-  return [n];
+  throw new Error(`${n} entries cannot be split into pools of 4 or 5.`);
 }
 
 export function splitIntoPools<T>(entrants: T[]): T[][] {
   const sizes = planPoolSizes(entrants.length);
   const pools: T[][] = sizes.map(() => []);
-  // Snake distribution keeps strength spread across pools.
   let index = 0;
   let direction = 1;
   for (const entrant of entrants) {
     pools[index]!.push(entrant);
-    if (pools[index]!.length > sizes[index]!) {
-      // shouldn't happen, but guard against overflow
-      pools[index]!.pop();
-    }
-    // advance to next pool that still has room
     let guard = 0;
     do {
       index += direction;
@@ -61,9 +56,6 @@ export interface RoundRobinPairing<T> {
   teamB: T;
 }
 
-/**
- * Standard circle method. Within a pool, no entrant appears twice in the same round.
- */
 export function circleMethod<T>(entrants: T[]): RoundRobinPairing<T>[] {
   const list: (T | null)[] = [...entrants];
   if (list.length % 2 === 1) list.push(null);
@@ -80,7 +72,6 @@ export function circleMethod<T>(entrants: T[]): RoundRobinPairing<T>[] {
         pairings.push({ round, teamA: a, teamB: b });
       }
     }
-    // rotate everything except the first element
     const fixed = rotation[0] as T | null;
     const rest = rotation.slice(1);
     rest.unshift(rest.pop() as T | null);

@@ -32,7 +32,7 @@ export const Route = createFileRoute("/registration")({
 
 function RegistrationPage() {
   const qc = useQueryClient();
-  const { signedIn } = useSession();
+  const { canRegister } = useSession();
   const { data: categories } = useCategories();
   const { data: players } = usePlayers();
   const { data: teams } = useTeams();
@@ -40,6 +40,7 @@ function RegistrationPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<string>("");
 
   const [categoryId, setCategoryId] = useState<string>("");
   const [p1, setP1] = useState<string>("");
@@ -74,10 +75,11 @@ function RegistrationPage() {
 
   const addPlayer = async () => {
     try {
-      await createPlayer({ name, email, phone });
+      await createPlayer({ name, email, phone, gender });
       setName("");
       setEmail("");
       setPhone("");
+      setGender("");
       toast.success("Player added");
       refresh();
     } catch (error) {
@@ -123,7 +125,19 @@ function RegistrationPage() {
                 <Label htmlFor="pphone">Phone</Label>
                 <Input id="pphone" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
-              <Button className="w-full" disabled={!signedIn || !name.trim()} onClick={addPlayer}>
+              <div className="space-y-1.5">
+                <Label>Gender</Label>
+                <Select value={gender} onValueChange={setGender}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Required for category checks" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="M">Male</SelectItem>
+                    <SelectItem value="F">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button className="w-full" disabled={!canRegister || !name.trim()} onClick={addPlayer}>
                 Add player
               </Button>
             </div>
@@ -156,7 +170,7 @@ function RegistrationPage() {
                   <PlayerSelect value={p2} onChange={setP2} options={eligible.filter((p) => p.id !== p1)} />
                 </div>
               ) : null}
-              <Button className="w-full" disabled={!signedIn || !categoryId || !p1} onClick={addEntry}>
+              <Button className="w-full" disabled={!canRegister || !categoryId || !p1} onClick={addEntry}>
                 Add entry
               </Button>
               <p className="text-xs text-muted-foreground">
@@ -188,7 +202,7 @@ function RegistrationPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            disabled={!signedIn}
+                            disabled={!canRegister}
                             onClick={async () => {
                               await setTeamWithdrawn(t.id, !t.withdrawn);
                               refresh();
@@ -199,7 +213,7 @@ function RegistrationPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            disabled={!signedIn}
+                            disabled={!canRegister}
                             onClick={async () => {
                               try {
                                 await deleteTeam(t.id);

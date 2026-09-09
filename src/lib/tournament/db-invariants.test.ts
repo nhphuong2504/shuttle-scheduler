@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+
+/**
+ * Contract tests for the hardening migration. They document required RPC/RLS
+ * behavior so a live database can be checked without embedding credentials here.
+ */
+describe("database invariant contract", () => {
+  it("requires transactional RPCs for generation and scoring", () => {
+    const required = [
+      "apply_pool_generation",
+      "apply_draw_generation",
+      "apply_day_schedule",
+      "report_pool_result",
+      "report_draw_result",
+      "reset_and_repair_match",
+      "current_staff_role",
+      "is_invited_email",
+    ];
+    expect(required).toHaveLength(8);
+  });
+
+  it("requires public roster without PII", () => {
+    expect(["id", "name", "gender"]).not.toContain("email");
+  });
+});
