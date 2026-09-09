@@ -149,8 +149,15 @@ function Desk() {
               const next = allMatches
                 .filter((m) => m.courtId === court.id && m.status === "scheduled" && m.scheduled)
                 .sort((a, b) => new Date(a.scheduled as string).getTime() - new Date(b.scheduled as string).getTime())[0];
+              const target = playing ?? next;
               return (
-                <div key={court.id} className="rounded-lg border border-hairline p-3">
+                <button
+                  key={court.id}
+                  type="button"
+                  disabled={!target}
+                  onClick={() => target && setOpenMatch(target)}
+                  className="rounded-lg border border-hairline p-3 text-left transition-colors enabled:hover:border-primary enabled:hover:bg-muted/40 disabled:cursor-default"
+                >
                   <div className="flex items-center justify-between">
                     <span className="font-display text-sm font-bold">Court {court.number}</span>
                     <StatusPill status={playing ? "in_progress" : "scheduled"} />
