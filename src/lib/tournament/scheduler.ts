@@ -60,7 +60,7 @@ export function scheduleMatches(matches: SchedulableMatch[], options: SchedulerO
     let best: { court: number; start: number } | null = null;
 
     for (let court = 0; court < courtCount; court++) {
-      let start = courtFreeAt[court];
+      let start = courtFreeAt[court] ?? dayStart.getTime();
       for (const playerId of match.playerIds) {
         const free = playerFreeAt.get(playerId);
         if (free != null && free > start) start = free;
@@ -124,12 +124,14 @@ export function findRestGapViolations(
   for (const [playerId, list] of byPlayer) {
     const sorted = [...list].sort((a, b) => a.start.getTime() - b.start.getTime());
     for (let i = 1; i < sorted.length; i++) {
-      const gap = (sorted[i].start.getTime() - sorted[i - 1].end.getTime()) / MINUTE;
+      const prev = sorted[i - 1]!;
+      const curr = sorted[i]!;
+      const gap = (curr.start.getTime() - prev.end.getTime()) / MINUTE;
       if (gap < restGapMinutes) {
         violations.push({
           playerId,
-          matchA: sorted[i - 1].matchId,
-          matchB: sorted[i].matchId,
+          matchA: prev.matchId,
+          matchB: curr.matchId,
           gapMinutes: Math.round(gap),
         });
       }
