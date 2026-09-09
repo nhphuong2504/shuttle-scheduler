@@ -14,7 +14,474 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      categories: {
+        Row: {
+          code: string
+          created_at: string
+          entry_type: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          entry_type: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          entry_type?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      courts: {
+        Row: {
+          created_at: string
+          id: string
+          number: number
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          number: number
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          number?: number
+          status?: string
+        }
+        Relationships: []
+      }
+      draw_matches: {
+        Row: {
+          court_id: string | null
+          created_at: string
+          draw_id: string
+          games: Json
+          id: string
+          note: string | null
+          reported_time: string | null
+          round: number
+          scheduled_time: string | null
+          slot: number
+          started_at: string | null
+          status: string
+          team_a_id: string | null
+          team_b_id: string | null
+          winner_id: string | null
+        }
+        Insert: {
+          court_id?: string | null
+          created_at?: string
+          draw_id: string
+          games?: Json
+          id?: string
+          note?: string | null
+          reported_time?: string | null
+          round: number
+          scheduled_time?: string | null
+          slot: number
+          started_at?: string | null
+          status?: string
+          team_a_id?: string | null
+          team_b_id?: string | null
+          winner_id?: string | null
+        }
+        Update: {
+          court_id?: string | null
+          created_at?: string
+          draw_id?: string
+          games?: Json
+          id?: string
+          note?: string | null
+          reported_time?: string | null
+          round?: number
+          scheduled_time?: string | null
+          slot?: number
+          started_at?: string | null
+          status?: string
+          team_a_id?: string | null
+          team_b_id?: string | null
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draw_matches_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_matches_draw_id_fkey"
+            columns: ["draw_id"]
+            isOneToOne: false
+            referencedRelation: "draws"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_matches_team_a_id_fkey"
+            columns: ["team_a_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_matches_team_b_id_fkey"
+            columns: ["team_b_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      draws: {
+        Row: {
+          bracket_size: number
+          category_id: string
+          created_at: string
+          entrant_count: number
+          id: string
+          tier: string
+        }
+        Insert: {
+          bracket_size: number
+          category_id: string
+          created_at?: string
+          entrant_count: number
+          id?: string
+          tier: string
+        }
+        Update: {
+          bracket_size?: number
+          category_id?: string
+          created_at?: string
+          entrant_count?: number
+          id?: string
+          tier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draws_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          created_at: string
+          email: string | null
+          gender: string | null
+          id: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          gender?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          gender?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      pool_entries: {
+        Row: {
+          id: string
+          manual_rank_override: number | null
+          pool_id: string
+          position: number
+          team_id: string
+        }
+        Insert: {
+          id?: string
+          manual_rank_override?: number | null
+          pool_id: string
+          position: number
+          team_id: string
+        }
+        Update: {
+          id?: string
+          manual_rank_override?: number | null
+          pool_id?: string
+          position?: number
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_entries_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_entries_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pool_matches: {
+        Row: {
+          category_id: string
+          court_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          pool_id: string
+          reported_time: string | null
+          round: number
+          scheduled_time: string | null
+          score_a: number | null
+          score_b: number | null
+          started_at: string | null
+          status: string
+          team_a_id: string | null
+          team_b_id: string | null
+          winner_id: string | null
+        }
+        Insert: {
+          category_id: string
+          court_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          pool_id: string
+          reported_time?: string | null
+          round: number
+          scheduled_time?: string | null
+          score_a?: number | null
+          score_b?: number | null
+          started_at?: string | null
+          status?: string
+          team_a_id?: string | null
+          team_b_id?: string | null
+          winner_id?: string | null
+        }
+        Update: {
+          category_id?: string
+          court_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          pool_id?: string
+          reported_time?: string | null
+          round?: number
+          scheduled_time?: string | null
+          score_a?: number | null
+          score_b?: number | null
+          started_at?: string | null
+          status?: string
+          team_a_id?: string | null
+          team_b_id?: string | null
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_matches_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_matches_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_matches_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_matches_team_a_id_fkey"
+            columns: ["team_a_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_matches_team_b_id_fkey"
+            columns: ["team_b_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pools: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          name: string
+          scheduled_end: string | null
+          size: number
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          name: string
+          scheduled_end?: string | null
+          size: number
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          scheduled_end?: string | null
+          size?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pools_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          player_1_id: string
+          player_2_id: string | null
+          seed: number | null
+          withdrawn: boolean
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          player_1_id: string
+          player_2_id?: string | null
+          seed?: number | null
+          withdrawn?: boolean
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          player_1_id?: string
+          player_2_id?: string | null
+          seed?: number | null
+          withdrawn?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_player_1_id_fkey"
+            columns: ["player_1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_player_2_id_fkey"
+            columns: ["player_2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournament_settings: {
+        Row: {
+          court_count: number
+          created_at: string
+          day_1: string
+          day_2: string
+          day_end_time: string
+          day_start_time: string
+          group_slot_minutes: number
+          id: string
+          knockout_slot_minutes: number
+          name: string
+          rest_gap_minutes: number
+        }
+        Insert: {
+          court_count?: number
+          created_at?: string
+          day_1?: string
+          day_2?: string
+          day_end_time?: string
+          day_start_time?: string
+          group_slot_minutes?: number
+          id?: string
+          knockout_slot_minutes?: number
+          name?: string
+          rest_gap_minutes?: number
+        }
+        Update: {
+          court_count?: number
+          created_at?: string
+          day_1?: string
+          day_2?: string
+          day_end_time?: string
+          day_start_time?: string
+          group_slot_minutes?: number
+          id?: string
+          knockout_slot_minutes?: number
+          name?: string
+          rest_gap_minutes?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
