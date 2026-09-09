@@ -7,9 +7,10 @@ import { circleMethod, splitIntoPools } from "./pools";
 import { scheduleMatches, type SchedulableMatch } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
-async function ok<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<T> {
+async function ok<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
   const { data, error } = await p;
   if (error) throw new Error(error.message);
+  if (data == null) throw new Error("The record could not be found.");
   return data;
 }
 
@@ -131,11 +132,17 @@ export async function startMatch(table: "pool_matches" | "draw_matches", matchId
 }
 
 export async function resetMatch(table: "pool_matches" | "draw_matches", matchId: string) {
-  const payload =
+  const base = { status: "scheduled", winner_id: null, reported_time: null, started_at: null };
+  const { error } =
     table === "pool_matches"
-      ? { status: "scheduled", winner_id: null, score_a: null, score_b: null, reported_time: null, started_at: null }
-      : { status: "scheduled", winner_id: null, games: [], reported_time: null, started_at: null };
-  const { error } = await supabase.from(table).update(payload).eq("id", matchId);
+      ? await supabase
+          .from("pool_matches")
+          .update({ ...base, score_a: null, score_b: null })
+          .eq("id", matchId)
+      : await supabase
+          .from("draw_matches")
+          .update({ ...base, games: [] })
+          .eq("id", matchId);
   if (error) throw new Error(error.message);
 }
 
