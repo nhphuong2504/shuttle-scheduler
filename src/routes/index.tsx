@@ -1,7 +1,14 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { AppShell, Panel, StatusPill } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { useSession } from "@/hooks/useSession";
+import { reportDrawMatch, reportPoolMatch, resetMatch, startMatch } from "@/lib/tournament/actions";
 import {
   indexBy,
   teamLabel,
@@ -14,7 +21,7 @@ import {
   usePools,
   useTeams,
 } from "@/lib/tournament/data";
-import { minutesSince, timeLabel } from "@/lib/tournament/format";
+import { gamesLabel, minutesSince, parseGames, timeLabel } from "@/lib/tournament/format";
 import { poolIsComplete } from "@/lib/tournament/standings";
 
 export const Route = createFileRoute("/")({
@@ -37,7 +44,22 @@ export const Route = createFileRoute("/")({
   component: Desk,
 });
 
+type DeskMatch = {
+  id: string;
+  kind: "pool" | "draw";
+  courtId: string | null;
+  status: string;
+  startedAt: string | null;
+  scheduled: string | null;
+  teams: [string | null, string | null];
+  tag: string;
+  score: string | null;
+};
+
 function Desk() {
+  const qc = useQueryClient();
+  const { signedIn } = useSession();
+  const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const { data: categories } = useCategories();
   const { data: courts } = useCourts();
   const { data: teams } = useTeams();
@@ -52,29 +74,36 @@ function Desk() {
   const catMap = useMemo(() => indexBy(categories), [categories]);
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
 
-  const allMatches = useMemo(
+  const allMatches = useMemo<DeskMatch[]>(
     () => [
       ...(poolMatches ?? []).map((m) => ({
         id: m.id,
+        kind: "pool" as const,
         courtId: m.court_id,
         status: m.status,
         startedAt: m.started_at,
         scheduled: m.scheduled_time,
         teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
         tag: catMap.get(m.category_id)?.code ?? "",
+        score: m.status === "reported" ? `${m.score_a}-${m.score_b}` : null,
       })),
       ...(drawMatches ?? []).map((m) => ({
         id: m.id,
+        kind: "draw" as const,
         courtId: m.court_id,
         status: m.status,
         startedAt: m.started_at,
         scheduled: m.scheduled_time,
         teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
         tag: `Draw ${(draws ?? []).find((d) => d.id === m.draw_id)?.tier ?? ""}`,
+        score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
       })),
     ],
     [poolMatches, drawMatches, draws, catMap],
   );
+
+  const refresh = () => qc.invalidateQueries();
+  const current = openMatch ? (allMatches.find((m) => m.id === openMatch.id) ?? openMatch) : null;
 
   const latePools = useMemo(() => {
     const now = Date.now();
@@ -120,8 +149,15 @@ function Desk() {
               const next = allMatches
                 .filter((m) => m.courtId === court.id && m.status === "scheduled" && m.scheduled)
                 .sort((a, b) => new Date(a.scheduled as string).getTime() - new Date(b.scheduled as string).getTime())[0];
+              const target = playing ?? next;
               return (
-                <div key={court.id} className="rounded-lg border border-hairline p-3">
+                <button
+                  key={court.id}
+                  type="button"
+                  disabled={!target}
+                  onClick={() => target && setOpenMatch(target)}
+                  className="rounded-lg border border-hairline p-3 text-left transition-colors enabled:hover:border-primary enabled:hover:bg-muted/40 disabled:cursor-default"
+                >
                   <div className="flex items-center justify-between">
                     <span className="font-display text-sm font-bold">Court {court.number}</span>
                     <StatusPill status={playing ? "in_progress" : "scheduled"} />
@@ -151,11 +187,15 @@ function Desk() {
                       "nothing queued"
                     )}
                   </p>
-                </div>
+                  <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {target ? "Tap to enter score" : ""}
+                  </p>
+                </button>
               );
             })}
           </div>
         </Panel>
+
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel title="Category progress">
@@ -201,9 +241,155 @@ function Desk() {
           </Panel>
         </div>
       </div>
+
+      <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>
+        <DialogContent className="sm:max-w-md">
+          {current ? (
+            <CourtScoreDialog
+              key={current.id}
+              match={current}
+              nameA={label(current.teams[0])}
+              nameB={label(current.teams[1])}
+              signedIn={signedIn}
+              onDone={() => {
+                refresh();
+                setOpenMatch(null);
+              }}
+              onRefresh={refresh}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
+
+function CourtScoreDialog({
+  match,
+  nameA,
+  nameB,
+  signedIn,
+  onDone,
+  onRefresh,
+}: {
+  match: DeskMatch;
+  nameA: string;
+  nameB: string;
+  signedIn: boolean;
+  onDone: () => void;
+  onRefresh: () => void;
+}) {
+  const [values, setValues] = useState<string[][]>([
+    ["", ""],
+    ["", ""],
+    ["", ""],
+  ]);
+  const [busy, setBusy] = useState(false);
+  const table = match.kind === "pool" ? "pool_matches" : "draw_matches";
+  const rows = match.kind === "pool" ? 1 : 3;
+
+  const set = (row: number, col: number, v: string) =>
+    setValues((prev) => prev.map((r, i) => (i === row ? r.map((c, j) => (j === col ? v : c)) : r)));
+
+  const games = values
+    .slice(0, rows)
+    .filter((r) => r[0] !== "" && r[1] !== "")
+    .map((r) => ({ a: Number(r[0]), b: Number(r[1]) }));
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      if (match.kind === "pool") {
+        const g = games[0];
+        if (!g) throw new Error("Enter both scores.");
+        await reportPoolMatch(match.id, g.a, g.b);
+      } else {
+        await reportDrawMatch(match.id, games);
+      }
+      toast.success("Result recorded");
+      onDone();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save result");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="font-display">
+          {nameA} vs {nameB}
+        </DialogTitle>
+        <DialogDescription>
+          {match.tag} · {match.kind === "pool" ? "single game to 21" : "best of three"} ·{" "}
+          {match.status === "in_progress" ? `${minutesSince(match.startedAt)}′ on court` : timeLabel(match.scheduled)}
+        </DialogDescription>
+      </DialogHeader>
+
+      {match.status === "reported" ? (
+        <div className="space-y-3">
+          <p className="font-score text-2xl">{match.score}</p>
+          {signedIn ? (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                await resetMatch(table, match.id);
+                onRefresh();
+              }}
+            >
+              Correct this result
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              {rows > 1 ? <span className="w-14 text-xs text-muted-foreground">Game {i + 1}</span> : null}
+              <Input
+                className="h-10 w-20 font-score"
+                inputMode="numeric"
+                value={values[i]?.[0] ?? ""}
+                disabled={!signedIn}
+                onChange={(e) => set(i, 0, e.target.value)}
+                aria-label={`Game ${i + 1} ${nameA}`}
+              />
+              <span className="text-muted-foreground">–</span>
+              <Input
+                className="h-10 w-20 font-score"
+                inputMode="numeric"
+                value={values[i]?.[1] ?? ""}
+                disabled={!signedIn}
+                onChange={(e) => set(i, 1, e.target.value)}
+                aria-label={`Game ${i + 1} ${nameB}`}
+              />
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <Button disabled={!signedIn || busy || games.length === 0} onClick={submit}>
+              Report result
+            </Button>
+            {match.status !== "in_progress" ? (
+              <Button
+                variant="outline"
+                disabled={!signedIn || busy}
+                onClick={async () => {
+                  await startMatch(table, match.id, match.courtId);
+                  onRefresh();
+                }}
+              >
+                Start match
+              </Button>
+            ) : null}
+          </div>
+          {!signedIn ? <p className="text-xs text-muted-foreground">Sign in at the desk to enter scores.</p> : null}
+        </div>
+      )}
+    </>
+  );
+}
+
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
