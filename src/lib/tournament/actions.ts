@@ -80,13 +80,12 @@ export async function generatePoolsForCategory(categoryId: string, teams: Team[]
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i] ?? [];
     if (!group.length) continue;
-    const pool = await ok(
-      supabase
-        .from("pools")
-        .insert({ category_id: categoryId, name: `Pool ${String.fromCharCode(65 + i)}`, size: group.length })
-        .select("id")
-        .single(),
-    );
+    const { data: pool, error: poolError } = await supabase
+      .from("pools")
+      .insert({ category_id: categoryId, name: `Pool ${String.fromCharCode(65 + i)}`, size: group.length })
+      .select("id")
+      .single();
+    if (poolError || !pool) throw new Error(poolError?.message ?? "Could not create the pool.");
     const { error: entryError } = await supabase
       .from("pool_entries")
       .insert(group.map((t, idx) => ({ pool_id: pool.id, team_id: t.id, position: idx + 1 })));
@@ -107,7 +106,12 @@ export async function generatePoolsForCategory(categoryId: string, teams: Team[]
 }
 
 export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: number) {
-  const match = await ok(supabase.from("pool_matches").select("*").eq("id", matchId).single());
+  const { data: match, error: loadError } = await supabase
+    .from("pool_matches")
+    .select("*")
+    .eq("id", matchId)
+    .single();
+  if (loadError || !match) throw new Error(loadError?.message ?? "Match not found.");
   const winner = scoreA === scoreB ? null : scoreA > scoreB ? match.team_a_id : match.team_b_id;
   if (!winner) throw new Error("A group match cannot end level — enter a winning score.");
   const { error } = await supabase
@@ -226,13 +230,12 @@ export async function generateDrawsForCategory(
     const entrants = tiers[tier];
     if (entrants.length < 2) continue;
     const { bracketSize, pairs } = buildFirstRound(entrants);
-    const draw = await ok(
-      supabase
-        .from("draws")
-        .insert({ category_id: categoryId, tier, bracket_size: bracketSize, entrant_count: entrants.length })
-        .select("id")
-        .single(),
-    );
+    const { data: draw, error: drawError } = await supabase
+      .from("draws")
+      .insert({ category_id: categoryId, tier, bracket_size: bracketSize, entrant_count: entrants.length })
+      .select("id")
+      .single();
+    if (drawError || !draw) throw new Error(drawError?.message ?? "Could not create the draw.");
     const rows = pairs.map((p) => ({
       draw_id: draw.id,
       round: 1,
@@ -280,7 +283,12 @@ export async function advanceDraw(drawId: string) {
 }
 
 export async function reportDrawMatch(matchId: string, games: GameScore[]) {
-  const match = await ok(supabase.from("draw_matches").select("*").eq("id", matchId).single());
+  const { data: match, error: loadError } = await supabase
+    .from("draw_matches")
+    .select("*")
+    .eq("id", matchId)
+    .single();
+  if (loadError || !match) throw new Error(loadError?.message ?? "Match not found.");
   const side = gamesWinner(games);
   if (!side) throw new Error("Enter game scores until one side has won the match.");
   const winner = side === "a" ? match.team_a_id : match.team_b_id;
