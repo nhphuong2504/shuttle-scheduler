@@ -44,7 +44,22 @@ export const Route = createFileRoute("/")({
   component: Desk,
 });
 
+type DeskMatch = {
+  id: string;
+  kind: "pool" | "draw";
+  courtId: string | null;
+  status: string;
+  startedAt: string | null;
+  scheduled: string | null;
+  teams: [string | null, string | null];
+  tag: string;
+  score: string | null;
+};
+
 function Desk() {
+  const qc = useQueryClient();
+  const { signedIn } = useSession();
+  const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const { data: categories } = useCategories();
   const { data: courts } = useCourts();
   const { data: teams } = useTeams();
