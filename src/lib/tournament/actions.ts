@@ -130,7 +130,7 @@ export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: n
 export async function startMatch(table: "pool_matches" | "draw_matches", matchId: string, courtId: string | null) {
   const { error } = await supabase
     .from(table)
-    .update({ status: "in_progress", started_at: new Date().toISOString(), court_id: courtId })
+    .update({ status: "in-progress", started_at: new Date().toISOString(), court_id: courtId })
     .eq("id", matchId);
   if (error) throw new Error(error.message);
 }

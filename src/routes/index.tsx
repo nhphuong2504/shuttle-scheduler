@@ -115,7 +115,7 @@ function Desk() {
     });
   }, [pools, poolMatches]);
 
-  const overCap = allMatches.filter((m) => m.status === "in_progress" && (minutesSince(m.startedAt) ?? 0) > 25);
+  const overCap = allMatches.filter((m) => m.status === "in-progress" && (minutesSince(m.startedAt) ?? 0) > 25);
 
   return (
     <AppShell
@@ -145,7 +145,7 @@ function Desk() {
         <Panel title="Court board">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {(courts ?? []).map((court) => {
-              const playing = allMatches.find((m) => m.courtId === court.id && m.status === "in_progress");
+              const playing = allMatches.find((m) => m.courtId === court.id && m.status === "in-progress");
               const next = allMatches
                 .filter((m) => m.courtId === court.id && m.status === "scheduled" && m.scheduled)
                 .sort((a, b) => new Date(a.scheduled as string).getTime() - new Date(b.scheduled as string).getTime())[0];
@@ -160,7 +160,7 @@ function Desk() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-display text-sm font-bold">Court {court.number}</span>
-                    <StatusPill status={playing ? "in_progress" : "scheduled"} />
+                    <StatusPill status={playing ? "in-progress" : "scheduled"} />
                   </div>
                   <p className="mt-2 text-sm">
                     {playing ? (
@@ -323,7 +323,7 @@ function CourtScoreDialog({
         </DialogTitle>
         <DialogDescription>
           {match.tag} · {match.kind === "pool" ? "single game to 21" : "best of three"} ·{" "}
-          {match.status === "in_progress" ? `${minutesSince(match.startedAt)}′ on court` : timeLabel(match.scheduled)}
+          {match.status === "in-progress" ? `${minutesSince(match.startedAt)}′ on court` : timeLabel(match.scheduled)}
         </DialogDescription>
       </DialogHeader>
 
@@ -370,13 +370,18 @@ function CourtScoreDialog({
             <Button disabled={!signedIn || busy || games.length === 0} onClick={submit}>
               Report result
             </Button>
-            {match.status !== "in_progress" ? (
+            {match.status !== "in-progress" ? (
               <Button
                 variant="outline"
                 disabled={!signedIn || busy}
                 onClick={async () => {
-                  await startMatch(table, match.id, match.courtId);
-                  onRefresh();
+                  try {
+                    await startMatch(table, match.id, match.courtId);
+                    toast.success("Match started");
+                    onRefresh();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Could not start the match");
+                  }
                 }}
               >
                 Start match

@@ -120,7 +120,7 @@ function MatchesPage() {
                       ) : (
                         <GroupScoreEntry
                           disabled={!signedIn}
-                          inProgress={m.status === "in_progress"}
+                          inProgress={m.status === "in-progress"}
                           startedAt={m.started_at}
                           onStart={async () => {
                             await startMatch("pool_matches", m.id, m.court_id);
@@ -201,7 +201,7 @@ function MatchesPage() {
                       ) : (
                         <KnockoutScoreEntry
                           disabled={!signedIn || !m.team_a_id || !m.team_b_id}
-                          inProgress={m.status === "in_progress"}
+                          inProgress={m.status === "in-progress"}
                           startedAt={m.started_at}
                           onStart={async () => {
                             await startMatch("draw_matches", m.id, m.court_id);
