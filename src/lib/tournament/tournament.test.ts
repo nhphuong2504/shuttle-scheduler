@@ -829,7 +829,7 @@ describe("applyDayPlan", () => {
         overrunMinutes: 0,
         diagnostics: {
           deadlockReason: "No future event can make 1 remaining match(es) eligible.",
-        } as unknown as GraspDiagnostics,
+        } as never,
       },
       settingsPatch: null,
       settingsId: "settings-id",
