@@ -492,7 +492,7 @@ function CourtScoreDialog({
                   try {
                     await startMatch(table, match.id, match.courtId);
                     toast.success("Match started");
-                    onRefresh();
+                    onDone();
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : "Could not start the match");
                   }
