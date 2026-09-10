@@ -827,7 +827,9 @@ describe("applyDayPlan", () => {
         currentProjectedFinish: null,
         projectedFinishDeltaMinutes: null,
         overrunMinutes: 0,
-        diagnostics: { deadlockReason: "No future event can make 1 remaining match(es) eligible." },
+        diagnostics: {
+          deadlockReason: "No future event can make 1 remaining match(es) eligible.",
+        } as never,
       },
       settingsPatch: null,
       settingsId: "settings-id",

@@ -99,7 +99,7 @@ export type DeskMatch = DeskMatchModel & {
   teams: [string | null, string | null];
   tag: string;
   score: string | null;
-  initialGames?: GameScore[];
+  initialGames?: GameScore[] | undefined;
 };
 
 function scoreFormValues(kind: DeskMatch["kind"], status: string, initialGames?: GameScore[]) {
