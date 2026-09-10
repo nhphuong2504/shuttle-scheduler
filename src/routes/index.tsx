@@ -875,37 +875,59 @@ export function MatchOperationsDialog({
               <Button
                 variant="outline"
                 disabled={!signedIn || busy || !!startCheck?.conflicts.length}
-                onClick={async () => {
-                  const restWarnings = startCheck?.warnings ?? [];
-                  if (
-                    restWarnings.length &&
-                    !window.confirm(
-                      `${restWarnings
-                        .map(
-                          (w) =>
-                            `${playerMap.get(w.playerId)?.name ?? "A player"} has rested only ${w.restMinutes} of ${w.requiredMinutes} min.`,
-                        )
-                        .join("\n")}\n\nStart this match anyway?`,
-                    )
-                  ) {
+                onClick={() => {
+                  if ((startCheck?.warnings ?? []).length) {
+                    setConfirmRestOpen(true);
                     return;
                   }
-                  try {
-                    setBusy(true);
-                    await startMatch(table, match.id, courtId, restWarnings.length > 0);
-                    toast.success("Match started");
-                    onDone();
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Could not start the match");
-                  } finally {
-                    setBusy(false);
-                  }
+                  void runStart();
                 }}
               >
                 Start match
               </Button>
             ) : null}
           </div>
+          <AlertDialog open={confirmRestOpen} onOpenChange={setConfirmRestOpen}>
+            <AlertDialogContent className="max-w-md">
+              <AlertDialogHeader>
+                <div className="flex size-11 items-center justify-center rounded-full bg-warn-surface text-warn-foreground">
+                  <span className="text-lg font-semibold">!</span>
+                </div>
+                <AlertDialogTitle>Short rest between matches</AlertDialogTitle>
+                <AlertDialogDescription>
+                  These players haven&apos;t had their full rest yet. You can still start the match.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <ul className="space-y-2">
+                {(startCheck?.warnings ?? []).map((w, i) => (
+                  <li
+                    key={`confirm-warning-${i}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-warn-surface/60 px-3 py-2"
+                  >
+                    <span className="text-sm font-medium">
+                      {playerMap.get(w.playerId)?.name ?? "A player"}
+                    </span>
+                    <span className="font-score text-sm text-warn-foreground">
+                      {w.restMinutes} / {w.requiredMinutes} min
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>Keep waiting</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={busy}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setConfirmRestOpen(false);
+                    void runStart();
+                  }}
+                >
+                  Start anyway
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {signedIn || canSchedule ? (
             <div className="border-t border-hairline pt-3">
               <div className="flex flex-wrap gap-2">
