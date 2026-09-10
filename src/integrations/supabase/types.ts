@@ -67,9 +67,13 @@ export type Database = {
           court_id: string | null
           created_at: string
           draw_id: string
+          ended_at: string | null
           games: Json
           id: string
+          is_bye: boolean
           note: string | null
+          parent_a_id: string | null
+          parent_b_id: string | null
           reported_time: string | null
           round: number
           scheduled_time: string | null
@@ -84,9 +88,13 @@ export type Database = {
           court_id?: string | null
           created_at?: string
           draw_id: string
+          ended_at?: string | null
           games?: Json
           id?: string
+          is_bye?: boolean
           note?: string | null
+          parent_a_id?: string | null
+          parent_b_id?: string | null
           reported_time?: string | null
           round: number
           scheduled_time?: string | null
@@ -101,9 +109,13 @@ export type Database = {
           court_id?: string | null
           created_at?: string
           draw_id?: string
+          ended_at?: string | null
           games?: Json
           id?: string
+          is_bye?: boolean
           note?: string | null
+          parent_a_id?: string | null
+          parent_b_id?: string | null
           reported_time?: string | null
           round?: number
           scheduled_time?: string | null
@@ -127,6 +139,20 @@ export type Database = {
             columns: ["draw_id"]
             isOneToOne: false
             referencedRelation: "draws"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_matches_parent_a_id_fkey"
+            columns: ["parent_a_id"]
+            isOneToOne: false
+            referencedRelation: "draw_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_matches_parent_b_id_fkey"
+            columns: ["parent_b_id"]
+            isOneToOne: false
+            referencedRelation: "draw_matches"
             referencedColumns: ["id"]
           },
           {
@@ -258,6 +284,7 @@ export type Database = {
           category_id: string
           court_id: string | null
           created_at: string
+          ended_at: string | null
           id: string
           note: string | null
           pool_id: string
@@ -276,6 +303,7 @@ export type Database = {
           category_id: string
           court_id?: string | null
           created_at?: string
+          ended_at?: string | null
           id?: string
           note?: string | null
           pool_id: string
@@ -294,6 +322,7 @@ export type Database = {
           category_id?: string
           court_id?: string | null
           created_at?: string
+          ended_at?: string | null
           id?: string
           note?: string | null
           pool_id?: string
@@ -388,6 +417,30 @@ export type Database = {
           },
         ]
       }
+      staff_roles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          role: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          role: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          role?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       teams: {
         Row: {
           category_id: string
@@ -428,7 +481,21 @@ export type Database = {
             foreignKeyName: "teams_player_1_id_fkey"
             columns: ["player_1_id"]
             isOneToOne: false
+            referencedRelation: "player_roster"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_player_1_id_fkey"
+            columns: ["player_1_id"]
+            isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_player_2_id_fkey"
+            columns: ["player_2_id"]
+            isOneToOne: false
+            referencedRelation: "player_roster"
             referencedColumns: ["id"]
           },
           {
@@ -448,11 +515,15 @@ export type Database = {
           day_2: string
           day_end_time: string
           day_start_time: string
+          group_rest_gap_minutes: number
           group_slot_minutes: number
           id: string
+          knockout_rest_gap_minutes: number
           knockout_slot_minutes: number
           name: string
+          planning_end_time: string
           rest_gap_minutes: number
+          venue_timezone: string
         }
         Insert: {
           court_count?: number
@@ -461,11 +532,15 @@ export type Database = {
           day_2?: string
           day_end_time?: string
           day_start_time?: string
+          group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
+          knockout_rest_gap_minutes?: number
           knockout_slot_minutes?: number
           name?: string
+          planning_end_time?: string
           rest_gap_minutes?: number
+          venue_timezone?: string
         }
         Update: {
           court_count?: number
@@ -474,20 +549,82 @@ export type Database = {
           day_2?: string
           day_end_time?: string
           day_start_time?: string
+          group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
+          knockout_rest_gap_minutes?: number
           knockout_slot_minutes?: number
           name?: string
+          planning_end_time?: string
           rest_gap_minutes?: number
+          venue_timezone?: string
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      player_roster: {
+        Row: {
+          created_at: string | null
+          gender: string | null
+          id: string | null
+          name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          gender?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          gender?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
+      apply_day_schedule: {
+        Args: { p_day: number; p_pool_ends: Json; p_slots: Json }
+        Returns: undefined
+      }
+      apply_draw_generation: {
+        Args: { p_category_id: string; p_force: boolean; p_payload: Json }
+        Returns: undefined
+      }
+      apply_pool_generation: {
+        Args: { p_category_id: string; p_force: boolean; p_payload: Json }
+        Returns: undefined
+      }
+      current_staff_role: { Args: never; Returns: string }
+      has_staff_role: { Args: { needed: string[] }; Returns: boolean }
+      is_invited_email: { Args: { value: string }; Returns: boolean }
+      normalize_email: { Args: { value: string }; Returns: string }
+      report_draw_result: {
+        Args: { p_games: Json; p_match_id: string }
+        Returns: undefined
+      }
+      report_pool_result: {
+        Args: { p_match_id: string; p_score_a: number; p_score_b: number }
+        Returns: undefined
+      }
+      reset_and_repair_match: {
+        Args: { p_match_id: string; p_table: string }
+        Returns: undefined
+      }
+      resolve_match_exception: {
+        Args: {
+          p_match_id: string
+          p_note: string
+          p_status: string
+          p_table: string
+          p_winner_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
