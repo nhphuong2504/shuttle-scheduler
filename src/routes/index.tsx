@@ -236,14 +236,22 @@ function Desk() {
     allMatches,
     slotMinutesFor,
   );
-  const upcoming = upcomingMatches(allMatches, now, 60);
-  const visibleUpcoming = upcoming.filter((match) => {
-    const query = queueSearch.trim().toLocaleLowerCase();
-    if (!query) return true;
-    return `${label(match.teams[0])} ${label(match.teams[1])} ${match.tag}`
-      .toLocaleLowerCase()
-      .includes(query);
+  const courtProgress = courtStates.map(({ court, state }) => {
+    const courtMatches = allMatches.filter((match) => match.courtId === court.id);
+    const total = courtMatches.length;
+    const done = courtMatches.filter((match) =>
+      ["reported", "walkover"].includes(match.status),
+    ).length;
+    return {
+      court,
+      state,
+      total,
+      done,
+      remaining: total - done,
+      percent: total ? Math.round((done / total) * 100) : 0,
+    };
   });
+
   const currentDelay = Math.max(
     0,
     ...courtStates.map(({ state }) => state.varianceMinutes ?? 0),
