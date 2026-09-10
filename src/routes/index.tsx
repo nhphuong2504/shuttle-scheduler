@@ -831,37 +831,57 @@ export function MatchOperationsDialog({
           ) : null}
         </div>
       ) : (
-        <div className="space-y-3">
-          {notStarted ? (
-            <p className="rounded-lg border border-hairline bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              Start the match before entering scores.
-            </p>
-          ) : null}
-          {Array.from({ length: rows }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              {rows > 1 ? (
-                <span className="w-14 text-xs text-muted-foreground">Game {i + 1}</span>
-              ) : null}
-              <Input
-                className="h-10 w-20 font-score"
-                inputMode="numeric"
-                autoFocus={i === 0 && !notStarted}
-                value={values[i]?.[0] ?? ""}
-                disabled={!signedIn || notStarted}
-                onChange={(e) => set(i, 0, e.target.value)}
-                aria-label={`Game ${i + 1} ${nameA}`}
-              />
-              <span className="text-muted-foreground">–</span>
-              <Input
-                className="h-10 w-20 font-score"
-                inputMode="numeric"
-                value={values[i]?.[1] ?? ""}
-                disabled={!signedIn || notStarted}
-                onChange={(e) => set(i, 1, e.target.value)}
-                aria-label={`Game ${i + 1} ${nameB}`}
-              />
+        <div className="space-y-4">
+          <div className="flex justify-center pt-1">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+                notStarted
+                  ? "bg-muted text-muted-foreground"
+                  : "bg-success-surface text-success-foreground"
+              }`}
+            >
+              {notStarted ? "Not started" : "Live"}
+            </span>
+          </div>
+
+          <div className="rounded-xl border border-hairline bg-muted/30 px-4 py-4">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center">
+              <span className="truncate text-sm font-medium">{nameA}</span>
+              <span aria-hidden className="w-6" />
+              <span className="truncate text-sm font-medium">{nameB}</span>
             </div>
-          ))}
+            <div className="mt-2 space-y-2">
+              {Array.from({ length: rows }).map((_, i) => (
+                <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <Input
+                    className="h-12 w-full text-center font-score text-xl"
+                    inputMode="numeric"
+                    placeholder="—"
+                    autoFocus={i === 0 && !notStarted}
+                    value={values[i]?.[0] ?? ""}
+                    disabled={!signedIn || notStarted}
+                    onChange={(e) => set(i, 0, e.target.value)}
+                    aria-label={`Game ${i + 1} ${nameA}`}
+                  />
+                  <span className="w-6 text-center font-score text-lg text-muted-foreground">:</span>
+                  <Input
+                    className="h-12 w-full text-center font-score text-xl"
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={values[i]?.[1] ?? ""}
+                    disabled={!signedIn || notStarted}
+                    onChange={(e) => set(i, 1, e.target.value)}
+                    aria-label={`Game ${i + 1} ${nameB}`}
+                  />
+                </div>
+              ))}
+            </div>
+            {rows > 1 ? (
+              <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                Games 1–3, top to bottom
+              </p>
+            ) : null}
+          </div>
           {match.status !== "in-progress" &&
           (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
             <ul className="space-y-1 text-xs">
