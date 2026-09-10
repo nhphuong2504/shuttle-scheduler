@@ -672,6 +672,7 @@ export function MatchOperationsDialog({
     ["", ""],
   ]);
   const [busy, setBusy] = useState(false);
+  const [confirmRestOpen, setConfirmRestOpen] = useState(false);
   const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(
     null,
   );
