@@ -629,6 +629,16 @@ export type Database = {
         Args: { p_category_id: string; p_force: boolean; p_payload: Json }
         Returns: undefined
       }
+      assert_match_eligible: {
+        Args: {
+          p_allow_push?: boolean
+          p_court_id: string
+          p_match_id: string
+          p_start: string
+          p_table: string
+        }
+        Returns: undefined
+      }
       current_staff_role: { Args: never; Returns: string }
       has_staff_role: { Args: { needed: string[] }; Returns: boolean }
       is_invited_email: { Args: { value: string }; Returns: boolean }
@@ -641,8 +651,21 @@ export type Database = {
         Args: { p_match_id: string; p_score_a: number; p_score_b: number }
         Returns: undefined
       }
+      reschedule_live_match: {
+        Args: {
+          p_court_id: string
+          p_match_id: string
+          p_scheduled_time: string
+          p_table: string
+        }
+        Returns: undefined
+      }
       reset_and_repair_match: {
         Args: { p_match_id: string; p_table: string }
+        Returns: undefined
+      }
+      reset_match_with_note: {
+        Args: { p_match_id: string; p_note: string; p_table: string }
         Returns: undefined
       }
       resolve_match_exception: {
@@ -653,6 +676,14 @@ export type Database = {
           p_table: string
           p_winner_id: string
         }
+        Returns: undefined
+      }
+      shift_live_schedule_after_match: {
+        Args: { p_match_id: string; p_table: string }
+        Returns: undefined
+      }
+      start_match_safe: {
+        Args: { p_court_id: string; p_match_id: string; p_table: string }
         Returns: undefined
       }
     }
