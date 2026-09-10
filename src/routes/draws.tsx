@@ -106,9 +106,10 @@ function DrawsPage() {
           const list = draw ? (drawMatches ?? []).filter((m) => m.draw_id === draw.id) : [];
           const playable = list.filter((m) => m.note !== "Bye");
           const done = playable.filter((m) => m.status === "reported" || m.status === "walkover").length;
-          const rounds = [...new Set(list.map((m) => m.round))].sort((a, b) => a - b);
-          const lastRound = rounds[rounds.length - 1];
-          const finalMatch = list.find((m) => m.round === lastRound);
+          const bracketSize = Math.max(draw?.bracket_size ?? 1, 1);
+          const totalRounds = Math.max(Math.round(Math.log2(bracketSize)), 1);
+          const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1);
+          const finalMatch = list.find((m) => m.round === totalRounds && m.slot === 1);
           const champion = finalMatch?.winner_id ? label(finalMatch.winner_id) : null;
 
           return (
