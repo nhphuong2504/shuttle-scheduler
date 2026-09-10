@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,27 +69,38 @@ function StaffPage() {
           </div>
         </Panel>
         <Panel title="Current staff">
-          <ul className="divide-y divide-hairline text-sm">
-            {(roles ?? []).map((row) => (
-              <li key={row.id} className="flex items-center justify-between gap-3 py-2">
-                <span>
-                  {row.email} <span className="text-muted-foreground">· {row.role}</span>
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={!isAdmin}
-                  onClick={async () => {
-                    await removeStaff(row.id);
-                    qc.invalidateQueries({ queryKey: ["staff_roles"] });
-                  }}
+          {(roles ?? []).length === 0 ? (
+            <EmptyState title="No staff invited yet" hint="Invite a desk account to give them access." />
+          ) : (
+            <ul className="divide-y divide-hairline text-sm">
+              {(roles ?? []).map((row) => (
+                <li
+                  key={row.id}
+                  className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/50"
                 >
-                  Remove
-                </Button>
-              </li>
-            ))}
-          </ul>
+                  <span>
+                    {row.email}{" "}
+                    <span className="ml-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                      {row.role}
+                    </span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!isAdmin}
+                    onClick={async () => {
+                      await removeStaff(row.id);
+                      qc.invalidateQueries({ queryKey: ["staff_roles"] });
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
+
       </div>
     </AppShell>
   );
