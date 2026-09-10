@@ -900,7 +900,15 @@ export function MatchOperationsDialog({
               >
                 Start match
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                className="h-11 flex-1 text-base font-semibold shadow-md"
+                disabled={!signedIn || busy || !canSubmit}
+                onClick={submit}
+              >
+                Report result
+              </Button>
+            )}
           </div>
           <AlertDialog open={confirmRestOpen} onOpenChange={setConfirmRestOpen}>
             <AlertDialogContent className="max-w-md">
