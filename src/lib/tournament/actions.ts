@@ -280,9 +280,11 @@ export async function scheduleDay(
             const fixed = m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
             const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
             const end =
-              m.status === "in-progress" && plannedEnd != null
-                ? Math.max(plannedEnd, schedulingFloor.getTime() + slotMinutes * 60_000)
-                : plannedEnd;
+              m.ended_at && (m.status === "reported" || m.status === "walkover")
+                ? new Date(m.ended_at).getTime()
+                : m.status === "in-progress" && plannedEnd != null
+                  ? Math.max(plannedEnd, schedulingFloor.getTime() + slotMinutes * 60_000)
+                  : plannedEnd;
             return {
               id: m.id,
               categoryId: m.category_id,
@@ -313,6 +315,7 @@ export async function scheduleDay(
             }, 0);
             const start = m.scheduled_time ? new Date(m.scheduled_time).getTime() : undefined;
             const fixed = m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+            const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
             return {
               id: m.id,
               categoryId: drawCategory.get(m.draw_id) ?? m.draw_id,
@@ -323,7 +326,12 @@ export async function scheduleDay(
               earliestStart: parentEnd || undefined,
               fixed,
               start,
-              end: start != null ? start + slotMinutes * 60_000 : undefined,
+              end:
+                m.ended_at && (m.status === "reported" || m.status === "walkover")
+                  ? new Date(m.ended_at).getTime()
+                  : m.status === "in-progress" && plannedEnd != null
+                    ? Math.max(plannedEnd, Date.now() + slotMinutes * 60_000)
+                    : plannedEnd,
               courtNumber: courts.find((c) => c.id === m.court_id)?.number,
             };
           })
