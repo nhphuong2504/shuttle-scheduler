@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -329,8 +329,9 @@ function Desk() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">No urgent desk actions right now.</p>
+            <EmptyState title="All clear" hint="No urgent desk actions right now." />
           )}
+
           </div>
         </Panel>
 
@@ -349,18 +350,27 @@ function Desk() {
                     setOperationCourtId(court.id);
                     setOpenMatch(target);
                   }}
-                  className={`rounded-lg border p-3 text-left transition-colors enabled:hover:border-primary enabled:hover:bg-muted/40 disabled:cursor-default ${
+                  className={`rounded-xl border p-3.5 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default disabled:opacity-80 ${
                     state.state === "overrun"
-                      ? "border-danger-border bg-danger-surface/30"
+                      ? "border-danger-border bg-danger-surface/40"
                       : state.state === "free-ready"
                         ? "border-primary/40 bg-primary/5"
-                        : "border-hairline"
+                        : state.state === "playing"
+                          ? "border-amber/40 bg-amber/5"
+                          : "border-hairline bg-surface"
                   }`}
+
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-display text-sm font-bold">Court {court.number}</span>
+                    <span className="flex items-center gap-1.5 font-display text-sm font-bold">
+                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 font-score text-[11px] text-primary">
+                        {court.number}
+                      </span>
+                      Court {court.number}
+                    </span>
                     <CourtStatePill state={state.state} />
                   </div>
+
                   <p className="mt-2 text-sm">
                     {state.playing ? (
                       <>
@@ -998,21 +1008,9 @@ function DeskKpi({
   value: string | number;
   tone?: "normal" | "warn" | "danger";
 }) {
-  return (
-    <div
-      className={`rounded-lg border p-3 ${
-        tone === "danger"
-          ? "border-danger-border bg-danger-surface"
-          : tone === "warn"
-            ? "border-warn-border bg-warn-surface"
-            : "border-hairline bg-surface"
-      }`}
-    >
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="font-score text-xl font-semibold">{value}</p>
-    </div>
-  );
+  return <StatTile label={label} value={value} tone={tone} />;
 }
+
 
 function CourtStatePill({
   state,

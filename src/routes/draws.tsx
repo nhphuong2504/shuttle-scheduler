@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import { AppShell, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { drawGate, generateDrawsForCategory } from "@/lib/tournament/actions";
@@ -107,11 +107,13 @@ function DrawsPage() {
 
               {catDraws.length === 0 ? (
                 <Panel>
-                  <p className="text-sm text-muted-foreground">
-                    Draws unlock once every pool in this category has all results recorded.
-                  </p>
+                  <EmptyState
+                    title="Draws locked"
+                    hint="Draws unlock once every pool in this category has all results recorded."
+                  />
                 </Panel>
               ) : (
+
                 <div className="grid gap-4 md:grid-cols-2">
                   {catDraws.map((draw) => {
                     const list = (drawMatches ?? []).filter((m) => m.draw_id === draw.id);
@@ -137,13 +139,16 @@ function DrawsPage() {
                                   .filter((m) => m.round === round)
                                   .sort((a, b) => a.slot - b.slot)
                                   .map((m) => (
-                                    <li key={m.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                                  <li
+                                    key={m.id}
+                                    className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                                  >
                                       <span>
-                                        <span className={m.winner_id === m.team_a_id ? "font-semibold" : ""}>
+                                        <span className={m.winner_id === m.team_a_id ? "font-semibold text-primary" : ""}>
                                           {label(m.team_a_id)}
                                         </span>
                                         <span className="text-muted-foreground"> vs </span>
-                                        <span className={m.winner_id === m.team_b_id ? "font-semibold" : ""}>
+                                        <span className={m.winner_id === m.team_b_id ? "font-semibold text-primary" : ""}>
                                           {m.note === "Bye" ? "Bye" : label(m.team_b_id)}
                                         </span>
                                       </span>
@@ -151,6 +156,7 @@ function DrawsPage() {
                                         {m.note === "Bye" ? "—" : gamesLabel(parseGames(m.games))}
                                       </span>
                                     </li>
+
                                   ))}
                               </ul>
                             </div>

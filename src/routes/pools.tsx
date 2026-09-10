@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import { AppShell, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { generatePoolsForCategory, setManualRankOverride } from "@/lib/tournament/actions";
@@ -91,11 +91,17 @@ function PoolsPage() {
 
               {catPools.length === 0 ? (
                 <Panel>
-                  <p className="text-sm text-muted-foreground">
-                    No pools yet. {catTeams.length < 4 ? "At least 4 entries are needed." : "Generate them when entries are final."}
-                  </p>
+                  <EmptyState
+                    title="No pools yet"
+                    hint={
+                      catTeams.length < 4
+                        ? "At least 4 entries are needed before pools can be drawn."
+                        : "Generate them when entries are final."
+                    }
+                  />
                 </Panel>
               ) : (
+
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {catPools.map((pool) => {
                     const poolEntries = (entries ?? []).filter((e) => e.pool_id === pool.id);
@@ -122,28 +128,29 @@ function PoolsPage() {
                           </span>
                         }
                       >
-                        <table className="w-full text-sm">
+                        <table className="data-table">
                           <thead>
-                            <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                              <th className="pb-1">#</th>
-                              <th className="pb-1">Entry</th>
-                              <th className="pb-1 text-right">W-L</th>
-                              <th className="pb-1 text-right">Diff</th>
-                              <th className="pb-1" />
+                            <tr>
+                              <th className="w-8">#</th>
+                              <th>Entry</th>
+                              <th className="text-right">W-L</th>
+                              <th className="text-right">Diff</th>
+                              <th />
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-hairline">
+                          <tbody>
                             {standings.map((s) => {
                               const entry = poolEntries.find((e) => e.team_id === s.teamId);
                               return (
                                 <tr key={s.teamId}>
-                                  <td className="py-1.5 font-score text-xs text-muted-foreground">{s.rank}</td>
-                                  <td className="py-1.5 pr-2">{teamLabel(teamMap.get(s.teamId), playerMap)}</td>
-                                  <td className="py-1.5 text-right font-score text-xs">
+                                  <td className="font-score text-xs font-semibold text-primary">{s.rank}</td>
+                                  <td className="pr-2 font-medium">{teamLabel(teamMap.get(s.teamId), playerMap)}</td>
+                                  <td className="text-right font-score text-xs">
                                     {s.wins}-{s.losses}
                                   </td>
-                                  <td className="py-1.5 text-right font-score text-xs">{signed(s.diff)}</td>
-                                  <td className="py-1.5 pl-2 text-right">
+                                  <td className="text-right font-score text-xs">{signed(s.diff)}</td>
+                                  <td className="pl-2 text-right">
+
                                     {canScore && entry ? (
                                       <button
                                         className="text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"

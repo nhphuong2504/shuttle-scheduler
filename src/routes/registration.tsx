@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -190,11 +190,15 @@ function RegistrationPage() {
                 right={<span className="font-score text-xs text-muted-foreground">{list.length} entries</span>}
               >
                 {list.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No entries yet.</p>
+                  <EmptyState title="No entries yet" hint="Add players on the left, then create an entry." />
                 ) : (
                   <ul className="divide-y divide-hairline">
                     {list.map((t) => (
-                      <li key={t.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <li
+                        key={t.id}
+                        className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
+                      >
+
                         <span className={t.withdrawn ? "text-muted-foreground line-through" : ""}>
                           {teamLabel(t, playerMap)}
                         </span>
