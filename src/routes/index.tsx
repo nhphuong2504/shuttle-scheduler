@@ -681,6 +681,7 @@ export function MatchOperationsDialog({
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
   const table = match.kind === "pool" ? "pool_matches" : "draw_matches";
+  const notStarted = match.status !== "in-progress";
   const runStart = async () => {
     const restWarnings = startCheck?.warnings ?? [];
     try {
