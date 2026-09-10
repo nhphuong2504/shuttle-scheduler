@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
-import { AppShell, Panel, StatusPill } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -134,8 +134,12 @@ function MatchesPage() {
               >
                 <ul className="divide-y divide-hairline">
                   {list.map((m) => (
-                    <li key={m.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                      <span className="w-14 font-score text-[11px] text-muted-foreground">R{m.round}</span>
+                    <li
+                      key={m.id}
+                      className="-mx-2 flex flex-wrap items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <span className="w-10 font-score text-[11px] font-semibold text-primary">R{m.round}</span>
+
                       <span className="min-w-[220px] flex-1">
                         {label(m.team_a_id)} <span className="text-muted-foreground">vs</span> {label(m.team_b_id)}
                       </span>
@@ -164,9 +168,13 @@ function MatchesPage() {
           })}
           {(pools ?? []).length === 0 ? (
             <Panel>
-              <p className="text-sm text-muted-foreground">No pools generated yet.</p>
+              <EmptyState
+                title="No pools generated yet"
+                hint="Draw the pools first and the group matches will appear here."
+              />
             </Panel>
           ) : null}
+
         </TabsContent>
 
         <TabsContent value="knockout" className="mt-4 space-y-4">
@@ -187,10 +195,14 @@ function MatchesPage() {
               >
                 <ul className="divide-y divide-hairline">
                   {list.map((m) => (
-                    <li key={m.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                      <span className="w-14 font-score text-[11px] text-muted-foreground">
+                    <li
+                      key={m.id}
+                      className="-mx-2 flex flex-wrap items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <span className="w-12 font-score text-[11px] font-semibold text-primary">
                         R{m.round}.{m.slot}
                       </span>
+
                       <span className="min-w-[220px] flex-1">
                         {label(m.team_a_id)} <span className="text-muted-foreground">vs</span> {label(m.team_b_id)}
                       </span>
@@ -221,9 +233,13 @@ function MatchesPage() {
           })}
           {(draws ?? []).length === 0 ? (
             <Panel>
-              <p className="text-sm text-muted-foreground">No draws generated yet.</p>
+              <EmptyState
+                title="No draws generated yet"
+                hint="Knockout matches appear once every pool in a category is complete."
+              />
             </Panel>
           ) : null}
+
         </TabsContent>
       </Tabs>
       <Dialog open={!!selectedMatch} onOpenChange={(open) => !open && setSelected(null)}>
