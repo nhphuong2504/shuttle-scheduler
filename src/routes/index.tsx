@@ -869,7 +869,7 @@ export function MatchOperationsDialog({
                     setBusy(true);
                     await startMatch(table, match.id, courtId);
                     toast.success("Match started");
-                    onRefresh();
+                    onDone();
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : "Could not start the match");
                   } finally {
