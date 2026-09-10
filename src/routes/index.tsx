@@ -681,6 +681,19 @@ export function MatchOperationsDialog({
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
   const table = match.kind === "pool" ? "pool_matches" : "draw_matches";
+  const runStart = async () => {
+    const restWarnings = startCheck?.warnings ?? [];
+    try {
+      setBusy(true);
+      await startMatch(table, match.id, courtId, restWarnings.length > 0);
+      toast.success("Match started");
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start the match");
+    } finally {
+      setBusy(false);
+    }
+  };
   const rows = match.kind === "pool" ? 1 : 3;
 
   const set = (row: number, col: number, v: string) =>
