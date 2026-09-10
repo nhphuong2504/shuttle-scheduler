@@ -362,9 +362,15 @@ function Desk() {
 
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-display text-sm font-bold">Court {court.number}</span>
+                    <span className="flex items-center gap-1.5 font-display text-sm font-bold">
+                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 font-score text-[11px] text-primary">
+                        {court.number}
+                      </span>
+                      Court {court.number}
+                    </span>
                     <CourtStatePill state={state.state} />
                   </div>
+
                   <p className="mt-2 text-sm">
                     {state.playing ? (
                       <>
