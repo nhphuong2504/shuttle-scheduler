@@ -69,7 +69,6 @@ import {
   deriveCourtState,
   getMatchReadiness,
   getOperationalKpis,
-  upcomingMatches,
   type DeskMatchModel,
   type MatchReadiness,
 } from "@/lib/tournament/desk";
