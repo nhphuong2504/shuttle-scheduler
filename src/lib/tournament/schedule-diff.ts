@@ -33,6 +33,42 @@ export interface DiffMatchRow {
   court_id: string | null;
 }
 
+export interface RemainingMatchRow {
+  status: string;
+  scheduled_time: string | null;
+  started_at?: string | null;
+}
+
+/** Latest predicted end among matches still scheduled or in progress. */
+export function projectedFinishFromRemainingMatches(
+  matches: RemainingMatchRow[],
+  slotMinutes: number,
+  now = Date.now(),
+): number | null {
+  let latest: number | null = null;
+  for (const match of matches) {
+    if (match.status !== "scheduled" && match.status !== "in-progress") continue;
+    let start: number | null = null;
+    if (match.status === "in-progress") {
+      const anchor = match.started_at ?? match.scheduled_time;
+      start = anchor ? Math.max(new Date(anchor).getTime(), now) : now;
+    } else if (match.scheduled_time) {
+      start = new Date(match.scheduled_time).getTime();
+    }
+    if (start == null) continue;
+    const end = start + slotMinutes * 60_000;
+    latest = latest == null ? end : Math.max(latest, end);
+  }
+  return latest;
+}
+
+export function formatProjectedFinishDelta(deltaMinutes: number): string {
+  if (deltaMinutes === 0) return "Same finish as the current schedule";
+  const abs = Math.abs(deltaMinutes);
+  if (deltaMinutes > 0) return `${abs} min later than the current schedule`;
+  return `${abs} min earlier than the current schedule`;
+}
+
 function courtNumber(
   courtId: string | null,
   courtNumberById: ReadonlyMap<string, number>,

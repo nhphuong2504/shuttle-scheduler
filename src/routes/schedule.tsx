@@ -35,6 +35,7 @@ import {
   useSettings,
   useTeams,
 } from "@/lib/tournament/data";
+import { formatProjectedFinishDelta } from "@/lib/tournament/schedule-diff";
 import { timeLabel } from "@/lib/tournament/format";
 
 export const Route = createFileRoute("/schedule")({
@@ -542,6 +543,17 @@ function SchedulePage() {
                       {previewPlan.summary.remainingUtilization != null
                         ? ` · ${Math.round(previewPlan.summary.remainingUtilization * 100)}% of remaining window`
                         : ""}
+                      {previewPlan.summary.projectedFinishDeltaMinutes != null ? (
+                        <>
+                          {" · "}
+                          {formatProjectedFinishDelta(
+                            previewPlan.summary.projectedFinishDeltaMinutes,
+                          )}
+                          {previewPlan.summary.currentProjectedFinish
+                            ? ` (current ${timeLabel(previewPlan.summary.currentProjectedFinish)})`
+                            : ""}
+                        </>
+                      ) : null}
                     </p>
                   ) : null}
                 </div>

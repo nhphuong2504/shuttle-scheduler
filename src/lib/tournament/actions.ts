@@ -11,7 +11,11 @@ import {
   type GraspScheduleResult,
   type GraspSchedulableMatch,
 } from "./scheduler-grasp";
-import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
+import {
+  diffPlan,
+  projectedFinishFromRemainingMatches,
+  type SchedulePlanDiff,
+} from "./schedule-diff";
 import { scheduleMatches, type SchedulableMatch, type ScheduledSlot } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
@@ -305,6 +309,8 @@ export interface ScheduleSummary {
   remainingUtilization: number | null;
   overrun: boolean;
   projectedFinish: string | null;
+  currentProjectedFinish: string | null;
+  projectedFinishDeltaMinutes: number | null;
   overrunMinutes: number;
   diagnostics?: GraspDiagnostics | undefined;
 }
@@ -529,6 +535,15 @@ export function planDay(
     }));
 
   const graspResult = day === 1 ? (result as GraspScheduleResult) : null;
+  const currentFinishMs =
+    day === 1 && isDayOneRebuild
+      ? projectedFinishFromRemainingMatches(poolMatches, slotMinutes)
+      : null;
+  const newFinishMs = result.projectedFinish?.getTime() ?? null;
+  const projectedFinishDeltaMinutes =
+    currentFinishMs != null && newFinishMs != null
+      ? Math.round((newFinishMs - currentFinishMs) / 60_000)
+      : null;
   const summary: ScheduleSummary = {
     placed: diff.placedCount,
     anchorCount: diff.anchorCount,
@@ -539,6 +554,9 @@ export function planDay(
     remainingUtilization: graspResult?.diagnostics.remainingWindowUtilization ?? null,
     overrun: result.overrun,
     projectedFinish: result.projectedFinish?.toISOString() ?? null,
+    currentProjectedFinish:
+      currentFinishMs != null ? new Date(currentFinishMs).toISOString() : null,
+    projectedFinishDeltaMinutes,
     overrunMinutes: result.overrunMinutes,
     ...(graspResult ? { diagnostics: graspResult.diagnostics } : {}),
   };

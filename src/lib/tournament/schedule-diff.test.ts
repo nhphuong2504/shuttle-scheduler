@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { diffPlan } from "./schedule-diff";
+import {
+  diffPlan,
+  formatProjectedFinishDelta,
+  projectedFinishFromRemainingMatches,
+} from "./schedule-diff";
 import type { ScheduledSlot } from "./scheduler";
 
 const courtNumberById = new Map([
@@ -59,5 +63,35 @@ describe("diffPlan", () => {
     expect(diff.movedCount).toBe(1);
     expect(diff.newlyPlacedCount).toBe(1);
     expect(diff.largestShiftMinutes).toBe(20);
+  });
+});
+
+describe("projectedFinishFromRemainingMatches", () => {
+  it("uses the latest end among scheduled and in-progress matches", () => {
+    const now = new Date("2026-09-12T13:00:00.000Z").getTime();
+    const finish = projectedFinishFromRemainingMatches(
+      [
+        {
+          status: "scheduled",
+          scheduled_time: "2026-09-12T14:00:00.000Z",
+        },
+        {
+          status: "in-progress",
+          scheduled_time: "2026-09-12T12:20:00.000Z",
+          started_at: "2026-09-12T12:48:00.000Z",
+        },
+      ],
+      20,
+      now,
+    );
+    expect(finish).toBe(new Date("2026-09-12T14:20:00.000Z").getTime());
+  });
+});
+
+describe("formatProjectedFinishDelta", () => {
+  it("describes earlier, later, and unchanged finishes", () => {
+    expect(formatProjectedFinishDelta(40)).toBe("40 min later than the current schedule");
+    expect(formatProjectedFinishDelta(-15)).toBe("15 min earlier than the current schedule");
+    expect(formatProjectedFinishDelta(0)).toBe("Same finish as the current schedule");
   });
 });
