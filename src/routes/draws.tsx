@@ -190,16 +190,39 @@ function DrawsPage() {
                   <Panel title={`Draw ${draw.tier} bracket`} bodyClassName="table-scroll p-3">
                     <div className="flex min-w-max items-stretch gap-4">
                       {rounds.map((round) => {
-                        const roundMatches = list
-                          .filter((m) => m.round === round)
-                          .sort((a, b) => a.slot - b.slot);
+                        const bySlot = new Map(
+                          list.filter((m) => m.round === round).map((m) => [m.slot, m] as const),
+                        );
+                        const slotCount = Math.max(bracketSize / Math.pow(2, round), 1);
+                        const roundSlots = Array.from({ length: slotCount }, (_, i) => i + 1);
                         return (
                           <div key={round} className="flex w-60 shrink-0 flex-col">
                             <h3 className="mb-2 font-display text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                              {roundName(draw.bracket_size, round)}
+                              {roundName(bracketSize, round)}
                             </h3>
                             <div className="flex flex-1 flex-col justify-around gap-2.5">
-                              {roundMatches.map((m) => {
+                              {roundSlots.map((slot) => {
+                                const m = bySlot.get(slot);
+                                if (!m) {
+                                  return (
+                                    <div
+                                      key={`${round}-${slot}`}
+                                      className="overflow-hidden rounded-lg border border-dashed border-hairline bg-surface/60"
+                                    >
+                                      <div className="flex items-center justify-between border-b border-hairline/70 bg-muted/30 px-2.5 py-1">
+                                        <span className="font-score text-[10px] uppercase tracking-widest text-muted-foreground">
+                                          Match {slot}
+                                        </span>
+                                        <span className="font-score text-[10px] uppercase tracking-widest text-muted-foreground">
+                                          Awaiting
+                                        </span>
+                                      </div>
+                                      <SideRow name="TBC" scores="" isWinner={false} isBye={false} dimmed />
+                                      <div className="h-px bg-hairline/70" />
+                                      <SideRow name="TBC" scores="" isWinner={false} isBye={false} dimmed />
+                                    </div>
+                                  );
+                                }
                                 const games = parseGames(m.games);
                                 const isBye = m.note === "Bye";
                                 const scoreFor = (side: Side) =>
