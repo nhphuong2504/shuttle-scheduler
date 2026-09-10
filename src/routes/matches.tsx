@@ -1,17 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 
 import { AppShell, Panel, StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/useSession";
-import { reportDrawMatch, reportPoolMatch, resetMatch, startMatch } from "@/lib/tournament/actions";
 import {
   indexBy,
   teamLabel,
+  teamPlayerIds,
   useCategories,
   useCourts,
   useDrawMatches,
@@ -19,10 +18,11 @@ import {
   usePlayers,
   usePoolMatches,
   usePools,
-  useSettings,
+  useRealtimeRefresh,
   useTeams,
 } from "@/lib/tournament/data";
-import { gamesLabel, gamesWinner, minutesSince, parseGames, timeLabel } from "@/lib/tournament/format";
+import { gamesLabel, parseGames, timeLabel } from "@/lib/tournament/format";
+import { MatchOperationsDialog, type DeskMatch } from "./index";
 
 export const Route = createFileRoute("/matches")({
   head: () => ({
@@ -44,8 +44,11 @@ export const Route = createFileRoute("/matches")({
 
 function MatchesPage() {
   const qc = useQueryClient();
-  const { canScore } = useSession();
-  const { data: settings } = useSettings();
+  const { canScore, canSchedule } = useSession();
+  useRealtimeRefresh();
+  const [selected, setSelected] = useState<{ id: string; kind: "pool" | "draw" } | null>(
+    null,
+  );
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -64,6 +67,46 @@ function MatchesPage() {
 
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
   const refresh = () => qc.invalidateQueries();
+  const selectedMatch = useMemo<DeskMatch | null>(() => {
+    if (!selected) return null;
+    if (selected.kind === "pool") {
+      const match = (poolMatches ?? []).find((row) => row.id === selected.id);
+      if (!match) return null;
+      return {
+        id: match.id,
+        kind: "pool",
+        courtId: match.court_id,
+        status: match.status,
+        startedAt: match.started_at,
+        endedAt: match.ended_at,
+        scheduled: match.scheduled_time,
+        teams: [match.team_a_id, match.team_b_id],
+        playerIds: [match.team_a_id, match.team_b_id].flatMap((id) =>
+          id ? teamPlayerIds(teamMap.get(id)) : [],
+        ),
+        tag: catMap.get(match.category_id)?.code ?? "",
+        score: match.status === "reported" ? `${match.score_a}-${match.score_b}` : null,
+      };
+    }
+    const match = (drawMatches ?? []).find((row) => row.id === selected.id);
+    if (!match) return null;
+    const draw = drawMap.get(match.draw_id);
+    return {
+      id: match.id,
+      kind: "draw",
+      courtId: match.court_id,
+      status: match.status,
+      startedAt: match.started_at,
+      endedAt: match.ended_at,
+      scheduled: match.scheduled_time,
+      teams: [match.team_a_id, match.team_b_id],
+      playerIds: [match.team_a_id, match.team_b_id].flatMap((id) =>
+        id ? teamPlayerIds(teamMap.get(id)) : [],
+      ),
+      tag: `${catMap.get(draw?.category_id ?? "")?.code ?? ""} · Draw ${draw?.tier ?? ""}`,
+      score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
+    };
+  }, [selected, poolMatches, drawMatches, teamMap, catMap, drawMap]);
 
   return (
     <AppShell title="Score entry" subtitle="Group stage is a single game to 21. Knockouts are best of three.">
@@ -102,44 +145,17 @@ function MatchesPage() {
                       </span>
                       <StatusPill status={m.status} />
                       {m.status === "reported" ? (
-                        <span className="flex items-center gap-2">
-                          <span className="font-score text-sm">
-                            {m.score_a}-{m.score_b}
-                          </span>
-                          {canScore ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={async () => {
-                                await resetMatch("pool_matches", m.id);
-                                refresh();
-                              }}
-                            >
-                              Correct
-                            </Button>
-                          ) : null}
+                        <span className="font-score text-sm">
+                          {m.score_a}-{m.score_b}
                         </span>
-                      ) : (
-                        <GroupScoreEntry
-                          disabled={!canScore}
-                          inProgress={m.status === "in-progress"}
-                          startedAt={m.started_at}
-                          capMinutes={settings?.group_slot_minutes ?? 20}
-                          onStart={async () => {
-                            await startMatch("pool_matches", m.id, m.court_id);
-                            refresh();
-                          }}
-                          onSubmit={async (a, b) => {
-                            try {
-                              await reportPoolMatch(m.id, a, b);
-                              toast.success("Result recorded");
-                              refresh();
-                            } catch (error) {
-                              toast.error(error instanceof Error ? error.message : "Could not save result");
-                            }
-                          }}
-                        />
-                      )}
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelected({ id: m.id, kind: "pool" })}
+                      >
+                        Open
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -184,44 +200,19 @@ function MatchesPage() {
                       </span>
                       <StatusPill status={m.note === "Bye" ? "walkover" : m.status} />
                       {m.status === "reported" ? (
-                        <span className="flex items-center gap-2">
-                          <span className="font-score text-sm">
-                            {m.note === "Bye" ? "Bye" : gamesLabel(parseGames(m.games))}
-                          </span>
-                          {canScore && m.note !== "Bye" ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={async () => {
-                                await resetMatch("draw_matches", m.id);
-                                refresh();
-                              }}
-                            >
-                              Correct
-                            </Button>
-                          ) : null}
+                        <span className="font-score text-sm">
+                          {m.note === "Bye" ? "Bye" : gamesLabel(parseGames(m.games))}
                         </span>
-                      ) : (
-                        <KnockoutScoreEntry
-                          disabled={!canScore || !m.team_a_id || !m.team_b_id}
-                          inProgress={m.status === "in-progress"}
-                          startedAt={m.started_at}
-                          capMinutes={settings?.knockout_slot_minutes ?? 25}
-                          onStart={async () => {
-                            await startMatch("draw_matches", m.id, m.court_id);
-                            refresh();
-                          }}
-                          onSubmit={async (games) => {
-                            try {
-                              await reportDrawMatch(m.id, games);
-                              toast.success("Result recorded");
-                              refresh();
-                            } catch (error) {
-                              toast.error(error instanceof Error ? error.message : "Could not save result");
-                            }
-                          }}
-                        />
-                      )}
+                      ) : null}
+                      {m.note !== "Bye" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelected({ id: m.id, kind: "draw" })}
+                        >
+                          Open
+                        </Button>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -235,130 +226,34 @@ function MatchesPage() {
           ) : null}
         </TabsContent>
       </Tabs>
+      <Dialog open={!!selectedMatch} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent className="sm:max-w-md">
+          {selectedMatch ? (
+            <MatchOperationsDialog
+              key={selectedMatch.id}
+              match={selectedMatch}
+              nameA={label(selectedMatch.teams[0])}
+              nameB={label(selectedMatch.teams[1])}
+              courtId={selectedMatch.courtId}
+              courtNumber={
+                selectedMatch.courtId
+                  ? (courtMap.get(selectedMatch.courtId)?.number ?? null)
+                  : null
+              }
+              courts={courts ?? []}
+              signedIn={canScore}
+              canSchedule={canSchedule}
+              startCheck={null}
+              playerMap={playerMap}
+              onDone={() => {
+                refresh();
+                setSelected(null);
+              }}
+              onRefresh={refresh}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </AppShell>
-  );
-}
-
-function Clock({ startedAt, capMinutes }: { startedAt: string | null; capMinutes: number }) {
-  const mins = minutesSince(startedAt);
-  if (mins == null) return null;
-  const late = mins > capMinutes;
-  return (
-    <span
-      className={`font-score text-[11px] ${late ? "rounded bg-danger-surface px-1.5 py-0.5 text-danger-foreground" : "text-muted-foreground"}`}
-    >
-      {mins}′{late ? " over cap" : ""}
-    </span>
-  );
-}
-
-function GroupScoreEntry({
-  disabled,
-  inProgress,
-  startedAt,
-  capMinutes,
-  onStart,
-  onSubmit,
-}: {
-  disabled: boolean;
-  inProgress: boolean;
-  startedAt: string | null;
-  capMinutes: number;
-  onStart: () => void;
-  onSubmit: (a: number, b: number) => void;
-}) {
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  return (
-    <span className="flex items-center gap-2">
-      {inProgress ? <Clock startedAt={startedAt} capMinutes={capMinutes} /> : null}
-      <Input
-        className="h-8 w-14 font-score"
-        inputMode="numeric"
-        value={a}
-        disabled={disabled}
-        onChange={(e) => setA(e.target.value)}
-        aria-label="Score A"
-      />
-      <Input
-        className="h-8 w-14 font-score"
-        inputMode="numeric"
-        value={b}
-        disabled={disabled}
-        onChange={(e) => setB(e.target.value)}
-        aria-label="Score B"
-      />
-      <Button size="sm" disabled={disabled || a === "" || b === ""} onClick={() => onSubmit(Number(a), Number(b))}>
-        Report
-      </Button>
-      {!inProgress ? (
-        <Button size="sm" variant="outline" disabled={disabled} onClick={onStart}>
-          Start
-        </Button>
-      ) : null}
-    </span>
-  );
-}
-
-function KnockoutScoreEntry({
-  disabled,
-  inProgress,
-  startedAt,
-  capMinutes,
-  onStart,
-  onSubmit,
-}: {
-  disabled: boolean;
-  inProgress: boolean;
-  startedAt: string | null;
-  capMinutes: number;
-  onStart: () => void;
-  onSubmit: (games: { a: number; b: number }[]) => void;
-}) {
-  const [values, setValues] = useState<string[][]>([
-    ["", ""],
-    ["", ""],
-    ["", ""],
-  ]);
-
-  const set = (row: number, col: number, v: string) =>
-    setValues((prev) => prev.map((r, i) => (i === row ? r.map((c, j) => (j === col ? v : c)) : r)));
-
-  const games = values
-    .filter((r) => r[0] !== "" && r[1] !== "")
-    .map((r) => ({ a: Number(r[0]), b: Number(r[1]) }));
-
-  return (
-    <span className="flex flex-wrap items-center gap-2">
-      {inProgress ? <Clock startedAt={startedAt} capMinutes={capMinutes} /> : null}
-      {values.map((row, i) => (
-        <span key={i} className="flex items-center gap-1">
-          <Input
-            className="h-8 w-12 font-score"
-            inputMode="numeric"
-            value={row[0] ?? ""}
-            disabled={disabled}
-            onChange={(e) => set(i, 0, e.target.value)}
-            aria-label={`Game ${i + 1} A`}
-          />
-          <Input
-            className="h-8 w-12 font-score"
-            inputMode="numeric"
-            value={row[1] ?? ""}
-            disabled={disabled}
-            onChange={(e) => set(i, 1, e.target.value)}
-            aria-label={`Game ${i + 1} B`}
-          />
-        </span>
-      ))}
-      <Button size="sm" disabled={disabled || !gamesWinner(games)} onClick={() => onSubmit(games)}>
-        Report
-      </Button>
-      {!inProgress ? (
-        <Button size="sm" variant="outline" disabled={disabled} onClick={onStart}>
-          Start
-        </Button>
-      ) : null}
-    </span>
   );
 }

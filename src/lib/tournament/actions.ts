@@ -26,6 +26,57 @@ async function rpc(name: string, args: Record<string, unknown>) {
   if (error) throw new Error(error.message);
 }
 
+export interface ScheduleImpact {
+  shiftedMatches: number;
+  largestShiftMinutes: number;
+  direction: "earlier" | "later" | "mixed" | "none";
+}
+
+type ScheduleSnapshot = Map<string, number>;
+
+async function scheduleSnapshot(): Promise<ScheduleSnapshot> {
+  const [pool, draw] = await Promise.all([
+    supabase.from("pool_matches").select("id, scheduled_time").eq("status", "scheduled"),
+    supabase.from("draw_matches").select("id, scheduled_time").eq("status", "scheduled"),
+  ]);
+  if (pool.error) throw new Error(pool.error.message);
+  if (draw.error) throw new Error(draw.error.message);
+  const snapshot = new Map<string, number>();
+  for (const row of pool.data ?? []) {
+    if (row.scheduled_time) {
+      snapshot.set(`pool:${row.id}`, new Date(row.scheduled_time).getTime());
+    }
+  }
+  for (const row of draw.data ?? []) {
+    if (row.scheduled_time) {
+      snapshot.set(`draw:${row.id}`, new Date(row.scheduled_time).getTime());
+    }
+  }
+  return snapshot;
+}
+
+function compareSchedule(before: ScheduleSnapshot, after: ScheduleSnapshot): ScheduleImpact {
+  const deltas: number[] = [];
+  for (const [id, next] of after) {
+    const previous = before.get(id);
+    if (previous != null && previous !== next) deltas.push(Math.round((next - previous) / 60_000));
+  }
+  const earlier = deltas.some((delta) => delta < 0);
+  const later = deltas.some((delta) => delta > 0);
+  return {
+    shiftedMatches: deltas.length,
+    largestShiftMinutes: deltas.reduce((largest, delta) => Math.max(largest, Math.abs(delta)), 0),
+    direction: earlier && later ? "mixed" : earlier ? "earlier" : later ? "later" : "none",
+  };
+}
+
+async function withScheduleImpact(work: () => Promise<void>): Promise<ScheduleImpact> {
+  const before = await scheduleSnapshot();
+  await work();
+  const after = await scheduleSnapshot();
+  return compareSchedule(before, after);
+}
+
 export async function createPlayer(input: { name: string; email?: string; phone?: string; gender?: string }) {
   return ok(
     supabase
@@ -83,19 +134,44 @@ export async function generatePoolsForCategory(categoryId: string, teams: Team[]
 
 export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: number) {
   if (!isLegalGameScore(scoreA, scoreB)) throw new Error("A group match needs a race-to-21 winning score.");
-  await rpc("report_pool_result", { p_match_id: matchId, p_score_a: scoreA, p_score_b: scoreB });
+  return withScheduleImpact(() =>
+    rpc("report_pool_result", { p_match_id: matchId, p_score_a: scoreA, p_score_b: scoreB }),
+  );
 }
 
 export async function startMatch(table: "pool_matches" | "draw_matches", matchId: string, courtId: string | null) {
-  const { error } = await supabase
-    .from(table)
-    .update({ status: "in-progress", started_at: new Date().toISOString(), court_id: courtId })
-    .eq("id", matchId);
-  if (error) throw new Error(error.message);
+  if (!courtId) throw new Error("Select a court before starting the match.");
+  await rpc("start_match_safe", {
+    p_table: table,
+    p_match_id: matchId,
+    p_court_id: courtId,
+  });
 }
 
-export async function resetMatch(table: "pool_matches" | "draw_matches", matchId: string) {
-  await rpc("reset_and_repair_match", { p_table: table, p_match_id: matchId });
+export async function rescheduleMatch(
+  table: "pool_matches" | "draw_matches",
+  matchId: string,
+  courtId: string,
+  scheduledTime: string,
+) {
+  await rpc("reschedule_live_match", {
+    p_table: table,
+    p_match_id: matchId,
+    p_court_id: courtId,
+    p_scheduled_time: scheduledTime,
+  });
+}
+
+export async function resetMatch(
+  table: "pool_matches" | "draw_matches",
+  matchId: string,
+  note: string,
+) {
+  await rpc("reset_match_with_note", {
+    p_table: table,
+    p_match_id: matchId,
+    p_note: note,
+  });
 }
 
 export async function resolveMatchException(
@@ -105,13 +181,15 @@ export async function resolveMatchException(
   winnerId: string | null,
   note: string,
 ) {
-  await rpc("resolve_match_exception", {
-    p_table: table,
-    p_match_id: matchId,
-    p_status: status,
-    p_winner_id: winnerId,
-    p_note: note,
-  });
+  return withScheduleImpact(() =>
+    rpc("resolve_match_exception", {
+      p_table: table,
+      p_match_id: matchId,
+      p_status: status,
+      p_winner_id: winnerId,
+      p_note: note,
+    }),
+  );
 }
 
 export async function setManualRankOverride(entryId: string, rank: number | null) {
@@ -200,7 +278,9 @@ export async function generateDrawsForCategory(
 export async function reportDrawMatch(matchId: string, games: GameScore[]) {
   const side = gamesWinner(games);
   if (!side) throw new Error("Enter a valid best-of-three result (exactly two game wins).");
-  await rpc("report_draw_result", { p_match_id: matchId, p_games: games });
+  return withScheduleImpact(() =>
+    rpc("report_draw_result", { p_match_id: matchId, p_games: games }),
+  );
 }
 
 function combineDateTime(date: string, time: string) {

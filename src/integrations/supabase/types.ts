@@ -62,6 +62,36 @@ export type Database = {
         }
         Relationships: []
       }
+      desk_activity: {
+        Row: {
+          action: string
+          actor_id: string | null
+          details: Json
+          id: number
+          match_id: string
+          match_table: string
+          occurred_at: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          details?: Json
+          id?: never
+          match_id: string
+          match_table: string
+          occurred_at?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          details?: Json
+          id?: never
+          match_id?: string
+          match_table?: string
+          occurred_at?: string
+        }
+        Relationships: []
+      }
       draw_matches: {
         Row: {
           court_id: string | null

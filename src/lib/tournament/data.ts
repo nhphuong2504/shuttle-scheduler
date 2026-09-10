@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Court = Database["public"]["Tables"]["courts"]["Row"];
+export type DeskActivity = Database["public"]["Tables"]["desk_activity"]["Row"];
 export type Player = {
   id: string;
   name: string;
@@ -32,6 +33,7 @@ async function must<T>(p: PromiseLike<{ data: T | null; error: { message: string
 export const keys = {
   categories: ["categories"] as const,
   courts: ["courts"] as const,
+  deskActivity: ["desk_activity"] as const,
   players: ["players"] as const,
   teams: ["teams"] as const,
   pools: ["pools"] as const,
@@ -55,6 +57,21 @@ export function useCourts() {
   return useQuery({
     queryKey: keys.courts,
     queryFn: () => must<Court[]>(supabase.from("courts").select("*").order("number")),
+  });
+}
+
+export function useDeskActivity(enabled = true) {
+  return useQuery({
+    queryKey: keys.deskActivity,
+    enabled,
+    queryFn: () =>
+      must<DeskActivity[]>(
+        supabase
+          .from("desk_activity")
+          .select("*")
+          .order("occurred_at", { ascending: false })
+          .limit(12),
+      ),
   });
 }
 
@@ -139,17 +156,36 @@ export function useStaffRoles() {
 
 export function useRealtimeRefresh() {
   const qc = useQueryClient();
+  const [status, setStatus] = useState<"connecting" | "live" | "offline" | "error">(
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting",
+  );
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(() => Date.now());
   useEffect(() => {
+    const onOffline = () => setStatus("offline");
+    const onOnline = () => setStatus("connecting");
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
     const channel = supabase
       .channel("ops-live")
       .on("postgres_changes", { event: "*", schema: "public" }, () => {
+        setLastUpdatedAt(Date.now());
         void qc.invalidateQueries();
       })
-      .subscribe();
+      .subscribe((next) => {
+        if (!navigator.onLine) setStatus("offline");
+        else if (next === "SUBSCRIBED") {
+          setStatus("live");
+          setLastUpdatedAt(Date.now());
+        } else if (next === "CHANNEL_ERROR" || next === "TIMED_OUT") setStatus("error");
+        else if (next === "CLOSED") setStatus("connecting");
+      });
     return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
       void supabase.removeChannel(channel);
     };
   }, [qc]);
+  return { status, lastUpdatedAt };
 }
 
 export function teamLabel(team: Team | undefined, players: Map<string, Player>): string {
