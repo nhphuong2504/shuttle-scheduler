@@ -886,12 +886,9 @@ export function MatchOperationsDialog({
             </ul>
           ) : null}
           <div className="flex gap-2">
-            <Button disabled={!signedIn || busy || !canSubmit} onClick={submit}>
-              Report result
-            </Button>
-            {match.status !== "in-progress" ? (
+            {notStarted ? (
               <Button
-                variant="outline"
+                className="h-11 flex-1 text-base font-semibold shadow-md"
                 disabled={!signedIn || busy || !!startCheck?.conflicts.length}
                 onClick={() => {
                   if ((startCheck?.warnings ?? []).length) {
