@@ -625,6 +625,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      shift_live_schedule_after_match: {
+        Args: { p_match_id: string; p_table: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
