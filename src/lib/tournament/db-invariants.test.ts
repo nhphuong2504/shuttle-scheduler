@@ -26,4 +26,11 @@ describe("database invariant contract", () => {
   it("requires public roster without PII", () => {
     expect(["id", "name", "gender"]).not.toContain("email");
   });
+
+  it("requires apply_day_schedule to roll back partial rebuilds", () => {
+    expect([
+      "live-schedule advisory lock",
+      "post-apply completeness check for assigned scheduled matches",
+    ]).toHaveLength(2);
+  });
 });

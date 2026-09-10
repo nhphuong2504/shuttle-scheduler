@@ -9,6 +9,7 @@ import {
   type GraspOptions,
   type GraspSchedulableMatch,
 } from "./scheduler-grasp";
+import { applyDayPlan, type DayPlan } from "./actions";
 import { checkStartConstraints, scheduleMatches } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
@@ -657,6 +658,183 @@ describe("Day 1 GRASP scheduler", () => {
     expect(result.unscheduled).toEqual([]);
     expect(performance.now() - started).toBeLessThan(20_000);
   }, 25_000);
+});
+
+describe("Day 1 rebuild hardening", () => {
+  const dayStart = new Date("2026-09-12T08:00:00Z");
+  const planningEnd = new Date("2026-09-12T17:00:00Z");
+  const schedulingFloor = new Date("2026-09-12T13:00:00Z");
+  const options: GraspOptions = {
+    dayStart,
+    planningEnd,
+    schedulingFloor,
+    courts: [{ id: "c1", number: 1 }],
+    slotMinutes: 20,
+    restGapMinutes: 10,
+    graspRuns: 4,
+    seed: 4242,
+  };
+
+  it("schedules around in-progress anchors that started later than scheduled_time", () => {
+    const reportedStart = dayStart.getTime() + 4 * 60 * 60_000;
+    const reportedEnd = reportedStart + 35 * 60_000;
+    const liveStart = dayStart.getTime() + 4 * 60 * 60_000 + 48 * 60_000;
+    const liveEnd = Math.max(liveStart + 20 * 60_000, schedulingFloor.getTime() + 20 * 60_000);
+    const rebuildMatches: GraspSchedulableMatch[] = [
+      {
+        id: "reported",
+        categoryId: "MS",
+        playerIds: ["p1", "p2"],
+        kind: "group",
+        order: 1,
+        fixed: true,
+        start: reportedStart,
+        end: reportedEnd,
+        courtNumber: 1,
+      },
+      {
+        id: "live",
+        categoryId: "MS",
+        playerIds: ["p1", "p3"],
+        kind: "group",
+        order: 2,
+        round: 2,
+        fixed: true,
+        start: liveStart,
+        end: liveEnd,
+        courtNumber: 1,
+      },
+      {
+        id: "next",
+        categoryId: "WS",
+        playerIds: ["p4", "p5"],
+        kind: "group",
+        order: 1,
+        round: 1,
+      },
+    ];
+
+    const result = scheduleGroupStageGrasp(rebuildMatches, options);
+    expect(result.unscheduled).toEqual([]);
+    const nextSlot = result.slots.find((slot) => slot.matchId === "next");
+    expect(nextSlot?.start.getTime()).toBeGreaterThanOrEqual(liveEnd);
+    expect(nextSlot?.start.getTime()).toBeGreaterThanOrEqual(schedulingFloor.getTime());
+    expect(
+      validateGraspSchedule(rebuildMatches, result.slots, result.unscheduled, options).valid,
+    ).toBe(true);
+  });
+
+  it("does not invalidate candidates because two fixed anchors overlap historically", () => {
+    const firstStart = dayStart.getTime() + 4 * 60 * 60_000;
+    const firstEnd = firstStart + 35 * 60_000;
+    const secondStart = dayStart.getTime() + 4 * 60 * 60_000 + 20 * 60_000;
+    const secondEnd = secondStart + 20 * 60_000;
+    const rebuildMatches: GraspSchedulableMatch[] = [
+      {
+        id: "first",
+        categoryId: "MS",
+        playerIds: ["p1", "p2"],
+        kind: "group",
+        order: 1,
+        fixed: true,
+        start: firstStart,
+        end: firstEnd,
+        courtNumber: 1,
+      },
+      {
+        id: "second",
+        categoryId: "MS",
+        playerIds: ["p1", "p3"],
+        kind: "group",
+        order: 2,
+        fixed: true,
+        start: secondStart,
+        end: secondEnd,
+        courtNumber: 1,
+      },
+      {
+        id: "next",
+        categoryId: "WS",
+        playerIds: ["p4", "p5"],
+        kind: "group",
+        order: 1,
+      },
+    ];
+
+    const result = scheduleGroupStageGrasp(rebuildMatches, options);
+    expect(result.unscheduled).toEqual([]);
+    expect(
+      validateGraspSchedule(rebuildMatches, result.slots, result.unscheduled, options).valid,
+    ).toBe(true);
+  });
+
+  it("reports remaining-window utilization during a mid-day rebuild", () => {
+    const movable: GraspSchedulableMatch[] = [
+      {
+        id: "m1",
+        categoryId: "MS",
+        playerIds: ["p1", "p2"],
+        kind: "group",
+        order: 1,
+        round: 1,
+      },
+      {
+        id: "m2",
+        categoryId: "WS",
+        playerIds: ["p3", "p4"],
+        kind: "group",
+        order: 1,
+        round: 1,
+      },
+    ];
+    const result = scheduleGroupStageGrasp(movable, {
+      ...options,
+      schedulingFloor,
+      graspRuns: 2,
+    });
+    expect(result.diagnostics.remainingWindowUtilization).not.toBeNull();
+    expect(result.diagnostics.remainingWindowUtilization).toBeGreaterThan(0);
+  });
+});
+
+describe("applyDayPlan", () => {
+  it("refuses to apply when blocked matches remain", async () => {
+    const plan: DayPlan = {
+      day: 1 as const,
+      slots: [],
+      fixedMatchIds: [],
+      blocked: ["blocked-match"],
+      awaitingTeams: [],
+      diff: {
+        changes: [],
+        anchorCount: 0,
+        placedCount: 0,
+        movedCount: 0,
+        newlyPlacedCount: 0,
+        largestShiftMinutes: 0,
+        unplaceable: ["blocked-match"],
+      },
+      summary: {
+        placed: 0,
+        anchorCount: 0,
+        movedCount: 0,
+        unscheduled: 1,
+        awaitingTeams: 0,
+        utilization: 0,
+        remainingUtilization: null,
+        overrun: true,
+        projectedFinish: null,
+        overrunMinutes: 0,
+        diagnostics: { deadlockReason: "No future event can make 1 remaining match(es) eligible." },
+      },
+      settingsPatch: null,
+      settingsId: "settings-id",
+      poolEnds: {},
+      movableSlotPayload: [],
+    };
+
+    await expect(applyDayPlan(plan)).rejects.toThrow(/Cannot apply rebuild/);
+  });
 });
 
 describe("start constraints", () => {

@@ -11,7 +11,8 @@ import {
   type GraspScheduleResult,
   type GraspSchedulableMatch,
 } from "./scheduler-grasp";
-import { scheduleMatches, type SchedulableMatch } from "./scheduler";
+import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
+import { scheduleMatches, type SchedulableMatch, type ScheduledSlot } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
 async function ok<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<NonNullable<T>> {
@@ -296,12 +297,30 @@ function combineDateTime(date: string, time: string) {
 
 export interface ScheduleSummary {
   placed: number;
+  anchorCount: number;
+  movedCount: number;
   unscheduled: number;
+  awaitingTeams: number;
   utilization: number;
+  remainingUtilization: number | null;
   overrun: boolean;
   projectedFinish: string | null;
   overrunMinutes: number;
   diagnostics?: GraspDiagnostics | undefined;
+}
+
+export interface DayPlan {
+  day: 1 | 2;
+  slots: ScheduledSlot[];
+  fixedMatchIds: string[];
+  blocked: string[];
+  awaitingTeams: string[];
+  diff: SchedulePlanDiff;
+  summary: ScheduleSummary;
+  settingsPatch: Partial<Settings> | null;
+  settingsId: string;
+  poolEnds: Record<string, string>;
+  movableSlotPayload: { match_id: string; scheduled_time: string; court_id: string }[];
 }
 
 export type DayOneSchedulerOptions = Pick<
@@ -314,7 +333,32 @@ export type DayOneSchedulerOptions = Pick<
   | "maxIterationsPerRun"
 >;
 
-export async function scheduleDay(
+function partitionUnscheduled(
+  unscheduled: string[],
+  items: GraspSchedulableMatch[],
+): { blocked: string[]; awaitingTeams: string[] } {
+  const blocked: string[] = [];
+  const awaitingTeams: string[] = [];
+  for (const id of unscheduled) {
+    const item = items.find((match) => match.id === id);
+    if (!item || item.playersKnown === false || item.playerIds.length === 0) {
+      awaitingTeams.push(id);
+    } else {
+      blocked.push(id);
+    }
+  }
+  return { blocked, awaitingTeams };
+}
+
+function anchorStart(
+  scheduledTime: string | null,
+  startedAt: string | null,
+): number | undefined {
+  const anchor = startedAt ?? scheduledTime;
+  return anchor ? new Date(anchor).getTime() : undefined;
+}
+
+export function planDay(
   day: 1 | 2,
   settings: Settings,
   courts: Court[],
@@ -324,7 +368,8 @@ export async function scheduleDay(
   drawCategory: Map<string, string>,
   categoryOrder: Map<string, number>,
   graspOptions?: DayOneSchedulerOptions,
-): Promise<ScheduleSummary> {
+  settingsPatch?: Partial<Settings> | null,
+): DayPlan {
   if (!courts.length) throw new Error("Load the court list before building a schedule.");
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const playersOf = (a: string | null, b: string | null) => {
@@ -362,8 +407,9 @@ export async function scheduleDay(
             if ((m.team_a_id || m.team_b_id) && ids.length === 0) {
               throw new Error("A scheduled group match is missing player records.");
             }
-            const start = m.scheduled_time ? new Date(m.scheduled_time).getTime() : undefined;
-            const fixed = m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+            const start = anchorStart(m.scheduled_time, m.started_at);
+            const fixed =
+              m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
             const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
             const end =
               m.ended_at && (m.status === "reported" || m.status === "walkover")
@@ -394,13 +440,16 @@ export async function scheduleDay(
             if (m.team_a_id && m.team_b_id && ids.length === 0) {
               throw new Error("A scheduled knockout match is missing player records.");
             }
-            const parents = drawMatches.filter((p) => p.id === m.parent_a_id || p.id === m.parent_b_id);
+            const parents = drawMatches.filter(
+              (p) => p.id === m.parent_a_id || p.id === m.parent_b_id,
+            );
             const parentEnd = parents.reduce((acc, p) => {
               const t = p.ended_at ?? p.reported_time;
               return t ? Math.max(acc, new Date(t).getTime() + restGap * 60_000) : acc;
             }, 0);
-            const start = m.scheduled_time ? new Date(m.scheduled_time).getTime() : undefined;
-            const fixed = m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+            const start = anchorStart(m.scheduled_time, m.started_at);
+            const fixed =
+              m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
             const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
             return {
               id: m.id,
@@ -421,7 +470,12 @@ export async function scheduleDay(
               courtNumber: courts.find((c) => c.id === m.court_id)?.number,
             };
           })
-          .filter((m) => m.fixed || (m.playerIds.length > 0 && drawMatches.find((d) => d.id === m.id)?.status !== "reported"));
+          .filter(
+            (m) =>
+              m.fixed ||
+              (m.playerIds.length > 0 &&
+                drawMatches.find((d) => d.id === m.id)?.status !== "reported"),
+          );
 
   const result =
     day === 1
@@ -442,6 +496,18 @@ export async function scheduleDay(
           restGapMinutes: restGap,
         });
 
+  const fixedMatchIds = items.filter((item) => item.fixed).map((item) => item.id);
+  const fixedSet = new Set(fixedMatchIds);
+  const { blocked, awaitingTeams } = partitionUnscheduled(result.unscheduled, items);
+  const courtNumberById = new Map(courts.map((court) => [court.id, court.number]));
+  const diff = diffPlan(
+    day === 1 ? poolMatches : drawMatches,
+    result.slots,
+    fixedSet,
+    courtNumberById,
+  );
+  diff.unplaceable = blocked;
+
   const poolEnds: Record<string, string> = {};
   if (day === 1) {
     for (const slot of result.slots) {
@@ -454,27 +520,65 @@ export async function scheduleDay(
     }
   }
 
-  await rpc("apply_day_schedule", {
-    p_day: day,
-    p_slots: result.slots
-      .filter((s) => !items.find((i) => i.id === s.matchId)?.fixed)
-      .map((s) => ({
-        match_id: s.matchId,
-        scheduled_time: s.start.toISOString(),
-        court_id: s.courtId,
-      })),
-    p_pool_ends: poolEnds,
-  });
+  const movableSlotPayload = result.slots
+    .filter((slot) => !fixedSet.has(slot.matchId))
+    .map((slot) => ({
+      match_id: slot.matchId,
+      scheduled_time: slot.start.toISOString(),
+      court_id: slot.courtId,
+    }));
 
-  return {
-    placed: result.slots.length,
-    unscheduled: result.unscheduled.length,
+  const graspResult = day === 1 ? (result as GraspScheduleResult) : null;
+  const summary: ScheduleSummary = {
+    placed: diff.placedCount,
+    anchorCount: diff.anchorCount,
+    movedCount: diff.movedCount,
+    unscheduled: blocked.length,
+    awaitingTeams: awaitingTeams.length,
     utilization: result.utilization,
+    remainingUtilization: graspResult?.diagnostics.remainingWindowUtilization ?? null,
     overrun: result.overrun,
     projectedFinish: result.projectedFinish?.toISOString() ?? null,
     overrunMinutes: result.overrunMinutes,
-    ...(day === 1 ? { diagnostics: (result as GraspScheduleResult).diagnostics } : {}),
+    ...(graspResult ? { diagnostics: graspResult.diagnostics } : {}),
   };
+
+  return {
+    day,
+    slots: result.slots,
+    fixedMatchIds,
+    blocked,
+    awaitingTeams,
+    diff,
+    summary,
+    settingsPatch: settingsPatch ?? null,
+    settingsId: settings.id,
+    poolEnds,
+    movableSlotPayload,
+  };
+}
+
+export async function applyDayPlan(plan: DayPlan): Promise<ScheduleImpact> {
+  if (plan.blocked.length > 0) {
+    const reason = plan.summary.diagnostics?.deadlockReason;
+    throw new Error(
+      reason
+        ? `Cannot apply rebuild: ${plan.blocked.length} match(es) could not be placed. ${reason}`
+        : `Cannot apply rebuild: ${plan.blocked.length} match(es) could not be placed.`,
+    );
+  }
+
+  if (plan.settingsPatch && Object.keys(plan.settingsPatch).length > 0) {
+    await updateSettings(plan.settingsId, plan.settingsPatch);
+  }
+
+  return withScheduleImpact(() =>
+    rpc("apply_day_schedule", {
+      p_day: plan.day,
+      p_slots: plan.movableSlotPayload,
+      p_pool_ends: plan.poolEnds,
+    }),
+  );
 }
 
 export async function updateSettings(id: string, patch: Partial<Settings>) {

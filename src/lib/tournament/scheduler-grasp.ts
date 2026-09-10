@@ -81,6 +81,7 @@ export interface GraspDiagnostics {
   winningSeed: number;
   totalRuntime: number;
   averageRuntimePerRun: number;
+  remainingWindowUtilization: number | null;
 }
 
 export interface GraspScheduleResult {
@@ -140,6 +141,7 @@ interface ScoreMetrics {
   makespanMinutes: number;
   courtUtilization: number;
   planningWindowUtilization: number;
+  remainingWindowUtilization: number | null;
   courtIdleMinutes: number;
   matchesAfterCutoff: number;
   afterCutoffMinutes: number;
@@ -787,6 +789,9 @@ export function validateGraspSchedule(
     for (let index = 1; index < courtSlots.length; index++) {
       const previous = courtSlots[index - 1]!;
       const current = courtSlots[index]!;
+      const previousMatch = matchById.get(previous.matchId);
+      const currentMatch = matchById.get(current.matchId);
+      if (previousMatch?.fixed && currentMatch?.fixed) continue;
       if (current.start.getTime() < previous.end.getTime()) {
         errors.push(
           `Court ${courtId} overlaps matches ${previous.matchId} and ${current.matchId}.`,
@@ -810,6 +815,9 @@ export function validateGraspSchedule(
     for (let index = 1; index < playerSlots.length; index++) {
       const previous = playerSlots[index - 1]!;
       const current = playerSlots[index]!;
+      const previousMatch = matchById.get(previous.matchId);
+      const currentMatch = matchById.get(current.matchId);
+      if (previousMatch?.fixed && currentMatch?.fixed) continue;
       const gap = current.start.getTime() - previous.end.getTime();
       if (gap < 0) {
         errors.push(
@@ -971,6 +979,15 @@ function scoreSchedule(
   const planningWindowOccupied = occupiedMinutes(run.slots, options.dayStart, options.planningEnd);
   const planningWindowUtilization =
     planningWindowMinutes > 0 ? planningWindowOccupied / planningWindowMinutes : 0;
+  const remainingWindowMinutes =
+    (Math.max(0, options.planningEnd - options.schedulingFloor) / MINUTE) * options.courts.length;
+  const remainingWindowOccupied = occupiedMinutes(
+    run.slots,
+    options.schedulingFloor,
+    options.planningEnd,
+  );
+  const remainingWindowUtilization =
+    remainingWindowMinutes > 0 ? remainingWindowOccupied / remainingWindowMinutes : null;
   const afterCutoffMinutes =
     projectedFinish == null ? 0 : Math.max(0, projectedFinish - options.planningEnd) / MINUTE;
   const matchesAfterCutoff = run.slots.filter((slot) => slot.end > options.planningEnd).length;
@@ -993,6 +1010,7 @@ function scoreSchedule(
     makespanMinutes,
     courtUtilization,
     planningWindowUtilization,
+    remainingWindowUtilization,
     courtIdleMinutes,
     matchesAfterCutoff,
     afterCutoffMinutes,
@@ -1096,6 +1114,7 @@ export function scheduleGroupStageGrasp(
     winningSeed: winner.seed,
     totalRuntime,
     averageRuntimePerRun: totalRuntime / normalized.graspRuns,
+    remainingWindowUtilization: metrics.remainingWindowUtilization,
   };
 
   return {

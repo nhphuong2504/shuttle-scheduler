@@ -4,23 +4,27 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/hooks/useSession";
-import { scheduleDay, updateSettings, type ScheduleSummary } from "@/lib/tournament/actions";
+import {
+  applyDayPlan,
+  planDay,
+  type DayPlan,
+  type ScheduleSummary,
+} from "@/lib/tournament/actions";
 import {
   indexBy,
+  keys,
   teamLabel,
   useCategories,
   useCourts,
@@ -72,7 +76,9 @@ function SchedulePage() {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [windowTouched, setWindowTouched] = useState(false);
-  const [confirmRebuild, setConfirmRebuild] = useState(false);
+  const [windowUnlocked, setWindowUnlocked] = useState(false);
+  const [previewPlan, setPreviewPlan] = useState<DayPlan | null>(null);
+  const [showAllChanges, setShowAllChanges] = useState(false);
 
   useEffect(() => {
     if (!windowTouched && settings) {
@@ -90,11 +96,13 @@ function SchedulePage() {
     () => new Map((draws ?? []).map((d) => [d.id, d.category_id])),
     [draws],
   );
+  const poolMatchMap = useMemo(() => indexBy(poolMatches), [poolMatches]);
 
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
   const hasDay1Schedule = (poolMatches ?? []).some(
     (match) => match.status !== "void" && match.scheduled_time,
   );
+  const windowLocked = hasDay1Schedule && !windowUnlocked;
 
   const rows = useMemo(() => {
     const groupRows = (poolMatches ?? [])
@@ -122,68 +130,124 @@ function SchedulePage() {
     return [...groupRows, ...knockoutRows].sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [poolMatches, drawMatches, catMap, courtMap, drawCategory]);
 
+  const matchLabel = (matchId: string) => {
+    const pool = poolMatchMap.get(matchId);
+    if (pool) {
+      return `${label(pool.team_a_id)} vs ${label(pool.team_b_id)}`;
+    }
+    const draw = (drawMatches ?? []).find((m) => m.id === matchId);
+    if (draw) return `${label(draw.team_a_id)} vs ${label(draw.team_b_id)}`;
+    return matchId.slice(0, 8);
+  };
+
+  const validateDay1Window = () => {
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(day1Date);
+    const validTimes = /^\d{2}:\d{2}$/.test(startTime) && /^\d{2}:\d{2}$/.test(endTime);
+    if (!validDate || !validTimes) {
+      toast.error("Choose a valid Day 1 date, start time, and end time.");
+      return false;
+    }
+    if (
+      new Date(`${day1Date}T${endTime}`).getTime() <=
+      new Date(`${day1Date}T${startTime}`).getTime()
+    ) {
+      toast.error("Day 1 end time must be later than its start time.");
+      return false;
+    }
+    return true;
+  };
+
+  const day1SettingsPatch = () => {
+    if (!settings) return null;
+    const normalizedStart = `${startTime}:00`;
+    const normalizedEnd = `${endTime}:00`;
+    if (
+      day1Date === settings.day_1 &&
+      normalizedStart === settings.day_start_time &&
+      normalizedEnd === settings.planning_end_time &&
+      normalizedEnd === settings.day_end_time
+    ) {
+      return null;
+    }
+    return {
+      day_1: day1Date,
+      day_start_time: normalizedStart,
+      day_end_time: normalizedEnd,
+      planning_end_time: normalizedEnd,
+    };
+  };
+
+  const effectiveDay1Settings = () => {
+    if (!settings) throw new Error("Settings are not loaded.");
+    const patch = day1SettingsPatch();
+    return patch ? { ...settings, ...patch } : settings;
+  };
+
+  const refetchScheduleData = async () => {
+    await qc.invalidateQueries({ queryKey: keys.poolMatches });
+    await qc.invalidateQueries({ queryKey: keys.drawMatches });
+    await qc.refetchQueries({ queryKey: keys.poolMatches });
+    await qc.refetchQueries({ queryKey: keys.drawMatches });
+    return {
+      poolMatches: (qc.getQueryData<typeof poolMatches>(keys.poolMatches) ?? []) as NonNullable<
+        typeof poolMatches
+      >,
+      drawMatches: (qc.getQueryData<typeof drawMatches>(keys.drawMatches) ?? []) as NonNullable<
+        typeof drawMatches
+      >,
+    };
+  };
+
+  const computePlan = async (day: 1 | 2) => {
+    if (!settings) throw new Error("Settings are not loaded.");
+    const fresh = await refetchScheduleData();
+    const effectiveSettings = day === 1 ? effectiveDay1Settings() : settings;
+    return planDay(
+      day,
+      effectiveSettings,
+      courts ?? [],
+      teams ?? [],
+      fresh.poolMatches,
+      fresh.drawMatches,
+      drawCategory,
+      new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
+      undefined,
+      day === 1 ? day1SettingsPatch() : null,
+    );
+  };
+
+  const finishApply = async (day: 1 | 2, plan: DayPlan) => {
+    const impact = await applyDayPlan(plan);
+    setSummary((prev) => ({ ...prev, [day]: plan.summary }));
+    if (day === 1 && hasDay1Schedule) {
+      toast.success(
+        `Day 1 rebuilt — ${plan.summary.placed} matches replanned, ${plan.summary.anchorCount} anchors kept${
+          impact.shiftedMatches
+            ? `; ${impact.shiftedMatches} moved by up to ${impact.largestShiftMinutes} min`
+            : ""
+        }`,
+      );
+    } else {
+      toast.success(
+        `Day ${day} schedule built — ${plan.summary.placed} matches placed, ${plan.summary.anchorCount} anchors kept`,
+      );
+    }
+    qc.invalidateQueries();
+  };
+
   const build = async (day: 1 | 2) => {
     if (!settings) return;
-    if (day === 1) {
-      const validDate = /^\d{4}-\d{2}-\d{2}$/.test(day1Date);
-      const validTimes = /^\d{2}:\d{2}$/.test(startTime) && /^\d{2}:\d{2}$/.test(endTime);
-      if (!validDate || !validTimes) {
-        toast.error("Choose a valid Day 1 date, start time, and end time.");
-        return;
-      }
-      if (
-        new Date(`${day1Date}T${endTime}`).getTime() <=
-        new Date(`${day1Date}T${startTime}`).getTime()
-      ) {
-        toast.error("Day 1 end time must be later than its start time.");
-        return;
-      }
-    }
+    if (day === 1 && !validateDay1Window()) return;
     setBusy(true);
     setBuildingDay(day);
     try {
-      let effectiveSettings = settings;
-      if (day === 1) {
-        const normalizedStart = `${startTime}:00`;
-        const normalizedEnd = `${endTime}:00`;
-        effectiveSettings = {
-          ...settings,
-          day_1: day1Date,
-          day_start_time: normalizedStart,
-          day_end_time: normalizedEnd,
-          planning_end_time: normalizedEnd,
-        };
-        if (
-          day1Date !== settings.day_1 ||
-          normalizedStart !== settings.day_start_time ||
-          normalizedEnd !== settings.planning_end_time ||
-          normalizedEnd !== settings.day_end_time
-        ) {
-          await updateSettings(settings.id, {
-            day_1: day1Date,
-            day_start_time: normalizedStart,
-            day_end_time: normalizedEnd,
-            planning_end_time: normalizedEnd,
-          });
-        }
+      const plan = await computePlan(day);
+      if (plan.blocked.length > 0) {
+        setPreviewPlan(plan);
+        setShowAllChanges(false);
+        return;
       }
-      const result = await scheduleDay(
-        day,
-        effectiveSettings,
-        courts ?? [],
-        teams ?? [],
-        poolMatches ?? [],
-        drawMatches ?? [],
-        drawCategory,
-        new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
-      );
-      setSummary((prev) => ({ ...prev, [day]: result }));
-      toast.success(
-        day === 1 && hasDay1Schedule
-          ? `Day 1 rebuilt — ${result.placed} matches placed; active and completed matches preserved`
-          : `Day ${day} schedule built — ${result.placed} matches placed`,
-      );
-      qc.invalidateQueries();
+      await finishApply(day, plan);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not build the schedule");
     } finally {
@@ -191,6 +255,41 @@ function SchedulePage() {
       setBuildingDay(null);
     }
   };
+
+  const previewRebuild = async () => {
+    if (!settings || !validateDay1Window()) return;
+    setBusy(true);
+    setBuildingDay(1);
+    try {
+      const plan = await computePlan(1);
+      setPreviewPlan(plan);
+      setShowAllChanges(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not plan the rebuild");
+    } finally {
+      setBusy(false);
+      setBuildingDay(null);
+    }
+  };
+
+  const applyPreview = async () => {
+    if (!previewPlan || previewPlan.blocked.length > 0) return;
+    setBusy(true);
+    try {
+      await finishApply(previewPlan.day, previewPlan);
+      setPreviewPlan(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not apply the rebuild");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const visibleChanges = previewPlan
+    ? showAllChanges
+      ? previewPlan.diff.changes
+      : previewPlan.diff.changes.filter((change) => change.kind !== "unchanged")
+    : [];
 
   return (
     <AppShell
@@ -207,7 +306,7 @@ function SchedulePage() {
               type="date"
               className="h-9 w-36"
               value={day1Date}
-              disabled={!canSchedule || busy}
+              disabled={!canSchedule || busy || windowLocked}
               onChange={(e) => {
                 setDay1Date(e.target.value);
                 setWindowTouched(true);
@@ -223,7 +322,7 @@ function SchedulePage() {
               type="time"
               className="h-9 w-28"
               value={startTime}
-              disabled={!canSchedule || busy}
+              disabled={!canSchedule || busy || windowLocked}
               onChange={(e) => {
                 setStartTime(e.target.value);
                 setWindowTouched(true);
@@ -239,17 +338,27 @@ function SchedulePage() {
               type="time"
               className="h-9 w-28"
               value={endTime}
-              disabled={!canSchedule || busy}
+              disabled={!canSchedule || busy || windowLocked}
               onChange={(e) => {
                 setEndTime(e.target.value);
                 setWindowTouched(true);
               }}
             />
           </div>
+          {windowLocked ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setWindowUnlocked(true)}
+            >
+              Unlock window
+            </Button>
+          ) : null}
           <Button
             disabled={!canSchedule || busy || !settings || !(courts ?? []).length}
             onClick={() => {
-              if (hasDay1Schedule) setConfirmRebuild(true);
+              if (hasDay1Schedule) void previewRebuild();
               else void build(1);
             }}
           >
@@ -282,7 +391,9 @@ function SchedulePage() {
           </p>
           <p className="mt-0.5 text-xs">
             {hasDay1Schedule
-              ? "Rebuilding keeps reported, walkover, and in-progress matches fixed. All other group matches may move to new courts or times, but never into the past."
+              ? windowLocked
+                ? "Rebuilding keeps reported, walkover, and in-progress matches fixed. The day window is locked once play starts; unlock only for a deliberate correction."
+                : "Window editing is unlocked. Rebuilding keeps reported, walkover, and in-progress matches fixed."
               : `The first build uses ${day1Date || "the selected day"}, ${startTime || "start"}–${endTime || "end"}. This full window is used for schedule scoring, utilization, and overrun calculations.`}
           </p>
         </div>
@@ -290,14 +401,30 @@ function SchedulePage() {
         <div className="grid gap-3 sm:grid-cols-2">
           {[1, 2].map((day) => {
             const s = summary[day];
-            const util = s ? Math.round(s.utilization * 100) : null;
+            const util = s
+              ? Math.round(
+                  (hasDay1Schedule && day === 1 && s.remainingUtilization != null
+                    ? s.remainingUtilization
+                    : s.utilization) * 100,
+                )
+              : null;
+            const utilLabel =
+              hasDay1Schedule && day === 1 && s?.remainingUtilization != null
+                ? "remaining window"
+                : `${startTime}–${endTime} window`;
             return (
               <Panel key={day} title={`Day ${day} ${day === 1 ? "groups" : "knockouts"}`}>
                 {s ? (
                   <div className="space-y-1 text-sm">
                     <p className="font-score">
-                      {s.placed} matches placed · {util}% of the {startTime}–{endTime} window
+                      {s.placed} matches placed · {s.anchorCount} anchors kept · {util}% of the{" "}
+                      {utilLabel}
                     </p>
+                    {s.movedCount > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {s.movedCount} match{s.movedCount === 1 ? "" : "es"} moved
+                      </p>
+                    ) : null}
                     {s.projectedFinish ? (
                       <p className="text-xs text-muted-foreground">
                         Projected finish {timeLabel(s.projectedFinish)}
@@ -311,8 +438,13 @@ function SchedulePage() {
                     ) : null}
                     {s.unscheduled > 0 ? (
                       <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
-                        {s.unscheduled} matches could not be placed inside the day — desk
-                        intervention needed.
+                        {s.unscheduled} matches could not be placed — desk intervention needed.
+                      </p>
+                    ) : null}
+                    {s.awaitingTeams > 0 ? (
+                      <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                        {s.awaitingTeams} match{s.awaitingTeams === 1 ? "" : "es"} awaiting team
+                        assignment.
                       </p>
                     ) : null}
                     {s.overrun ? (
@@ -381,26 +513,130 @@ function SchedulePage() {
             </div>
           )}
         </Panel>
-
       </div>
 
-      <AlertDialog open={confirmRebuild} onOpenChange={setConfirmRebuild}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rebuild the remaining Day 1 schedule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Reported, walkover, and in-progress matches will remain fixed. Every other group match
-              may receive a new court or time, starting no earlier than the current time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep current schedule</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void build(1)}>
-              Rebuild remaining matches
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Dialog open={!!previewPlan} onOpenChange={(open) => !open && setPreviewPlan(null)}>
+        <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-2xl">
+          {previewPlan ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Rebuild preview</DialogTitle>
+                <DialogDescription>
+                  Nothing is written until you apply. Anchors stay fixed; only scheduled matches
+                  may move.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 overflow-y-auto pr-1">
+                <div className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm">
+                  <p className="font-score">
+                    {previewPlan.summary.anchorCount} anchors kept · {previewPlan.summary.placed}{" "}
+                    matches replanned · {previewPlan.diff.movedCount} moving
+                  </p>
+                  {previewPlan.summary.projectedFinish ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Projected finish {timeLabel(previewPlan.summary.projectedFinish)}
+                      {previewPlan.summary.overrunMinutes > 0
+                        ? ` · ${previewPlan.summary.overrunMinutes} min past ${endTime}`
+                        : ""}
+                      {previewPlan.summary.remainingUtilization != null
+                        ? ` · ${Math.round(previewPlan.summary.remainingUtilization * 100)}% of remaining window`
+                        : ""}
+                    </p>
+                  ) : null}
+                </div>
+
+                {previewPlan.blocked.length > 0 ? (
+                  <div className="rounded-md bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
+                    <p className="font-semibold">
+                      {previewPlan.blocked.length} match
+                      {previewPlan.blocked.length === 1 ? "" : "es"} could not be placed.
+                    </p>
+                    {previewPlan.summary.diagnostics?.deadlockReason ? (
+                      <p className="mt-1 text-xs">{previewPlan.summary.diagnostics.deadlockReason}</p>
+                    ) : null}
+                    <ul className="mt-2 space-y-1 text-xs">
+                      {previewPlan.blocked.map((matchId) => (
+                        <li key={matchId}>{matchLabel(matchId)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {previewPlan.awaitingTeams.length > 0 ? (
+                  <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                    {previewPlan.awaitingTeams.length} match
+                    {previewPlan.awaitingTeams.length === 1 ? "" : "es"} awaiting team assignment
+                    and will stay unscheduled.
+                  </div>
+                ) : null}
+
+                {previewPlan.blocked.length === 0 ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">
+                        {showAllChanges ? "Full plan" : "Changes only"} ({visibleChanges.length})
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowAllChanges((value) => !value)}
+                      >
+                        {showAllChanges ? "Show changes only" : "Show full plan"}
+                      </Button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto rounded-md border border-hairline">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Match</th>
+                            <th className="w-28">Time</th>
+                            <th className="w-20">Court</th>
+                            <th className="w-16">Shift</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleChanges.map((change) => (
+                            <tr key={change.matchId}>
+                              <td className="text-sm">{matchLabel(change.matchId)}</td>
+                              <td className="font-score text-xs">
+                                {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
+                                {timeLabel(change.toStart)}
+                              </td>
+                              <td className="font-score text-xs">
+                                {change.fromCourtNumber != null
+                                  ? `C${change.fromCourtNumber}`
+                                  : "—"}{" "}
+                                → C{change.toCourtNumber}
+                              </td>
+                              <td className="font-score text-xs">
+                                {change.shiftMinutes > 0 ? "+" : ""}
+                                {change.shiftMinutes || "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" disabled={busy} onClick={() => setPreviewPlan(null)}>
+                  Keep current schedule
+                </Button>
+                <Button
+                  disabled={busy || previewPlan.blocked.length > 0}
+                  onClick={() => void applyPreview()}
+                >
+                  Apply rebuild
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
