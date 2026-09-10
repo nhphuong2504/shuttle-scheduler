@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,11 +104,45 @@ function RegistrationPage() {
 
   const eligible = (players ?? []).filter((p) => !atCap(p.id));
 
+  const stats = useMemo(() => {
+    const all = teams ?? [];
+    const active = all.filter((t) => !t.withdrawn);
+    const withdrawn = all.length - active.length;
+    const entered = new Set<string>();
+    let atCapCount = 0;
+    for (const [pid, set] of categoryCount) {
+      entered.add(pid);
+      if (set.size >= 2) atCapCount += 1;
+    }
+    const totalPlayers = (players ?? []).length;
+    return {
+      totalPlayers,
+      entries: all.length,
+      active: active.length,
+      withdrawn,
+      unassigned: Math.max(0, totalPlayers - entered.size),
+      atCapCount,
+    };
+  }, [teams, players, categoryCount]);
+
   return (
     <AppShell
       title="Registration"
       subtitle="Each player may enter a maximum of two categories. A third entry is rejected outright."
     >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <StatTile label="Players" value={stats.totalPlayers} hint={`${stats.unassigned} with no entry`} />
+        <StatTile label="Entries" value={stats.entries} hint="Across all categories" />
+        <StatTile label="Active" value={stats.active} tone="good" hint="Still in the draw" />
+        <StatTile
+          label="Withdrawn"
+          value={stats.withdrawn}
+          tone={stats.withdrawn > 0 ? "warn" : "normal"}
+          hint="Pulled out"
+        />
+        <StatTile label="At two-category cap" value={stats.atCapCount} hint="Cannot enter more" />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         <div className="space-y-4">
           <Panel title="Add player">
