@@ -139,12 +139,18 @@ export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: n
   );
 }
 
-export async function startMatch(table: "pool_matches" | "draw_matches", matchId: string, courtId: string | null) {
+export async function startMatch(
+  table: "pool_matches" | "draw_matches",
+  matchId: string,
+  courtId: string | null,
+  ignoreRest = false,
+) {
   if (!courtId) throw new Error("Select a court before starting the match.");
   await rpc("start_match_safe", {
     p_table: table,
     p_match_id: matchId,
     p_court_id: courtId,
+    p_ignore_rest: ignoreRest,
   });
 }
 
