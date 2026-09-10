@@ -344,7 +344,7 @@ function SchedulePage() {
               hint="Build Day 1 to place the group matches across the courts."
             />
           ) : (
-            <div className="max-h-[32rem] overflow-auto">
+            <div>
               <table className="data-table">
                 <thead>
                   <tr>
