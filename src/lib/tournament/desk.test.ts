@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveCourtState,
+  finishStatusLabel,
   getMatchReadiness,
   getOperationalKpis,
+  projectedFinishFromRemaining,
   scheduleVarianceMinutes,
   type DeskMatchModel,
 } from "./desk";
@@ -120,7 +122,7 @@ describe("desk operational metrics", () => {
       deriveCourtState("c2", [active, next], () => 20, () => 10, base + 21 * 60_000),
     ];
 
-    expect(getOperationalKpis(states, [active, next], () => 20)).toEqual({
+    expect(getOperationalKpis(states, [active, next], () => 20, base + 21 * 60_000)).toEqual({
       activeCourts: 1,
       waitingCourts: 0,
       idleCourts: 0,
@@ -129,6 +131,24 @@ describe("desk operational metrics", () => {
       overrunCourts: 1,
       projectedFinish: base + 50 * 60_000,
     });
+  });
+
+  it("projects finish from in-progress matches using elapsed time", () => {
+    const active = match({
+      id: "active",
+      status: "in-progress",
+      startedAt: at(0),
+      scheduled: at(0),
+    });
+    const finish = projectedFinishFromRemaining([active], () => 20, base + 25 * 60_000);
+    expect(finish).toBe(base + 45 * 60_000);
+  });
+
+  it("formats finish status against the day target", () => {
+    const target = base + 9 * 60 * 60_000;
+    expect(finishStatusLabel(target + 24 * 60_000, target)).toBe("24 min behind");
+    expect(finishStatusLabel(target - 10 * 60_000, target)).toBe("10 min ahead");
+    expect(finishStatusLabel(target, target)).toBe("On target");
   });
 
   it("calculates a signed start variance", () => {

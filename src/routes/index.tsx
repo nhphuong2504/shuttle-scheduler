@@ -28,7 +28,6 @@ import {
   reportDrawMatch,
   reportPoolMatch,
   rescheduleMatch,
-  resetMatch,
   resolveMatchException,
   startMatch,
   type ScheduleImpact,
@@ -59,6 +58,7 @@ import {
   minutesSince,
   parseGames,
   timeLabel,
+  type GameScore,
 } from "@/lib/tournament/format";
 import {
   checkStartConstraints,
@@ -67,6 +67,7 @@ import {
 } from "@/lib/tournament/scheduler";
 import {
   deriveCourtState,
+  finishStatusLabel,
   getMatchReadiness,
   getOperationalKpis,
   type DeskMatchModel,
@@ -98,7 +99,19 @@ export type DeskMatch = DeskMatchModel & {
   teams: [string | null, string | null];
   tag: string;
   score: string | null;
+  initialGames?: GameScore[];
 };
+
+function scoreFormValues(kind: DeskMatch["kind"], status: string, initialGames?: GameScore[]) {
+  const rows = kind === "pool" ? 1 : 3;
+  if (status !== "reported" || !initialGames?.length) {
+    return Array.from({ length: rows }, () => ["", ""]);
+  }
+  return Array.from({ length: rows }, (_, i) => {
+    const game = initialGames[i];
+    return game ? [String(game.a), String(game.b)] : ["", ""];
+  });
+}
 
 function Desk() {
   const qc = useQueryClient();
@@ -149,6 +162,10 @@ function Desk() {
         ),
         tag: catMap.get(m.category_id)?.code ?? "",
         score: m.status === "reported" ? `${m.score_a}-${m.score_b}` : null,
+        initialGames:
+          m.status === "reported" && m.score_a != null && m.score_b != null
+            ? [{ a: m.score_a, b: m.score_b }]
+            : undefined,
       })),
       ...(drawMatches ?? []).map((m) => ({
         id: m.id,
@@ -164,6 +181,7 @@ function Desk() {
         ),
         tag: `Draw ${(draws ?? []).find((d) => d.id === m.draw_id)?.tier ?? ""}`,
         score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
+        initialGames: m.status === "reported" ? parseGames(m.games) : undefined,
       })),
     ],
     [poolMatches, drawMatches, draws, catMap, teamMap],
@@ -233,7 +251,28 @@ function Desk() {
     courtStates.map(({ state }) => state),
     allMatches,
     slotMinutesFor,
+    now,
   );
+  const targetFinishMs = useMemo(() => {
+    if (!settings) return null;
+    const hasRemainingGroups = allMatches.some(
+      (match) =>
+        match.kind === "pool" &&
+        (match.status === "scheduled" || match.status === "in-progress"),
+    );
+    const day = hasRemainingGroups ? settings.day_1 : settings.day_2;
+    const end = settings.planning_end_time || settings.day_end_time || "17:00:00";
+    const normalized = end.length === 5 ? `${end}:00` : end;
+    const target = new Date(`${day}T${normalized}`);
+    return Number.isFinite(target.getTime()) ? target.getTime() : null;
+  }, [settings, allMatches]);
+  const finishStatus = finishStatusLabel(kpis.projectedFinish, targetFinishMs);
+  const finishStatusTone =
+    kpis.projectedFinish != null &&
+    targetFinishMs != null &&
+    kpis.projectedFinish > targetFinishMs
+      ? "warn"
+      : "normal";
   const courtProgress = courtStates.map(({ court, state }) => {
     const courtMatches = allMatches.filter((match) => match.courtId === court.id);
     const total = courtMatches.length;
@@ -250,10 +289,6 @@ function Desk() {
     };
   });
 
-  const currentDelay = Math.max(
-    0,
-    ...courtStates.map(({ state }) => state.varianceMinutes ?? 0),
-  );
   const readyUnassigned = allMatches
     .filter((match) => match.status === "scheduled" && !match.courtId)
     .filter(
@@ -283,9 +318,12 @@ function Desk() {
           <DeskKpi label="Courts active" value={`${kpis.activeCourts}/${(courts ?? []).length}`} />
           <DeskKpi label="Ready courts" value={courtStates.filter(({ state }) => state.state === "free-ready").length} />
           <DeskKpi label="Waiting courts" value={kpis.waitingCourts} tone={kpis.waitingCourts ? "warn" : "normal"} />
-          <DeskKpi label="Current delay" value={`${currentDelay}m`} tone={currentDelay ? "warn" : "normal"} />
           <DeskKpi label="Matches left" value={kpis.remainingMatches} />
-          <DeskKpi label="Projected finish" value={timeLabel(kpis.projectedFinish ? new Date(kpis.projectedFinish) : null)} />
+          <DeskKpi
+            label="Projected finish"
+            value={timeLabel(kpis.projectedFinish ? new Date(kpis.projectedFinish) : null)}
+          />
+          <DeskKpi label="Finish status" value={finishStatus} tone={finishStatusTone} />
         </div>
 
         <Panel
@@ -616,7 +654,6 @@ function Desk() {
                 refresh();
                 setOpenMatch(null);
               }}
-              onRefresh={refresh}
             />
           ) : null}
         </DialogContent>
@@ -637,7 +674,6 @@ export function MatchOperationsDialog({
   startCheck,
   playerMap,
   onDone,
-  onRefresh,
 }: {
   match: DeskMatch;
   nameA: string;
@@ -650,13 +686,10 @@ export function MatchOperationsDialog({
   startCheck: StartConstraints | null;
   playerMap: Map<string, Player>;
   onDone: () => void;
-  onRefresh: () => void;
 }) {
-  const [values, setValues] = useState<string[][]>([
-    ["", ""],
-    ["", ""],
-    ["", ""],
-  ]);
+  const [values, setValues] = useState(() =>
+    scoreFormValues(match.kind, match.status, match.initialGames),
+  );
   const [busy, setBusy] = useState(false);
   const [confirmRestOpen, setConfirmRestOpen] = useState(false);
   const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(
@@ -667,7 +700,9 @@ export function MatchOperationsDialog({
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
   const table = match.kind === "pool" ? "pool_matches" : "draw_matches";
-  const notStarted = match.status !== "in-progress";
+  const isReported = match.status === "reported";
+  const notStarted = match.status !== "in-progress" && !isReported;
+  const canEditScores = signedIn && (match.status === "in-progress" || isReported);
   const runStart = async () => {
     const restWarnings = startCheck?.warnings ?? [];
     try {
@@ -697,6 +732,7 @@ export function MatchOperationsDialog({
 
   const submit = async () => {
     if (
+      !isReported &&
       match.status !== "in-progress" &&
       !window.confirm("This match has not been started. Report the result anyway?")
     ) {
@@ -712,7 +748,7 @@ export function MatchOperationsDialog({
       } else {
         impact = await reportDrawMatch(match.id, games);
       }
-      toast.success(impactMessage("Result recorded", impact));
+      toast.success(impactMessage(isReported ? "Result corrected" : "Result recorded", impact));
       onDone();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save result");
@@ -788,88 +824,68 @@ export function MatchOperationsDialog({
           {courtNumber ? ` · Court ${courtNumber}` : ""} ·{" "}
           {match.status === "in-progress"
             ? `${minutesSince(match.startedAt)}′ on court`
-            : timeLabel(match.scheduled)}
+            : isReported
+              ? `Finished ${timeLabel(match.endedAt)}`
+              : timeLabel(match.scheduled)}
         </DialogDescription>
       </DialogHeader>
 
-      {match.status === "reported" ? (
-        <div className="space-y-3">
-          <p className="font-score text-2xl">{match.score}</p>
-          {signedIn ? (
-            <Button
-              variant="outline"
-              onClick={async () => {
-                const correctionNote = window.prompt("Why is this result being corrected?");
-                if (!correctionNote?.trim()) return;
-                try {
-                  await resetMatch(table, match.id, correctionNote.trim());
-                  toast.success("Result reopened for correction");
-                  onRefresh();
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error ? error.message : "Could not reopen the result",
-                  );
-                }
-              }}
-            >
-              Correct this result
-            </Button>
-          ) : null}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex justify-center pt-1">
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
-                notStarted
+      <div className="space-y-4">
+        <div className="flex justify-center pt-1">
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+              isReported
+                ? "bg-mint/20 text-foreground"
+                : notStarted
                   ? "bg-muted text-muted-foreground"
                   : "bg-info-surface text-info-foreground"
-              }`}
-            >
-              {notStarted ? "Not started" : "Live"}
-            </span>
-          </div>
+            }`}
+          >
+            {isReported ? "Reported" : notStarted ? "Not started" : "Live"}
+          </span>
+        </div>
 
-          <div className="rounded-xl border border-hairline bg-muted/30 px-4 py-4">
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center">
-              <span className="truncate text-sm font-medium">{nameA}</span>
-              <span aria-hidden className="w-6" />
-              <span className="truncate text-sm font-medium">{nameB}</span>
-            </div>
-            <div className="mt-2 space-y-2">
-              {Array.from({ length: rows }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                  <Input
-                    className="h-12 w-full text-center font-score text-xl"
-                    inputMode="numeric"
-                    placeholder="—"
-                    autoFocus={i === 0 && !notStarted}
-                    value={values[i]?.[0] ?? ""}
-                    disabled={!signedIn || notStarted}
-                    onChange={(e) => set(i, 0, e.target.value)}
-                    aria-label={`Game ${i + 1} ${nameA}`}
-                  />
-                  <span className="w-6 text-center font-score text-lg text-muted-foreground">:</span>
-                  <Input
-                    className="h-12 w-full text-center font-score text-xl"
-                    inputMode="numeric"
-                    placeholder="—"
-                    value={values[i]?.[1] ?? ""}
-                    disabled={!signedIn || notStarted}
-                    onChange={(e) => set(i, 1, e.target.value)}
-                    aria-label={`Game ${i + 1} ${nameB}`}
-                  />
-                </div>
-              ))}
-            </div>
-            {rows > 1 ? (
-              <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                Games 1–3, top to bottom
-              </p>
-            ) : null}
+        <div className="rounded-xl border border-hairline bg-muted/30 px-4 py-4">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center">
+            <span className="truncate text-sm font-medium">{nameA}</span>
+            <span aria-hidden className="w-6" />
+            <span className="truncate text-sm font-medium">{nameB}</span>
           </div>
-          {match.status !== "in-progress" &&
-          (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
+          <div className="mt-2 space-y-2">
+            {Array.from({ length: rows }).map((_, i) => (
+              <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <Input
+                  className="h-12 w-full text-center font-score text-xl"
+                  inputMode="numeric"
+                  placeholder="—"
+                  autoFocus={i === 0 && canEditScores}
+                  value={values[i]?.[0] ?? ""}
+                  disabled={!canEditScores}
+                  onChange={(e) => set(i, 0, e.target.value)}
+                  aria-label={`Game ${i + 1} ${nameA}`}
+                />
+                <span className="w-6 text-center font-score text-lg text-muted-foreground">:</span>
+                <Input
+                  className="h-12 w-full text-center font-score text-xl"
+                  inputMode="numeric"
+                  placeholder="—"
+                  value={values[i]?.[1] ?? ""}
+                  disabled={!canEditScores}
+                  onChange={(e) => set(i, 1, e.target.value)}
+                  aria-label={`Game ${i + 1} ${nameB}`}
+                />
+              </div>
+            ))}
+          </div>
+          {rows > 1 ? (
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              Games 1–3, top to bottom
+            </p>
+          ) : null}
+        </div>
+        {!isReported &&
+        match.status !== "in-progress" &&
+        (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
             <ul className="space-y-1 text-xs">
               {(startCheck?.conflicts ?? []).map((c, i) => (
                 <li
@@ -892,31 +908,39 @@ export function MatchOperationsDialog({
               ))}
             </ul>
           ) : null}
-          <div className="flex gap-2">
-            {notStarted ? (
-              <Button
-                className="h-11 flex-1 text-base font-semibold shadow-md"
-                disabled={!signedIn || busy || !!startCheck?.conflicts.length}
-                onClick={() => {
-                  if ((startCheck?.warnings ?? []).length) {
-                    setConfirmRestOpen(true);
-                    return;
-                  }
-                  void runStart();
-                }}
-              >
-                ▶  Start match
-              </Button>
-            ) : (
-              <Button
-                className="h-11 flex-1 text-base font-semibold shadow-md"
-                disabled={!signedIn || busy || !canSubmit}
-                onClick={submit}
-              >
-                Report result
-              </Button>
-            )}
-          </div>
+        <div className="flex gap-2">
+          {isReported ? (
+            <Button
+              className="h-11 flex-1 text-base font-semibold shadow-md"
+              disabled={!signedIn || busy || !canSubmit}
+              onClick={submit}
+            >
+              Save correction
+            </Button>
+          ) : notStarted ? (
+            <Button
+              className="h-11 flex-1 text-base font-semibold shadow-md"
+              disabled={!signedIn || busy || !!startCheck?.conflicts.length}
+              onClick={() => {
+                if ((startCheck?.warnings ?? []).length) {
+                  setConfirmRestOpen(true);
+                  return;
+                }
+                void runStart();
+              }}
+            >
+              ▶  Start match
+            </Button>
+          ) : (
+            <Button
+              className="h-11 flex-1 text-base font-semibold shadow-md"
+              disabled={!signedIn || busy || !canSubmit}
+              onClick={submit}
+            >
+              Report result
+            </Button>
+          )}
+        </div>
           <AlertDialog open={confirmRestOpen} onOpenChange={setConfirmRestOpen}>
             <AlertDialogContent className="max-w-md">
               <AlertDialogHeader>
@@ -958,37 +982,37 @@ export function MatchOperationsDialog({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          {signedIn || canSchedule ? (
-            <div className="border-t border-hairline pt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                More actions
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {signedIn ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      disabled={busy}
-                      onClick={() =>
-                        setExceptionMode(exceptionMode === "walkover" ? null : "walkover")
-                      }
-                    >
-                      Walkover
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      disabled={busy}
-                      onClick={() => setExceptionMode(exceptionMode === "void" ? null : "void")}
-                    >
-                      Void
-                    </Button>
-                  </>
-                ) : null}
-                {match.status === "scheduled" && (signedIn || canSchedule) ? (
+        {!isReported && (signedIn || canSchedule) ? (
+          <div className="border-t border-hairline pt-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              More actions
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {signedIn ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={busy}
+                    onClick={() =>
+                      setExceptionMode(exceptionMode === "walkover" ? null : "walkover")
+                    }
+                  >
+                    Walkover
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={busy}
+                    onClick={() => setExceptionMode(exceptionMode === "void" ? null : "void")}
+                  >
+                    Void
+                  </Button>
+                </>
+              ) : null}
+              {match.status === "scheduled" && (signedIn || canSchedule) ? (
                   <Button
                     size="sm"
                     variant="outline"
@@ -1073,11 +1097,10 @@ export function MatchOperationsDialog({
               ) : null}
             </div>
           ) : null}
-          {!signedIn ? (
-            <p className="text-xs text-muted-foreground">Sign in at the desk to enter scores.</p>
-          ) : null}
-        </div>
-      )}
+        {!signedIn ? (
+          <p className="text-xs text-muted-foreground">Sign in at the desk to enter scores.</p>
+        ) : null}
+      </div>
     </>
   );
 }

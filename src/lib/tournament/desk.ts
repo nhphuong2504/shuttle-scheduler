@@ -198,20 +198,47 @@ export function deriveCourtState<TMatch extends DeskMatchModel>(
   };
 }
 
+export function projectedFinishFromRemaining<TMatch extends DeskMatchModel>(
+  matches: TMatch[],
+  slotMinutesFor: (match: TMatch) => number,
+  now: number,
+): number | null {
+  let latest: number | null = null;
+  for (const match of matches) {
+    if (match.status !== "scheduled" && match.status !== "in-progress") continue;
+    const slotMs = slotMinutesFor(match) * MINUTE;
+    let start: number | null = null;
+    if (match.status === "in-progress") {
+      const anchor = asTime(match.startedAt) ?? asTime(match.scheduled);
+      start = anchor != null ? Math.max(anchor, now) : now;
+    } else {
+      start = asTime(match.scheduled);
+    }
+    if (start == null) continue;
+    const end = start + slotMs;
+    latest = latest == null ? end : Math.max(latest, end);
+  }
+  return latest;
+}
+
+export function finishStatusLabel(
+  projectedMs: number | null,
+  targetMs: number | null,
+): string {
+  if (projectedMs == null || targetMs == null) return "—";
+  const deltaMinutes = Math.round((projectedMs - targetMs) / MINUTE);
+  if (deltaMinutes === 0) return "On target";
+  if (deltaMinutes > 0) return `${deltaMinutes} min behind`;
+  return `${Math.abs(deltaMinutes)} min ahead`;
+}
+
 export function getOperationalKpis<TMatch extends DeskMatchModel>(
   courtStates: DeskCourtState<TMatch>[],
   matches: TMatch[],
   slotMinutesFor: (match: TMatch) => number,
+  now: number = Date.now(),
 ): OperationalKpis {
-  const scheduled = matches.filter(
-    (match) => match.status === "scheduled" && asTime(match.scheduled) != null,
-  );
-  const projectedFinish = scheduled.reduce<number | null>((latest, match) => {
-    const start = asTime(match.scheduled);
-    if (start == null) return latest;
-    const finish = start + slotMinutesFor(match) * MINUTE;
-    return Math.max(latest ?? finish, finish);
-  }, null);
+  const projectedFinish = projectedFinishFromRemaining(matches, slotMinutesFor, now);
 
   return {
     activeCourts: courtStates.filter(

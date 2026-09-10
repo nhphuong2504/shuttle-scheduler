@@ -86,6 +86,10 @@ function MatchesPage() {
         ),
         tag: catMap.get(match.category_id)?.code ?? "",
         score: match.status === "reported" ? `${match.score_a}-${match.score_b}` : null,
+        initialGames:
+          match.status === "reported" && match.score_a != null && match.score_b != null
+            ? [{ a: match.score_a, b: match.score_b }]
+            : undefined,
       };
     }
     const match = (drawMatches ?? []).find((row) => row.id === selected.id);
@@ -105,6 +109,7 @@ function MatchesPage() {
       ),
       tag: `${catMap.get(draw?.category_id ?? "")?.code ?? ""} · Draw ${draw?.tier ?? ""}`,
       score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
+      initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
     };
   }, [selected, poolMatches, drawMatches, teamMap, catMap, drawMap]);
 
@@ -265,7 +270,6 @@ function MatchesPage() {
                 refresh();
                 setSelected(null);
               }}
-              onRefresh={refresh}
             />
           ) : null}
         </DialogContent>
