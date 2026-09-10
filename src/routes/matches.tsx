@@ -97,7 +97,6 @@ function MatchesPage() {
 
   const playerMap = useMemo(() => indexBy(players), [players]);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
-  const poolMap = useMemo(() => indexBy(pools), [pools]);
   const drawMap = useMemo(() => indexBy(draws), [draws]);
   const courtMap = useMemo(() => indexBy(courts), [courts]);
   const catMap = useMemo(() => indexBy(categories), [categories]);
