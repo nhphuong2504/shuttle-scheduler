@@ -837,7 +837,7 @@ export function MatchOperationsDialog({
               className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
                 notStarted
                   ? "bg-muted text-muted-foreground"
-                  : "bg-success-surface text-success-foreground"
+                  : "bg-info-surface text-info-foreground"
               }`}
             >
               {notStarted ? "Not started" : "Live"}
@@ -919,7 +919,7 @@ export function MatchOperationsDialog({
                   void runStart();
                 }}
               >
-                Start match
+                ▶  Start match
               </Button>
             ) : (
               <Button
@@ -974,12 +974,16 @@ export function MatchOperationsDialog({
           </AlertDialog>
           {signedIn || canSchedule ? (
             <div className="border-t border-hairline pt-3">
-              <div className="flex flex-wrap gap-2">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                More actions
+              </p>
+              <div className="grid grid-cols-3 gap-2">
                 {signedIn ? (
                   <>
                     <Button
                       size="sm"
                       variant="outline"
+                      className="w-full"
                       disabled={busy}
                       onClick={() =>
                         setExceptionMode(exceptionMode === "walkover" ? null : "walkover")
@@ -990,6 +994,7 @@ export function MatchOperationsDialog({
                     <Button
                       size="sm"
                       variant="outline"
+                      className="w-full"
                       disabled={busy}
                       onClick={() => setExceptionMode(exceptionMode === "void" ? null : "void")}
                     >
@@ -1001,6 +1006,7 @@ export function MatchOperationsDialog({
                   <Button
                     size="sm"
                     variant="outline"
+                    className="w-full"
                     disabled={busy}
                     onClick={() => setExceptionMode(exceptionMode === "move" ? null : "move")}
                   >
