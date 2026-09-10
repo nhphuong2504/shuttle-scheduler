@@ -793,12 +793,12 @@ export function MatchOperationsDialog({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="font-display">
-          {nameA} vs {nameB}
+      <DialogHeader className="space-y-1 border-b border-hairline pb-3 text-left">
+        <DialogTitle className="pr-8 font-display text-lg leading-tight">
+          {nameA} <span className="text-muted-foreground">vs</span> {nameB}
         </DialogTitle>
-        <DialogDescription>
-          {match.tag} · {match.kind === "pool" ? "single game to 21" : "best of three"}
+        <DialogDescription className="text-xs uppercase tracking-wide">
+          {match.tag} · {match.kind === "pool" ? "game to 21" : "best of three"}
           {courtNumber ? ` · Court ${courtNumber}` : ""} ·{" "}
           {match.status === "in-progress"
             ? `${minutesSince(match.startedAt)}′ on court`
