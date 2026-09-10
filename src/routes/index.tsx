@@ -681,6 +681,7 @@ export function MatchOperationsDialog({
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
   const table = match.kind === "pool" ? "pool_matches" : "draw_matches";
+  const notStarted = match.status !== "in-progress";
   const runStart = async () => {
     const restWarnings = startCheck?.warnings ?? [];
     try {
@@ -831,6 +832,11 @@ export function MatchOperationsDialog({
         </div>
       ) : (
         <div className="space-y-3">
+          {notStarted ? (
+            <p className="rounded-lg border border-hairline bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Start the match before entering scores.
+            </p>
+          ) : null}
           {Array.from({ length: rows }).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
               {rows > 1 ? (
@@ -839,9 +845,9 @@ export function MatchOperationsDialog({
               <Input
                 className="h-10 w-20 font-score"
                 inputMode="numeric"
-                autoFocus={i === 0}
+                autoFocus={i === 0 && !notStarted}
                 value={values[i]?.[0] ?? ""}
-                disabled={!signedIn}
+                disabled={!signedIn || notStarted}
                 onChange={(e) => set(i, 0, e.target.value)}
                 aria-label={`Game ${i + 1} ${nameA}`}
               />
@@ -850,7 +856,7 @@ export function MatchOperationsDialog({
                 className="h-10 w-20 font-score"
                 inputMode="numeric"
                 value={values[i]?.[1] ?? ""}
-                disabled={!signedIn}
+                disabled={!signedIn || notStarted}
                 onChange={(e) => set(i, 1, e.target.value)}
                 aria-label={`Game ${i + 1} ${nameB}`}
               />
@@ -881,12 +887,9 @@ export function MatchOperationsDialog({
             </ul>
           ) : null}
           <div className="flex gap-2">
-            <Button disabled={!signedIn || busy || !canSubmit} onClick={submit}>
-              Report result
-            </Button>
-            {match.status !== "in-progress" ? (
+            {notStarted ? (
               <Button
-                variant="outline"
+                className="h-11 flex-1 text-base font-semibold shadow-md"
                 disabled={!signedIn || busy || !!startCheck?.conflicts.length}
                 onClick={() => {
                   if ((startCheck?.warnings ?? []).length) {
@@ -898,7 +901,15 @@ export function MatchOperationsDialog({
               >
                 Start match
               </Button>
-            ) : null}
+            ) : (
+              <Button
+                className="h-11 flex-1 text-base font-semibold shadow-md"
+                disabled={!signedIn || busy || !canSubmit}
+                onClick={submit}
+              >
+                Report result
+              </Button>
+            )}
           </div>
           <AlertDialog open={confirmRestOpen} onOpenChange={setConfirmRestOpen}>
             <AlertDialogContent className="max-w-md">
