@@ -865,9 +865,23 @@ export function MatchOperationsDialog({
                 variant="outline"
                 disabled={!signedIn || busy || !!startCheck?.conflicts.length}
                 onClick={async () => {
+                  const restWarnings = startCheck?.warnings ?? [];
+                  if (
+                    restWarnings.length &&
+                    !window.confirm(
+                      `${restWarnings
+                        .map(
+                          (w) =>
+                            `${playerMap.get(w.playerId)?.name ?? "A player"} has rested only ${w.restMinutes} of ${w.requiredMinutes} min.`,
+                        )
+                        .join("\n")}\n\nStart this match anyway?`,
+                    )
+                  ) {
+                    return;
+                  }
                   try {
                     setBusy(true);
-                    await startMatch(table, match.id, courtId);
+                    await startMatch(table, match.id, courtId, restWarnings.length > 0);
                     toast.success("Match started");
                     onDone();
                   } catch (e) {

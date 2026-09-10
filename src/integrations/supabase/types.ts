@@ -633,6 +633,7 @@ export type Database = {
         Args: {
           p_allow_push?: boolean
           p_court_id: string
+          p_ignore_rest?: boolean
           p_match_id: string
           p_start: string
           p_table: string
@@ -683,7 +684,12 @@ export type Database = {
         Returns: undefined
       }
       start_match_safe: {
-        Args: { p_court_id: string; p_match_id: string; p_table: string }
+        Args: {
+          p_court_id: string
+          p_ignore_rest?: boolean
+          p_match_id: string
+          p_table: string
+        }
         Returns: undefined
       }
     }
