@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, Panel, StatusPill } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -329,41 +329,59 @@ function SchedulePage() {
           })}
         </div>
 
-        <Panel title="Running order">
+        <Panel
+          title="Running order"
+          right={
+            <span className="font-score text-[11px] text-muted-foreground">
+              {rows.length} scheduled
+            </span>
+          }
+          bodyClassName={rows.length ? "p-0" : "p-4"}
+        >
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
+            <EmptyState
+              title="Nothing scheduled yet"
+              hint="Build Day 1 to place the group matches across the courts."
+            />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="pb-1">Time</th>
-                  <th className="pb-1">Court</th>
-                  <th className="pb-1">Cat</th>
-                  <th className="pb-1">Stage</th>
-                  <th className="pb-1">Status</th>
-                  <th className="pb-1">Match</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="py-1.5 font-score text-xs">{timeLabel(r.start)}</td>
-                    <td className="py-1.5 font-score text-xs">C{r.courtNumber || "—"}</td>
-                    <td className="py-1.5 font-score text-xs">{r.categoryCode}</td>
-                    <td className="py-1.5 text-xs text-muted-foreground">{r.kind}</td>
-                    <td className="py-1.5">
-                      <StatusPill status={r.status} />
-                    </td>
-                    <td className="py-1.5">
-                      {label(r.teams[0])} <span className="text-muted-foreground">vs</span>{" "}
-                      {label(r.teams[1])}
-                    </td>
+            <div className="max-h-[32rem] overflow-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th className="w-16">Time</th>
+                    <th className="w-16">Court</th>
+                    <th className="w-14">Cat</th>
+                    <th className="w-24">Stage</th>
+                    <th className="w-28">Status</th>
+                    <th>Match</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id}>
+                      <td className="font-score text-xs font-semibold">{timeLabel(r.start)}</td>
+                      <td>
+                        <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-[11px] font-semibold text-primary">
+                          C{r.courtNumber || "—"}
+                        </span>
+                      </td>
+                      <td className="font-score text-xs">{r.categoryCode}</td>
+                      <td className="text-xs capitalize text-muted-foreground">{r.kind}</td>
+                      <td>
+                        <StatusPill status={r.status} />
+                      </td>
+                      <td>
+                        {label(r.teams[0])} <span className="text-muted-foreground">vs</span>{" "}
+                        {label(r.teams[1])}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Panel>
+
       </div>
 
       <AlertDialog open={confirmRebuild} onOpenChange={setConfirmRebuild}>
