@@ -107,7 +107,6 @@ function Desk() {
   const live = useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);
-  const [queueSearch, setQueueSearch] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const { data: categories } = useCategories();
   const { data: courts } = useCourts();
