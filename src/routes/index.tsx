@@ -69,7 +69,6 @@ import {
   deriveCourtState,
   getMatchReadiness,
   getOperationalKpis,
-  upcomingMatches,
   type DeskMatchModel,
   type MatchReadiness,
 } from "@/lib/tournament/desk";
@@ -107,7 +106,6 @@ function Desk() {
   const live = useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);
-  const [queueSearch, setQueueSearch] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const { data: categories } = useCategories();
   const { data: courts } = useCourts();
@@ -236,14 +234,22 @@ function Desk() {
     allMatches,
     slotMinutesFor,
   );
-  const upcoming = upcomingMatches(allMatches, now, 60);
-  const visibleUpcoming = upcoming.filter((match) => {
-    const query = queueSearch.trim().toLocaleLowerCase();
-    if (!query) return true;
-    return `${label(match.teams[0])} ${label(match.teams[1])} ${match.tag}`
-      .toLocaleLowerCase()
-      .includes(query);
+  const courtProgress = courtStates.map(({ court, state }) => {
+    const courtMatches = allMatches.filter((match) => match.courtId === court.id);
+    const total = courtMatches.length;
+    const done = courtMatches.filter((match) =>
+      ["reported", "walkover"].includes(match.status),
+    ).length;
+    return {
+      court,
+      state,
+      total,
+      done,
+      remaining: total - done,
+      percent: total ? Math.round((done / total) * 100) : 0,
+    };
   });
+
   const currentDelay = Math.max(
     0,
     ...courtStates.map(({ state }) => state.varianceMinutes ?? 0),
@@ -519,62 +525,67 @@ function Desk() {
           </Panel>
 
           <Panel
-            title="Next 60 minutes"
+            title="Court progress"
             right={
-              <Input
-                className="h-8 w-40"
-                value={queueSearch}
-                onChange={(event) => setQueueSearch(event.target.value)}
-                placeholder="Find player or team"
-                aria-label="Search upcoming matches"
-              />
+              <span className="text-[11px] text-muted-foreground">
+                {courtProgress.reduce((sum, row) => sum + row.done, 0)}/
+                {courtProgress.reduce((sum, row) => sum + row.total, 0)} matches done
+              </span>
             }
           >
-            {visibleUpcoming.length ? (
+            {courtProgress.length ? (
               <ul className="divide-y divide-hairline">
-                {visibleUpcoming.slice(0, 10).map((match) => {
-                  const readiness = getMatchReadiness(
-                    match,
-                    allMatches,
-                    restMinutesFor(match),
-                    now,
-                  );
-                  return (
-                    <li key={match.id}>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-3 py-2 text-left text-sm hover:text-primary"
-                        onClick={() => {
-                          setOperationCourtId(match.courtId);
-                          setOpenMatch(match);
-                        }}
-                      >
-                        <span className="w-12 font-score text-xs">{timeLabel(match.scheduled)}</span>
-                        <span className="min-w-0 flex-1 truncate">
-                          {label(match.teams[0])} vs {label(match.teams[1])}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {match.courtId ? `C${courtMap.get(match.courtId)?.number ?? "?"}` : "Unassigned"}
-                          {" · "}
-                          {readiness.state === "ready"
-                            ? "Ready"
-                            : readiness.state === "resting"
-                              ? `${readiness.remainingMinutes}m rest`
-                              : readiness.state === "player-busy"
-                                ? "Player busy"
-                                : "TBC"}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
+                {courtProgress.map((row) => (
+                  <li key={row.court.id} className="py-2">
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 font-score text-[11px] text-primary">
+                        {row.court.number}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {row.state.playing ? (
+                          <>
+                            {label(row.state.playing.teams[0])} vs{" "}
+                            {label(row.state.playing.teams[1])}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {row.state.state === "free-ready"
+                              ? "Free — next match ready"
+                              : row.state.state === "free-blocked"
+                                ? "Free — waiting for players"
+                                : "Idle"}
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-score text-xs text-muted-foreground">
+                        {row.done}/{row.total}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-3">
+                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <span
+                          className={`block h-full rounded-full ${
+                            row.state.state === "overrun" ? "bg-danger-border" : "bg-primary"
+                          }`}
+                          style={{ width: `${row.percent}%` }}
+                        />
+                      </span>
+                      <span className="w-24 text-right font-score text-[11px] text-muted-foreground">
+                        {row.state.playing
+                          ? `${row.state.elapsedMinutes ?? 0}′ on court`
+                          : row.remaining
+                            ? `${row.remaining} left`
+                            : "complete"}
+                      </span>
+                    </div>
+                  </li>
+                ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {queueSearch ? "No upcoming match matches that search." : "Nothing scheduled in the next hour."}
-              </p>
+              <EmptyState title="No courts" hint="Add courts to see progress here." />
             )}
           </Panel>
+
         </div>
 
         {signedIn ? (
