@@ -5,13 +5,20 @@ import { toast } from "sonner";
 
 import { AppShell, Panel, StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/hooks/useSession";
 import { reportDrawMatch, reportPoolMatch, resetMatch, startMatch } from "@/lib/tournament/actions";
 import {
   indexBy,
   teamLabel,
+  teamPlayerIds,
   useCategories,
   useCourts,
   useDrawMatches,
@@ -23,8 +30,14 @@ import {
   useRealtimeRefresh,
   useSettings,
   useTeams,
+  type Player,
 } from "@/lib/tournament/data";
 import { gamesLabel, minutesSince, parseGames, timeLabel } from "@/lib/tournament/format";
+import {
+  checkStartConstraints,
+  restGapForKind,
+  type StartConstraints,
+} from "@/lib/tournament/scheduler";
 import { poolIsComplete } from "@/lib/tournament/standings";
 
 export const Route = createFileRoute("/")({
@@ -53,6 +66,7 @@ type DeskMatch = {
   courtId: string | null;
   status: string;
   startedAt: string | null;
+  endedAt: string | null;
   scheduled: string | null;
   teams: [string | null, string | null];
   tag: string;
@@ -78,7 +92,11 @@ function Desk() {
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
   const catMap = useMemo(() => indexBy(categories), [categories]);
+  const courtMap = useMemo(() => indexBy(courts), [courts]);
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
+
+  const matchPlayerIds = (m: Pick<DeskMatch, "teams">) =>
+    m.teams.flatMap((id) => (id ? teamPlayerIds(teamMap.get(id)) : []));
 
   const allMatches = useMemo<DeskMatch[]>(
     () => [
@@ -88,6 +106,7 @@ function Desk() {
         courtId: m.court_id,
         status: m.status,
         startedAt: m.started_at,
+        endedAt: m.ended_at,
         scheduled: m.scheduled_time,
         teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
         tag: catMap.get(m.category_id)?.code ?? "",
@@ -99,6 +118,7 @@ function Desk() {
         courtId: m.court_id,
         status: m.status,
         startedAt: m.started_at,
+        endedAt: m.ended_at,
         scheduled: m.scheduled_time,
         teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
         tag: `Draw ${(draws ?? []).find((d) => d.id === m.draw_id)?.tier ?? ""}`,
@@ -111,19 +131,49 @@ function Desk() {
   const refresh = () => qc.invalidateQueries();
   const current = openMatch ? (allMatches.find((m) => m.id === openMatch.id) ?? openMatch) : null;
 
+  const startCheck = useMemo<StartConstraints | null>(() => {
+    if (!current || current.status === "in-progress") return null;
+    const targetPlayerIds = matchPlayerIds(current);
+    if (!targetPlayerIds.length) return null;
+
+    const others = allMatches
+      .filter((m) => m.id !== current.id)
+      .map((m) => ({
+        id: m.id,
+        playerIds: matchPlayerIds(m),
+        status: m.status,
+        courtNumber: m.courtId ? (courtMap.get(m.courtId)?.number ?? null) : null,
+        endedAt: m.endedAt,
+      }));
+
+    const requiredRestMinutes = restGapForKind(
+      current.kind === "pool" ? "group" : "knockout",
+      settings?.group_rest_gap_minutes ?? 10,
+      settings?.knockout_rest_gap_minutes ?? 30,
+    );
+
+    return checkStartConstraints(targetPlayerIds, requiredRestMinutes, others);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, allMatches, teamMap, courtMap, settings]);
+
   const latePools = useMemo(() => {
     const now = Date.now();
     return (pools ?? []).filter((pool) => {
       if (!pool.scheduled_end) return false;
       const matches = (poolMatches ?? []).filter((m) => m.pool_id === pool.id);
-      const teamIds = (poolEntries ?? []).filter((e) => e.pool_id === pool.id).map((e) => e.team_id);
+      const teamIds = (poolEntries ?? [])
+        .filter((e) => e.pool_id === pool.id)
+        .map((e) => e.team_id);
       if (poolIsComplete(teamIds, matches)) return false;
       return now > new Date(pool.scheduled_end).getTime() + 15 * 60000;
     });
   }, [pools, poolMatches, poolEntries]);
 
   const overCap = allMatches.filter((m) => {
-    const cap = m.kind === "pool" ? (settings?.group_slot_minutes ?? 20) : (settings?.knockout_slot_minutes ?? 25);
+    const cap =
+      m.kind === "pool"
+        ? (settings?.group_slot_minutes ?? 20)
+        : (settings?.knockout_slot_minutes ?? 25);
     return m.status === "in-progress" && (minutesSince(m.startedAt) ?? 0) > cap;
   });
 
@@ -137,15 +187,21 @@ function Desk() {
           <Panel title="Alerts">
             <ul className="space-y-1.5 text-sm">
               {latePools.map((p) => (
-                <li key={p.id} className="rounded-md bg-danger-surface px-2.5 py-1.5 text-danger-foreground">
-                  {p.name} ({catMap.get(p.category_id)?.code}) is more than 15 minutes past its scheduled finish with
-                  results still missing — this blocks draw generation.
+                <li
+                  key={p.id}
+                  className="rounded-md bg-danger-surface px-2.5 py-1.5 text-danger-foreground"
+                >
+                  {p.name} ({catMap.get(p.category_id)?.code}) is more than 15 minutes past its
+                  scheduled finish with results still missing — this blocks draw generation.
                 </li>
               ))}
               {overCap.map((m) => (
-                <li key={m.id} className="rounded-md bg-warn-surface px-2.5 py-1.5 text-warn-foreground">
-                  {label(m.teams[0])} vs {label(m.teams[1])} has been on court {minutesSince(m.startedAt)} minutes —
-                  past the planned slot.
+                <li
+                  key={m.id}
+                  className="rounded-md bg-warn-surface px-2.5 py-1.5 text-warn-foreground"
+                >
+                  {label(m.teams[0])} vs {label(m.teams[1])} has been on court{" "}
+                  {minutesSince(m.startedAt)} minutes — past the planned slot.
                 </li>
               ))}
             </ul>
@@ -155,10 +211,16 @@ function Desk() {
         <Panel title="Court board">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {(courts ?? []).map((court) => {
-              const playing = allMatches.find((m) => m.courtId === court.id && m.status === "in-progress");
+              const playing = allMatches.find(
+                (m) => m.courtId === court.id && m.status === "in-progress",
+              );
               const next = allMatches
                 .filter((m) => m.courtId === court.id && m.status === "scheduled" && m.scheduled)
-                .sort((a, b) => new Date(a.scheduled as string).getTime() - new Date(b.scheduled as string).getTime())[0];
+                .sort(
+                  (a, b) =>
+                    new Date(a.scheduled as string).getTime() -
+                    new Date(b.scheduled as string).getTime(),
+                )[0];
               const target = playing ?? next;
               return (
                 <button
@@ -175,7 +237,9 @@ function Desk() {
                   <p className="mt-2 text-sm">
                     {playing ? (
                       <>
-                        <span className="font-score text-[11px] text-muted-foreground">{playing.tag}</span>
+                        <span className="font-score text-[11px] text-muted-foreground">
+                          {playing.tag}
+                        </span>
                         <br />
                         {label(playing.teams[0])} vs {label(playing.teams[1])}
                         <br />
@@ -191,7 +255,8 @@ function Desk() {
                     Next:{" "}
                     {next ? (
                       <>
-                        {timeLabel(next.scheduled)} · {label(next.teams[0])} vs {label(next.teams[1])}
+                        {timeLabel(next.scheduled)} · {label(next.teams[0])} vs{" "}
+                        {label(next.teams[1])}
                       </>
                     ) : (
                       "nothing queued"
@@ -205,7 +270,6 @@ function Desk() {
             })}
           </div>
         </Panel>
-
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel title="Category progress">
@@ -227,7 +291,8 @@ function Desk() {
                     <span>
                       <span className="font-semibold">{c.code}</span>{" "}
                       <span className="text-muted-foreground">
-                        {(teams ?? []).filter((t) => t.category_id === c.id).length} entries · {catPools.length} pools
+                        {(teams ?? []).filter((t) => t.category_id === c.id).length} entries ·{" "}
+                        {catPools.length} pools
                       </span>
                     </span>
                     <span className="flex items-center gap-3">
@@ -266,6 +331,8 @@ function Desk() {
               nameA={label(current.teams[0])}
               nameB={label(current.teams[1])}
               signedIn={canScore}
+              startCheck={startCheck}
+              playerMap={playerMap}
               onDone={() => {
                 refresh();
                 setOpenMatch(null);
@@ -284,6 +351,8 @@ function CourtScoreDialog({
   nameA,
   nameB,
   signedIn,
+  startCheck,
+  playerMap,
   onDone,
   onRefresh,
 }: {
@@ -291,6 +360,8 @@ function CourtScoreDialog({
   nameA: string;
   nameB: string;
   signedIn: boolean;
+  startCheck: StartConstraints | null;
+  playerMap: Map<string, Player>;
   onDone: () => void;
   onRefresh: () => void;
 }) {
@@ -338,7 +409,9 @@ function CourtScoreDialog({
         </DialogTitle>
         <DialogDescription>
           {match.tag} · {match.kind === "pool" ? "single game to 21" : "best of three"} ·{" "}
-          {match.status === "in-progress" ? `${minutesSince(match.startedAt)}′ on court` : timeLabel(match.scheduled)}
+          {match.status === "in-progress"
+            ? `${minutesSince(match.startedAt)}′ on court`
+            : timeLabel(match.scheduled)}
         </DialogDescription>
       </DialogHeader>
 
@@ -361,7 +434,9 @@ function CourtScoreDialog({
         <div className="space-y-3">
           {Array.from({ length: rows }).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
-              {rows > 1 ? <span className="w-14 text-xs text-muted-foreground">Game {i + 1}</span> : null}
+              {rows > 1 ? (
+                <span className="w-14 text-xs text-muted-foreground">Game {i + 1}</span>
+              ) : null}
               <Input
                 className="h-10 w-20 font-score"
                 inputMode="numeric"
@@ -381,6 +456,30 @@ function CourtScoreDialog({
               />
             </div>
           ))}
+          {match.status !== "in-progress" &&
+          (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
+            <ul className="space-y-1 text-xs">
+              {(startCheck?.conflicts ?? []).map((c, i) => (
+                <li
+                  key={`conflict-${i}`}
+                  className="rounded-md bg-danger-surface px-2 py-1 text-danger-foreground"
+                >
+                  {playerMap.get(c.playerId)?.name ?? "A player"} is currently playing
+                  {c.courtNumber ? ` on Court ${c.courtNumber}` : " another match"} — this match
+                  can't start until they finish.
+                </li>
+              ))}
+              {(startCheck?.warnings ?? []).map((w, i) => (
+                <li
+                  key={`warning-${i}`}
+                  className="rounded-md bg-warn-surface px-2 py-1 text-warn-foreground"
+                >
+                  {playerMap.get(w.playerId)?.name ?? "A player"} has only rested {w.restMinutes} of{" "}
+                  {w.requiredMinutes} min since their last match.
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <div className="flex gap-2">
             <Button disabled={!signedIn || busy || games.length === 0} onClick={submit}>
               Report result
@@ -388,7 +487,7 @@ function CourtScoreDialog({
             {match.status !== "in-progress" ? (
               <Button
                 variant="outline"
-                disabled={!signedIn || busy}
+                disabled={!signedIn || busy || !!startCheck?.conflicts.length}
                 onClick={async () => {
                   try {
                     await startMatch(table, match.id, match.courtId);
@@ -403,13 +502,14 @@ function CourtScoreDialog({
               </Button>
             ) : null}
           </div>
-          {!signedIn ? <p className="text-xs text-muted-foreground">Sign in at the desk to enter scores.</p> : null}
+          {!signedIn ? (
+            <p className="text-xs text-muted-foreground">Sign in at the desk to enter scores.</p>
+          ) : null}
         </div>
       )}
     </>
   );
 }
-
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (

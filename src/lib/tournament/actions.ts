@@ -4,6 +4,13 @@ import type { Team, Pool, PoolEntry, PoolMatch, DrawMatch, Settings, Court } fro
 import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
 import { gamesWinner, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
+import {
+  scheduleGroupStageGrasp,
+  type GraspDiagnostics,
+  type GraspOptions,
+  type GraspScheduleResult,
+  type GraspSchedulableMatch,
+} from "./scheduler-grasp";
 import { scheduleMatches, type SchedulableMatch } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
@@ -208,7 +215,18 @@ export interface ScheduleSummary {
   overrun: boolean;
   projectedFinish: string | null;
   overrunMinutes: number;
+  diagnostics?: GraspDiagnostics | undefined;
 }
+
+export type DayOneSchedulerOptions = Pick<
+  GraspOptions,
+  | "categoryFragmentationGapMinutes"
+  | "rclSize"
+  | "graspRuns"
+  | "seed"
+  | "debugTrace"
+  | "maxIterationsPerRun"
+>;
 
 export async function scheduleDay(
   day: 1 | 2,
@@ -219,6 +237,7 @@ export async function scheduleDay(
   drawMatches: DrawMatch[],
   drawCategory: Map<string, string>,
   categoryOrder: Map<string, number>,
+  graspOptions?: DayOneSchedulerOptions,
 ): Promise<ScheduleSummary> {
   if (!courts.length) throw new Error("Load the court list before building a schedule.");
   const teamById = new Map(teams.map((t) => [t.id, t]));
@@ -235,28 +254,48 @@ export async function scheduleDay(
 
   const slotMinutes = day === 1 ? settings.group_slot_minutes : settings.knockout_slot_minutes;
   const restGap = day === 1 ? settings.group_rest_gap_minutes : settings.knockout_rest_gap_minutes;
-  const items: SchedulableMatch[] =
+  const date = day === 1 ? settings.day_1 : settings.day_2;
+  const dayStart = combineDateTime(date, settings.day_start_time);
+  const planningEnd = combineDateTime(date, settings.planning_end_time || "17:00:00");
+  const nextWholeMinute = Math.ceil(Date.now() / 60_000) * 60_000;
+  const isDayOneRebuild =
+    day === 1 &&
+    poolMatches.some((match) => match.status !== "void" && match.scheduled_time != null);
+  const schedulingFloor = isDayOneRebuild
+    ? new Date(Math.max(dayStart.getTime(), nextWholeMinute))
+    : dayStart;
+  const items: GraspSchedulableMatch[] =
     day === 1
       ? poolMatches
           .filter((m) => m.status !== "void")
           .map((m) => {
             const ids = playersOf(m.team_a_id, m.team_b_id);
+            const playersKnown = Boolean(
+              m.team_a_id && m.team_b_id && teamById.has(m.team_a_id) && teamById.has(m.team_b_id),
+            );
             if ((m.team_a_id || m.team_b_id) && ids.length === 0) {
               throw new Error("A scheduled group match is missing player records.");
             }
             const start = m.scheduled_time ? new Date(m.scheduled_time).getTime() : undefined;
             const fixed = m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+            const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
+            const end =
+              m.status === "in-progress" && plannedEnd != null
+                ? Math.max(plannedEnd, schedulingFloor.getTime() + slotMinutes * 60_000)
+                : plannedEnd;
             return {
               id: m.id,
               categoryId: m.category_id,
               categoryOrder: categoryOrder.get(m.category_id) ?? 0,
               poolId: m.pool_id,
               playerIds: ids,
+              playersKnown,
               kind: "group" as const,
               order: m.round,
+              round: m.round,
               fixed,
               start,
-              end: start != null ? start + slotMinutes * 60_000 : undefined,
+              end,
               courtNumber: courts.find((c) => c.id === m.court_id)?.number,
             };
           })
@@ -290,15 +329,24 @@ export async function scheduleDay(
           })
           .filter((m) => m.fixed || (m.playerIds.length > 0 && drawMatches.find((d) => d.id === m.id)?.status !== "reported"));
 
-  const date = day === 1 ? settings.day_1 : settings.day_2;
-  const result = scheduleMatches(items, {
-    dayStart: combineDateTime(date, settings.day_start_time),
-    planningEnd: combineDateTime(date, settings.planning_end_time || "17:00:00"),
-    courts,
-    slotMinutes,
-    restGapMinutes: restGap,
-    now: new Date(),
-  });
+  const result =
+    day === 1
+      ? scheduleGroupStageGrasp(items, {
+          dayStart,
+          planningEnd,
+          schedulingFloor,
+          courts,
+          slotMinutes,
+          restGapMinutes: restGap,
+          ...graspOptions,
+        })
+      : scheduleMatches(items as SchedulableMatch[], {
+          dayStart,
+          planningEnd,
+          courts,
+          slotMinutes,
+          restGapMinutes: restGap,
+        });
 
   const poolEnds: Record<string, string> = {};
   if (day === 1) {
@@ -331,6 +379,7 @@ export async function scheduleDay(
     overrun: result.overrun,
     projectedFinish: result.projectedFinish?.toISOString() ?? null,
     overrunMinutes: result.overrunMinutes,
+    ...(day === 1 ? { diagnostics: (result as GraspScheduleResult).diagnostics } : {}),
   };
 }
 

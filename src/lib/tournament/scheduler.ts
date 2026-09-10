@@ -24,7 +24,6 @@ export interface SchedulerOptions {
   courts: { id: string; number: number }[];
   slotMinutes: number;
   restGapMinutes: number;
-  now?: Date;
 }
 
 export interface ScheduledSlot {
@@ -46,33 +45,38 @@ export interface ScheduleResult {
   overrunMinutes: number;
 }
 
-export interface RestGapViolation {
-  playerId: string;
-  matchA: string;
-  matchB: string;
-  gapMinutes: number;
-}
-
 const MINUTE = 60_000;
 
-export function scheduleMatches(matches: SchedulableMatch[], options: SchedulerOptions): ScheduleResult {
-  const { dayStart, planningEnd, courts, slotMinutes, restGapMinutes, now } = options;
+export function scheduleMatches(
+  matches: SchedulableMatch[],
+  options: SchedulerOptions,
+): ScheduleResult {
+  const { dayStart, planningEnd, courts, slotMinutes, restGapMinutes } = options;
   if (!courts.length) throw new Error("No courts are available to schedule.");
   const courtIds = [...courts].sort((a, b) => a.number - b.number);
   const courtFreeAt = new Map<string, number>(courtIds.map((c) => [c.id, dayStart.getTime()]));
   const playerFreeAt = new Map<string, number>();
   const slots: ScheduledSlot[] = [];
   const unscheduled: string[] = [];
-  const floor = Math.max(dayStart.getTime(), now?.getTime() ?? dayStart.getTime());
+  // Fresh (non-fixed) matches always start from the chosen day-start time, never from
+  // the current wall-clock time — the tournament start time picked by the desk is
+  // authoritative. Matches already in progress/reported are handled as "fixed" below
+  // and naturally push courtFreeAt/playerFreeAt forward from their real end times.
+  const floor = dayStart.getTime();
 
-  const fixed = matches.filter((m) => m.fixed && m.start != null && m.end != null && m.courtNumber != null);
+  const fixed = matches.filter(
+    (m) => m.fixed && m.start != null && m.end != null && m.courtNumber != null,
+  );
   for (const match of fixed) {
     const court = courtIds.find((c) => c.number === match.courtNumber);
     if (!court || match.start == null || match.end == null) continue;
     const current = courtFreeAt.get(court.id) ?? dayStart.getTime();
     courtFreeAt.set(court.id, Math.max(current, match.end));
     for (const playerId of match.playerIds) {
-      playerFreeAt.set(playerId, Math.max(playerFreeAt.get(playerId) ?? 0, match.end + restGapMinutes * MINUTE));
+      playerFreeAt.set(
+        playerId,
+        Math.max(playerFreeAt.get(playerId) ?? 0, match.end + restGapMinutes * MINUTE),
+      );
     }
     slots.push({
       matchId: match.id,
@@ -101,7 +105,9 @@ export function scheduleMatches(matches: SchedulableMatch[], options: SchedulerO
   });
 
   for (const [, catMatches] of categories) {
-    const ordered = [...catMatches].sort((a, b) => a.order - b.order || (a.poolId ?? "").localeCompare(b.poolId ?? ""));
+    const ordered = [...catMatches].sort(
+      (a, b) => a.order - b.order || (a.poolId ?? "").localeCompare(b.poolId ?? ""),
+    );
     for (const match of ordered) {
       if (!match.playerIds.length) {
         unscheduled.push(match.id);
@@ -109,7 +115,11 @@ export function scheduleMatches(matches: SchedulableMatch[], options: SchedulerO
       }
       let best: { court: (typeof courtIds)[number]; start: number } | null = null;
       for (const court of courtIds) {
-        let start = Math.max(courtFreeAt.get(court.id) ?? dayStart.getTime(), floor, match.earliestStart ?? 0);
+        let start = Math.max(
+          courtFreeAt.get(court.id) ?? dayStart.getTime(),
+          floor,
+          match.earliestStart ?? 0,
+        );
         for (const playerId of match.playerIds) {
           const free = playerFreeAt.get(playerId);
           if (free != null && free > start) start = free;
@@ -139,50 +149,107 @@ export function scheduleMatches(matches: SchedulableMatch[], options: SchedulerO
 
   const windowMinutes = ((planningEnd.getTime() - dayStart.getTime()) / MINUTE) * courtIds.length;
   const usedMinutes = slots.length * slotMinutes;
-  const last = slots.reduce<number | null>((acc, slot) => Math.max(acc ?? 0, slot.end.getTime()), null);
+  const last = slots.reduce<number | null>(
+    (acc, slot) => Math.max(acc ?? 0, slot.end.getTime()),
+    null,
+  );
   return {
-    slots: slots.sort((a, b) => a.start.getTime() - b.start.getTime() || a.courtNumber - b.courtNumber),
+    slots: slots.sort(
+      (a, b) => a.start.getTime() - b.start.getTime() || a.courtNumber - b.courtNumber,
+    ),
     unscheduled,
     utilization: windowMinutes > 0 ? usedMinutes / windowMinutes : 0,
     overrun: slots.some((s) => s.overrun) || unscheduled.length > 0,
     projectedFinish: last != null ? new Date(last) : null,
-    overrunMinutes: last != null ? Math.max(0, Math.round((last - planningEnd.getTime()) / MINUTE)) : 0,
+    overrunMinutes:
+      last != null ? Math.max(0, Math.round((last - planningEnd.getTime()) / MINUTE)) : 0,
   };
 }
 
-export function findRestGapViolations(
-  entries: { matchId: string; playerIds: string[]; start: Date; end: Date }[],
-  restGapMinutes: number,
-): RestGapViolation[] {
-  const byPlayer = new Map<string, typeof entries>();
-  for (const entry of entries) {
-    for (const playerId of entry.playerIds) {
-      const list = byPlayer.get(playerId) ?? [];
-      list.push(entry);
-      byPlayer.set(playerId, list);
-    }
-  }
+export function restGapForKind(
+  kind: "group" | "knockout",
+  groupMinutes: number,
+  knockoutMinutes: number,
+): number {
+  return kind === "group" ? groupMinutes : knockoutMinutes;
+}
 
-  const violations: RestGapViolation[] = [];
-  for (const [playerId, list] of byPlayer) {
-    const sorted = [...list].sort((a, b) => a.start.getTime() - b.start.getTime());
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1]!;
-      const curr = sorted[i]!;
-      const gap = (curr.start.getTime() - prev.end.getTime()) / MINUTE;
-      if (gap < restGapMinutes) {
-        violations.push({
+/** A match, reduced to just what's needed to check start-time constraints for another match. */
+export interface StartCheckMatch {
+  id: string;
+  playerIds: string[];
+  status: string;
+  courtNumber?: number | null;
+  /** When the match actually finished (report/walkover time), if it has. */
+  endedAt?: string | null;
+}
+
+export interface StartConflict {
+  playerId: string;
+  /** The other match the player is currently on court for. */
+  matchId: string;
+  courtNumber?: number | null;
+}
+
+export interface StartRestWarning {
+  playerId: string;
+  /** The player's most recently finished match. */
+  matchId: string;
+  restMinutes: number;
+  requiredMinutes: number;
+}
+
+export interface StartConstraints {
+  /** Hard blockers — a player physically cannot start this match right now. */
+  conflicts: StartConflict[];
+  /** Soft warnings — starting is allowed, but a player hasn't had the configured rest gap. */
+  warnings: StartRestWarning[];
+}
+
+/**
+ * Checks whether a match is safe to start right now, given every other match's live state.
+ * - `conflicts`: a player in this match is `in-progress` elsewhere — should block starting.
+ * - `warnings`: a player's most recently finished match ended too recently — desk can override.
+ */
+export function checkStartConstraints(
+  targetPlayerIds: string[],
+  requiredRestMinutes: number,
+  others: StartCheckMatch[],
+  now: number = Date.now(),
+): StartConstraints {
+  const conflicts: StartConflict[] = [];
+  const warnings: StartRestWarning[] = [];
+
+  for (const playerId of targetPlayerIds) {
+    const inProgress = others.find(
+      (m) => m.status === "in-progress" && m.playerIds.includes(playerId),
+    );
+    if (inProgress) {
+      conflicts.push({
+        playerId,
+        matchId: inProgress.id,
+        courtNumber: inProgress.courtNumber ?? null,
+      });
+      continue; // a hard conflict makes the rest gap moot for this player
+    }
+
+    const lastFinished = others
+      .filter((m) => m.endedAt && m.playerIds.includes(playerId))
+      .sort(
+        (a, b) => new Date(b.endedAt as string).getTime() - new Date(a.endedAt as string).getTime(),
+      )[0];
+    if (lastFinished?.endedAt) {
+      const restMinutes = Math.floor((now - new Date(lastFinished.endedAt).getTime()) / MINUTE);
+      if (restMinutes < requiredRestMinutes) {
+        warnings.push({
           playerId,
-          matchA: prev.matchId,
-          matchB: curr.matchId,
-          gapMinutes: Math.round(gap),
+          matchId: lastFinished.id,
+          restMinutes: Math.max(restMinutes, 0),
+          requiredMinutes: requiredRestMinutes,
         });
       }
     }
   }
-  return violations;
-}
 
-export function restGapForKind(kind: "group" | "knockout", groupMinutes: number, knockoutMinutes: number): number {
-  return kind === "group" ? groupMinutes : knockoutMinutes;
+  return { conflicts, warnings };
 }
