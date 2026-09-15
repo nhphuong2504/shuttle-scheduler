@@ -181,6 +181,17 @@ function SetupPage() {
         ) : undefined
       }
     >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="Days" value={parseIntStrict(dayCount) ?? 0} hint="Consecutive dates" />
+        <StatTile label="Courts" value={parseIntStrict(courtCount) ?? 0} hint="Numbered from 1" />
+        <StatTile label="Categories" value={selected.length} hint="Switched on" />
+        <StatTile
+          label="Status"
+          value={problems.length ? "Check form" : createdId ? "Created" : "Ready"}
+          tone={problems.length ? "warn" : createdId ? "good" : "normal"}
+          hint={problems.length ? `${problems.length} to fix` : "All fields valid"}
+        />
+      </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
           <Panel title="Basics">
