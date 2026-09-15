@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,9 +12,21 @@ import { useSession } from "@/hooks/useSession";
 import { inviteStaff, removeStaff } from "@/lib/tournament/actions";
 import { useStaffRoles, type StaffRoleName } from "@/lib/tournament/data";
 
+const ROLES = ["admin", "registrar", "scorer", "scheduler"] as const;
+
+const STAFF_DESCRIPTION =
+  "Invite desk accounts and manage registrar, scorer, scheduler and admin access for the tournament.";
+
 export const Route = createFileRoute("/staff")({
   head: () => ({
-    meta: [{ title: "Staff | ShuttleNet Tournament Ops" }],
+    meta: [
+      { title: "Staff | ShuttleNet Tournament Ops" },
+      { name: "description", content: STAFF_DESCRIPTION },
+      { property: "og:title", content: "Staff | ShuttleNet Tournament Ops" },
+      { property: "og:description", content: STAFF_DESCRIPTION },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
   }),
   component: StaffPage,
 });
