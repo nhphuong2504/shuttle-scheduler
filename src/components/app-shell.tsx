@@ -91,7 +91,7 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1400px] px-4 py-6">
+      <main className="mx-auto min-h-[calc(100vh-3.5rem)] max-w-[1400px] px-4 py-6">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>
