@@ -52,7 +52,7 @@ function StaffPage() {
           <StatTile key={r} label={r} value={countOf(r)} tone={r === "admin" ? "good" : "normal"} />
         ))}
       </div>
-      <div className="grid gap-4 md:grid-cols-[320px_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         <Panel title="Invite staff">
           <div className="space-y-3">
             <div className="space-y-1.5">
