@@ -38,8 +38,20 @@ function StaffPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<StaffRoleName>("scorer");
 
+  const rows = roles ?? [];
+  const countOf = (name: StaffRoleName) => rows.filter((r) => r.role === name).length;
+
   return (
-    <AppShell title="Staff access" subtitle="Invite-only accounts with registrar, scorer, scheduler, or admin roles.">
+    <AppShell
+      title="Staff access"
+      subtitle="Invite-only accounts with registrar, scorer, scheduler, or admin roles."
+    >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <StatTile label="Accounts" value={rows.length} hint="Total invited" />
+        {ROLES.map((r) => (
+          <StatTile key={r} label={r} value={countOf(r)} tone={r === "admin" ? "good" : "normal"} />
+        ))}
+      </div>
       <div className="grid gap-4 md:grid-cols-[320px_1fr]">
         <Panel title="Invite staff">
           <div className="space-y-3">
