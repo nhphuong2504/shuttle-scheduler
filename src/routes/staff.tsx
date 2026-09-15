@@ -66,7 +66,7 @@ function StaffPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(["admin", "registrar", "scorer", "scheduler"] as const).map((r) => (
+                  {ROLES.map((r) => (
                     <SelectItem key={r} value={r}>
                       {r}
                     </SelectItem>
@@ -92,19 +92,32 @@ function StaffPage() {
             </Button>
           </div>
         </Panel>
-        <Panel title="Current staff">
-          {(roles ?? []).length === 0 ? (
-            <EmptyState title="No staff invited yet" hint="Invite a desk account to give them access." />
+        <Panel
+          title="Current staff"
+          right={
+            <span className="font-score text-[11px] text-muted-foreground">
+              {rows.length} account{rows.length === 1 ? "" : "s"}
+            </span>
+          }
+          bodyClassName="p-0"
+        >
+          {rows.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                title="No staff invited yet"
+                hint="Invite a desk account to give them access."
+              />
+            </div>
           ) : (
             <ul className="divide-y divide-hairline text-sm">
-              {(roles ?? []).map((row) => (
+              {rows.map((row) => (
                 <li
                   key={row.id}
-                  className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/50"
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-muted/50"
                 >
-                  <span>
-                    {row.email}{" "}
-                    <span className="ml-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{row.email}</span>
+                    <span className="inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-score text-[10px] uppercase tracking-wider text-primary">
                       {row.role}
                     </span>
                   </span>
@@ -124,7 +137,6 @@ function StaffPage() {
             </ul>
           )}
         </Panel>
-
       </div>
     </AppShell>
   );
