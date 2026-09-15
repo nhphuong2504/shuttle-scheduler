@@ -328,9 +328,10 @@ function SetupPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No active tournament. The desk will stay empty until one is created.
-              </p>
+              <EmptyState
+                title="No active tournament"
+                hint="The desk stays empty until one is created."
+              />
             )}
           </Panel>
 
