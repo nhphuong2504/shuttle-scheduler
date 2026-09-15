@@ -154,7 +154,7 @@ export async function createTeam(input: {
         category_id: input.categoryId,
         player_1_id: input.player1,
         player_2_id: input.player2,
-      })
+      } as never)
       .select("*")
       .single(),
   );
