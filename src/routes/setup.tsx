@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, Panel } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,8 @@ export const Route = createFileRoute("/setup")({
         content:
           "Create a tournament: name, day count, court count, start date and the active categories.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: SetupPage,
@@ -179,6 +181,17 @@ function SetupPage() {
         ) : undefined
       }
     >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="Days" value={parseIntStrict(dayCount) ?? 0} hint="Consecutive dates" />
+        <StatTile label="Courts" value={parseIntStrict(courtCount) ?? 0} hint="Numbered from 1" />
+        <StatTile label="Categories" value={selected.length} hint="Switched on" />
+        <StatTile
+          label="Status"
+          value={problems.length ? "Check form" : createdId ? "Created" : "Ready"}
+          tone={problems.length ? "warn" : createdId ? "good" : "normal"}
+          hint={problems.length ? `${problems.length} to fix` : "All fields valid"}
+        />
+      </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
           <Panel title="Basics">
@@ -315,9 +328,10 @@ function SetupPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No active tournament. The desk will stay empty until one is created.
-              </p>
+              <EmptyState
+                title="No active tournament"
+                hint="The desk stays empty until one is created."
+              />
             )}
           </Panel>
 
