@@ -7,7 +7,13 @@ import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSession } from "@/hooks/useSession";
 import { createPlayer, createTeam, deleteTeam, setTeamWithdrawn } from "@/lib/tournament/actions";
 import { indexBy, teamLabel, useCategories, usePlayers, useTeams } from "@/lib/tournament/data";
@@ -18,12 +24,14 @@ export const Route = createFileRoute("/registration")({
       { title: "Registration | ShuttleNet Tournament Ops" },
       {
         name: "description",
-        content: "Register players and doubles pairs across the four badminton categories, capped at two per player.",
+        content:
+          "Register players and doubles pairs across the tournament's active badminton categories, capped at two per player.",
       },
       { property: "og:title", content: "Registration | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
-        content: "Register players and doubles pairs across the four badminton categories, capped at two per player.",
+        content:
+          "Register players and doubles pairs across the tournament's active badminton categories, capped at two per player.",
       },
     ],
   }),
@@ -68,6 +76,31 @@ function RegistrationPage() {
     if (!set) return false;
     return set.size >= 2 && !set.has(categoryId);
   };
+
+  /** Registration is only open for categories this tournament switched on. */
+  const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.active), [categories]);
+
+  const activeEntryCount = (id: string) =>
+    (teams ?? []).filter((t) => t.category_id === id && !t.withdrawn).length;
+
+  const isFull = (id: string) => {
+    const cat = (categories ?? []).find((c) => c.id === id);
+    if (!cat || cat.max_entries == null) return false;
+    return activeEntryCount(id) >= cat.max_entries;
+  };
+
+  const openCategories = activeCategories.filter((c) => !isFull(c.id));
+  const selectedIsFull = !!categoryId && isFull(categoryId);
+
+  // Inactive categories are hidden from registration, but any that already hold
+  // entries stay visible so existing entries can never disappear from the desk.
+  const listedCategories = useMemo(
+    () =>
+      (categories ?? []).filter(
+        (c) => c.active || (teams ?? []).some((t) => t.category_id === c.id),
+      ),
+    [categories, teams],
+  );
 
   const refresh = () => {
     qc.invalidateQueries();
@@ -131,7 +164,11 @@ function RegistrationPage() {
       subtitle="Each player may enter a maximum of two categories. A third entry is rejected outright."
     >
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <StatTile label="Players" value={stats.totalPlayers} hint={`${stats.unassigned} with no entry`} />
+        <StatTile
+          label="Players"
+          value={stats.totalPlayers}
+          hint={`${stats.unassigned} with no entry`}
+        />
         <StatTile label="Entries" value={stats.entries} hint="Across all categories" />
         <StatTile label="Active" value={stats.active} tone="good" hint="Still in the draw" />
         <StatTile
@@ -171,7 +208,11 @@ function RegistrationPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full" disabled={!canRegister || !name.trim()} onClick={addPlayer}>
+              <Button
+                className="w-full"
+                disabled={!canRegister || !name.trim()}
+                onClick={addPlayer}
+              >
                 Add player
               </Button>
             </div>
@@ -186,13 +227,26 @@ function RegistrationPage() {
                     <SelectValue placeholder="Choose category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(categories ?? []).map((c) => (
+                    {openCategories.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.code} — {c.name}
+                        {c.max_entries != null
+                          ? ` (${activeEntryCount(c.id)}/${c.max_entries})`
+                          : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {!openCategories.length ? (
+                  <p className="text-xs text-warn-foreground">
+                    Every active category is either full or switched off for this tournament.
+                  </p>
+                ) : null}
+                {selectedIsFull ? (
+                  <p className="text-xs text-danger-foreground">
+                    That category is full — withdraw an entry to make room.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1.5">
                 <Label>{isPair ? "Player 1" : "Player"}</Label>
@@ -201,10 +255,18 @@ function RegistrationPage() {
               {isPair ? (
                 <div className="space-y-1.5">
                   <Label>Player 2</Label>
-                  <PlayerSelect value={p2} onChange={setP2} options={eligible.filter((p) => p.id !== p1)} />
+                  <PlayerSelect
+                    value={p2}
+                    onChange={setP2}
+                    options={eligible.filter((p) => p.id !== p1)}
+                  />
                 </div>
               ) : null}
-              <Button className="w-full" disabled={!canRegister || !categoryId || !p1} onClick={addEntry}>
+              <Button
+                className="w-full"
+                disabled={!canRegister || !categoryId || !p1 || selectedIsFull}
+                onClick={addEntry}
+              >
                 Add entry
               </Button>
               <p className="text-xs text-muted-foreground">
@@ -215,16 +277,37 @@ function RegistrationPage() {
         </div>
 
         <div className="space-y-4">
-          {(categories ?? []).map((c) => {
+          {listedCategories.map((c) => {
             const list = (teams ?? []).filter((t) => t.category_id === c.id);
+            const activeCount = list.filter((t) => !t.withdrawn).length;
+            const full = isFull(c.id);
             return (
               <Panel
                 key={c.id}
                 title={`${c.code} — ${c.name}`}
-                right={<span className="font-score text-xs text-muted-foreground">{list.length} entries</span>}
+                right={
+                  <span className="flex items-center gap-2">
+                    {!c.active ? (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Closed
+                      </span>
+                    ) : full ? (
+                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-danger-foreground">
+                        Full
+                      </span>
+                    ) : null}
+                    <span className="font-score text-xs text-muted-foreground">
+                      {activeCount}
+                      {c.max_entries != null ? ` / ${c.max_entries}` : ""} entries
+                    </span>
+                  </span>
+                }
               >
                 {list.length === 0 ? (
-                  <EmptyState title="No entries yet" hint="Add players on the left, then create an entry." />
+                  <EmptyState
+                    title="No entries yet"
+                    hint="Add players on the left, then create an entry."
+                  />
                 ) : (
                   <ul className="divide-y divide-hairline">
                     {list.map((t) => (
@@ -232,7 +315,6 @@ function RegistrationPage() {
                         key={t.id}
                         className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
                       >
-
                         <span className={t.withdrawn ? "text-muted-foreground line-through" : ""}>
                           {teamLabel(t, playerMap)}
                         </span>
@@ -257,7 +339,9 @@ function RegistrationPage() {
                                 await deleteTeam(t.id);
                                 refresh();
                               } catch (error) {
-                                toast.error(error instanceof Error ? error.message : "Could not remove entry");
+                                toast.error(
+                                  error instanceof Error ? error.message : "Could not remove entry",
+                                );
                               }
                             }}
                           >

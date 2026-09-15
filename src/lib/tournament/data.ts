@@ -20,14 +20,27 @@ export type PoolEntry = Database["public"]["Tables"]["pool_entries"]["Row"];
 export type PoolMatch = Database["public"]["Tables"]["pool_matches"]["Row"];
 export type Draw = Database["public"]["Tables"]["draws"]["Row"];
 export type DrawMatch = Database["public"]["Tables"]["draw_matches"]["Row"];
-export type Settings = Database["public"]["Tables"]["tournament_settings"]["Row"];
+export type Tournament = Database["public"]["Tables"]["tournaments"]["Row"];
+export type TournamentDay = Database["public"]["Tables"]["tournament_days"]["Row"];
 export type StaffRole = Database["public"]["Tables"]["staff_roles"]["Row"];
 export type StaffRoleName = "admin" | "registrar" | "scorer" | "scheduler";
 
-async function must<T>(p: PromiseLike<{ data: T | null; error: { message: string } | null }>): Promise<T> {
+export type StageName = "group" | "knockout";
+
+async function must<T>(
+  p: PromiseLike<{ data: T | null; error: { message: string } | null }>,
+): Promise<T> {
   const { data, error } = await p;
   if (error) throw new Error(error.message);
   return (data ?? []) as T;
+}
+
+/**
+ * Every tournament-scoped query key ends with the tournament id, so switching
+ * the active tournament invalidates the whole cache slice at once.
+ */
+export function scopedKey(base: readonly unknown[], tournamentId: string | null | undefined) {
+  return [...base, tournamentId ?? null];
 }
 
 export const keys = {
@@ -41,22 +54,102 @@ export const keys = {
   poolMatches: ["pool_matches"] as const,
   draws: ["draws"] as const,
   drawMatches: ["draw_matches"] as const,
-  settings: ["settings"] as const,
+  activeTournament: ["active_tournament"] as const,
+  tournamentDays: ["tournament_days"] as const,
   staffRole: ["staff_role"] as const,
   staffRoles: ["staff_roles"] as const,
 };
 
-export function useCategories() {
+/** The tournament the desk is currently operating on. */
+export function useActiveTournament() {
   return useQuery({
-    queryKey: keys.categories,
-    queryFn: () => must<Category[]>(supabase.from("categories").select("*").order("sort_order")),
+    queryKey: keys.activeTournament,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const rows = await must<Tournament[]>(
+        supabase.from("tournaments").select("*").eq("is_active", true).limit(1),
+      );
+      return rows[0] ?? null;
+    },
+  });
+}
+
+/**
+ * Shared scope handle. Every scoped hook subscribes to the same query, so this
+ * costs one request regardless of how many hooks call it.
+ */
+export function useActiveTournamentId(): string | null {
+  const { data } = useActiveTournament();
+  return data?.id ?? null;
+}
+
+export function useTournamentDays() {
+  const tournamentId = useActiveTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.tournamentDays, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<TournamentDay[]>(
+        supabase
+          .from("tournament_days")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("day_number"),
+      ),
+  });
+}
+
+/** The active tournament plus its ordered days, which is what the UI mostly wants. */
+export function useTournamentScope() {
+  const tournamentQuery = useActiveTournament();
+  const daysQuery = useTournamentDays();
+  return {
+    tournament: tournamentQuery.data ?? null,
+    days: daysQuery.data ?? [],
+    loading: tournamentQuery.isLoading || daysQuery.isLoading,
+  };
+}
+
+/**
+ * Groups open on day 1 and knockouts close on the final day. A single-day
+ * tournament runs both stages on that day.
+ */
+export function stagesForDay(dayNumber: number, dayCount: number): StageName[] {
+  const stages: StageName[] = [];
+  if (dayNumber === 1) stages.push("group");
+  if (dayNumber === dayCount && !stages.includes("knockout")) stages.push("knockout");
+  return stages;
+}
+
+export function useCategories() {
+  const tournamentId = useActiveTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.categories, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<Category[]>(
+        supabase
+          .from("categories")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("sort_order"),
+      ),
   });
 }
 
 export function useCourts() {
+  const tournamentId = useActiveTournamentId();
   return useQuery({
-    queryKey: keys.courts,
-    queryFn: () => must<Court[]>(supabase.from("courts").select("*").order("number")),
+    queryKey: scopedKey(keys.courts, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<Court[]>(
+        supabase
+          .from("courts")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("number"),
+      ),
   });
 }
 
@@ -86,7 +179,12 @@ export function usePlayers() {
       const rows: Player[] = [];
       for (const p of data ?? []) {
         if (!p.id || !p.name) continue;
-        rows.push({ id: p.id, name: p.name, gender: p.gender, created_at: p.created_at ?? undefined });
+        rows.push({
+          id: p.id,
+          name: p.name,
+          gender: p.gender,
+          created_at: p.created_at ?? undefined,
+        });
       }
       return rows;
     },
@@ -94,56 +192,100 @@ export function usePlayers() {
 }
 
 export function useTeams() {
+  const tournamentId = useActiveTournamentId();
   return useQuery({
-    queryKey: keys.teams,
-    queryFn: () => must<Team[]>(supabase.from("teams").select("*").order("created_at")),
+    queryKey: scopedKey(keys.teams, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<Team[]>(
+        supabase
+          .from("teams")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("created_at"),
+      ),
   });
 }
 
 export function usePools() {
+  const tournamentId = useActiveTournamentId();
   return useQuery({
-    queryKey: keys.pools,
-    queryFn: () => must<Pool[]>(supabase.from("pools").select("*").order("name")),
+    queryKey: scopedKey(keys.pools, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<Pool[]>(
+        supabase
+          .from("pools")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("name"),
+      ),
   });
 }
 
 export function usePoolEntries() {
+  const tournamentId = useActiveTournamentId();
   return useQuery({
-    queryKey: keys.poolEntries,
-    queryFn: () => must<PoolEntry[]>(supabase.from("pool_entries").select("*").order("position")),
+    queryKey: scopedKey(keys.poolEntries, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<PoolEntry[]>(
+        supabase
+          .from("pool_entries")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("position"),
+      ),
   });
 }
 
 export function usePoolMatches() {
+  const tournamentId = useActiveTournamentId();
   return useQuery({
-    queryKey: keys.poolMatches,
-    queryFn: () => must<PoolMatch[]>(supabase.from("pool_matches").select("*").order("round")),
+    queryKey: scopedKey(keys.poolMatches, tournamentId),
+    enabled: !!tournamentId,
     refetchInterval: 20_000,
+    queryFn: () =>
+      must<PoolMatch[]>(
+        supabase
+          .from("pool_matches")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("round"),
+      ),
   });
 }
 
 export function useDraws() {
+  const tournamentId = useActiveTournamentId();
   return useQuery({
-    queryKey: keys.draws,
-    queryFn: () => must<Draw[]>(supabase.from("draws").select("*").order("tier")),
+    queryKey: scopedKey(keys.draws, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<Draw[]>(
+        supabase
+          .from("draws")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("tier"),
+      ),
   });
 }
 
 export function useDrawMatches() {
+  const tournamentId = useActiveTournamentId();
   return useQuery({
-    queryKey: keys.drawMatches,
-    queryFn: () => must<DrawMatch[]>(supabase.from("draw_matches").select("*").order("round")),
+    queryKey: scopedKey(keys.drawMatches, tournamentId),
+    enabled: !!tournamentId,
     refetchInterval: 20_000,
-  });
-}
-
-export function useSettings() {
-  return useQuery({
-    queryKey: keys.settings,
-    queryFn: async () => {
-      const rows = await must<Settings[]>(supabase.from("tournament_settings").select("*").limit(1));
-      return rows[0] ?? null;
-    },
+    queryFn: () =>
+      must<DrawMatch[]>(
+        supabase
+          .from("draw_matches")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("round"),
+      ),
   });
 }
 

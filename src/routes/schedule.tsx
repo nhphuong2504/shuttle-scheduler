@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
@@ -19,21 +19,27 @@ import { useSession } from "@/hooks/useSession";
 import {
   applyDayPlan,
   planDay,
+  updateTournamentDay,
   type DayPlan,
   type ScheduleSummary,
 } from "@/lib/tournament/actions";
 import {
   indexBy,
   keys,
+  scopedKey,
+  stagesForDay,
   teamLabel,
+  useActiveTournament,
   useCategories,
   useCourts,
   useDrawMatches,
   useDraws,
   usePlayers,
   usePoolMatches,
-  useSettings,
   useTeams,
+  useTournamentDays,
+  type StageName,
+  type TournamentDay,
 } from "@/lib/tournament/data";
 import { formatProjectedFinishDelta } from "@/lib/tournament/schedule-diff";
 import { timeLabel } from "@/lib/tournament/format";
@@ -45,23 +51,52 @@ export const Route = createFileRoute("/schedule")({
       {
         name: "description",
         content:
-          "Build the two-day court schedule with stage-specific rest gaps and overrun forecasts.",
+          "Build the court schedule day by day with stage-specific rest gaps and overrun forecasts.",
       },
       { property: "og:title", content: "Court Schedule | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Build the two-day court schedule with stage-specific rest gaps and overrun forecasts.",
+          "Build the court schedule day by day with stage-specific rest gaps and overrun forecasts.",
       },
     ],
   }),
   component: SchedulePage,
 });
 
+interface DayWindow {
+  date: string;
+  start: string;
+  end: string;
+}
+
+interface BuildTarget {
+  key: string;
+  day: TournamentDay;
+  dayNumber: number;
+  stage: StageName;
+}
+
+function stageLabel(stage: StageName) {
+  return stage === "group" ? "groups" : "knockouts";
+}
+
+function stageTitle(dayNumber: number, dayCount: number) {
+  const stages = stagesForDay(dayNumber, dayCount);
+  if (!stages.length) return "buffer day";
+  return stages.map(stageLabel).join(" + ");
+}
+
+function normalizeTime(value: string) {
+  if (!value) return value;
+  return value.length === 5 ? `${value}:00` : value;
+}
+
 function SchedulePage() {
   const qc = useQueryClient();
   const { canSchedule } = useSession();
-  const { data: settings } = useSettings();
+  const { data: tournament } = useActiveTournament();
+  const { data: days } = useTournamentDays();
   const { data: courts } = useCourts();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -70,24 +105,28 @@ function SchedulePage() {
   const { data: drawMatches } = useDrawMatches();
   const { data: categories } = useCategories();
 
-  const [summary, setSummary] = useState<Record<number, ScheduleSummary>>({});
+  const [summary, setSummary] = useState<Record<string, ScheduleSummary>>({});
   const [busy, setBusy] = useState(false);
-  const [buildingDay, setBuildingDay] = useState<1 | 2 | null>(null);
-  const [day1Date, setDay1Date] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [windowTouched, setWindowTouched] = useState(false);
+  const [buildingKey, setBuildingKey] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, DayWindow>>({});
   const [windowUnlocked, setWindowUnlocked] = useState(false);
-  const [previewPlan, setPreviewPlan] = useState<DayPlan | null>(null);
+  const [previewPlan, setPreviewPlan] = useState<{ plan: DayPlan; key: string } | null>(null);
   const [showAllChanges, setShowAllChanges] = useState(false);
 
-  useEffect(() => {
-    if (!windowTouched && settings) {
-      setDay1Date(settings.day_1);
-      setStartTime(settings.day_start_time.slice(0, 5));
-      setEndTime((settings.planning_end_time || settings.day_end_time).slice(0, 5));
-    }
-  }, [settings, windowTouched]);
+  const tournamentDays = useMemo(() => days ?? [], [days]);
+  const dayCount = tournament?.day_count ?? tournamentDays.length;
+  const tournamentId = tournament?.id ?? null;
+
+  /** A day's window is a local draft until it is applied. */
+  const windowFor = (day: TournamentDay): DayWindow =>
+    drafts[day.id] ?? {
+      date: day.date,
+      start: day.start_time.slice(0, 5),
+      end: day.end_time.slice(0, 5),
+    };
+
+  const setWindow = (day: TournamentDay, patch: Partial<DayWindow>) =>
+    setDrafts((prev) => ({ ...prev, [day.id]: { ...windowFor(day), ...patch } }));
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -100,10 +139,23 @@ function SchedulePage() {
   const poolMatchMap = useMemo(() => indexBy(poolMatches), [poolMatches]);
 
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
-  const hasDay1Schedule = (poolMatches ?? []).some(
+
+  const hasGroupSchedule = (poolMatches ?? []).some(
     (match) => match.status !== "void" && match.scheduled_time,
   );
-  const windowLocked = hasDay1Schedule && !windowUnlocked;
+  const hasKnockoutSchedule = (drawMatches ?? []).some(
+    (match) => !match.is_bye && match.status !== "void" && match.scheduled_time,
+  );
+
+  const targets = useMemo<BuildTarget[]>(() => {
+    const list: BuildTarget[] = [];
+    for (const day of tournamentDays) {
+      for (const stage of stagesForDay(day.day_number, dayCount)) {
+        list.push({ key: `${day.day_number}:${stage}`, day, dayNumber: day.day_number, stage });
+      }
+    }
+    return list;
+  }, [tournamentDays, dayCount]);
 
   const rows = useMemo(() => {
     const groupRows = (poolMatches ?? [])
@@ -141,88 +193,84 @@ function SchedulePage() {
     return matchId.slice(0, 8);
   };
 
-  const validateDay1Window = () => {
-    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(day1Date);
-    const validTimes = /^\d{2}:\d{2}$/.test(startTime) && /^\d{2}:\d{2}$/.test(endTime);
+  const validateWindow = (dayNumber: number, window: DayWindow) => {
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(window.date);
+    const validTimes = /^\d{2}:\d{2}$/.test(window.start) && /^\d{2}:\d{2}$/.test(window.end);
     if (!validDate || !validTimes) {
-      toast.error("Choose a valid Day 1 date, start time, and end time.");
+      toast.error(`Choose a valid date, start time, and end time for day ${dayNumber}.`);
       return false;
     }
     if (
-      new Date(`${day1Date}T${endTime}`).getTime() <=
-      new Date(`${day1Date}T${startTime}`).getTime()
+      new Date(`${window.date}T${window.end}`).getTime() <=
+      new Date(`${window.date}T${window.start}`).getTime()
     ) {
-      toast.error("Day 1 end time must be later than its start time.");
+      toast.error(`Day ${dayNumber} end time must be later than its start time.`);
       return false;
     }
     return true;
   };
 
-  const day1SettingsPatch = () => {
-    if (!settings) return null;
-    const normalizedStart = `${startTime}:00`;
-    const normalizedEnd = `${endTime}:00`;
-    if (
-      day1Date === settings.day_1 &&
-      normalizedStart === settings.day_start_time &&
-      normalizedEnd === settings.planning_end_time &&
-      normalizedEnd === settings.day_end_time
-    ) {
-      return null;
-    }
-    return {
-      day_1: day1Date,
-      day_start_time: normalizedStart,
-      day_end_time: normalizedEnd,
-      planning_end_time: normalizedEnd,
-    };
-  };
-
-  const effectiveDay1Settings = () => {
-    if (!settings) throw new Error("Settings are not loaded.");
-    const patch = day1SettingsPatch();
-    return patch ? { ...settings, ...patch } : settings;
-  };
-
   const refetchScheduleData = async () => {
-    await qc.invalidateQueries({ queryKey: keys.poolMatches });
-    await qc.invalidateQueries({ queryKey: keys.drawMatches });
-    await qc.refetchQueries({ queryKey: keys.poolMatches });
-    await qc.refetchQueries({ queryKey: keys.drawMatches });
+    await qc.invalidateQueries({ queryKey: scopedKey(keys.poolMatches, tournamentId) });
+    await qc.invalidateQueries({ queryKey: scopedKey(keys.drawMatches, tournamentId) });
+    await qc.refetchQueries({ queryKey: scopedKey(keys.poolMatches, tournamentId) });
+    await qc.refetchQueries({ queryKey: scopedKey(keys.drawMatches, tournamentId) });
     return {
-      poolMatches: (qc.getQueryData<typeof poolMatches>(keys.poolMatches) ?? []) as NonNullable<
-        typeof poolMatches
-      >,
-      drawMatches: (qc.getQueryData<typeof drawMatches>(keys.drawMatches) ?? []) as NonNullable<
-        typeof drawMatches
-      >,
+      poolMatches: (qc.getQueryData<typeof poolMatches>(
+        scopedKey(keys.poolMatches, tournamentId),
+      ) ?? []) as NonNullable<typeof poolMatches>,
+      drawMatches: (qc.getQueryData<typeof drawMatches>(
+        scopedKey(keys.drawMatches, tournamentId),
+      ) ?? []) as NonNullable<typeof drawMatches>,
     };
   };
 
-  const computePlan = async (day: 1 | 2) => {
-    if (!settings) throw new Error("Settings are not loaded.");
+  const computePlan = async (target: BuildTarget) => {
+    if (!tournament) throw new Error("No active tournament is configured.");
+    const window = windowFor(target.day);
+    const effectiveDay: TournamentDay = {
+      ...target.day,
+      date: window.date,
+      start_time: normalizeTime(window.start),
+      end_time: normalizeTime(window.end),
+    };
     const fresh = await refetchScheduleData();
-    const effectiveSettings = day === 1 ? effectiveDay1Settings() : settings;
     return planDay(
-      day,
-      effectiveSettings,
+      target.dayNumber,
+      target.stage,
+      tournament,
+      effectiveDay,
       courts ?? [],
       teams ?? [],
       fresh.poolMatches,
       fresh.drawMatches,
       drawCategory,
       new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
-      undefined,
-      day === 1 ? day1SettingsPatch() : null,
     );
   };
 
-  const finishApply = async (day: 1 | 2, plan: DayPlan) => {
+  const finishApply = async (day: TournamentDay, plan: DayPlan) => {
+    const window = windowFor(day);
+    const normalized = {
+      date: window.date,
+      start_time: normalizeTime(window.start),
+      end_time: normalizeTime(window.end),
+    };
+    // The schedule page owns the day window; persist edits before applying.
+    if (
+      normalized.date !== day.date ||
+      normalized.start_time !== day.start_time ||
+      normalized.end_time !== day.end_time
+    ) {
+      await updateTournamentDay(day.id, normalized);
+    }
+
     const impact = await applyDayPlan(plan);
-    setSummary((prev) => ({ ...prev, [day]: plan.summary }));
-    if (day === 1 && hasDay1Schedule) {
+    setSummary((prev) => ({ ...prev, [`${plan.day}:${plan.stage}`]: plan.summary }));
+
+    if (plan.stage === "group" && hasGroupSchedule) {
       toast.success(
-        `Day 1 rebuilt — ${plan.summary.placed} matches replanned, ${plan.summary.anchorCount} anchors kept${
+        `Groups rebuilt — ${plan.summary.placed} matches replanned, ${plan.summary.anchorCount} anchors kept${
           impact.shiftedMatches
             ? `; ${impact.shiftedMatches} moved by up to ${impact.largestShiftMinutes} min`
             : ""
@@ -230,54 +278,56 @@ function SchedulePage() {
       );
     } else {
       toast.success(
-        `Day ${day} schedule built — ${plan.summary.placed} matches placed, ${plan.summary.anchorCount} anchors kept`,
+        `${plan.stage === "group" ? "Group" : "Knockout"} schedule built — ${
+          plan.summary.placed
+        } matches placed, ${plan.summary.anchorCount} anchors kept`,
       );
     }
     qc.invalidateQueries();
   };
 
-  const build = async (day: 1 | 2) => {
-    if (!settings) return;
-    if (day === 1 && !validateDay1Window()) return;
+  const build = async (target: BuildTarget) => {
+    if (!validateWindow(target.dayNumber, windowFor(target.day))) return;
     setBusy(true);
-    setBuildingDay(day);
+    setBuildingKey(target.key);
     try {
-      const plan = await computePlan(day);
+      const plan = await computePlan(target);
       if (plan.blocked.length > 0) {
-        setPreviewPlan(plan);
+        setPreviewPlan({ plan, key: target.key });
         setShowAllChanges(false);
         return;
       }
-      await finishApply(day, plan);
+      await finishApply(target.day, plan);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not build the schedule");
     } finally {
       setBusy(false);
-      setBuildingDay(null);
+      setBuildingKey(null);
     }
   };
 
-  const previewRebuild = async () => {
-    if (!settings || !validateDay1Window()) return;
+  const previewRebuild = async (target: BuildTarget) => {
+    if (!validateWindow(target.dayNumber, windowFor(target.day))) return;
     setBusy(true);
-    setBuildingDay(1);
+    setBuildingKey(target.key);
     try {
-      const plan = await computePlan(1);
-      setPreviewPlan(plan);
+      const plan = await computePlan(target);
+      setPreviewPlan({ plan, key: target.key });
       setShowAllChanges(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not plan the rebuild");
     } finally {
       setBusy(false);
-      setBuildingDay(null);
+      setBuildingKey(null);
     }
   };
 
   const applyPreview = async () => {
-    if (!previewPlan || previewPlan.blocked.length > 0) return;
+    if (!previewPlan || previewPlan.plan.blocked.length > 0) return;
     setBusy(true);
     try {
-      await finishApply(previewPlan.day, previewPlan);
+      const day = tournamentDays.find((d) => d.day_number === previewPlan.plan.day);
+      if (day) await finishApply(day, previewPlan.plan);
       setPreviewPlan(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not apply the rebuild");
@@ -288,175 +338,230 @@ function SchedulePage() {
 
   const visibleChanges = previewPlan
     ? showAllChanges
-      ? previewPlan.diff.changes
-      : previewPlan.diff.changes.filter((change) => change.kind !== "unchanged")
+      ? previewPlan.plan.diff.changes
+      : previewPlan.plan.diff.changes.filter((change) => change.kind !== "unchanged")
     : [];
+
+  const previewDay = previewPlan
+    ? tournamentDays.find((d) => d.day_number === previewPlan.plan.day)
+    : undefined;
+  const previewWindow = previewDay ? windowFor(previewDay) : null;
 
   return (
     <AppShell
       title="Court schedule"
-      subtitle="Build the initial running order before play, or safely rebuild the remaining Day 1 matches from the current time."
+      subtitle="Build each day of the running order, or safely rebuild the remaining group matches from the current time."
       actions={
-        <>
-          <div className="flex items-center gap-1.5">
-            <Label htmlFor="day-1-date" className="text-xs text-muted-foreground">
-              Day 1
-            </Label>
-            <Input
-              id="day-1-date"
-              type="date"
-              className="h-9 w-36"
-              value={day1Date}
-              disabled={!canSchedule || busy || windowLocked}
-              onChange={(e) => {
-                setDay1Date(e.target.value);
-                setWindowTouched(true);
-              }}
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Label htmlFor="day-1-start-time" className="text-xs text-muted-foreground">
-              Start
-            </Label>
-            <Input
-              id="day-1-start-time"
-              type="time"
-              className="h-9 w-28"
-              value={startTime}
-              disabled={!canSchedule || busy || windowLocked}
-              onChange={(e) => {
-                setStartTime(e.target.value);
-                setWindowTouched(true);
-              }}
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Label htmlFor="day-1-end-time" className="text-xs text-muted-foreground">
-              End
-            </Label>
-            <Input
-              id="day-1-end-time"
-              type="time"
-              className="h-9 w-28"
-              value={endTime}
-              disabled={!canSchedule || busy || windowLocked}
-              onChange={(e) => {
-                setEndTime(e.target.value);
-                setWindowTouched(true);
-              }}
-            />
-          </div>
-          {windowLocked ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => setWindowUnlocked(true)}
-            >
-              Unlock window
-            </Button>
-          ) : null}
-          <Button
-            disabled={!canSchedule || busy || !settings || !(courts ?? []).length}
-            onClick={() => {
-              if (hasDay1Schedule) void previewRebuild();
-              else void build(1);
-            }}
-          >
-            {buildingDay === 1
-              ? "Building Day 1…"
-              : hasDay1Schedule
-                ? "Rebuild remaining Day 1"
-                : "Build day 1"}
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!canSchedule || busy || !settings || !(courts ?? []).length}
-            onClick={() => build(2)}
-          >
-            {buildingDay === 2 ? "Building Day 2…" : "Build day 2 (knockouts)"}
-          </Button>
-        </>
+        <span className="text-xs text-muted-foreground">
+          {tournament ? `${tournament.name} · ${dayCount} day${dayCount === 1 ? "" : "s"}` : ""}
+        </span>
       }
     >
       <div className="space-y-4">
-        <div
-          className={`rounded-lg border px-3 py-2.5 text-sm ${
-            hasDay1Schedule
-              ? "border-warn-border bg-warn-surface text-warn-foreground"
-              : "border-hairline bg-surface text-muted-foreground"
-          }`}
-        >
-          <p className="font-semibold text-foreground">
-            {hasDay1Schedule ? "Day 1 rebuild mode" : "Before the first Day 1 build"}
-          </p>
-          <p className="mt-0.5 text-xs">
-            {hasDay1Schedule
-              ? windowLocked
-                ? "Rebuilding keeps reported, walkover, and in-progress matches fixed. The day window is locked once play starts; unlock only for a deliberate correction."
-                : "Window editing is unlocked. Rebuilding keeps reported, walkover, and in-progress matches fixed."
-              : `The first build uses ${day1Date || "the selected day"}, ${startTime || "start"}–${endTime || "end"}. This full window is used for schedule scoring, utilization, and overrun calculations.`}
-          </p>
-        </div>
+        {!tournamentDays.length ? (
+          <Panel title="No tournament configured">
+            <EmptyState
+              title="Set up a tournament first"
+              hint="A tournament defines its day count, court count, and which categories are open for registration."
+              action={
+                <Link
+                  to="/setup"
+                  className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  Open tournament setup
+                </Link>
+              }
+            />
+          </Panel>
+        ) : null}
+
+        {tournamentDays.length ? (
+          <div
+            className={`rounded-lg border px-3 py-2.5 text-sm ${
+              hasGroupSchedule
+                ? "border-warn-border bg-warn-surface text-warn-foreground"
+                : "border-hairline bg-surface text-muted-foreground"
+            }`}
+          >
+            <p className="font-semibold text-foreground">
+              {hasGroupSchedule ? "Group rebuild mode" : "Before the first group build"}
+            </p>
+            <p className="mt-0.5 text-xs">
+              {hasGroupSchedule
+                ? windowUnlocked
+                  ? "Window editing is unlocked. Rebuilding keeps reported, walkover, and in-progress matches fixed."
+                  : "Rebuilding keeps reported, walkover, and in-progress matches fixed. Day 1's window is locked once play starts; unlock only for a deliberate correction."
+                : "Choose each day's window, then build. The full day window is used for schedule scoring, utilization, and overrun calculations."}
+            </p>
+          </div>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {[1, 2].map((day) => {
-            const s = summary[day];
-            const util = s
-              ? Math.round(
-                  (hasDay1Schedule && day === 1 && s.remainingUtilization != null
-                    ? s.remainingUtilization
-                    : s.utilization) * 100,
-                )
-              : null;
-            const utilLabel =
-              hasDay1Schedule && day === 1 && s?.remainingUtilization != null
-                ? "remaining window"
-                : `${startTime}–${endTime} window`;
+          {tournamentDays.map((day) => {
+            const window = windowFor(day);
+            const dayTargets = targets.filter((target) => target.day.id === day.id);
+            const locked = day.day_number === 1 && hasGroupSchedule && !windowUnlocked;
             return (
-              <Panel key={day} title={`Day ${day} ${day === 1 ? "groups" : "knockouts"}`}>
-                {s ? (
-                  <div className="space-y-1 text-sm">
-                    <p className="font-score">
-                      {s.placed} matches placed · {s.anchorCount} anchors kept · {util}% of the{" "}
-                      {utilLabel}
-                    </p>
-                    {s.movedCount > 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        {s.movedCount} match{s.movedCount === 1 ? "" : "es"} moved
-                      </p>
-                    ) : null}
-                    {s.projectedFinish ? (
-                      <p className="text-xs text-muted-foreground">
-                        Projected finish {timeLabel(s.projectedFinish)}
-                        {s.overrunMinutes > 0 ? ` · ${s.overrunMinutes} min past ${endTime}` : ""}
-                      </p>
-                    ) : null}
-                    {util != null && util > 90 ? (
-                      <p className="rounded-md bg-warn-surface px-2 py-1 text-xs text-warn-foreground">
-                        Above 90% utilisation — very little buffer for overruns.
-                      </p>
-                    ) : null}
-                    {s.unscheduled > 0 ? (
-                      <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
-                        {s.unscheduled} matches could not be placed — desk intervention needed.
-                      </p>
-                    ) : null}
-                    {s.awaitingTeams > 0 ? (
-                      <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-                        {s.awaitingTeams} match{s.awaitingTeams === 1 ? "" : "es"} awaiting team
-                        assignment.
-                      </p>
-                    ) : null}
-                    {s.overrun ? (
-                      <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
-                        Some matches run past the planned day end.
-                      </p>
+              <Panel
+                key={day.id}
+                title={`Day ${day.day_number} · ${stageTitle(day.day_number, dayCount)}`}
+              >
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <Label
+                        htmlFor={`day-${day.id}-date`}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Date
+                      </Label>
+                      <Input
+                        id={`day-${day.id}-date`}
+                        type="date"
+                        className="mt-1 h-9 w-36"
+                        value={window.date}
+                        disabled={!canSchedule || busy || locked}
+                        onChange={(e) => setWindow(day, { date: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label
+                        htmlFor={`day-${day.id}-start`}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Start
+                      </Label>
+                      <Input
+                        id={`day-${day.id}-start`}
+                        type="time"
+                        className="mt-1 h-9 w-28"
+                        value={window.start}
+                        disabled={!canSchedule || busy || locked}
+                        onChange={(e) => setWindow(day, { start: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label
+                        htmlFor={`day-${day.id}-end`}
+                        className="text-xs text-muted-foreground"
+                      >
+                        End
+                      </Label>
+                      <Input
+                        id={`day-${day.id}-end`}
+                        type="time"
+                        className="mt-1 h-9 w-28"
+                        value={window.end}
+                        disabled={!canSchedule || busy || locked}
+                        onChange={(e) => setWindow(day, { end: e.target.value })}
+                      />
+                    </div>
+                    {locked ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => setWindowUnlocked(true)}
+                      >
+                        Unlock window
+                      </Button>
                     ) : null}
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Not built in this session.</p>
-                )}
+
+                  {dayTargets.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {dayTargets.map((target) => {
+                        const isRebuild = target.stage === "group" && hasGroupSchedule;
+                        const alreadyPlaced =
+                          target.stage === "group" ? hasGroupSchedule : hasKnockoutSchedule;
+                        return (
+                          <Button
+                            key={target.key}
+                            size="sm"
+                            variant={isRebuild ? "default" : "outline"}
+                            disabled={!canSchedule || busy || !tournament || !(courts ?? []).length}
+                            onClick={() =>
+                              isRebuild ? void previewRebuild(target) : void build(target)
+                            }
+                          >
+                            {buildingKey === target.key
+                              ? `Building ${stageLabel(target.stage)}…`
+                              : isRebuild
+                                ? "Rebuild remaining groups"
+                                : `${alreadyPlaced ? "Rebuild" : "Build"} ${stageLabel(target.stage)}`}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+                      Groups run on day 1 and knockouts on the final day, so this day only gets a
+                      window. Spilling the group stage across extra days is not supported yet.
+                    </p>
+                  )}
+
+                  {dayTargets.map((target) => {
+                    const s = summary[target.key];
+                    if (!s) return null;
+                    const util = Math.round(
+                      (hasGroupSchedule &&
+                      target.stage === "group" &&
+                      s.remainingUtilization != null
+                        ? s.remainingUtilization
+                        : s.utilization) * 100,
+                    );
+                    const utilLabel =
+                      hasGroupSchedule && target.stage === "group" && s.remainingUtilization != null
+                        ? "remaining window"
+                        : `${window.start}–${window.end} window`;
+                    return (
+                      <div key={target.key} className="space-y-1 text-sm">
+                        <p className="font-score">
+                          <span className="capitalize">{stageLabel(target.stage)}</span>: {s.placed}{" "}
+                          matches placed · {s.anchorCount} anchors kept · {util}% of the {utilLabel}
+                        </p>
+                        {s.movedCount > 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            {s.movedCount} match{s.movedCount === 1 ? "" : "es"} moved
+                          </p>
+                        ) : null}
+                        {s.projectedFinish ? (
+                          <p className="text-xs text-muted-foreground">
+                            Projected finish {timeLabel(s.projectedFinish)}
+                            {s.overrunMinutes > 0
+                              ? ` · ${s.overrunMinutes} min past ${window.end}`
+                              : ""}
+                          </p>
+                        ) : null}
+                        {util > 90 ? (
+                          <p className="rounded-md bg-warn-surface px-2 py-1 text-xs text-warn-foreground">
+                            Above 90% utilisation — very little buffer for overruns.
+                          </p>
+                        ) : null}
+                        {s.unscheduled > 0 ? (
+                          <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
+                            {s.unscheduled} matches could not be placed — desk intervention needed.
+                          </p>
+                        ) : null}
+                        {s.awaitingTeams > 0 ? (
+                          <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                            {s.awaitingTeams} match{s.awaitingTeams === 1 ? "" : "es"} awaiting team
+                            assignment.
+                          </p>
+                        ) : null}
+                        {s.overrun ? (
+                          <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
+                            Some matches run past the planned day end.
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+
+                  {dayTargets.length && !dayTargets.some((target) => summary[target.key]) ? (
+                    <p className="text-sm text-muted-foreground">Not built in this session.</p>
+                  ) : null}
+                </div>
               </Panel>
             );
           })}
@@ -474,7 +579,7 @@ function SchedulePage() {
           {rows.length === 0 ? (
             <EmptyState
               title="Nothing scheduled yet"
-              hint="Build Day 1 to place the group matches across the courts."
+              hint="Build the group stage to place the first day's matches across the courts."
             />
           ) : (
             <div>
@@ -523,34 +628,35 @@ function SchedulePage() {
               <DialogHeader>
                 <DialogTitle>Rebuild preview</DialogTitle>
                 <DialogDescription>
-                  Nothing is written until you apply. Anchors stay fixed; only scheduled matches
-                  may move.
+                  Nothing is written until you apply. Anchors stay fixed; only scheduled matches may
+                  move.
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-3 overflow-y-auto pr-1">
                 <div className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm">
                   <p className="font-score">
-                    {previewPlan.summary.anchorCount} anchors kept · {previewPlan.summary.placed}{" "}
-                    matches replanned · {previewPlan.diff.movedCount} moving
+                    {previewPlan.plan.summary.anchorCount} anchors kept ·{" "}
+                    {previewPlan.plan.summary.placed} matches replanned ·{" "}
+                    {previewPlan.plan.diff.movedCount} moving
                   </p>
-                  {previewPlan.summary.projectedFinish ? (
+                  {previewPlan.plan.summary.projectedFinish ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Projected finish {timeLabel(previewPlan.summary.projectedFinish)}
-                      {previewPlan.summary.overrunMinutes > 0
-                        ? ` · ${previewPlan.summary.overrunMinutes} min past ${endTime}`
+                      Projected finish {timeLabel(previewPlan.plan.summary.projectedFinish)}
+                      {previewPlan.plan.summary.overrunMinutes > 0
+                        ? ` · ${previewPlan.plan.summary.overrunMinutes} min past ${previewWindow?.end ?? "day end"}`
                         : ""}
-                      {previewPlan.summary.remainingUtilization != null
-                        ? ` · ${Math.round(previewPlan.summary.remainingUtilization * 100)}% of remaining window`
+                      {previewPlan.plan.summary.remainingUtilization != null
+                        ? ` · ${Math.round(previewPlan.plan.summary.remainingUtilization * 100)}% of remaining window`
                         : ""}
-                      {previewPlan.summary.projectedFinishDeltaMinutes != null ? (
+                      {previewPlan.plan.summary.projectedFinishDeltaMinutes != null ? (
                         <>
                           {" · "}
                           {formatProjectedFinishDelta(
-                            previewPlan.summary.projectedFinishDeltaMinutes,
+                            previewPlan.plan.summary.projectedFinishDeltaMinutes,
                           )}
-                          {previewPlan.summary.currentProjectedFinish
-                            ? ` (current ${timeLabel(previewPlan.summary.currentProjectedFinish)})`
+                          {previewPlan.plan.summary.currentProjectedFinish
+                            ? ` (current ${timeLabel(previewPlan.plan.summary.currentProjectedFinish)})`
                             : ""}
                         </>
                       ) : null}
@@ -558,32 +664,34 @@ function SchedulePage() {
                   ) : null}
                 </div>
 
-                {previewPlan.blocked.length > 0 ? (
+                {previewPlan.plan.blocked.length > 0 ? (
                   <div className="rounded-md bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
                     <p className="font-semibold">
-                      {previewPlan.blocked.length} match
-                      {previewPlan.blocked.length === 1 ? "" : "es"} could not be placed.
+                      {previewPlan.plan.blocked.length} match
+                      {previewPlan.plan.blocked.length === 1 ? "" : "es"} could not be placed.
                     </p>
-                    {previewPlan.summary.diagnostics?.deadlockReason ? (
-                      <p className="mt-1 text-xs">{previewPlan.summary.diagnostics.deadlockReason}</p>
+                    {previewPlan.plan.summary.diagnostics?.deadlockReason ? (
+                      <p className="mt-1 text-xs">
+                        {previewPlan.plan.summary.diagnostics.deadlockReason}
+                      </p>
                     ) : null}
                     <ul className="mt-2 space-y-1 text-xs">
-                      {previewPlan.blocked.map((matchId) => (
+                      {previewPlan.plan.blocked.map((matchId) => (
                         <li key={matchId}>{matchLabel(matchId)}</li>
                       ))}
                     </ul>
                   </div>
                 ) : null}
 
-                {previewPlan.awaitingTeams.length > 0 ? (
+                {previewPlan.plan.awaitingTeams.length > 0 ? (
                   <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-                    {previewPlan.awaitingTeams.length} match
-                    {previewPlan.awaitingTeams.length === 1 ? "" : "es"} awaiting team assignment
-                    and will stay unscheduled.
+                    {previewPlan.plan.awaitingTeams.length} match
+                    {previewPlan.plan.awaitingTeams.length === 1 ? "" : "es"} awaiting team
+                    assignment and will stay unscheduled.
                   </div>
                 ) : null}
 
-                {previewPlan.blocked.length === 0 ? (
+                {previewPlan.plan.blocked.length === 0 ? (
                   <>
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium">
@@ -639,7 +747,7 @@ function SchedulePage() {
                   Keep current schedule
                 </Button>
                 <Button
-                  disabled={busy || previewPlan.blocked.length > 0}
+                  disabled={busy || previewPlan.plan.blocked.length > 0}
                   onClick={() => void applyPreview()}
                 >
                   Apply rebuild

@@ -26,8 +26,14 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { session, signedIn, role, isAdmin } = useSession();
+  const { session, signedIn, role, isAdmin, canSchedule } = useSession();
   const navigate = useNavigate();
+
+  const nav = [
+    ...NAV,
+    ...(isAdmin || canSchedule ? [{ to: "/setup" as const, label: "New event" }] : []),
+    ...(isAdmin ? [{ to: "/staff" as const, label: "Staff" }] : []),
+  ];
 
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
@@ -42,7 +48,7 @@ export function AppShell({
             </span>
           </Link>
           <nav className="flex flex-wrap items-center gap-1">
-            {[...NAV, ...(isAdmin ? [{ to: "/staff" as const, label: "Staff" }] : [])].map((item) => (
+            {nav.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
@@ -97,7 +103,8 @@ export function AppShell({
         </div>
         {!signedIn ? (
           <div className="mb-5 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-xs font-medium text-warn-foreground">
-            Read-only view. Sign in at the desk to enter scores or generate pools, draws and schedules.
+            Read-only view. Sign in at the desk to enter scores or generate pools, draws and
+            schedules.
           </div>
         ) : null}
         {children}

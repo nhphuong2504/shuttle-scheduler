@@ -258,3 +258,9 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Database migrations
+
+Migrations live in `supabase/migrations` and are applied in filename order. The hosted
+project is `hdmfxndanyrbxedgboev`. See [supabase/migrations/README.md](supabase/migrations/README.md)
+for how to apply the tournament-scoping migration and how to verify it afterwards.

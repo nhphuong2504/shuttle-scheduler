@@ -36,6 +36,7 @@ import {
   indexBy,
   teamLabel,
   teamPlayerIds,
+  useActiveTournament,
   useCategories,
   useCourts,
   useDeskActivity,
@@ -46,8 +47,8 @@ import {
   usePoolMatches,
   usePools,
   useRealtimeRefresh,
-  useSettings,
   useTeams,
+  useTournamentDays,
   type Court,
   type Player,
 } from "@/lib/tournament/data";
@@ -82,13 +83,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Live control desk for a two-day, four-category badminton tournament: court board, pool progress, draw readiness and alerts.",
+          "Live control desk for a badminton tournament: court board, pool progress, draw readiness and alerts.",
       },
       { property: "og:title", content: "ShuttleNet Control Desk | Live Badminton Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Live control desk for a two-day, four-category badminton tournament: court board, pool progress, draw readiness and alerts.",
+          "Live control desk for a badminton tournament: court board, pool progress, draw readiness and alerts.",
       },
     ],
   }),
@@ -128,7 +129,8 @@ function Desk() {
   const { data: poolMatches } = usePoolMatches();
   const { data: draws } = useDraws();
   const { data: drawMatches } = useDrawMatches();
-  const { data: settings } = useSettings();
+  const { data: tournament } = useActiveTournament();
+  const { data: tournamentDays } = useTournamentDays();
   const { data: poolEntries } = usePoolEntries();
   const { data: activity } = useDeskActivity(signedIn);
 
@@ -207,13 +209,13 @@ function Desk() {
 
     const requiredRestMinutes = restGapForKind(
       current.kind === "pool" ? "group" : "knockout",
-      settings?.group_rest_gap_minutes ?? 10,
-      settings?.knockout_rest_gap_minutes ?? 30,
+      tournament?.group_rest_gap_minutes ?? 10,
+      tournament?.knockout_rest_gap_minutes ?? 30,
     );
 
     return checkStartConstraints(targetPlayerIds, requiredRestMinutes, others);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, allMatches, teamMap, courtMap, settings]);
+  }, [current, allMatches, teamMap, courtMap, tournament]);
 
   const latePools = useMemo(() => {
     return (pools ?? []).filter((pool) => {
@@ -230,19 +232,19 @@ function Desk() {
   const overCap = allMatches.filter((m) => {
     const cap =
       m.kind === "pool"
-        ? (settings?.group_slot_minutes ?? 20)
-        : (settings?.knockout_slot_minutes ?? 25);
+        ? (tournament?.group_slot_minutes ?? 20)
+        : (tournament?.knockout_slot_minutes ?? 25);
     return m.status === "in-progress" && (minutesSince(m.startedAt, now) ?? 0) > cap;
   });
 
   const slotMinutesFor = (match: DeskMatch) =>
     match.kind === "pool"
-      ? (settings?.group_slot_minutes ?? 20)
-      : (settings?.knockout_slot_minutes ?? 25);
+      ? (tournament?.group_slot_minutes ?? 20)
+      : (tournament?.knockout_slot_minutes ?? 25);
   const restMinutesFor = (match: DeskMatch) =>
     match.kind === "pool"
-      ? (settings?.group_rest_gap_minutes ?? 10)
-      : (settings?.knockout_rest_gap_minutes ?? 30);
+      ? (tournament?.group_rest_gap_minutes ?? 10)
+      : (tournament?.knockout_rest_gap_minutes ?? 30);
   const courtStates = (courts ?? []).map((court) => ({
     court,
     state: deriveCourtState(court.id, allMatches, slotMinutesFor, restMinutesFor, now),
@@ -254,23 +256,21 @@ function Desk() {
     now,
   );
   const targetFinishMs = useMemo(() => {
-    if (!settings) return null;
+    const days = tournamentDays ?? [];
+    if (!days.length) return null;
     const hasRemainingGroups = allMatches.some(
       (match) =>
-        match.kind === "pool" &&
-        (match.status === "scheduled" || match.status === "in-progress"),
+        match.kind === "pool" && (match.status === "scheduled" || match.status === "in-progress"),
     );
-    const day = hasRemainingGroups ? settings.day_1 : settings.day_2;
-    const end = settings.planning_end_time || settings.day_end_time || "17:00:00";
-    const normalized = end.length === 5 ? `${end}:00` : end;
-    const target = new Date(`${day}T${normalized}`);
+    // Chase the day that still has group work, otherwise the final day's window.
+    const day = hasRemainingGroups ? days[0] : days[days.length - 1];
+    if (!day) return null;
+    const target = new Date(`${day.date}T${day.end_time}`);
     return Number.isFinite(target.getTime()) ? target.getTime() : null;
-  }, [settings, allMatches]);
+  }, [tournamentDays, allMatches]);
   const finishStatus = finishStatusLabel(kpis.projectedFinish, targetFinishMs);
   const finishStatusTone =
-    kpis.projectedFinish != null &&
-    targetFinishMs != null &&
-    kpis.projectedFinish > targetFinishMs
+    kpis.projectedFinish != null && targetFinishMs != null && kpis.projectedFinish > targetFinishMs
       ? "warn"
       : "normal";
   const courtProgress = courtStates.map(({ court, state }) => {
@@ -292,13 +292,9 @@ function Desk() {
   const readyUnassigned = allMatches
     .filter((match) => match.status === "scheduled" && !match.courtId)
     .filter(
-      (match) =>
-        getMatchReadiness(match, allMatches, restMinutesFor(match), now).state === "ready",
+      (match) => getMatchReadiness(match, allMatches, restMinutesFor(match), now).state === "ready",
     )
-    .sort(
-      (a, b) =>
-        new Date(a.scheduled ?? 0).getTime() - new Date(b.scheduled ?? 0).getTime(),
-    );
+    .sort((a, b) => new Date(a.scheduled ?? 0).getTime() - new Date(b.scheduled ?? 0).getTime());
 
   return (
     <AppShell
@@ -316,8 +312,15 @@ function Desk() {
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <DeskKpi label="Courts active" value={`${kpis.activeCourts}/${(courts ?? []).length}`} />
-          <DeskKpi label="Ready courts" value={courtStates.filter(({ state }) => state.state === "free-ready").length} />
-          <DeskKpi label="Waiting courts" value={kpis.waitingCourts} tone={kpis.waitingCourts ? "warn" : "normal"} />
+          <DeskKpi
+            label="Ready courts"
+            value={courtStates.filter(({ state }) => state.state === "free-ready").length}
+          />
+          <DeskKpi
+            label="Waiting courts"
+            value={kpis.waitingCourts}
+            tone={kpis.waitingCourts ? "warn" : "normal"}
+          />
           <DeskKpi label="Matches left" value={kpis.remainingMatches} />
           <DeskKpi
             label="Projected finish"
@@ -335,57 +338,61 @@ function Desk() {
           }
         >
           <div aria-live="polite">
-          {latePools.length || overCap.length || courtStates.some(({ state }) => state.state === "free-ready") ? (
-            <ul className="space-y-1.5 text-sm">
-              {courtStates
-                .filter(({ state }) => state.state === "free-ready" && state.next)
-                .map(({ court, state }) => (
-                  <li key={`ready-${court.id}`}>
+            {latePools.length ||
+            overCap.length ||
+            courtStates.some(({ state }) => state.state === "free-ready") ? (
+              <ul className="space-y-1.5 text-sm">
+                {courtStates
+                  .filter(({ state }) => state.state === "free-ready" && state.next)
+                  .map(({ court, state }) => (
+                    <li key={`ready-${court.id}`}>
+                      <button
+                        type="button"
+                        className="w-full rounded-md bg-mint/15 px-2.5 py-2 text-left font-medium hover:bg-mint/25"
+                        onClick={() => {
+                          setOperationCourtId(court.id);
+                          setOpenMatch(state.next);
+                        }}
+                      >
+                        Court {court.number} is free — start{" "}
+                        {state.next
+                          ? `${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`
+                          : "the next match"}
+                      </button>
+                    </li>
+                  ))}
+                {latePools.map((p) => (
+                  <li
+                    key={p.id}
+                    className="rounded-md bg-danger-surface px-2.5 py-1.5 text-danger-foreground"
+                  >
+                    {p.name} ({catMap.get(p.category_id)?.code}) is more than 15 minutes past its
+                    scheduled finish with results still missing —{" "}
+                    <Link to="/matches" className="font-semibold underline">
+                      enter results
+                    </Link>
+                    .
+                  </li>
+                ))}
+                {overCap.map((m) => (
+                  <li key={m.id}>
                     <button
                       type="button"
-                      className="w-full rounded-md bg-mint/15 px-2.5 py-2 text-left font-medium hover:bg-mint/25"
+                      className="w-full rounded-md bg-warn-surface px-2.5 py-2 text-left text-warn-foreground hover:brightness-95"
                       onClick={() => {
-                        setOperationCourtId(court.id);
-                        setOpenMatch(state.next);
+                        setOperationCourtId(m.courtId);
+                        setOpenMatch(m);
                       }}
                     >
-                      Court {court.number} is free — start {state.next ? `${label(state.next.teams[0])} vs ${label(state.next.teams[1])}` : "the next match"}
+                      {label(m.teams[0])} vs {label(m.teams[1])} has been on court{" "}
+                      {minutesSince(m.startedAt, now)} minutes — open the score desk.
                     </button>
                   </li>
                 ))}
-              {latePools.map((p) => (
-                <li
-                  key={p.id}
-                  className="rounded-md bg-danger-surface px-2.5 py-1.5 text-danger-foreground"
-                >
-                  {p.name} ({catMap.get(p.category_id)?.code}) is more than 15 minutes past its
-                  scheduled finish with results still missing —{" "}
-                  <Link to="/matches" className="font-semibold underline">
-                    enter results
-                  </Link>
-                  .
-                </li>
-              ))}
-              {overCap.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    className="w-full rounded-md bg-warn-surface px-2.5 py-2 text-left text-warn-foreground hover:brightness-95"
-                    onClick={() => {
-                      setOperationCourtId(m.courtId);
-                      setOpenMatch(m);
-                    }}
-                  >
-                    {label(m.teams[0])} vs {label(m.teams[1])} has been on court{" "}
-                    {minutesSince(m.startedAt, now)} minutes — open the score desk.
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState title="All clear" hint="No urgent desk actions right now." />
-          )}
-
+              </ul>
+            ) : (
+              <EmptyState title="All clear" hint="No urgent desk actions right now." />
+            )}
           </div>
         </Panel>
 
@@ -413,7 +420,6 @@ function Desk() {
                           ? "border-amber/40 bg-amber/5"
                           : "border-hairline bg-surface"
                   }`}
-
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 font-display text-sm font-bold">
@@ -473,17 +479,16 @@ function Desk() {
                         />
                       </>
                     ) : readyUnassigned[0] ? (
-                      <>Ready unassigned: {label(readyUnassigned[0].teams[0])} vs {label(readyUnassigned[0].teams[1])}</>
+                      <>
+                        Ready unassigned: {label(readyUnassigned[0].teams[0])} vs{" "}
+                        {label(readyUnassigned[0].teams[1])}
+                      </>
                     ) : (
                       "nothing queued"
                     )}
                   </p>
                   <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {state.playing
-                      ? "Open score desk"
-                      : target
-                        ? "Open next match"
-                        : ""}
+                    {state.playing ? "Open score desk" : target ? "Open next match" : ""}
                   </p>
                 </button>
               );
@@ -592,13 +597,11 @@ function Desk() {
                     </span>
                   </li>
                 ))}
-
               </ul>
             ) : (
               <EmptyState title="No courts" hint="Add courts to see progress here." />
             )}
           </Panel>
-
         </div>
 
         {signedIn ? (
@@ -692,9 +695,7 @@ export function MatchOperationsDialog({
   );
   const [busy, setBusy] = useState(false);
   const [confirmRestOpen, setConfirmRestOpen] = useState(false);
-  const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(
-    null,
-  );
+  const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(null);
   const [note, setNote] = useState("");
   const [winnerId, setWinnerId] = useState(match.teams[0] ?? "");
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
@@ -886,28 +887,28 @@ export function MatchOperationsDialog({
         {!isReported &&
         match.status !== "in-progress" &&
         (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
-            <ul className="space-y-1 text-xs">
-              {(startCheck?.conflicts ?? []).map((c, i) => (
-                <li
-                  key={`conflict-${i}`}
-                  className="rounded-md bg-danger-surface px-2 py-1 text-danger-foreground"
-                >
-                  {playerMap.get(c.playerId)?.name ?? "A player"} is currently playing
-                  {c.courtNumber ? ` on Court ${c.courtNumber}` : " another match"} — this match
-                  can't start until they finish.
-                </li>
-              ))}
-              {(startCheck?.warnings ?? []).map((w, i) => (
-                <li
-                  key={`warning-${i}`}
-                  className="rounded-md bg-warn-surface px-2 py-1 text-warn-foreground"
-                >
-                  {playerMap.get(w.playerId)?.name ?? "A player"} has only rested {w.restMinutes} of{" "}
-                  {w.requiredMinutes} min since their last match.
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          <ul className="space-y-1 text-xs">
+            {(startCheck?.conflicts ?? []).map((c, i) => (
+              <li
+                key={`conflict-${i}`}
+                className="rounded-md bg-danger-surface px-2 py-1 text-danger-foreground"
+              >
+                {playerMap.get(c.playerId)?.name ?? "A player"} is currently playing
+                {c.courtNumber ? ` on Court ${c.courtNumber}` : " another match"} — this match can't
+                start until they finish.
+              </li>
+            ))}
+            {(startCheck?.warnings ?? []).map((w, i) => (
+              <li
+                key={`warning-${i}`}
+                className="rounded-md bg-warn-surface px-2 py-1 text-warn-foreground"
+              >
+                {playerMap.get(w.playerId)?.name ?? "A player"} has only rested {w.restMinutes} of{" "}
+                {w.requiredMinutes} min since their last match.
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <div className="flex gap-2">
           {isReported ? (
             <Button
@@ -929,7 +930,7 @@ export function MatchOperationsDialog({
                 void runStart();
               }}
             >
-              ▶  Start match
+              ▶ Start match
             </Button>
           ) : (
             <Button
@@ -941,47 +942,47 @@ export function MatchOperationsDialog({
             </Button>
           )}
         </div>
-          <AlertDialog open={confirmRestOpen} onOpenChange={setConfirmRestOpen}>
-            <AlertDialogContent className="max-w-md">
-              <AlertDialogHeader>
-                <div className="flex size-11 items-center justify-center rounded-full bg-warn-surface text-warn-foreground">
-                  <span className="text-lg font-semibold">!</span>
-                </div>
-                <AlertDialogTitle>Short rest between matches</AlertDialogTitle>
-                <AlertDialogDescription>
-                  These players haven&apos;t had their full rest yet. You can still start the match.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <ul className="space-y-2">
-                {(startCheck?.warnings ?? []).map((w, i) => (
-                  <li
-                    key={`confirm-warning-${i}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-warn-surface/60 px-3 py-2"
-                  >
-                    <span className="text-sm font-medium">
-                      {playerMap.get(w.playerId)?.name ?? "A player"}
-                    </span>
-                    <span className="font-score text-sm text-warn-foreground">
-                      {w.restMinutes} / {w.requiredMinutes} min
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={busy}>Keep waiting</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={busy}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setConfirmRestOpen(false);
-                    void runStart();
-                  }}
+        <AlertDialog open={confirmRestOpen} onOpenChange={setConfirmRestOpen}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <div className="flex size-11 items-center justify-center rounded-full bg-warn-surface text-warn-foreground">
+                <span className="text-lg font-semibold">!</span>
+              </div>
+              <AlertDialogTitle>Short rest between matches</AlertDialogTitle>
+              <AlertDialogDescription>
+                These players haven&apos;t had their full rest yet. You can still start the match.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <ul className="space-y-2">
+              {(startCheck?.warnings ?? []).map((w, i) => (
+                <li
+                  key={`confirm-warning-${i}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-warn-surface/60 px-3 py-2"
                 >
-                  Start anyway
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  <span className="text-sm font-medium">
+                    {playerMap.get(w.playerId)?.name ?? "A player"}
+                  </span>
+                  <span className="font-score text-sm text-warn-foreground">
+                    {w.restMinutes} / {w.requiredMinutes} min
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy}>Keep waiting</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={busy}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setConfirmRestOpen(false);
+                  void runStart();
+                }}
+              >
+                Start anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         {!isReported && (signedIn || canSchedule) ? (
           <div className="border-t border-hairline pt-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1013,90 +1014,90 @@ export function MatchOperationsDialog({
                 </>
               ) : null}
               {match.status === "scheduled" && (signedIn || canSchedule) ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    disabled={busy}
-                    onClick={() => setExceptionMode(exceptionMode === "move" ? null : "move")}
-                  >
-                    Move / delay
-                  </Button>
-                ) : null}
-              </div>
-
-              {exceptionMode === "walkover" || exceptionMode === "void" ? (
-                <div className="mt-3 space-y-2 rounded-lg bg-muted/50 p-3">
-                  {exceptionMode === "walkover" ? (
-                    <label className="block text-xs font-medium">
-                      Winner
-                      <select
-                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                        value={winnerId}
-                        onChange={(event) => setWinnerId(event.target.value)}
-                      >
-                        <option value={match.teams[0] ?? ""}>{nameA}</option>
-                        <option value={match.teams[1] ?? ""}>{nameB}</option>
-                      </select>
-                    </label>
-                  ) : null}
-                  <label className="block text-xs font-medium">
-                    Operator note
-                    <Input
-                      className="mt-1"
-                      value={note}
-                      onChange={(event) => setNote(event.target.value)}
-                      placeholder={
-                        exceptionMode === "walkover"
-                          ? "Example: Team B did not arrive"
-                          : "Reason for voiding this match"
-                      }
-                    />
-                  </label>
-                  <Button size="sm" disabled={busy || !note.trim()} onClick={resolveException}>
-                    Confirm {exceptionMode}
-                  </Button>
-                </div>
-              ) : null}
-
-              {exceptionMode === "move" ? (
-                <div className="mt-3 grid gap-2 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
-                  <label className="block text-xs font-medium">
-                    Court
-                    <select
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                      value={moveCourtId}
-                      onChange={(event) => setMoveCourtId(event.target.value)}
-                    >
-                      <option value="">Select court</option>
-                      {courts.map((court) => (
-                        <option key={court.id} value={court.id}>
-                          Court {court.number}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-xs font-medium">
-                    Start time
-                    <Input
-                      className="mt-1"
-                      type="datetime-local"
-                      value={moveTime}
-                      onChange={(event) => setMoveTime(event.target.value)}
-                    />
-                  </label>
-                  <Button
-                    className="sm:col-span-2"
-                    size="sm"
-                    disabled={busy || !moveCourtId || !moveTime}
-                    onClick={moveMatch}
-                  >
-                    Check constraints and update
-                  </Button>
-                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  disabled={busy}
+                  onClick={() => setExceptionMode(exceptionMode === "move" ? null : "move")}
+                >
+                  Move / delay
+                </Button>
               ) : null}
             </div>
-          ) : null}
+
+            {exceptionMode === "walkover" || exceptionMode === "void" ? (
+              <div className="mt-3 space-y-2 rounded-lg bg-muted/50 p-3">
+                {exceptionMode === "walkover" ? (
+                  <label className="block text-xs font-medium">
+                    Winner
+                    <select
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      value={winnerId}
+                      onChange={(event) => setWinnerId(event.target.value)}
+                    >
+                      <option value={match.teams[0] ?? ""}>{nameA}</option>
+                      <option value={match.teams[1] ?? ""}>{nameB}</option>
+                    </select>
+                  </label>
+                ) : null}
+                <label className="block text-xs font-medium">
+                  Operator note
+                  <Input
+                    className="mt-1"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    placeholder={
+                      exceptionMode === "walkover"
+                        ? "Example: Team B did not arrive"
+                        : "Reason for voiding this match"
+                    }
+                  />
+                </label>
+                <Button size="sm" disabled={busy || !note.trim()} onClick={resolveException}>
+                  Confirm {exceptionMode}
+                </Button>
+              </div>
+            ) : null}
+
+            {exceptionMode === "move" ? (
+              <div className="mt-3 grid gap-2 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
+                <label className="block text-xs font-medium">
+                  Court
+                  <select
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={moveCourtId}
+                    onChange={(event) => setMoveCourtId(event.target.value)}
+                  >
+                    <option value="">Select court</option>
+                    {courts.map((court) => (
+                      <option key={court.id} value={court.id}>
+                        Court {court.number}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs font-medium">
+                  Start time
+                  <Input
+                    className="mt-1"
+                    type="datetime-local"
+                    value={moveTime}
+                    onChange={(event) => setMoveTime(event.target.value)}
+                  />
+                </label>
+                <Button
+                  className="sm:col-span-2"
+                  size="sm"
+                  disabled={busy || !moveCourtId || !moveTime}
+                  onClick={moveMatch}
+                >
+                  Check constraints and update
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {!signedIn ? (
           <p className="text-xs text-muted-foreground">Sign in at the desk to enter scores.</p>
         ) : null}
@@ -1116,7 +1117,6 @@ function DeskKpi({
 }) {
   return <StatTile label={label} value={value} tone={tone} />;
 }
-
 
 function CourtStatePill({
   state,
@@ -1156,7 +1156,8 @@ function ReadinessText({
   players: ReadonlyMap<string, Player>;
 }) {
   if (!readiness) return null;
-  if (readiness.state === "ready") return <span className="font-medium text-primary">Ready now</span>;
+  if (readiness.state === "ready")
+    return <span className="font-medium text-primary">Ready now</span>;
   if (readiness.state === "resting") {
     return (
       <span className="text-warn-foreground">
@@ -1169,7 +1170,8 @@ function ReadinessText({
     return (
       <span className="text-danger-foreground">
         {readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"} · ` : ""}
-        on Court {readiness.blockingCourtId ? (courts.get(readiness.blockingCourtId)?.number ?? "?") : "?"}
+        on Court{" "}
+        {readiness.blockingCourtId ? (courts.get(readiness.blockingCourtId)?.number ?? "?") : "?"}
       </span>
     );
   }
@@ -1178,8 +1180,7 @@ function ReadinessText({
 
 function impactMessage(prefix: string, impact: ScheduleImpact): string {
   if (!impact.shiftedMatches) return prefix;
-  const direction =
-    impact.direction === "mixed" ? "in both directions" : `${impact.direction}`;
+  const direction = impact.direction === "mixed" ? "in both directions" : `${impact.direction}`;
   return `${prefix}. ${impact.shiftedMatches} later match${
     impact.shiftedMatches === 1 ? "" : "es"
   } shifted ${direction} by up to ${impact.largestShiftMinutes} min.`;

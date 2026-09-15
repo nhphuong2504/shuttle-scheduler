@@ -16,6 +16,7 @@ import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as PoolsRouteImport } from './routes/pools'
 import { Route as RegistrationRouteImport } from './routes/registration'
 import { Route as ScheduleRouteImport } from './routes/schedule'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as StaffRouteImport } from './routes/staff'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +54,11 @@ const ScheduleRoute = ScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StaffRoute = StaffRouteImport.update({
   id: '/staff',
   path: '/staff',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
+  '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
+  '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
+  '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/pools'
     | '/registration'
     | '/schedule'
+    | '/setup'
     | '/staff'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/pools'
     | '/registration'
     | '/schedule'
+    | '/setup'
     | '/staff'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/pools'
     | '/registration'
     | '/schedule'
+    | '/setup'
     | '/staff'
   fileRoutesById: FileRoutesById
 }
@@ -131,6 +143,7 @@ export interface RootRouteChildren {
   PoolsRoute: typeof PoolsRoute
   RegistrationRoute: typeof RegistrationRoute
   ScheduleRoute: typeof ScheduleRoute
+  SetupRoute: typeof SetupRoute
   StaffRoute: typeof StaffRoute
 }
 
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScheduleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/staff': {
       id: '/staff'
       path: '/staff'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   PoolsRoute: PoolsRoute,
   RegistrationRoute: RegistrationRoute,
   ScheduleRoute: ScheduleRoute,
+  SetupRoute: SetupRoute,
   StaffRoute: StaffRoute,
 }
 export const routeTree = rootRouteImport

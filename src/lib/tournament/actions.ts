@@ -1,6 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
 
-import type { Team, Pool, PoolEntry, PoolMatch, DrawMatch, Settings, Court } from "./data";
+import type {
+  Court,
+  DrawMatch,
+  Pool,
+  PoolEntry,
+  PoolMatch,
+  StageName,
+  Team,
+  Tournament,
+  TournamentDay,
+} from "./data";
 import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
 import { gamesWinner, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
@@ -19,7 +29,9 @@ import {
 import { scheduleMatches, type SchedulableMatch, type ScheduledSlot } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
-async function ok<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>): Promise<NonNullable<T>> {
+async function ok<T>(
+  p: PromiseLike<{ data: T; error: { message: string } | null }>,
+): Promise<NonNullable<T>> {
   const { data, error } = await p;
   if (error) throw new Error(error.message);
   if (data == null) throw new Error("The record could not be found.");
@@ -39,14 +51,35 @@ export interface ScheduleImpact {
 
 type ScheduleSnapshot = Map<string, number>;
 
-async function scheduleSnapshot(): Promise<ScheduleSnapshot> {
+/** The active tournament, unless a caller already knows which one it means. */
+async function resolveTournamentId(explicit?: string | null): Promise<string | null> {
+  if (explicit) return explicit;
+  const { data, error } = await supabase
+    .from("tournaments")
+    .select("id")
+    .eq("is_active", true)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return data?.[0]?.id ?? null;
+}
+
+async function scheduleSnapshot(tournamentId: string | null): Promise<ScheduleSnapshot> {
+  const snapshot = new Map<string, number>();
+  if (!tournamentId) return snapshot;
   const [pool, draw] = await Promise.all([
-    supabase.from("pool_matches").select("id, scheduled_time").eq("status", "scheduled"),
-    supabase.from("draw_matches").select("id, scheduled_time").eq("status", "scheduled"),
+    supabase
+      .from("pool_matches")
+      .select("id, scheduled_time")
+      .eq("tournament_id", tournamentId)
+      .eq("status", "scheduled"),
+    supabase
+      .from("draw_matches")
+      .select("id, scheduled_time")
+      .eq("tournament_id", tournamentId)
+      .eq("status", "scheduled"),
   ]);
   if (pool.error) throw new Error(pool.error.message);
   if (draw.error) throw new Error(draw.error.message);
-  const snapshot = new Map<string, number>();
   for (const row of pool.data ?? []) {
     if (row.scheduled_time) {
       snapshot.set(`pool:${row.id}`, new Date(row.scheduled_time).getTime());
@@ -75,14 +108,24 @@ function compareSchedule(before: ScheduleSnapshot, after: ScheduleSnapshot): Sch
   };
 }
 
-async function withScheduleImpact(work: () => Promise<void>): Promise<ScheduleImpact> {
-  const before = await scheduleSnapshot();
+/** Schedule impact is measured inside a single tournament, never across two. */
+async function withScheduleImpact(
+  work: () => Promise<void>,
+  tournamentId?: string | null,
+): Promise<ScheduleImpact> {
+  const scope = await resolveTournamentId(tournamentId);
+  const before = await scheduleSnapshot(scope);
   await work();
-  const after = await scheduleSnapshot();
+  const after = await scheduleSnapshot(scope);
   return compareSchedule(before, after);
 }
 
-export async function createPlayer(input: { name: string; email?: string; phone?: string; gender?: string }) {
+export async function createPlayer(input: {
+  name: string;
+  email?: string;
+  phone?: string;
+  gender?: string;
+}) {
   return ok(
     supabase
       .from("players")
@@ -97,7 +140,13 @@ export async function createPlayer(input: { name: string; email?: string; phone?
   );
 }
 
-export async function createTeam(input: { categoryId: string; player1: string; player2: string | null }) {
+// `tournament_id` is intentionally omitted: the `teams_shape` trigger derives it
+// from the category, and the cap trigger rejects entries past `max_entries`.
+export async function createTeam(input: {
+  categoryId: string;
+  player1: string;
+  player2: string | null;
+}) {
   return ok(
     supabase
       .from("teams")
@@ -134,11 +183,16 @@ export async function generatePoolsForCategory(categoryId: string, teams: Team[]
       team_b_id: p.teamB.id,
     })),
   }));
-  await rpc("apply_pool_generation", { p_category_id: categoryId, p_force: force, p_payload: payload });
+  await rpc("apply_pool_generation", {
+    p_category_id: categoryId,
+    p_force: force,
+    p_payload: payload,
+  });
 }
 
 export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: number) {
-  if (!isLegalGameScore(scoreA, scoreB)) throw new Error("A group match needs a race-to-21 winning score.");
+  if (!isLegalGameScore(scoreA, scoreB))
+    throw new Error("A group match needs a race-to-21 winning score.");
   return withScheduleImpact(() =>
     rpc("report_pool_result", { p_match_id: matchId, p_score_a: scoreA, p_score_b: scoreB }),
   );
@@ -207,7 +261,10 @@ export async function setManualRankOverride(entryId: string, rank: number | null
   if (rank != null && (!Number.isInteger(rank) || rank < 1 || rank > 5)) {
     throw new Error("Manual rank must be an integer from 1 to 5.");
   }
-  const { error } = await supabase.from("pool_entries").update({ manual_rank_override: rank }).eq("id", entryId);
+  const { error } = await supabase
+    .from("pool_entries")
+    .update({ manual_rank_override: rank })
+    .eq("id", entryId);
   if (error) throw new Error(error.message);
 }
 
@@ -227,8 +284,10 @@ export function drawGate(pools: Pool[], entries: PoolEntry[], matches: PoolMatch
 }
 
 export function entrantsByTier(pools: Pool[], entries: PoolEntry[], matches: PoolMatch[]) {
-  const byTier: Record<DrawTier, { teamId: string; diff: number; wins: number; poolName: string; poolRank: number }[]> =
-    { A: [], B: [], C: [], D: [] };
+  const byTier: Record<
+    DrawTier,
+    { teamId: string; diff: number; wins: number; poolName: string; poolRank: number }[]
+  > = { A: [], B: [], C: [], D: [] };
   for (const pool of pools) {
     const poolEntries = entries.filter((e) => e.pool_id === pool.id);
     const overrides: Record<string, number | null> = {};
@@ -259,7 +318,8 @@ export async function generateDrawsForCategory(
   force = false,
 ) {
   const gate = drawGate(pools, entries, matches);
-  if (!gate.ready) throw new Error(`Waiting on results from ${gate.waitingOn.join(", ") || "the pools"}.`);
+  if (!gate.ready)
+    throw new Error(`Waiting on results from ${gate.waitingOn.join(", ") || "the pools"}.`);
   const tiers = entrantsByTier(pools, entries, matches);
   const payload = (["A", "B", "C", "D"] as DrawTier[])
     .map((tier) => {
@@ -283,7 +343,11 @@ export async function generateDrawsForCategory(
       };
     })
     .filter(Boolean);
-  await rpc("apply_draw_generation", { p_category_id: categoryId, p_force: force, p_payload: payload });
+  await rpc("apply_draw_generation", {
+    p_category_id: categoryId,
+    p_force: force,
+    p_payload: payload,
+  });
 }
 
 export async function reportDrawMatch(matchId: string, games: GameScore[]) {
@@ -316,15 +380,15 @@ export interface ScheduleSummary {
 }
 
 export interface DayPlan {
-  day: 1 | 2;
+  day: number;
+  stage: StageName;
+  tournamentId: string;
   slots: ScheduledSlot[];
   fixedMatchIds: string[];
   blocked: string[];
   awaitingTeams: string[];
   diff: SchedulePlanDiff;
   summary: ScheduleSummary;
-  settingsPatch: Partial<Settings> | null;
-  settingsId: string;
   poolEnds: Record<string, string>;
   movableSlotPayload: { match_id: string; scheduled_time: string; court_id: string }[];
 }
@@ -356,17 +420,16 @@ function partitionUnscheduled(
   return { blocked, awaitingTeams };
 }
 
-function anchorStart(
-  scheduledTime: string | null,
-  startedAt: string | null,
-): number | undefined {
+function anchorStart(scheduledTime: string | null, startedAt: string | null): number | undefined {
   const anchor = startedAt ?? scheduledTime;
   return anchor ? new Date(anchor).getTime() : undefined;
 }
 
 export function planDay(
-  day: 1 | 2,
-  settings: Settings,
+  day: number,
+  stage: StageName,
+  tournament: Tournament,
+  dayConfig: TournamentDay,
   courts: Court[],
   teams: Team[],
   poolMatches: PoolMatch[],
@@ -374,9 +437,9 @@ export function planDay(
   drawCategory: Map<string, string>,
   categoryOrder: Map<string, number>,
   graspOptions?: DayOneSchedulerOptions,
-  settingsPatch?: Partial<Settings> | null,
 ): DayPlan {
   if (!courts.length) throw new Error("Load the court list before building a schedule.");
+  const isGroupStage = stage === "group";
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const playersOf = (a: string | null, b: string | null) => {
     const ids: string[] = [];
@@ -389,125 +452,127 @@ export function planDay(
     return ids;
   };
 
-  const slotMinutes = day === 1 ? settings.group_slot_minutes : settings.knockout_slot_minutes;
-  const restGap = day === 1 ? settings.group_rest_gap_minutes : settings.knockout_rest_gap_minutes;
-  const date = day === 1 ? settings.day_1 : settings.day_2;
-  const dayStart = combineDateTime(date, settings.day_start_time);
-  const planningEnd = combineDateTime(date, settings.planning_end_time || "17:00:00");
+  const slotMinutes = isGroupStage
+    ? tournament.group_slot_minutes
+    : tournament.knockout_slot_minutes;
+  const restGap = isGroupStage
+    ? tournament.group_rest_gap_minutes
+    : tournament.knockout_rest_gap_minutes;
+  const date = dayConfig.date;
+  const dayStart = combineDateTime(date, dayConfig.start_time);
+  const planningEnd = combineDateTime(date, dayConfig.end_time);
   const nextWholeMinute = Math.ceil(Date.now() / 60_000) * 60_000;
-  const isDayOneRebuild =
-    day === 1 &&
+  const isGroupRebuild =
+    isGroupStage &&
     poolMatches.some((match) => match.status !== "void" && match.scheduled_time != null);
-  const schedulingFloor = isDayOneRebuild
+  const schedulingFloor = isGroupRebuild
     ? new Date(Math.max(dayStart.getTime(), nextWholeMinute))
     : dayStart;
-  const items: GraspSchedulableMatch[] =
-    day === 1
-      ? poolMatches
-          .filter((m) => m.status !== "void")
-          .map((m) => {
-            const ids = playersOf(m.team_a_id, m.team_b_id);
-            const playersKnown = Boolean(
-              m.team_a_id && m.team_b_id && teamById.has(m.team_a_id) && teamById.has(m.team_b_id),
-            );
-            if ((m.team_a_id || m.team_b_id) && ids.length === 0) {
-              throw new Error("A scheduled group match is missing player records.");
-            }
-            const start = anchorStart(m.scheduled_time, m.started_at);
-            const fixed =
-              m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
-            const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
-            const end =
+  const items: GraspSchedulableMatch[] = isGroupStage
+    ? poolMatches
+        .filter((m) => m.status !== "void")
+        .map((m) => {
+          const ids = playersOf(m.team_a_id, m.team_b_id);
+          const playersKnown = Boolean(
+            m.team_a_id && m.team_b_id && teamById.has(m.team_a_id) && teamById.has(m.team_b_id),
+          );
+          if ((m.team_a_id || m.team_b_id) && ids.length === 0) {
+            throw new Error("A scheduled group match is missing player records.");
+          }
+          const start = anchorStart(m.scheduled_time, m.started_at);
+          const fixed =
+            m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+          const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
+          const end =
+            m.ended_at && (m.status === "reported" || m.status === "walkover")
+              ? new Date(m.ended_at).getTime()
+              : m.status === "in-progress" && plannedEnd != null
+                ? Math.max(plannedEnd, schedulingFloor.getTime() + slotMinutes * 60_000)
+                : plannedEnd;
+          return {
+            id: m.id,
+            categoryId: m.category_id,
+            categoryOrder: categoryOrder.get(m.category_id) ?? 0,
+            poolId: m.pool_id,
+            playerIds: ids,
+            playersKnown,
+            kind: "group" as const,
+            order: m.round,
+            round: m.round,
+            fixed,
+            start,
+            end,
+            courtNumber: courts.find((c) => c.id === m.court_id)?.number,
+          };
+        })
+    : drawMatches
+        .filter((m) => !m.is_bye && m.status !== "void")
+        .map((m) => {
+          const ids = playersOf(m.team_a_id, m.team_b_id);
+          if (m.team_a_id && m.team_b_id && ids.length === 0) {
+            throw new Error("A scheduled knockout match is missing player records.");
+          }
+          const parents = drawMatches.filter(
+            (p) => p.id === m.parent_a_id || p.id === m.parent_b_id,
+          );
+          const parentEnd = parents.reduce((acc, p) => {
+            const t = p.ended_at ?? p.reported_time;
+            return t ? Math.max(acc, new Date(t).getTime() + restGap * 60_000) : acc;
+          }, 0);
+          const start = anchorStart(m.scheduled_time, m.started_at);
+          const fixed =
+            m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+          const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
+          return {
+            id: m.id,
+            categoryId: drawCategory.get(m.draw_id) ?? m.draw_id,
+            categoryOrder: categoryOrder.get(drawCategory.get(m.draw_id) ?? "") ?? 0,
+            playerIds: ids,
+            kind: "knockout" as const,
+            order: m.round * 100 + m.slot,
+            earliestStart: parentEnd || undefined,
+            fixed,
+            start,
+            end:
               m.ended_at && (m.status === "reported" || m.status === "walkover")
                 ? new Date(m.ended_at).getTime()
                 : m.status === "in-progress" && plannedEnd != null
-                  ? Math.max(plannedEnd, schedulingFloor.getTime() + slotMinutes * 60_000)
-                  : plannedEnd;
-            return {
-              id: m.id,
-              categoryId: m.category_id,
-              categoryOrder: categoryOrder.get(m.category_id) ?? 0,
-              poolId: m.pool_id,
-              playerIds: ids,
-              playersKnown,
-              kind: "group" as const,
-              order: m.round,
-              round: m.round,
-              fixed,
-              start,
-              end,
-              courtNumber: courts.find((c) => c.id === m.court_id)?.number,
-            };
-          })
-      : drawMatches
-          .filter((m) => !m.is_bye && m.status !== "void")
-          .map((m) => {
-            const ids = playersOf(m.team_a_id, m.team_b_id);
-            if (m.team_a_id && m.team_b_id && ids.length === 0) {
-              throw new Error("A scheduled knockout match is missing player records.");
-            }
-            const parents = drawMatches.filter(
-              (p) => p.id === m.parent_a_id || p.id === m.parent_b_id,
-            );
-            const parentEnd = parents.reduce((acc, p) => {
-              const t = p.ended_at ?? p.reported_time;
-              return t ? Math.max(acc, new Date(t).getTime() + restGap * 60_000) : acc;
-            }, 0);
-            const start = anchorStart(m.scheduled_time, m.started_at);
-            const fixed =
-              m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
-            const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
-            return {
-              id: m.id,
-              categoryId: drawCategory.get(m.draw_id) ?? m.draw_id,
-              categoryOrder: categoryOrder.get(drawCategory.get(m.draw_id) ?? "") ?? 0,
-              playerIds: ids,
-              kind: "knockout" as const,
-              order: m.round * 100 + m.slot,
-              earliestStart: parentEnd || undefined,
-              fixed,
-              start,
-              end:
-                m.ended_at && (m.status === "reported" || m.status === "walkover")
-                  ? new Date(m.ended_at).getTime()
-                  : m.status === "in-progress" && plannedEnd != null
-                    ? Math.max(plannedEnd, Date.now() + slotMinutes * 60_000)
-                    : plannedEnd,
-              courtNumber: courts.find((c) => c.id === m.court_id)?.number,
-            };
-          })
-          .filter(
-            (m) =>
-              m.fixed ||
-              (m.playerIds.length > 0 &&
-                drawMatches.find((d) => d.id === m.id)?.status !== "reported"),
-          );
-
-  const result =
-    day === 1
-      ? scheduleGroupStageGrasp(items, {
-          dayStart,
-          planningEnd,
-          schedulingFloor,
-          courts,
-          slotMinutes,
-          restGapMinutes: restGap,
-          ...graspOptions,
+                  ? Math.max(plannedEnd, Date.now() + slotMinutes * 60_000)
+                  : plannedEnd,
+            courtNumber: courts.find((c) => c.id === m.court_id)?.number,
+          };
         })
-      : scheduleMatches(items as SchedulableMatch[], {
-          dayStart,
-          planningEnd,
-          courts,
-          slotMinutes,
-          restGapMinutes: restGap,
-        });
+        .filter(
+          (m) =>
+            m.fixed ||
+            (m.playerIds.length > 0 &&
+              drawMatches.find((d) => d.id === m.id)?.status !== "reported"),
+        );
+
+  const result = isGroupStage
+    ? scheduleGroupStageGrasp(items, {
+        dayStart,
+        planningEnd,
+        schedulingFloor,
+        courts,
+        slotMinutes,
+        restGapMinutes: restGap,
+        ...graspOptions,
+      })
+    : scheduleMatches(items as SchedulableMatch[], {
+        dayStart,
+        planningEnd,
+        courts,
+        slotMinutes,
+        restGapMinutes: restGap,
+      });
 
   const fixedMatchIds = items.filter((item) => item.fixed).map((item) => item.id);
   const fixedSet = new Set(fixedMatchIds);
   const { blocked, awaitingTeams } = partitionUnscheduled(result.unscheduled, items);
   const courtNumberById = new Map(courts.map((court) => [court.id, court.number]));
   const diff = diffPlan(
-    day === 1 ? poolMatches : drawMatches,
+    isGroupStage ? poolMatches : drawMatches,
     result.slots,
     fixedSet,
     courtNumberById,
@@ -515,7 +580,7 @@ export function planDay(
   diff.unplaceable = blocked;
 
   const poolEnds: Record<string, string> = {};
-  if (day === 1) {
+  if (isGroupStage) {
     for (const slot of result.slots) {
       const match = poolMatches.find((m) => m.id === slot.matchId);
       if (!match) continue;
@@ -534,9 +599,9 @@ export function planDay(
       court_id: slot.courtId,
     }));
 
-  const graspResult = day === 1 ? (result as GraspScheduleResult) : null;
+  const graspResult = isGroupStage ? (result as GraspScheduleResult) : null;
   const currentFinishMs =
-    day === 1 && isDayOneRebuild
+    isGroupStage && isGroupRebuild
       ? projectedFinishFromRemainingMatches(poolMatches, slotMinutes)
       : null;
   const newFinishMs = result.projectedFinish?.getTime() ?? null;
@@ -563,14 +628,14 @@ export function planDay(
 
   return {
     day,
+    stage,
+    tournamentId: tournament.id,
     slots: result.slots,
     fixedMatchIds,
     blocked,
     awaitingTeams,
     diff,
     summary,
-    settingsPatch: settingsPatch ?? null,
-    settingsId: settings.id,
     poolEnds,
     movableSlotPayload,
   };
@@ -586,26 +651,76 @@ export async function applyDayPlan(plan: DayPlan): Promise<ScheduleImpact> {
     );
   }
 
-  if (plan.settingsPatch && Object.keys(plan.settingsPatch).length > 0) {
-    await updateSettings(plan.settingsId, plan.settingsPatch);
-  }
-
-  return withScheduleImpact(() =>
-    rpc("apply_day_schedule", {
-      p_day: plan.day,
-      p_slots: plan.movableSlotPayload,
-      p_pool_ends: plan.poolEnds,
-    }),
+  return withScheduleImpact(
+    () =>
+      rpc("apply_day_schedule", {
+        p_tournament_id: plan.tournamentId,
+        p_day: plan.day,
+        p_stage: plan.stage,
+        p_slots: plan.movableSlotPayload,
+        p_pool_ends: plan.poolEnds,
+      }),
+    plan.tournamentId,
   );
 }
 
-export async function updateSettings(id: string, patch: Partial<Settings>) {
-  const { error } = await supabase.from("tournament_settings").update(patch).eq("id", id);
+/** The schedule page edits a `tournament_days` row directly. */
+export async function updateTournamentDay(
+  id: string,
+  patch: Partial<Pick<TournamentDay, "date" | "start_time" | "end_time">>,
+) {
+  const { error } = await supabase.from("tournament_days").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
-export async function inviteStaff(email: string, role: "admin" | "registrar" | "scorer" | "scheduler") {
-  const { error } = await supabase.from("staff_roles").insert({ email: email.trim().toLowerCase(), role });
+export interface TournamentCategoryInput {
+  code: string;
+  name: string;
+  entryType: string;
+  sortOrder: number;
+  active: boolean;
+  maxEntries: number | null;
+}
+
+export interface CreateTournamentInput {
+  name: string;
+  dayCount: number;
+  courtCount: number;
+  startDate: string;
+  categories: TournamentCategoryInput[];
+}
+
+/**
+ * Creates a tournament and everything it owns (days, courts, categories) in one
+ * transaction, then makes it the active tournament.
+ */
+export async function createTournament(input: CreateTournamentInput): Promise<string> {
+  const payload = input.categories.map((c) => ({
+    code: c.code,
+    name: c.name,
+    entry_type: c.entryType,
+    sort_order: c.sortOrder,
+    active: c.active,
+    max_entries: c.maxEntries,
+  }));
+  const { data, error } = await supabase.rpc("create_tournament", {
+    p_name: input.name.trim(),
+    p_day_count: input.dayCount,
+    p_court_count: input.courtCount,
+    p_start_date: input.startDate,
+    p_categories: payload as never,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export async function inviteStaff(
+  email: string,
+  role: "admin" | "registrar" | "scorer" | "scheduler",
+) {
+  const { error } = await supabase
+    .from("staff_roles")
+    .insert({ email: email.trim().toLowerCase(), role });
   if (error) throw new Error(error.message);
 }
 

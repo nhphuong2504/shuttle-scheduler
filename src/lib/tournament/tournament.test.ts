@@ -9,9 +9,52 @@ import {
   type GraspOptions,
   type GraspSchedulableMatch,
 } from "./scheduler-grasp";
-import { applyDayPlan, type DayPlan } from "./actions";
+import { applyDayPlan, planDay, type DayPlan } from "./actions";
+import type { Court, PoolMatch, Team, Tournament, TournamentDay } from "./data";
+import { stagesForDay } from "./data";
 import { checkStartConstraints, scheduleMatches } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
+
+/**
+ * The tournament the desk has run so far: 8 courts, 2 days, four categories,
+ * 09:00–18:30 doors. The scoping refactor made all of that configurable, so this
+ * config is the reference point for "no behavior change".
+ */
+const DEFAULT_CONFIG = {
+  court_count: 8,
+  created_at: "2026-09-01T00:00:00.000Z",
+  day_count: 2,
+  group_rest_gap_minutes: 10,
+  group_slot_minutes: 20,
+  id: "tournament-default",
+  is_active: true,
+  knockout_rest_gap_minutes: 30,
+  knockout_slot_minutes: 25,
+  name: "City Open 2026",
+  rest_gap_minutes: 10,
+  venue_timezone: "America/Chicago",
+} satisfies Tournament;
+
+const DAY_ONE: TournamentDay = {
+  created_at: "2026-09-01T00:00:00.000Z",
+  date: "2026-09-12",
+  day_number: 1,
+  end_time: "18:30:00",
+  id: "day-1",
+  start_time: "09:00:00",
+  tournament_id: DEFAULT_CONFIG.id,
+};
+
+/** Courts are materialised into rows from `court_count` when the tournament is created. */
+function courtsFor(config: Tournament): Court[] {
+  return Array.from({ length: config.court_count }, (_, index) => ({
+    created_at: config.created_at,
+    id: `court-${index + 1}`,
+    number: index + 1,
+    status: "available",
+    tournament_id: config.id,
+  }));
+}
 
 describe("pool sizing", () => {
   it("uses fours and fives only", () => {
@@ -647,10 +690,7 @@ describe("Day 1 GRASP scheduler", () => {
     const result = scheduleGroupStageGrasp(synthetic, {
       dayStart,
       planningEnd,
-      courts: Array.from({ length: 8 }, (_, index) => ({
-        id: `court-${index + 1}`,
-        number: index + 1,
-      })),
+      courts: courtsFor(DEFAULT_CONFIG),
       slotMinutes: 20,
       restGapMinutes: 10,
       seed: 9876,
@@ -800,7 +840,9 @@ describe("Day 1 rebuild hardening", () => {
 describe("applyDayPlan", () => {
   it("refuses to apply when blocked matches remain", async () => {
     const plan: DayPlan = {
-      day: 1 as const,
+      day: 1,
+      stage: "group",
+      tournamentId: "tournament-id",
       slots: [],
       fixedMatchIds: [],
       blocked: ["blocked-match"],
@@ -831,8 +873,6 @@ describe("applyDayPlan", () => {
           deadlockReason: "No future event can make 1 remaining match(es) eligible.",
         } as never,
       },
-      settingsPatch: null,
-      settingsId: "settings-id",
       poolEnds: {},
       movableSlotPayload: [],
     };
@@ -906,5 +946,179 @@ describe("start constraints", () => {
     );
     expect(conflicts).toHaveLength(1);
     expect(warnings).toEqual([]);
+  });
+});
+
+/**
+ * Golden plan for a default-config tournament.
+ *
+ * The scoping refactor moved slot minutes, rest gaps, day windows, court count and
+ * day count out of the code and into the active tournament row. This test runs the
+ * scheduler against a tournament configured exactly like the desk always ran (8
+ * courts, 2 days, four categories — `DEFAULT_CONFIG`) and pins the resulting
+ * group-stage plan. If a future change alters placement for the default config,
+ * this fails.
+ */
+describe("default tournament golden plan", () => {
+  const CATEGORY_CODES = ["MS", "MD", "WD", "XD"] as const;
+
+  /** A deterministic four-category morning: 16 teams in four pools of four. */
+  function goldenFixture() {
+    const teams: Team[] = [];
+    const poolMatches: PoolMatch[] = [];
+    const categoryOrder = new Map<string, number>();
+
+    CATEGORY_CODES.forEach((code, categoryIndex) => {
+      const categoryId = `category-${code}`;
+      const poolId = `pool-${code}`;
+      categoryOrder.set(categoryId, categoryIndex);
+
+      const teamIds = Array.from({ length: 4 }, (_, index) => `team-${code}-${index + 1}`);
+      for (const teamId of teamIds) {
+        teams.push({
+          category_id: categoryId,
+          created_at: DEFAULT_CONFIG.created_at,
+          id: teamId,
+          player_1_id: `${teamId}-a`,
+          player_2_id: `${teamId}-b`,
+          seed: null,
+          tournament_id: DEFAULT_CONFIG.id,
+          withdrawn: false,
+        });
+      }
+
+      circleMethod(teamIds).forEach((pair, index) => {
+        poolMatches.push({
+          category_id: categoryId,
+          court_id: null,
+          created_at: DEFAULT_CONFIG.created_at,
+          ended_at: null,
+          id: `match-${code}-${index + 1}`,
+          note: null,
+          pool_id: poolId,
+          reported_time: null,
+          round: pair.round,
+          scheduled_time: null,
+          score_a: null,
+          score_b: null,
+          started_at: null,
+          status: "scheduled",
+          team_a_id: pair.teamA,
+          team_b_id: pair.teamB,
+          tournament_id: DEFAULT_CONFIG.id,
+          winner_id: null,
+        });
+      });
+    });
+
+    return { teams, poolMatches, categoryOrder };
+  }
+
+  /** Wall-clock minutes, so the golden does not move with the test runner's timezone. */
+  function clock(iso: string): string {
+    const at = new Date(iso);
+    return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+  }
+
+  it("places every group match and finishes inside the day-1 window", () => {
+    const { teams, poolMatches, categoryOrder } = goldenFixture();
+    const courts = courtsFor(DEFAULT_CONFIG);
+    const plan = planDay(
+      1,
+      "group",
+      DEFAULT_CONFIG,
+      DAY_ONE,
+      courts,
+      teams,
+      poolMatches,
+      [],
+      new Map(),
+      categoryOrder,
+      { seed: 4242 },
+    );
+
+    const courtNumber = new Map(courts.map((court) => [court.id, court.number]));
+    const schedule = plan.movableSlotPayload
+      .map(
+        (slot) =>
+          `court ${courtNumber.get(slot.court_id) ?? "?"} ${clock(slot.scheduled_time)} ${slot.match_id}`,
+      )
+      .sort();
+
+    expect(plan.blocked).toEqual([]);
+    expect(plan.awaitingTeams).toEqual([]);
+    expect(plan.summary.placed).toBe(poolMatches.length);
+    expect(schedule).toEqual([
+      "court 1 09:00 match-MD-3",
+      "court 1 09:30 match-MD-2",
+      "court 1 10:00 match-MD-5",
+      "court 2 09:00 match-MS-3",
+      "court 2 09:30 match-MS-5",
+      "court 2 10:00 match-MD-6",
+      "court 3 09:00 match-WD-5",
+      "court 3 09:30 match-WD-2",
+      "court 3 10:00 match-MS-1",
+      "court 4 09:00 match-XD-3",
+      "court 4 09:30 match-XD-5",
+      "court 4 10:00 match-WD-4",
+      "court 5 09:00 match-MS-4",
+      "court 5 09:30 match-WD-1",
+      "court 5 10:00 match-MS-2",
+      "court 6 09:00 match-MD-4",
+      "court 6 09:30 match-MD-1",
+      "court 6 10:00 match-WD-3",
+      "court 7 09:00 match-WD-6",
+      "court 7 09:30 match-MS-6",
+      "court 7 10:00 match-XD-2",
+      "court 8 09:00 match-XD-4",
+      "court 8 09:30 match-XD-6",
+      "court 8 10:00 match-XD-1",
+    ]);
+    // The whole group stage fits in one hour of wall clock on eight courts.
+    expect(plan.summary.projectedFinish).not.toBeNull();
+    expect(clock(plan.summary.projectedFinish as string)).toBe("10:20");
+    expect(plan.summary.overrun).toBe(false);
+  });
+
+  it("takes slot minutes and rest gaps from the tournament row, not from constants", () => {
+    const { teams, poolMatches, categoryOrder } = goldenFixture();
+    const courts = courtsFor(DEFAULT_CONFIG);
+    const stretched = planDay(
+      1,
+      "group",
+      { ...DEFAULT_CONFIG, group_slot_minutes: 30 },
+      DAY_ONE,
+      courts,
+      teams,
+      poolMatches,
+      [],
+      new Map(),
+      categoryOrder,
+      { seed: 4242 },
+    );
+
+    const starts = [
+      ...new Set(stretched.movableSlotPayload.map((slot) => clock(slot.scheduled_time))),
+    ].sort();
+    // 30-minute slots plus the 10-minute group rest gap makes a 40-minute cadence.
+    expect(starts).toEqual(["09:00", "09:40", "10:20"]);
+    expect(clock(stretched.summary.projectedFinish as string)).toBe("10:50");
+  });
+});
+
+describe("stage placement across the configured day count", () => {
+  it("opens groups on day 1 and closes knockouts on the final day", () => {
+    expect(stagesForDay(1, 2)).toEqual(["group"]);
+    expect(stagesForDay(2, 2)).toEqual(["knockout"]);
+  });
+
+  it("leaves the intermediate days of a three-day tournament without a stage", () => {
+    expect(stagesForDay(1, 3)).toEqual(["group"]);
+    expect(stagesForDay(2, 3)).toEqual([]);
+    expect(stagesForDay(3, 3)).toEqual(["knockout"]);
+  });
+
+  it("runs both stages on a single-day tournament", () => {
+    expect(stagesForDay(1, 1)).toEqual(["group", "knockout"]);
   });
 });
