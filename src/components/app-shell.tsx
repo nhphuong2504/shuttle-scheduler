@@ -6,13 +6,19 @@ import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
+/**
+ * The desk navigation.
+ *
+ * Pools, Draws and Schedule are deliberately absent: the tournament creation
+ * flow replaced the round-robin engine with the two-round placement format, and
+ * its scheduling is temporarily disabled until that engine is built. The route
+ * files and every library they depend on are untouched, so the pages still exist
+ * for a direct URL; only the nav entries are gone.
+ */
 const NAV = [
   { to: "/", label: "Desk" },
   { to: "/registration", label: "Registration" },
-  { to: "/pools", label: "Pools" },
   { to: "/matches", label: "Scores" },
-  { to: "/draws", label: "Draws" },
-  { to: "/schedule", label: "Schedule" },
 ] as const;
 
 export function AppShell({
@@ -26,12 +32,13 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { session, signedIn, role, isAdmin, canSchedule } = useSession();
+  const { session, signedIn, role, isAdmin } = useSession();
   const navigate = useNavigate();
 
   const nav = [
     ...NAV,
-    ...(isAdmin || canSchedule ? [{ to: "/setup" as const, label: "New event" }] : []),
+    // Creating a tournament is admin-only.
+    ...(isAdmin ? [{ to: "/setup" as const, label: "Tournament setup" }] : []),
     ...(isAdmin ? [{ to: "/staff" as const, label: "Staff" }] : []),
   ];
 

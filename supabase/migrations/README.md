@@ -52,3 +52,102 @@ There is no down migration. The retired columns (`day_1`, `day_2`, `day_start_ti
 `day_end_time`, `planning_end_time`) can be reconstructed from `tournament_days`, and the
 added `tournament_id` columns are nullable-safe to drop, but any tournament created after
 this migration (i.e. a second tournament) has no equivalent in the old singleton schema.
+
+## Applying `20260916000000_tournament_creation_flow.sql`
+
+This is the migration behind the admin-only tournament creation wizard. Apply it after the
+scoping migration, exactly the same way (Lovable sync, or paste into the SQL editor and then
+`NOTIFY pgrst, 'reload schema';`).
+
+It is **additive and safe on a live database**: every new column has a default, and existing
+rows are backfilled so an already-running tournament keeps behaving exactly as it did.
+
+### What it adds
+
+- **Draft lifecycle.** `tournaments.status` (`draft` / `in_progress` / `completed`) and
+  `tournaments.format`. Existing rows are backfilled to `status='in_progress'` where
+  `is_active`, and `format='round_robin'`, so nothing that is currently live changes status.
+  Only `draft` tournaments are editable through the wizard, and only `in_progress` rows can
+  be activated (or discovered as the active scope).
+- **Basics.** `venue_name`, `venue_address`, `organizer_name`, `organizer_email`,
+  `organizer_phone`, and `max_categories_per_player` (1–5). `venue_timezone` already existed
+  and is now actually read by the app.
+- **Per-stage scoring.** `placement_games_to` / `placement_win_by` / `placement_best_of` and
+  `knockout_games_to` / `knockout_win_by` / `knockout_best_of`. Existing rows are backfilled
+  to single-game-to-21 and best-of-three-to-21, which is what the code used to hardcode.
+  Scoring is stored separately from duration; the existing `group_slot_minutes`,
+  `knockout_slot_minutes` and `*_rest_gap_minutes` columns are reused as the placement and
+  knockout durations and rest gaps. They are deliberately **not** renamed, because that would
+  break the round-robin SQL without any functional gain.
+- **`categories.gender`** (`men` / `women` / `mixed` / `open`), backfilled from `code`
+  (MS/MD → men, WS/WD → women, XD → mixed). `entry_type` already encoded singles vs doubles,
+  so no second column was added. This is what lets a Women's Singles event work without a
+  code special-case.
+- **`tournament_day_courts`** and **`tournament_day_breaks`**, both with the same RLS as
+  `tournament_days` (public read, staff write). A day can now pick a subset of the court pool
+  and declare optional breaks.
+
+### What it changes in existing functions
+
+- `enforce_two_category_cap()` no longer hardcodes a cap of 2; it reads the tournament's
+  `max_categories_per_player`.
+- `enforce_team_shape()` reads `cat.gender` instead of inferring gender from `cat.code`.
+- `report_draw_result()` reads the tournament's knockout rule instead of hardcoding
+  "best of three, race to 21, win by 2". `report_pool_result` is untouched, which is why
+  group-stage scoring stays on the legacy 21 rule.
+- `create_tournament()` is kept and simply becomes unreferenced by the app.
+
+### What it deliberately does not do
+
+- **No engine.** There is no placement-match generation, record derivation or draw
+  generation. Activating a tournament flips its status; matches come later.
+- **No scheduling changes.** Per-day courts and breaks are stored and editable but not yet
+  enforced, and the per-stage durations and rest gaps are stored and displayed but not yet
+  consumed by the scheduler.
+- **No deletions.** `pools`, `pool_entries`, `standings.ts`, `/pools` and `/draws` are all
+  left in place and simply unreferenced. `/pools`, `/draws` and `/schedule` were removed from
+  the navigation only; their route files are intact and still reachable by URL.
+
+### New RPCs
+
+All are gated on `public.has_staff_role(ARRAY['admin'])`:
+
+| RPC                                                         | Purpose                                                                                                                                                     |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_tournament_draft(p_payload jsonb)`                  | Creates the draft row from the basics step.                                                                                                                 |
+| `save_tournament_draft(p_tournament_id, p_payload)`         | Updates basics, stage rules and the category cap. Raises unless the row is still a draft.                                                                   |
+| `save_tournament_days(p_tournament_id, p_days)`             | Replaces the days, their courts and their breaks, keeping `day_count` / `court_count` in sync.                                                              |
+| `save_tournament_categories(p_tournament_id, p_categories)` | Replaces the categories.                                                                                                                                    |
+| `tournament_readiness(p_tournament_id)`                     | The authoritative review checklist, so the wizard's checks match the activation gate.                                                                       |
+| `activate_tournament(p_tournament_id)`                      | Re-runs readiness, clears `is_active` on every row, then sets `status='in_progress', is_active=true` under the same advisory lock `create_tournament` uses. |
+| `delete_tournament_draft(p_tournament_id)`                  | Discards a draft; children cascade.                                                                                                                         |
+
+### Verify after applying
+
+```sql
+-- every existing tournament was backfilled, and the active one is still in progress
+SELECT name, status, format, placement_best_of, knockout_best_of, max_categories_per_player
+FROM public.tournaments ORDER BY created_at;
+
+-- no category is left without gender metadata
+SELECT code, gender, entry_type FROM public.categories ORDER BY code;
+
+-- a draft can be created, checked and activated end to end
+SELECT public.create_tournament_draft('{"name":"Test","venue_timezone":"Asia/Kuala_Lumpur"}'::jsonb);
+SELECT public.tournament_readiness('<draft-id>'::uuid);
+SELECT public.activate_tournament('<draft-id>'::uuid);
+SELECT id, status, is_active FROM public.tournaments WHERE is_active;
+
+-- the cap is read from configuration, not hardcoded
+UPDATE public.tournaments SET max_categories_per_player = 3 WHERE id = '<draft-id>';
+```
+
+Then regenerate `src/integrations/supabase/types.ts` against the project and run
+`npm run typecheck && npm run test`.
+
+### Rolling back
+
+Drop `tournament_day_courts` and `tournament_day_breaks`, restore the previous bodies of
+`enforce_two_category_cap`, `enforce_team_shape` and `report_draw_result`, and drop the added
+`tournaments` and `categories` columns. Drafts are safe to delete first; activated
+tournaments are not, because they are the active scope.

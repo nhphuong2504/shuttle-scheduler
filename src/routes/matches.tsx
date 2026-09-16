@@ -13,6 +13,7 @@ import {
   indexBy,
   teamLabel,
   teamPlayerIds,
+  useActiveTournament,
   useCategories,
   useCourts,
   useDrawMatches,
@@ -24,6 +25,12 @@ import {
   useTeams,
 } from "@/lib/tournament/data";
 import { gamesLabel, parseGames, timeLabel } from "@/lib/tournament/format";
+import {
+  DEFAULT_KNOCKOUT_RULE,
+  LEGACY_GAME_RULE,
+  ruleForStage,
+  scoringRuleLabel,
+} from "@/lib/tournament/scoring";
 import { MatchOperationsDialog, type DeskMatch } from "./index";
 
 export const Route = createFileRoute("/matches")({
@@ -94,6 +101,17 @@ function MatchesPage() {
   const { data: draws } = useDraws();
   const { data: drawMatches } = useDrawMatches();
   const { data: courts } = useCourts();
+  const { data: tournament } = useActiveTournament();
+
+  /**
+   * Knockout scoring follows the tournament's configured rule. Placement matches
+   * stay on the legacy single-game-to-21 rule because `report_pool_result`, which
+   * the database uses for them, still enforces exactly that.
+   */
+  const knockoutRule = useMemo(
+    () => (tournament ? ruleForStage(tournament, "knockout") : DEFAULT_KNOCKOUT_RULE),
+    [tournament],
+  );
 
   const playerMap = useMemo(() => indexBy(players), [players]);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
@@ -185,7 +203,10 @@ function MatchesPage() {
   }, [selected, poolMatches, drawMatches, teamMap, catMap, drawMap]);
 
   return (
-    <AppShell title="Score entry" subtitle="Group stage is a single game to 21. Knockouts are best of three.">
+    <AppShell
+      title="Score entry"
+      subtitle={`Group stage is ${scoringRuleLabel(LEGACY_GAME_RULE).toLowerCase()}. Knockouts are ${scoringRuleLabel(knockoutRule).toLowerCase()}.`}
+    >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Matches shown" value={all.length} />
@@ -378,6 +399,8 @@ function MatchesPage() {
               canSchedule={canSchedule}
               startCheck={null}
               playerMap={playerMap}
+              scoringRule={selectedMatch.kind === "pool" ? LEGACY_GAME_RULE : knockoutRule}
+              timezone={tournament?.venue_timezone}
               onDone={() => {
                 refresh();
                 setSelected(null);

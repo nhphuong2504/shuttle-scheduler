@@ -1,0 +1,237 @@
+import { Panel } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import type { TournamentReadiness } from "@/lib/tournament/data";
+import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
+import { scoringRuleLabel } from "@/lib/tournament/scoring";
+import { cn } from "@/lib/utils";
+import { courtPoolSize, dateRangeLabel, type DraftForm } from "./types";
+
+/**
+ * The final summary. The checks come from `tournament_readiness`, which is the
+ * same function the activation RPC re-runs, so what is shown here is what the
+ * database will enforce.
+ */
+export function ReviewStep({
+  form,
+  readiness,
+  readinessError,
+  busy,
+  canActivate,
+  onActivate,
+  onDiscard,
+}: {
+  form: DraftForm;
+  readiness: TournamentReadiness | undefined;
+  readinessError: string | null;
+  busy: boolean;
+  canActivate: boolean;
+  onActivate: () => void;
+  onDiscard: () => void;
+}) {
+  const activeEvents = form.events.filter((event) => event.active !== false);
+  const courts = courtPoolSize(form.days);
+  const checks = readiness?.checks ?? [];
+  const blockers = checks.filter((check) => !check.ok);
+  const ready = readiness?.ready === true;
+
+  return (
+    <div className="space-y-4">
+      <Panel title="Checks">
+        {readinessError ? (
+          <p className="text-sm text-danger-foreground">{readinessError}</p>
+        ) : !readiness ? (
+          <p className="text-sm text-muted-foreground">Running checks…</p>
+        ) : (
+          <>
+            <p className="mb-3 text-sm">
+              {ready ? (
+                <span className="font-semibold text-mint-foreground">
+                  All checks passed. This tournament is ready to activate.
+                </span>
+              ) : (
+                <span className="font-semibold">
+                  {blockers.length} check{blockers.length === 1 ? "" : "s"} to resolve before
+                  activation.
+                </span>
+              )}
+            </p>
+            <ul className="space-y-2">
+              {checks.map((check) => (
+                <li key={check.id} className="flex items-start gap-2.5">
+                  <span
+                    className={cn(
+                      "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-[10px] font-bold",
+                      check.ok
+                        ? "bg-mint/40 text-foreground"
+                        : "bg-danger/20 text-danger-foreground",
+                    )}
+                    aria-hidden
+                  >
+                    {check.ok ? "✓" : "!"}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm">{check.label}</span>
+                    {!check.ok && check.detail ? (
+                      <span className="block text-xs text-danger-foreground">{check.detail}</span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Panel>
+
+      <Panel title="Basics">
+        <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+          <Row label="Name" value={form.basics.name.trim() || "Not set"} />
+          <Row label="Timezone" value={form.basics.venueTimezone || "Not set"} />
+          <Row label="Venue" value={form.basics.venueName.trim() || "Not set"} />
+          <Row label="Address" value={form.basics.venueAddress.trim() || "Not set"} />
+          <Row label="Organizer" value={form.basics.organizerName.trim() || "Not set"} />
+          <Row
+            label="Contact"
+            value={
+              [form.basics.organizerEmail.trim(), form.basics.organizerPhone.trim()]
+                .filter(Boolean)
+                .join(" · ") || "Not set"
+            }
+          />
+        </dl>
+      </Panel>
+
+      <Panel title="Days and courts">
+        <dl className="mb-3 grid gap-x-4 gap-y-3 sm:grid-cols-3">
+          <Row label="Date range" value={dateRangeLabel(form.days)} />
+          <Row label="Days" value={String(form.days.length)} />
+          <Row label="Courts in the pool" value={courts ? String(courts) : "None"} />
+        </dl>
+        <ul className="divide-y divide-hairline">
+          {form.days.map((day, index) => (
+            <li key={index} className="py-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">Day {index + 1}</span>
+                <span className="font-score">{day.date || "No date"}</span>
+                <span className="font-score text-muted-foreground">
+                  {day.startTime}–{day.endTime}
+                </span>
+                <span className="text-muted-foreground">
+                  {day.courts.length
+                    ? `Court${day.courts.length === 1 ? "" : "s"} ${day.courts.join(", ")}`
+                    : "No courts"}
+                </span>
+              </div>
+              {day.breaks.length ? (
+                <p className="mt-0.5 text-muted-foreground">
+                  Breaks:{" "}
+                  {day.breaks
+                    .map((br) => `${br.label || "Break"} ${br.startTime}–${br.endTime}`)
+                    .join(", ")}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel title="Events">
+        {activeEvents.length === 0 ? (
+          <p className="text-sm text-danger-foreground">No events. Add at least one.</p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {activeEvents.map((event) => (
+              <li key={event.code} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                <span className="font-score font-semibold">{event.code}</span>
+                <span>{event.name}</span>
+                <Badge variant="outline">
+                  {event.gender === "open" ? "Open" : `${event.gender}`}
+                </Badge>
+                <Badge variant="outline">
+                  {event.entryType === "pair" ? "Doubles" : "Singles"}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {event.maxEntries == null ? "No entry cap" : `Cap ${event.maxEntries}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-muted-foreground">
+          A player may enter at most{" "}
+          <span className="font-semibold text-foreground">
+            {form.maxCategoriesPerPlayer} event{form.maxCategoriesPerPlayer === 1 ? "" : "s"}
+          </span>
+          .
+        </p>
+      </Panel>
+
+      <Panel title="Structure">
+        <p className="text-sm font-semibold">{SUPPORTED_FORMAT.name}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{SUPPORTED_FORMAT.summary}</p>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {PLACEMENT_TIERS.map((tier) => (
+            <li key={tier.tier} className="flex items-center gap-2 text-xs">
+              <Badge variant="outline" className="font-score">
+                {tier.record}
+              </Badge>
+              <span className="text-muted-foreground">→</span>
+              <span className="font-semibold">{tier.label}</span>
+              <span className="text-muted-foreground">{tier.title}</span>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel title="Match rules">
+        <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+          <Row label="Placement scoring" value={scoringRuleLabel(form.rules.placementRule)} />
+          <Row label="Knockout scoring" value={scoringRuleLabel(form.rules.knockoutRule)} />
+          <Row
+            label="Placement duration"
+            value={`${form.rules.placementSlotMinutes} min per match`}
+          />
+          <Row
+            label="Knockout duration"
+            value={`${form.rules.knockoutSlotMinutes} min per match`}
+          />
+          <Row label="Placement rest" value={`${form.rules.placementRestGapMinutes} min`} />
+          <Row label="Knockout rest" value={`${form.rules.knockoutRestGapMinutes} min`} />
+        </dl>
+      </Panel>
+
+      <Panel title="Finish">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Activating moves this tournament from <span className="font-semibold">Draft</span> to{" "}
+          <span className="font-semibold">In Progress</span> and makes it the active scope for the
+          desk. The current active tournament is switched off. Discarding deletes the draft and
+          everything it owns.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy || !canActivate || !ready} onClick={onActivate}>
+            {busy ? "Working…" : "Activate tournament"}
+          </Button>
+          <Button variant="outline" disabled={busy} onClick={onDiscard}>
+            Discard draft
+          </Button>
+        </div>
+        {!ready && readiness ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Activation is blocked until every check passes. The database enforces the same checks.
+          </p>
+        ) : null}
+      </Panel>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="break-words text-sm">{value}</dd>
+    </div>
+  );
+}

@@ -2,23 +2,11 @@
 
 # Build prompt: Badminton tournament tracking platform
 
-
-
-
 Copy everything below into your coding tool of choice (e.g. Claude Code) to kick off the build.
-
-
-
 
 ---
 
-
-
-
 ## Project overview
-
-
-
 
 Build a web platform to manage a 2-day, 4-category badminton tournament (Men's Singles,
 
@@ -30,20 +18,11 @@ knockout draws once pools finish, and produce a court schedule that respects pla
 
 and category-conflict rules.
 
-
-
-
 Target scale: ~130-140 players, ~230 group matches, ~130 knockout matches, ~360 total matches
 
 across the weekend.
 
-
-
-
 ## Core entities
-
-
-
 
 - **Player**: id, name, contact info, categories registered (max 2)
 
@@ -71,13 +50,7 @@ across the weekend.
 
 - **ScheduleSlot**: court_id, start_time, end_time, assigned match id, category, buffer flag
 
-
-
-
 ## Business rules to implement
-
-
-
 
 ### Registration
 
@@ -88,9 +61,6 @@ across the weekend.
 - Doubles pairs are single "team" entities for match scheduling, but each half of the pair
 
   is tracked individually against the 2-category cap and the rest-gap rule.
-
-
-
 
 ### Pool generation
 
@@ -108,10 +78,13 @@ across the weekend.
 
   across pool matches, (3) coin toss / manual override flag for the desk.
 
-
-
-
 ### Draw generation (the A/B/C/D drop-down mechanic)
+
+> **Superseded for new tournaments.** The supported format is now a two-round placement
+> stage feeding A/B/C/D single-elimination draws (WW → A, WL → B, LW → C, LL → D), not
+> pool standings. The wizard presents only that format, so the pool-based rules below
+> describe the legacy round-robin path, which is still in the database and untouched.
+> Match generation for the new format is not built yet.
 
 - Only build a category's Draw A/B/C/D once **every pool in that category has all match
 
@@ -135,10 +108,14 @@ across the weekend.
 
 - Round 2+ pairings depend on round 1 results — don't pre-generate beyond one round ahead.
 
-
-
-
 ### Match format & timing
+
+> **Now configurable.** Timing and scoring are read from the tournament row
+> (`placement_*` / `knockout_*` and the existing slot-minute and rest-gap columns) rather
+> than hardcoded, so the values below are the defaults for a tournament that was already
+> running. The host picks a scoring preset or a custom rule in the creation wizard, and the
+> system suggests a duration the host can override. Group-stage scoring itself is still
+> enforced at the legacy rule, because `report_pool_result` has not been generalised.
 
 - Group stage: single game, race to 21, 20-minute planned court slot (incl. changeover).
 
@@ -147,9 +124,6 @@ across the weekend.
 - Support a visible match clock / time-cap flag so slow matches don't silently blow the
 
   schedule without the desk noticing.
-
-
-
 
 ### Scheduling constraints
 
@@ -177,9 +151,6 @@ across the weekend.
 
   if a generated schedule exceeds ~90% utilization on a given day.
 
-
-
-
 ### Live operations
 
 - Score entry should update pool standings and draw eligibility in near real time — the
@@ -194,13 +165,7 @@ across the weekend.
 
   what's queued next.
 
-
-
-
 ## Suggested build order
-
-
-
 
 1. Data model + category/pool/team CRUD
 
@@ -218,13 +183,7 @@ across the weekend.
 
    late-reporting pools or overrun risk
 
-
-
-
 ## Non-functional notes
-
-
-
 
 - This will be operated live on tournament day by a small control desk team on
 
@@ -263,4 +222,11 @@ npm run dev
 
 Migrations live in `supabase/migrations` and are applied in filename order. The hosted
 project is `hdmfxndanyrbxedgboev`. See [supabase/migrations/README.md](supabase/migrations/README.md)
-for how to apply the tournament-scoping migration and how to verify it afterwards.
+for how to apply the tournament-scoping and tournament-creation-flow migrations and how to
+verify them afterwards.
+
+`20260916000000_tournament_creation_flow.sql` is the second half of the tournament work: it
+adds the draft lifecycle, the venue/organizer fields, per-day courts and breaks, category
+gender metadata and configurable scoring rules, so a host can build a tournament in a
+resumable wizard and activate it. See "Tournament creation flow" in the migrations README
+for what it changes and what it deliberately leaves alone.

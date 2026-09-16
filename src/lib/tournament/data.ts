@@ -22,6 +22,8 @@ export type Draw = Database["public"]["Tables"]["draws"]["Row"];
 export type DrawMatch = Database["public"]["Tables"]["draw_matches"]["Row"];
 export type Tournament = Database["public"]["Tables"]["tournaments"]["Row"];
 export type TournamentDay = Database["public"]["Tables"]["tournament_days"]["Row"];
+export type TournamentDayCourt = Database["public"]["Tables"]["tournament_day_courts"]["Row"];
+export type TournamentDayBreak = Database["public"]["Tables"]["tournament_day_breaks"]["Row"];
 export type StaffRole = Database["public"]["Tables"]["staff_roles"]["Row"];
 export type StaffRoleName = "admin" | "registrar" | "scorer" | "scheduler";
 
@@ -56,6 +58,11 @@ export const keys = {
   drawMatches: ["draw_matches"] as const,
   activeTournament: ["active_tournament"] as const,
   tournamentDays: ["tournament_days"] as const,
+  tournamentById: ["tournament_by_id"] as const,
+  tournamentDrafts: ["tournament_drafts"] as const,
+  tournamentReadiness: ["tournament_readiness"] as const,
+  dayCourts: ["tournament_day_courts"] as const,
+  dayBreaks: ["tournament_day_breaks"] as const,
   staffRole: ["staff_role"] as const,
   staffRoles: ["staff_roles"] as const,
 };
@@ -107,6 +114,183 @@ export function useTournamentScope() {
     tournament: tournamentQuery.data ?? null,
     days: daysQuery.data ?? [],
     loading: tournamentQuery.isLoading || daysQuery.isLoading,
+  };
+}
+
+/**
+ * A single tournament by id, so the creation wizard can resume a draft that is
+ * not the active scope. Drafts are never active, so the active-tournament hook
+ * cannot be used for them.
+ */
+export function useTournamentById(tournamentId: string | null | undefined) {
+  return useQuery({
+    queryKey: scopedKey(keys.tournamentById, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: async () => {
+      const rows = await must<Tournament[]>(
+        supabase
+          .from("tournaments")
+          .select("*")
+          .eq("id", tournamentId as string)
+          .limit(1),
+      );
+      return rows[0] ?? null;
+    },
+  });
+}
+
+/** Every draft, newest first, so the host can pick up an unfinished creation. */
+export function useTournamentDrafts() {
+  return useQuery({
+    queryKey: keys.tournamentDrafts,
+    queryFn: () =>
+      must<Tournament[]>(
+        supabase
+          .from("tournaments")
+          .select("*")
+          .eq("status", "draft")
+          .order("created_at", { ascending: false }),
+      ),
+  });
+}
+
+export interface ReadinessCheck {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail: string | null;
+}
+
+export interface TournamentReadiness {
+  ready: boolean;
+  checks: ReadinessCheck[];
+}
+
+/**
+ * The authoritative pre-activation checklist. The same function guards the
+ * activation RPC, so the review step can never disagree with the database.
+ */
+export function useTournamentReadiness(tournamentId: string | null | undefined) {
+  return useQuery({
+    queryKey: scopedKey(keys.tournamentReadiness, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("tournament_readiness", {
+        p_tournament_id: tournamentId as string,
+      });
+      if (error) throw new Error(error.message);
+      return data as unknown as TournamentReadiness;
+    },
+  });
+}
+
+/** Per-day court availability, keyed to an explicit tournament. */
+export function useTournamentDayCourts(tournamentId: string | null | undefined) {
+  return useQuery({
+    queryKey: scopedKey(keys.dayCourts, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<TournamentDayCourt[]>(
+        supabase
+          .from("tournament_day_courts")
+          .select("*")
+          .eq("tournament_id", tournamentId as string),
+      ),
+  });
+}
+
+/** Per-day break windows, keyed to an explicit tournament. */
+export function useTournamentDayBreaks(tournamentId: string | null | undefined) {
+  return useQuery({
+    queryKey: scopedKey(keys.dayBreaks, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<TournamentDayBreak[]>(
+        supabase
+          .from("tournament_day_breaks")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("start_time"),
+      ),
+  });
+}
+
+/** Days for a specific tournament, so a non-active draft can be edited. */
+export function useTournamentDaysFor(tournamentId: string | null | undefined) {
+  return useQuery({
+    queryKey: scopedKey(keys.tournamentDays, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<TournamentDay[]>(
+        supabase
+          .from("tournament_days")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("day_number"),
+      ),
+  });
+}
+
+/** Courts for a specific tournament, so a non-active draft can be edited. */
+export function useCourtsFor(tournamentId: string | null | undefined) {
+  return useQuery({
+    queryKey: scopedKey(keys.courts, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<Court[]>(
+        supabase
+          .from("courts")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("number"),
+      ),
+  });
+}
+
+/** Events for a specific tournament, so a non-active draft can be edited. */
+export function useCategoriesFor(tournamentId: string | null | undefined) {
+  return useQuery({
+    queryKey: scopedKey(keys.categories, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: () =>
+      must<Category[]>(
+        supabase
+          .from("categories")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("sort_order"),
+      ),
+  });
+}
+
+/** Everything the creation wizard needs to hydrate one draft. */
+export function useTournamentDraftData(tournamentId: string | null | undefined) {
+  const tournamentQuery = useTournamentById(tournamentId);
+  const daysQuery = useTournamentDaysFor(tournamentId);
+  const courtsQuery = useCourtsFor(tournamentId);
+  const dayCourtsQuery = useTournamentDayCourts(tournamentId);
+  const dayBreaksQuery = useTournamentDayBreaks(tournamentId);
+  const categoriesQuery = useCategoriesFor(tournamentId);
+
+  const queries = [
+    tournamentQuery,
+    daysQuery,
+    courtsQuery,
+    dayCourtsQuery,
+    dayBreaksQuery,
+    categoriesQuery,
+  ];
+
+  return {
+    tournament: tournamentQuery.data ?? null,
+    days: daysQuery.data ?? [],
+    courts: courtsQuery.data ?? [],
+    dayCourts: dayCourtsQuery.data ?? [],
+    dayBreaks: dayBreaksQuery.data ?? [],
+    categories: categoriesQuery.data ?? [],
+    isLoading: queries.some((q) => q.isLoading),
+    isError: queries.some((q) => q.isError),
+    error: queries.find((q) => q.error)?.error ?? null,
   };
 }
 

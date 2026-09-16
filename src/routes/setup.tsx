@@ -1,367 +1,493 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { BasicsStep } from "@/components/tournament-setup/BasicsStep";
+import { DaysStep } from "@/components/tournament-setup/DaysStep";
+import { DraftHeader } from "@/components/tournament-setup/DraftHeader";
+import { EventsStep } from "@/components/tournament-setup/EventsStep";
+import { ReviewStep } from "@/components/tournament-setup/ReviewStep";
+import { RulesStep } from "@/components/tournament-setup/RulesStep";
+import { StepNav } from "@/components/tournament-setup/StepNav";
+import { StructureStep } from "@/components/tournament-setup/StructureStep";
+import { hydrateForm } from "@/components/tournament-setup/hydrate";
+import {
+  SETUP_STEPS,
+  courtPoolSize,
+  dateRangeLabel,
+  defaultForm,
+  isSetupStep,
+  setupStepIndex,
+  type DraftForm,
+  type SetupStep,
+} from "@/components/tournament-setup/types";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useSession } from "@/hooks/useSession";
-import { createTournament, type TournamentCategoryInput } from "@/lib/tournament/actions";
-import { useActiveTournament, useCourts, useTournamentDays } from "@/lib/tournament/data";
+import {
+  activateTournament,
+  createTournamentDraft,
+  deleteTournamentDraft,
+  saveTournamentDays,
+  saveTournamentDraft,
+  saveTournamentEvents,
+  type TournamentDraftInput,
+} from "@/lib/tournament/actions";
+import {
+  useTournamentDraftData,
+  useTournamentDrafts,
+  useTournamentReadiness,
+} from "@/lib/tournament/data";
+import { isScoringRuleValid } from "@/lib/tournament/scoring";
+
+interface SetupSearch {
+  /** A draft id, or "new" while the first step has not been saved yet. */
+  draft?: string;
+  /** Which step of the wizard to show. */
+  step?: SetupStep;
+}
 
 export const Route = createFileRoute("/setup")({
+  validateSearch: (search: Record<string, unknown>): SetupSearch => {
+    const result: SetupSearch = {};
+    const draft = search["draft"];
+    if (typeof draft === "string" && draft.length > 0) {
+      result.draft = draft;
+    }
+    if (isSetupStep(search["step"])) result.step = search["step"];
+    return result;
+  },
   head: () => ({
     meta: [
-      { title: "New tournament | ShuttleNet Tournament Ops" },
+      { title: "Tournament setup | ShuttleNet Tournament Ops" },
       {
         name: "description",
         content:
-          "Create a tournament: name, day count, court count, start date and the active categories.",
+          "Create a badminton tournament: basics, days and courts, events, competition structure and match rules, then activate it.",
       },
-      { property: "og:title", content: "New tournament | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Tournament setup | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Create a tournament: name, day count, court count, start date and the active categories.",
+          "Create a badminton tournament: basics, days and courts, events, competition structure and match rules, then activate it.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
+      { property: "twitter:card", content: "summary" },
     ],
   }),
   component: SetupPage,
 });
 
-/** The four categories the desk has always run, offered as the starting point. */
-const CATEGORY_TEMPLATES = [
-  { code: "MS", name: "Men's Singles", entryType: "individual", sortOrder: 1 },
-  { code: "MD", name: "Men's Doubles", entryType: "pair", sortOrder: 2 },
-  { code: "WD", name: "Women's Doubles", entryType: "pair", sortOrder: 3 },
-  { code: "XD", name: "Mixed Doubles", entryType: "pair", sortOrder: 4 },
-] as const;
-
-interface CategoryDraft {
-  code: string;
-  name: string;
-  entryType: string;
-  sortOrder: number;
-  active: boolean;
-  cap: string;
-}
-
-function defaultDrafts(): CategoryDraft[] {
-  return CATEGORY_TEMPLATES.map((c) => ({ ...c, active: true, cap: "" }));
-}
-
-function todayIso() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
-}
-
-function parseIntStrict(raw: string): number | null {
-  const value = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(value) || Number.isNaN(value)) return null;
-  return value;
+/** Maps the wizard form onto the payload the draft RPCs accept. */
+function toDraftInput(form: DraftForm): TournamentDraftInput {
+  return {
+    name: form.basics.name,
+    format: "two_round_placement",
+    venueName: form.basics.venueName,
+    venueAddress: form.basics.venueAddress,
+    venueTimezone: form.basics.venueTimezone,
+    organizerName: form.basics.organizerName,
+    organizerEmail: form.basics.organizerEmail,
+    organizerPhone: form.basics.organizerPhone,
+    maxCategoriesPerPlayer: form.maxCategoriesPerPlayer,
+    placementGamesTo: form.rules.placementRule.gamesTo,
+    placementWinBy: form.rules.placementRule.winBy,
+    placementBestOf: form.rules.placementRule.bestOf,
+    knockoutGamesTo: form.rules.knockoutRule.gamesTo,
+    knockoutWinBy: form.rules.knockoutRule.winBy,
+    knockoutBestOf: form.rules.knockoutRule.bestOf,
+    groupSlotMinutes: form.rules.placementSlotMinutes,
+    knockoutSlotMinutes: form.rules.knockoutSlotMinutes,
+    groupRestGapMinutes: form.rules.placementRestGapMinutes,
+    knockoutRestGapMinutes: form.rules.knockoutRestGapMinutes,
+  };
 }
 
 function SetupPage() {
   const qc = useQueryClient();
-  const { isAdmin, canSchedule, signedIn } = useSession();
-  const canCreate = isAdmin || canSchedule;
+  const { isAdmin, signedIn } = useSession();
+  const { draft: draftParam, step: stepParam } = Route.useSearch();
+  const navigate = useNavigate();
 
-  const { data: activeTournament } = useActiveTournament();
-  const { data: activeCourts } = useCourts();
-  const { data: activeDays } = useTournamentDays();
+  const isNew = draftParam === "new";
+  const draftId = draftParam && !isNew ? draftParam : null;
 
-  const [name, setName] = useState("");
-  const [dayCount, setDayCount] = useState("2");
-  const [courtCount, setCourtCount] = useState("8");
-  const [startDate, setStartDate] = useState(todayIso);
-  const [drafts, setDrafts] = useState<CategoryDraft[]>(defaultDrafts);
+  const draftData = useTournamentDraftData(draftId);
+  const readinessQuery = useTournamentReadiness(draftId);
+  const draftsQuery = useTournamentDrafts();
+
+  const [form, setForm] = useState<DraftForm>(defaultForm);
   const [busy, setBusy] = useState(false);
-  const [createdId, setCreatedId] = useState<string | null>(null);
+  const hydratedFor = useRef<string | null>(null);
 
-  const setDraft = (code: string, patch: Partial<CategoryDraft>) =>
-    setDrafts((rows) => rows.map((row) => (row.code === code ? { ...row, ...patch } : row)));
+  const step: SetupStep = stepParam ?? "basics";
+  const currentIndex = setupStepIndex(step);
 
-  const selected = drafts.filter((d) => d.active);
-
-  const problems = useMemo(() => {
-    const issues: string[] = [];
-    const days = parseIntStrict(dayCount);
-    const courts = parseIntStrict(courtCount);
-    if (!name.trim()) issues.push("Give the tournament a name.");
-    if (days == null || days < 1 || days > 7)
-      issues.push("Day count must be a whole number from 1 to 7.");
-    if (courts == null || courts < 1 || courts > 64)
-      issues.push("Court count must be a whole number from 1 to 64.");
-    if (!startDate) issues.push("Pick a start date.");
-    if (selected.length === 0) issues.push("Switch on at least one category.");
-    for (const draft of selected) {
-      if (draft.cap.trim() === "") continue;
-      const cap = parseIntStrict(draft.cap);
-      if (cap == null || cap < 2)
-        issues.push(`${draft.code} cap must be a whole number of 2 or more, or blank for no cap.`);
-    }
-    return issues;
-  }, [name, dayCount, courtCount, startDate, selected]);
-
-  const submit = async () => {
-    if (problems.length) {
-      toast.error(problems[0] ?? "Check the form.");
+  // Load a persisted draft into the form exactly once per draft, so a background
+  // refetch can never overwrite what the host is typing.
+  useEffect(() => {
+    if (!draftId) {
+      hydratedFor.current = null;
       return;
     }
-    const categories: TournamentCategoryInput[] = selected.map((draft) => ({
-      code: draft.code,
-      name: draft.name,
-      entryType: draft.entryType,
-      sortOrder: draft.sortOrder,
-      active: true,
-      maxEntries: draft.cap.trim() === "" ? null : parseIntStrict(draft.cap),
-    }));
+    if (hydratedFor.current === draftId) return;
+    if (draftData.isLoading || !draftData.tournament) return;
+    setForm(
+      hydrateForm(
+        draftData.tournament,
+        draftData.days,
+        draftData.courts,
+        draftData.dayCourts,
+        draftData.dayBreaks,
+        draftData.categories,
+      ),
+    );
+    hydratedFor.current = draftId;
+  }, [draftId, draftData]);
 
+  const patchForm = (patch: Partial<DraftForm>) => setForm((prev) => ({ ...prev, ...patch }));
+
+  const problems = useMemo(() => problemsForStep(step, form), [step, form]);
+
+  const goto = (nextStep: SetupStep, nextDraft?: string | null) => {
+    void navigate({
+      to: "/setup",
+      search: (prev) => {
+        const search: SetupSearch = { ...prev, step: nextStep };
+        if (nextDraft !== undefined) {
+          if (nextDraft) search.draft = nextDraft;
+          else delete search.draft;
+        }
+        return search;
+      },
+      replace: true,
+    });
+  };
+
+  const refresh = () => qc.invalidateQueries();
+
+  /** Saves whatever the current step owns, then advances. */
+  const saveAndContinue = async () => {
+    if (problems.length) {
+      toast.error(problems[0] ?? "Check this step.");
+      return;
+    }
     setBusy(true);
     try {
-      const id = await createTournament({
-        name,
-        dayCount: parseIntStrict(dayCount) as number,
-        courtCount: parseIntStrict(courtCount) as number,
-        startDate,
-        categories,
-      });
-      setCreatedId(id);
-      await qc.invalidateQueries();
-      toast.success("Tournament created and set active");
+      let id = draftId;
+      if (isNew) {
+        id = await createTournamentDraft(toDraftInput(form));
+        hydratedFor.current = id;
+      } else if (id) {
+        await saveStep(step, id, form);
+      }
+
+      await refresh();
+
+      // Advancing past the first step means the draft now exists, so the URL
+      // must carry its id or a refresh would lose the work.
+      const next = SETUP_STEPS[Math.min(currentIndex + 1, SETUP_STEPS.length - 1)];
+      const nextStep: SetupStep = next ? next.id : "review";
+      goto(nextStep, id ?? undefined);
+      toast.success("Saved");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create the tournament");
+      toast.error(error instanceof Error ? error.message : "Could not save");
     } finally {
       setBusy(false);
     }
   };
 
-  if (signedIn && !canCreate) {
+  const activate = async () => {
+    if (!draftId) return;
+    setBusy(true);
+    try {
+      await activateTournament(draftId);
+      await refresh();
+      toast.success("Tournament activated and set as the active scope");
+      void navigate({ to: "/" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not activate");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const discard = async () => {
+    if (!draftId) return;
+    if (!window.confirm("Discard this draft? Everything configured so far is deleted.")) return;
+    setBusy(true);
+    try {
+      await deleteTournamentDraft(draftId);
+      await refresh();
+      toast.success("Draft discarded");
+      void navigate({ to: "/setup", search: {}, replace: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not discard the draft");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!isAdmin) {
     return (
-      <AppShell
-        title="New tournament"
-        subtitle="Only admins and schedulers can create a tournament."
-      >
+      <AppShell title="Tournament setup" subtitle="Only admins can create a tournament.">
         <Panel title="Not permitted">
           <p className="text-sm text-muted-foreground">
-            Your account does not hold the admin or scheduler role. Ask an admin to grant it on the{" "}
-            <Link
-              to="/staff"
-              className="font-semibold text-primary underline-offset-4 hover:underline"
-            >
-              staff
-            </Link>{" "}
-            page.
+            {signedIn ? "Your account does not hold the admin role." : "Sign in at the desk first."}{" "}
+            Creating a tournament, and adding players and entries, is admin-only.
           </p>
         </Panel>
       </AppShell>
     );
   }
 
-  return (
-    <AppShell
-      title="New tournament"
-      subtitle="A tournament owns its days, courts and categories. Everything else in the desk is scoped to it."
-      actions={
-        createdId ? (
-          <>
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/registration">Registration</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to="/schedule">Build schedule</Link>
-            </Button>
-          </>
-        ) : undefined
-      }
-    >
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Days" value={parseIntStrict(dayCount) ?? 0} hint="Consecutive dates" />
-        <StatTile label="Courts" value={parseIntStrict(courtCount) ?? 0} hint="Numbered from 1" />
-        <StatTile label="Categories" value={selected.length} hint="Switched on" />
-        <StatTile
-          label="Status"
-          value={problems.length ? "Check form" : createdId ? "Created" : "Ready"}
-          tone={problems.length ? "warn" : createdId ? "good" : "normal"}
-          hint={problems.length ? `${problems.length} to fix` : "All fields valid"}
-        />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <div className="space-y-4">
-          <Panel title="Basics">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="tname">Tournament name</Label>
-                <Input
-                  id="tname"
-                  value={name}
-                  placeholder="City Open 2026"
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="days">Days</Label>
-                <Input
-                  id="days"
-                  type="number"
-                  min={1}
-                  max={7}
-                  value={dayCount}
-                  onChange={(e) => setDayCount(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="courts">Courts</Label>
-                <Input
-                  id="courts"
-                  type="number"
-                  min={1}
-                  max={64}
-                  value={courtCount}
-                  onChange={(e) => setCourtCount(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="start">First day</Label>
-                <Input
-                  id="start"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Courts are created as rows numbered 1..{parseIntStrict(courtCount) ?? "n"}. Days run
-              on consecutive dates from the first day.
-            </p>
-          </Panel>
-
-          <Panel title="Categories">
+  if (!draftParam) {
+    const drafts = draftsQuery.data ?? [];
+    return (
+      <AppShell
+        title="Tournament setup"
+        subtitle="A tournament owns its days, courts and events. Everything else in the desk is scoped to it."
+        actions={
+          <Button size="sm" onClick={() => goto("basics", "new")}>
+            New tournament
+          </Button>
+        }
+      >
+        <Panel title="Unfinished drafts">
+          {draftsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading drafts…</p>
+          ) : draftsQuery.isError ? (
+            <EmptyState
+              title="Could not read drafts"
+              hint={
+                draftsQuery.error instanceof Error
+                  ? draftsQuery.error.message
+                  : "The tournament schema may not be up to date. Apply the latest migration and reload."
+              }
+            />
+          ) : drafts.length === 0 ? (
+            <EmptyState
+              title="No drafts"
+              hint="Start a new tournament to configure it step by step."
+            />
+          ) : (
             <ul className="divide-y divide-hairline">
               {drafts.map((draft) => (
-                <li key={draft.code} className="flex flex-wrap items-center gap-3 py-2.5">
-                  <label className="flex min-w-[220px] items-center gap-2.5">
-                    <Checkbox
-                      checked={draft.active}
-                      onCheckedChange={(checked) =>
-                        setDraft(draft.code, { active: checked === true })
-                      }
-                    />
-                    <span className="text-sm">
-                      <span className="font-score font-semibold">{draft.code}</span>{" "}
-                      <span className="text-muted-foreground">{draft.name}</span>
-                    </span>
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor={`cap-${draft.code}`} className="text-xs text-muted-foreground">
-                      Cap
-                    </Label>
-                    <Input
-                      id={`cap-${draft.code}`}
-                      className="w-24"
-                      inputMode="numeric"
-                      placeholder="none"
-                      disabled={!draft.active}
-                      value={draft.cap}
-                      onChange={(e) => setDraft(draft.code, { cap: e.target.value })}
-                    />
+                <li key={draft.id} className="flex flex-wrap items-center gap-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-sm font-semibold">{draft.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Started {new Date(draft.created_at).toLocaleString()} · {draft.day_count}{" "}
+                      day(s)
+                    </p>
                   </div>
+                  <Button size="sm" variant="outline" onClick={() => goto("basics", draft.id)}>
+                    Resume
+                  </Button>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-muted-foreground">
-              A cap is enforced when entries are added. Leave blank for uncapped.
-            </p>
+          )}
+        </Panel>
+        <div className="mt-4">
+          <Panel title="How this works">
+            <ul className="space-y-2 text-xs text-muted-foreground">
+              <li>Each step saves into the same draft, so you can stop and come back.</li>
+              <li>Nothing reaches the desk until the review step activates the tournament.</li>
+              <li>The active tournament stays in charge until a draft takes over.</li>
+            </ul>
           </Panel>
+        </div>
+      </AppShell>
+    );
+  }
 
-          <Panel title="Create">
-            {!canCreate ? (
-              <p className="mb-3 text-xs text-warn-foreground">
-                {signedIn
-                  ? "Your account needs the admin or scheduler role to create a tournament."
-                  : "Sign in at the desk before creating a tournament."}
-              </p>
-            ) : null}
-            {problems.length ? (
-              <ul className="mb-3 space-y-1 text-xs text-danger-foreground">
-                {problems.map((issue) => (
-                  <li key={issue}>• {issue}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mb-3 text-xs text-muted-foreground">
-                Ready: {selected.length} categor{selected.length === 1 ? "y" : "ies"},{" "}
-                {parseIntStrict(courtCount) ?? 0} courts, {parseIntStrict(dayCount) ?? 0} days.
-              </p>
-            )}
-            <Button
-              className="w-full sm:w-auto"
-              disabled={busy || problems.length > 0 || !canCreate}
-              onClick={submit}
-            >
-              {busy ? "Creating…" : "Create tournament"}
-            </Button>
+  if (draftId && !draftData.isLoading && !draftData.tournament) {
+    return (
+      <AppShell title="Tournament setup" subtitle="Draft not found.">
+        <Panel title="Not found">
+          <p className="mb-3 text-sm text-muted-foreground">
+            That draft no longer exists. It may have been discarded or activated.
+          </p>
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/setup" search={{}}>
+              Back to drafts
+            </Link>
+          </Button>
+        </Panel>
+      </AppShell>
+    );
+  }
+
+  const activeEvents = form.events.filter((event) => event.active !== false);
+  const courts = courtPoolSize(form.days);
+  const draftStillEditable = isNew || draftData.tournament?.status === "draft";
+
+  return (
+    <AppShell
+      title={isNew ? "New tournament" : (draftData.tournament?.name ?? "Tournament setup")}
+      subtitle={`Step ${currentIndex + 1} of ${SETUP_STEPS.length} · ${SETUP_STEPS[currentIndex]?.label ?? ""}`}
+      actions={
+        <Button size="sm" variant="ghost" onClick={() => goto("basics", null)}>
+          {isNew ? "Cancel" : "All drafts"}
+        </Button>
+      }
+    >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="Days" value={form.days.length} hint={dateRangeLabel(form.days)} />
+        <StatTile label="Courts" value={courts} hint="Union of the days' courts" />
+        <StatTile label="Events" value={activeEvents.length} hint="Switched on" />
+        <StatTile
+          label="Status"
+          value={draftStillEditable ? "Draft" : "In progress"}
+          tone={draftStillEditable ? "normal" : "good"}
+          hint={problems.length ? `${problems.length} to fix` : "No open issues"}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_320px]">
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <Panel title="Steps">
+            <StepNav current={step} draftId={draftId} onSelect={(next) => goto(next)} />
           </Panel>
         </div>
 
-        <div className="space-y-4">
-          <Panel title="Currently active">
-            {activeTournament ? (
-              <div className="space-y-1 text-sm">
-                <p className="font-display font-semibold">{activeTournament.name}</p>
-                <p className="text-muted-foreground">
-                  {activeDays?.length ?? activeTournament.day_count} day(s) ·{" "}
-                  {activeCourts?.length ?? 0} court(s)
-                </p>
-                {(activeDays ?? []).map((day) => (
-                  <p key={day.id} className="font-score text-xs text-muted-foreground">
-                    Day {day.day_number}: {day.date} · {day.start_time.slice(0, 5)}–
-                    {day.end_time.slice(0, 5)}
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No active tournament"
-                hint="The desk stays empty until one is created."
-              />
-            )}
-          </Panel>
+        <div className="min-w-0">
+          {step === "basics" ? (
+            <BasicsStep
+              value={form.basics}
+              onChange={(patch) => patchForm({ basics: { ...form.basics, ...patch } })}
+              isNew={isNew}
+            />
+          ) : null}
+          {step === "days" ? <DaysStep form={form} onChange={patchForm} /> : null}
+          {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
+          {step === "structure" ? <StructureStep /> : null}
+          {step === "rules" ? <RulesStep form={form} onChange={patchForm} /> : null}
+          {step === "review" ? (
+            <ReviewStep
+              form={form}
+              readiness={readinessQuery.data}
+              readinessError={
+                readinessQuery.error instanceof Error ? readinessQuery.error.message : null
+              }
+              busy={busy}
+              canActivate={!!draftId && draftStillEditable}
+              onActivate={activate}
+              onDiscard={discard}
+            />
+          ) : null}
 
-          {createdId ? (
-            <Panel title="Created">
-              <p className="text-sm text-muted-foreground">
-                The new tournament is now active. Register entries next, then build the group
-                schedule on day 1.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" asChild>
-                  <Link to="/registration">Open registration</Link>
-                </Button>
-                <Button size="sm" asChild>
-                  <Link to="/schedule">Open schedule</Link>
-                </Button>
-              </div>
-            </Panel>
-          ) : (
-            <Panel title="What this does">
-              <ul className="space-y-2 text-xs text-muted-foreground">
-                <li>Creates the tournament and switches it on as the active scope.</li>
-                <li>Materialises one court row per court, numbered from 1.</li>
-                <li>Creates one day row per day on consecutive dates, 09:00–18:30 by default.</li>
-                <li>Creates only the categories you leave switched on.</li>
-              </ul>
-            </Panel>
-          )}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {step !== "review" ? (
+              <Button disabled={busy} onClick={saveAndContinue}>
+                {busy ? "Saving…" : isNew ? "Create draft and continue" : "Save and continue"}
+              </Button>
+            ) : null}
+            {currentIndex > 0 ? (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  const previous = SETUP_STEPS[currentIndex - 1];
+                  if (previous) goto(previous.id);
+                }}
+              >
+                Back
+              </Button>
+            ) : null}
+            {step !== "review" && problems.length ? (
+              <p className="text-xs text-danger-foreground">{problems[0]}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <DraftHeader form={form} isDraft={draftStillEditable} />
         </div>
       </div>
     </AppShell>
   );
+}
+
+async function saveStep(step: SetupStep, id: string, form: DraftForm): Promise<void> {
+  switch (step) {
+    case "days":
+      await saveTournamentDays(id, form.days);
+      return;
+    case "events":
+      await saveTournamentDraft(id, toDraftInput(form));
+      await saveTournamentEvents(id, form.events);
+      return;
+    case "structure":
+      return;
+    default:
+      // Basics, rules and review all persist through the same draft payload.
+      await saveTournamentDraft(id, toDraftInput(form));
+      return;
+  }
+}
+
+/** Client-side checks per step. The database re-validates everything. */
+function problemsForStep(step: SetupStep, form: DraftForm): string[] {
+  const issues: string[] = [];
+
+  if (step === "basics") {
+    if (!form.basics.name.trim()) issues.push("Give the tournament a name.");
+    if (!form.basics.venueTimezone.trim()) issues.push("Choose a timezone.");
+    return issues;
+  }
+
+  if (step === "days") {
+    if (form.days.length === 0) issues.push("Add at least one day.");
+    form.days.forEach((day, index) => {
+      if (!day.date) issues.push(`Day ${index + 1} needs a date.`);
+      if (day.startTime >= day.endTime) {
+        issues.push(`Day ${index + 1} must close after it opens.`);
+      }
+      day.breaks.forEach((br) => {
+        if (br.endTime <= br.startTime) {
+          issues.push(`A break on day ${index + 1} must end after it starts.`);
+        }
+      });
+    });
+    return issues;
+  }
+
+  if (step === "events") {
+    if (form.events.length === 0) issues.push("Add at least one event.");
+    const codes = form.events.map((event) => event.code);
+    if (new Set(codes).size !== codes.length) issues.push("Two events share a code.");
+    for (const event of form.events) {
+      if (event.gender === "mixed" && event.entryType !== "pair") {
+        issues.push(`${event.code} is mixed, so it must be a doubles event.`);
+      }
+      if (event.maxEntries != null && event.maxEntries < 2) {
+        issues.push(`${event.code} needs an entry cap of 2 or more, or no cap.`);
+      }
+    }
+    if (form.maxCategoriesPerPlayer < 1 || form.maxCategoriesPerPlayer > 5) {
+      issues.push("The per-player event limit must be between 1 and 5.");
+    }
+    return issues;
+  }
+
+  if (step === "rules") {
+    if (!isScoringRuleValid(form.rules.placementRule)) {
+      issues.push("Check the placement scoring rule.");
+    }
+    if (!isScoringRuleValid(form.rules.knockoutRule)) {
+      issues.push("Check the knockout scoring rule.");
+    }
+    if (form.rules.placementSlotMinutes < 5) {
+      issues.push("Placement matches need at least 5 minutes.");
+    }
+    if (form.rules.knockoutSlotMinutes < 5) {
+      issues.push("Knockout matches need at least 5 minutes.");
+    }
+    return issues;
+  }
+
+  return issues;
 }

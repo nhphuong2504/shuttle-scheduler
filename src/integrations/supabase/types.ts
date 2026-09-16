@@ -20,6 +20,7 @@ export type Database = {
           code: string
           created_at: string
           entry_type: string
+          gender: string
           id: string
           max_entries: number | null
           name: string
@@ -31,6 +32,7 @@ export type Database = {
           code: string
           created_at?: string
           entry_type: string
+          gender?: string
           id?: string
           max_entries?: number | null
           name: string
@@ -42,6 +44,7 @@ export type Database = {
           code?: string
           created_at?: string
           entry_type?: string
+          gender?: string
           id?: string
           max_entries?: number | null
           name?: string
@@ -668,43 +671,139 @@ export type Database = {
           court_count: number
           created_at: string
           day_count: number
+          format: string
           group_rest_gap_minutes: number
           group_slot_minutes: number
           id: string
           is_active: boolean
+          knockout_best_of: number
+          knockout_games_to: number
           knockout_rest_gap_minutes: number
           knockout_slot_minutes: number
+          knockout_win_by: number
+          max_categories_per_player: number
           name: string
+          organizer_email: string | null
+          organizer_name: string | null
+          organizer_phone: string | null
+          placement_best_of: number
+          placement_games_to: number
+          placement_win_by: number
           rest_gap_minutes: number
+          status: string
+          venue_address: string | null
+          venue_name: string | null
           venue_timezone: string
         }
         Insert: {
           court_count?: number
           created_at?: string
           day_count?: number
+          format?: string
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
           is_active?: boolean
+          knockout_best_of?: number
+          knockout_games_to?: number
           knockout_rest_gap_minutes?: number
           knockout_slot_minutes?: number
+          knockout_win_by?: number
+          max_categories_per_player?: number
           name?: string
+          organizer_email?: string | null
+          organizer_name?: string | null
+          organizer_phone?: string | null
+          placement_best_of?: number
+          placement_games_to?: number
+          placement_win_by?: number
           rest_gap_minutes?: number
+          status?: string
+          venue_address?: string | null
+          venue_name?: string | null
           venue_timezone?: string
         }
         Update: {
           court_count?: number
           created_at?: string
           day_count?: number
+          format?: string
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
           is_active?: boolean
+          knockout_best_of?: number
+          knockout_games_to?: number
           knockout_rest_gap_minutes?: number
           knockout_slot_minutes?: number
+          knockout_win_by?: number
+          max_categories_per_player?: number
           name?: string
+          organizer_email?: string | null
+          organizer_name?: string | null
+          organizer_phone?: string | null
+          placement_best_of?: number
+          placement_games_to?: number
+          placement_win_by?: number
           rest_gap_minutes?: number
+          status?: string
+          venue_address?: string | null
+          venue_name?: string | null
           venue_timezone?: string
+        }
+        Relationships: []
+      }
+      tournament_day_courts: {
+        Row: {
+          court_id: string
+          created_at: string
+          day_id: string
+          id: string
+          tournament_id: string
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          day_id: string
+          id?: string
+          tournament_id: string
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          day_id?: string
+          id?: string
+          tournament_id?: string
+        }
+        Relationships: []
+      }
+      tournament_day_breaks: {
+        Row: {
+          created_at: string
+          day_id: string
+          end_time: string
+          id: string
+          label: string | null
+          start_time: string
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_id: string
+          end_time: string
+          id?: string
+          label?: string | null
+          start_time: string
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string
+          day_id?: string
+          end_time?: string
+          id?: string
+          label?: string | null
+          start_time?: string
+          tournament_id?: string
         }
         Relationships: []
       }
@@ -774,6 +873,22 @@ export type Database = {
         }
         Returns: string
       }
+      create_tournament_draft: { Args: { p_payload: Json }; Returns: string }
+      save_tournament_draft: {
+        Args: { p_payload: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      save_tournament_days: {
+        Args: { p_days: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      save_tournament_categories: {
+        Args: { p_categories: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
+      activate_tournament: { Args: { p_tournament_id: string }; Returns: undefined }
+      delete_tournament_draft: { Args: { p_tournament_id: string }; Returns: undefined }
       current_staff_role: { Args: never; Returns: string }
       has_staff_role: { Args: { needed: string[] }; Returns: boolean }
       is_invited_email: { Args: { value: string }; Returns: boolean }

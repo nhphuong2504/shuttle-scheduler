@@ -694,6 +694,204 @@ export interface CreateTournamentInput {
  * Creates a tournament and everything it owns (days, courts, categories) in one
  * transaction, then makes it the active tournament.
  */
+// ---------------------------------------------------------------------------
+// Tournament creation: a persisted, resumable draft
+//
+// The wizard writes a Draft tournament on its first step and saves each later
+// step into the same row, so an unfinished creation survives a refresh. Only
+// `activateTournament` moves a draft to In Progress and makes it the active
+// scope. Every one of these calls is admin-only at the database level.
+// ---------------------------------------------------------------------------
+
+/** The identity, venue, organizer and rules captured by the basics and rules steps. */
+export interface TournamentDraftInput {
+  name: string;
+  format?: string;
+  venueName?: string | null;
+  venueAddress?: string | null;
+  venueTimezone?: string;
+  organizerName?: string | null;
+  organizerEmail?: string | null;
+  organizerPhone?: string | null;
+  maxCategoriesPerPlayer?: number;
+  placementGamesTo?: number;
+  placementWinBy?: number;
+  placementBestOf?: number;
+  knockoutGamesTo?: number;
+  knockoutWinBy?: number;
+  knockoutBestOf?: number;
+  groupSlotMinutes?: number;
+  knockoutSlotMinutes?: number;
+  groupRestGapMinutes?: number;
+  knockoutRestGapMinutes?: number;
+}
+
+/** The JSON keys are the database column names, so they are declared explicitly. */
+interface DraftPayload {
+  name: string;
+  format?: string;
+  venue_name?: string;
+  venue_address?: string;
+  venue_timezone?: string;
+  organizer_name?: string;
+  organizer_email?: string;
+  organizer_phone?: string;
+  max_categories_per_player?: number;
+  placement_games_to?: number;
+  placement_win_by?: number;
+  placement_best_of?: number;
+  knockout_games_to?: number;
+  knockout_win_by?: number;
+  knockout_best_of?: number;
+  group_slot_minutes?: number;
+  knockout_slot_minutes?: number;
+  group_rest_gap_minutes?: number;
+  knockout_rest_gap_minutes?: number;
+}
+
+function draftBasicsPayload(input: TournamentDraftInput): DraftPayload {
+  const payload: DraftPayload = { name: input.name.trim() };
+  if (input.format !== undefined) payload.format = input.format;
+  if (input.venueName !== undefined) payload.venue_name = input.venueName ?? "";
+  if (input.venueAddress !== undefined) payload.venue_address = input.venueAddress ?? "";
+  if (input.venueTimezone !== undefined) payload.venue_timezone = input.venueTimezone;
+  if (input.organizerName !== undefined) payload.organizer_name = input.organizerName ?? "";
+  if (input.organizerEmail !== undefined) payload.organizer_email = input.organizerEmail ?? "";
+  if (input.organizerPhone !== undefined) payload.organizer_phone = input.organizerPhone ?? "";
+  if (input.maxCategoriesPerPlayer !== undefined)
+    payload.max_categories_per_player = input.maxCategoriesPerPlayer;
+  if (input.placementGamesTo !== undefined) payload.placement_games_to = input.placementGamesTo;
+  if (input.placementWinBy !== undefined) payload.placement_win_by = input.placementWinBy;
+  if (input.placementBestOf !== undefined) payload.placement_best_of = input.placementBestOf;
+  if (input.knockoutGamesTo !== undefined) payload.knockout_games_to = input.knockoutGamesTo;
+  if (input.knockoutWinBy !== undefined) payload.knockout_win_by = input.knockoutWinBy;
+  if (input.knockoutBestOf !== undefined) payload.knockout_best_of = input.knockoutBestOf;
+  if (input.groupSlotMinutes !== undefined) payload.group_slot_minutes = input.groupSlotMinutes;
+  if (input.knockoutSlotMinutes !== undefined)
+    payload.knockout_slot_minutes = input.knockoutSlotMinutes;
+  if (input.groupRestGapMinutes !== undefined)
+    payload.group_rest_gap_minutes = input.groupRestGapMinutes;
+  if (input.knockoutRestGapMinutes !== undefined)
+    payload.knockout_rest_gap_minutes = input.knockoutRestGapMinutes;
+  return payload;
+}
+
+/** Creates an empty draft and returns its id. */
+export async function createTournamentDraft(input: TournamentDraftInput): Promise<string> {
+  const { data, error } = await supabase.rpc("create_tournament_draft", {
+    p_payload: {
+      name: input.name.trim(),
+      format: input.format ?? "two_round_placement",
+      venue_name: input.venueName ?? "",
+      venue_address: input.venueAddress ?? "",
+      venue_timezone: input.venueTimezone ?? "America/Chicago",
+      organizer_name: input.organizerName ?? "",
+      organizer_email: input.organizerEmail ?? "",
+      organizer_phone: input.organizerPhone ?? "",
+    } as never,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Saves basics, the tournament-wide cap and the per-stage match rules. */
+export async function saveTournamentDraft(
+  tournamentId: string,
+  input: TournamentDraftInput,
+): Promise<void> {
+  const { error } = await supabase.rpc("save_tournament_draft", {
+    p_tournament_id: tournamentId,
+    p_payload: draftBasicsPayload(input) as never,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export interface TournamentDayInput {
+  date: string;
+  startTime: string;
+  endTime: string;
+  /** Court numbers available that day. The tournament's court pool is their union. */
+  courts: number[];
+  breaks: { label: string; startTime: string; endTime: string }[];
+}
+
+/**
+ * Replaces the whole day/court/break configuration. The database renumbers the
+ * court pool 1..N from the union of the days' court numbers.
+ */
+export async function saveTournamentDays(
+  tournamentId: string,
+  days: TournamentDayInput[],
+): Promise<void> {
+  const { error } = await supabase.rpc("save_tournament_days", {
+    p_tournament_id: tournamentId,
+    p_days: days.map((day) => ({
+      date: day.date,
+      start_time: day.startTime,
+      end_time: day.endTime,
+      courts: day.courts,
+      breaks: day.breaks.map((br) => ({
+        label: br.label,
+        start_time: br.startTime,
+        end_time: br.endTime,
+      })),
+    })) as never,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export interface TournamentEventInput {
+  code: string;
+  name: string;
+  entryType: "individual" | "pair";
+  gender: "men" | "women" | "mixed" | "open";
+  sortOrder?: number;
+  active?: boolean;
+  maxEntries?: number | null;
+}
+
+/** Replaces the event list. Only a draft with no entries may be rewritten. */
+export async function saveTournamentEvents(
+  tournamentId: string,
+  events: TournamentEventInput[],
+): Promise<void> {
+  const { error } = await supabase.rpc("save_tournament_categories", {
+    p_tournament_id: tournamentId,
+    p_categories: events.map((event, index) => ({
+      code: event.code,
+      name: event.name,
+      entry_type: event.entryType,
+      gender: event.gender,
+      sort_order: event.sortOrder ?? index + 1,
+      active: event.active ?? true,
+      max_entries: event.maxEntries ?? null,
+    })) as never,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Draft -> In Progress. Re-checks readiness and makes it the active scope. */
+export async function activateTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("activate_tournament", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Discards a draft and everything it owns. */
+export async function deleteTournamentDraft(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_tournament_draft", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Creates an active tournament in one call. Superseded by the draft wizard, and
+ * kept only so any remaining caller still compiles.
+ *
+ * @deprecated Use `createTournamentDraft` followed by `activateTournament`.
+ */
 export async function createTournament(input: CreateTournamentInput): Promise<string> {
   const payload = input.categories.map((c) => ({
     code: c.code,

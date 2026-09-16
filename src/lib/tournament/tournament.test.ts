@@ -1,7 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { buildFirstRound, seedEntrants, totalMatchesInDraw } from "./draws";
-import { gamesWinner, isLegalGameScore } from "./format";
+import {
+  CUSTOM_PRESET_ID,
+  DEFAULT_KNOCKOUT_RULE,
+  DEFAULT_PLACEMENT_RULE,
+  gamesNeededToWin,
+  isOddBestOf,
+  isScoringRuleValid,
+  LEGACY_GAME_RULE,
+  LEGACY_KNOCKOUT_RULE,
+  presetForRule,
+  ruleForStage,
+  SCORING_PRESETS,
+  scoringRuleLabel,
+  suggestedSlotMinutes,
+} from "./scoring";
+import { gamesWinner, gamesWinnerFor, isLegalGameScore, isLegalGameScoreFor } from "./format";
 import { circleMethod, planPoolSizes, poolMatchCount } from "./pools";
 import {
   scheduleGroupStageGrasp,
@@ -24,14 +39,28 @@ const DEFAULT_CONFIG = {
   court_count: 8,
   created_at: "2026-09-01T00:00:00.000Z",
   day_count: 2,
+  format: "round_robin",
   group_rest_gap_minutes: 10,
   group_slot_minutes: 20,
   id: "tournament-default",
   is_active: true,
+  knockout_best_of: 3,
+  knockout_games_to: 21,
   knockout_rest_gap_minutes: 30,
   knockout_slot_minutes: 25,
+  knockout_win_by: 2,
+  max_categories_per_player: 2,
   name: "City Open 2026",
+  organizer_email: null,
+  organizer_name: null,
+  organizer_phone: null,
+  placement_best_of: 1,
+  placement_games_to: 21,
+  placement_win_by: 2,
   rest_gap_minutes: 10,
+  status: "in_progress",
+  venue_address: null,
+  venue_name: null,
   venue_timezone: "America/Chicago",
 } satisfies Tournament;
 
@@ -98,6 +127,212 @@ describe("scores", () => {
     ).toBe("a");
     expect(isLegalGameScore(21, 19)).toBe(true);
     expect(isLegalGameScore(21, 20)).toBe(false);
+  });
+});
+
+describe("scoring rules", () => {
+  it("derives games needed to win from best of", () => {
+    expect(gamesNeededToWin({ gamesTo: 21, winBy: 2, bestOf: 1 })).toBe(1);
+    expect(gamesNeededToWin({ gamesTo: 21, winBy: 2, bestOf: 3 })).toBe(2);
+    expect(gamesNeededToWin({ gamesTo: 21, winBy: 2, bestOf: 5 })).toBe(3);
+    expect(gamesNeededToWin({ gamesTo: 21, winBy: 2, bestOf: 9 })).toBe(5);
+  });
+
+  it("accepts odd best-of counts only", () => {
+    for (const bestOf of [1, 3, 5, 7, 9]) {
+      expect(isOddBestOf(bestOf)).toBe(true);
+      expect(isScoringRuleValid({ gamesTo: 21, winBy: 2, bestOf })).toBe(true);
+    }
+    for (const bestOf of [0, 2, 4, 10, 1.5]) {
+      expect(isOddBestOf(bestOf)).toBe(false);
+      expect(isScoringRuleValid({ gamesTo: 21, winBy: 2, bestOf })).toBe(false);
+    }
+  });
+
+  it("rejects out-of-range point targets and margins", () => {
+    expect(isScoringRuleValid({ gamesTo: 0, winBy: 2, bestOf: 1 })).toBe(false);
+    expect(isScoringRuleValid({ gamesTo: 100, winBy: 2, bestOf: 1 })).toBe(false);
+    expect(isScoringRuleValid({ gamesTo: 21, winBy: 0, bestOf: 1 })).toBe(false);
+    expect(isScoringRuleValid({ gamesTo: 21, winBy: 21, bestOf: 1 })).toBe(false);
+    expect(isScoringRuleValid({ gamesTo: 11, winBy: 1, bestOf: 5 })).toBe(true);
+  });
+
+  it("matches a rule back to its preset, falling back to custom", () => {
+    expect(presetForRule({ gamesTo: 21, winBy: 2, bestOf: 3 }).id).toBe("best-of-3-21");
+    expect(presetForRule({ gamesTo: 15, winBy: 2, bestOf: 1 }).id).toBe("single-15");
+    expect(presetForRule({ gamesTo: 11, winBy: 2, bestOf: 3 }).id).toBe(CUSTOM_PRESET_ID);
+    // A preset shape with a different margin is not the same preset.
+    expect(presetForRule({ gamesTo: 21, winBy: 1, bestOf: 1 }).id).toBe(CUSTOM_PRESET_ID);
+  });
+
+  it("suggests the preset duration when one matches", () => {
+    for (const preset of SCORING_PRESETS) {
+      expect(suggestedSlotMinutes(preset)).toBe(preset.suggestedMinutes);
+    }
+  });
+
+  it("suggests a tidy, positive duration for a custom rule", () => {
+    const custom = suggestedSlotMinutes({ gamesTo: 17, winBy: 3, bestOf: 5 });
+    expect(custom).toBeGreaterThan(0);
+    expect(custom % 5).toBe(0);
+    // A longer point target cannot suggest a shorter slot than a shorter one.
+    expect(custom).toBeGreaterThan(suggestedSlotMinutes({ gamesTo: 7, winBy: 3, bestOf: 1 }));
+    // Even an extreme rule still yields at least one workable slot.
+    expect(suggestedSlotMinutes({ gamesTo: 1, winBy: 1, bestOf: 1 })).toBeGreaterThanOrEqual(5);
+  });
+
+  it("labels a rule in the host's words", () => {
+    expect(scoringRuleLabel({ gamesTo: 21, winBy: 2, bestOf: 1 })).toBe(
+      "Single game to 21, win by 2",
+    );
+    expect(scoringRuleLabel({ gamesTo: 15, winBy: 2, bestOf: 3 })).toBe(
+      "Best of 3 to 15, win by 2",
+    );
+    expect(scoringRuleLabel({ gamesTo: 11, winBy: 1, bestOf: 5 })).toBe("Best of 5 to 11");
+  });
+
+  it("reads the rule for the stage the tournament stores it for", () => {
+    const tournament = {
+      placement_games_to: 15,
+      placement_win_by: 2,
+      placement_best_of: 1,
+      knockout_games_to: 21,
+      knockout_win_by: 2,
+      knockout_best_of: 3,
+    };
+    expect(ruleForStage(tournament, "placement")).toEqual({ gamesTo: 15, winBy: 2, bestOf: 1 });
+    expect(ruleForStage(tournament, "knockout")).toEqual({ gamesTo: 21, winBy: 2, bestOf: 3 });
+    // The legacy constants are what the un-migrated surfaces still assume.
+    expect(LEGACY_GAME_RULE).toEqual({ gamesTo: 21, winBy: 2, bestOf: 1 });
+    expect(LEGACY_KNOCKOUT_RULE).toEqual({ gamesTo: 21, winBy: 2, bestOf: 3 });
+    expect(DEFAULT_PLACEMENT_RULE).toEqual(LEGACY_GAME_RULE);
+    expect(DEFAULT_KNOCKOUT_RULE).toEqual(LEGACY_KNOCKOUT_RULE);
+  });
+
+  it("falls back to the stage default when the stored rule is unusable", () => {
+    // This is the shape of a row read before the scoring columns existed.
+    const missing = {
+      placement_games_to: undefined,
+      placement_win_by: undefined,
+      placement_best_of: undefined,
+      knockout_games_to: undefined,
+      knockout_win_by: undefined,
+      knockout_best_of: undefined,
+    } as unknown as Parameters<typeof ruleForStage>[0];
+    expect(ruleForStage(missing, "placement")).toEqual(DEFAULT_PLACEMENT_RULE);
+    expect(ruleForStage(missing, "knockout")).toEqual(DEFAULT_KNOCKOUT_RULE);
+
+    // A stored even best-of is nonsense; the desk must not be locked out by it.
+    const broken = { ...missing, knockout_games_to: 21, knockout_win_by: 2, knockout_best_of: 4 };
+    expect(ruleForStage(broken, "knockout")).toEqual(DEFAULT_KNOCKOUT_RULE);
+  });
+});
+
+describe("rule-driven score validation", () => {
+  it("honours the configured target and margin", () => {
+    const to15 = { gamesTo: 15, winBy: 2, bestOf: 1 };
+    expect(isLegalGameScoreFor(15, 13, to15)).toBe(true);
+    expect(isLegalGameScoreFor(15, 14, to15)).toBe(false);
+    expect(isLegalGameScoreFor(14, 12, to15)).toBe(false);
+    // The same scores are illegal under the 21 rule, which is the point of the split.
+    expect(isLegalGameScoreFor(15, 13, LEGACY_GAME_RULE)).toBe(false);
+    expect(isLegalGameScoreFor(21, 19, LEGACY_GAME_RULE)).toBe(true);
+    // `winBy: 1` permits a one-point game.
+    expect(isLegalGameScoreFor(21, 20, { gamesTo: 21, winBy: 1, bestOf: 1 })).toBe(true);
+  });
+
+  it("still rejects non-integer, negative and drawn games", () => {
+    expect(isLegalGameScoreFor(21.5, 19, LEGACY_GAME_RULE)).toBe(false);
+    expect(isLegalGameScoreFor(-1, 21, LEGACY_GAME_RULE)).toBe(false);
+    expect(isLegalGameScoreFor(21, 21, LEGACY_GAME_RULE)).toBe(false);
+  });
+
+  it("decides a match under any best-of", () => {
+    const bo3 = { gamesTo: 15, winBy: 2, bestOf: 3 };
+    expect(gamesWinnerFor([{ a: 15, b: 13 }], bo3)).toBeNull();
+    expect(
+      gamesWinnerFor(
+        [
+          { a: 15, b: 13 },
+          { a: 15, b: 11 },
+        ],
+        bo3,
+      ),
+    ).toBe("a");
+    expect(
+      gamesWinnerFor(
+        [
+          { a: 15, b: 13 },
+          { a: 11, b: 15 },
+          { a: 15, b: 9 },
+        ],
+        bo3,
+      ),
+    ).toBe("a");
+
+    const bo1 = { gamesTo: 15, winBy: 2, bestOf: 1 };
+    expect(gamesWinnerFor([{ a: 15, b: 13 }], bo1)).toBe("a");
+    // A best-of-one has no second game to play.
+    expect(
+      gamesWinnerFor(
+        [
+          { a: 15, b: 13 },
+          { a: 15, b: 13 },
+        ],
+        bo1,
+      ),
+    ).toBeNull();
+
+    const bo5 = { gamesTo: 11, winBy: 2, bestOf: 5 };
+    expect(
+      gamesWinnerFor(
+        [
+          { a: 11, b: 9 },
+          { a: 11, b: 9 },
+        ],
+        bo5,
+      ),
+    ).toBeNull();
+    expect(
+      gamesWinnerFor(
+        [
+          { a: 11, b: 9 },
+          { a: 11, b: 9 },
+          { a: 11, b: 9 },
+        ],
+        bo5,
+      ),
+    ).toBe("a");
+  });
+
+  it("rejects a result that keeps playing after it is decided", () => {
+    expect(
+      gamesWinnerFor(
+        [
+          { a: 21, b: 19 },
+          { a: 21, b: 19 },
+          { a: 21, b: 19 },
+        ],
+        LEGACY_KNOCKOUT_RULE,
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects an invalid rule outright rather than guessing", () => {
+    expect(gamesWinnerFor([{ a: 21, b: 19 }], { gamesTo: 21, winBy: 2, bestOf: 2 })).toBeNull();
+  });
+
+  it("keeps the legacy wrappers pinned to 21 / best of three", () => {
+    expect(isLegalGameScore(21, 19)).toBe(true);
+    expect(isLegalGameScore(15, 13)).toBe(false);
+    expect(gamesWinner([{ a: 21, b: 19 }])).toBeNull();
+    expect(gamesWinner([{ a: 15, b: 13 }])).toBeNull();
+    expect(
+      gamesWinner([
+        { a: 21, b: 19 },
+        { a: 21, b: 18 },
+      ]),
+    ).toBe("a");
   });
 });
 

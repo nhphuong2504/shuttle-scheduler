@@ -54,13 +54,21 @@ import {
 } from "@/lib/tournament/data";
 import {
   gamesLabel,
-  gamesWinner,
-  isLegalGameScore,
+  gamesWinnerFor,
+  isLegalGameScoreFor,
   minutesSince,
   parseGames,
   timeLabel,
   type GameScore,
 } from "@/lib/tournament/format";
+import {
+  DEFAULT_KNOCKOUT_RULE,
+  gamesNeededToWin,
+  LEGACY_GAME_RULE,
+  ruleForStage,
+  scoringRuleLabel,
+  type ScoringRule,
+} from "@/lib/tournament/scoring";
 import {
   checkStartConstraints,
   restGapForKind,
@@ -103,8 +111,7 @@ export type DeskMatch = DeskMatchModel & {
   initialGames?: GameScore[] | undefined;
 };
 
-function scoreFormValues(kind: DeskMatch["kind"], status: string, initialGames?: GameScore[]) {
-  const rows = kind === "pool" ? 1 : 3;
+function scoreFormValues(rows: number, status: string, initialGames?: GameScore[]) {
   if (status !== "reported" || !initialGames?.length) {
     return Array.from({ length: rows }, () => ["", ""]);
   }
@@ -133,6 +140,16 @@ function Desk() {
   const { data: tournamentDays } = useTournamentDays();
   const { data: poolEntries } = usePoolEntries();
   const { data: activity } = useDeskActivity(signedIn);
+
+  /**
+   * Knockout scoring follows the tournament's configured rule. Placement matches
+   * stay on the legacy single-game-to-21 rule because `report_pool_result`, which
+   * the database uses for them, still enforces exactly that.
+   */
+  const knockoutRule = useMemo(
+    () => (tournament ? ruleForStage(tournament, "knockout") : DEFAULT_KNOCKOUT_RULE),
+    [tournament],
+  );
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -653,6 +670,8 @@ function Desk() {
               canSchedule={canSchedule}
               startCheck={startCheck}
               playerMap={playerMap}
+              scoringRule={current.kind === "pool" ? LEGACY_GAME_RULE : knockoutRule}
+              timezone={tournament?.venue_timezone}
               onDone={() => {
                 refresh();
                 setOpenMatch(null);
@@ -676,6 +695,8 @@ export function MatchOperationsDialog({
   canSchedule,
   startCheck,
   playerMap,
+  scoringRule,
+  timezone,
   onDone,
 }: {
   match: DeskMatch;
@@ -688,10 +709,14 @@ export function MatchOperationsDialog({
   canSchedule: boolean;
   startCheck: StartConstraints | null;
   playerMap: Map<string, Player>;
+  /** The tournament's rule for this match's stage, so scoring follows config. */
+  scoringRule: ScoringRule;
+  timezone?: string | undefined;
   onDone: () => void;
 }) {
+  const rows = scoringRule.bestOf;
   const [values, setValues] = useState(() =>
-    scoreFormValues(match.kind, match.status, match.initialGames),
+    scoreFormValues(rows, match.status, match.initialGames),
   );
   const [busy, setBusy] = useState(false);
   const [confirmRestOpen, setConfirmRestOpen] = useState(false);
@@ -717,8 +742,6 @@ export function MatchOperationsDialog({
       setBusy(false);
     }
   };
-  const rows = match.kind === "pool" ? 1 : 3;
-
   const set = (row: number, col: number, v: string) =>
     setValues((prev) => prev.map((r, i) => (i === row ? r.map((c, j) => (j === col ? v : c)) : r)));
 
@@ -728,8 +751,8 @@ export function MatchOperationsDialog({
     .map((r) => ({ a: Number(r[0]), b: Number(r[1]) }));
   const canSubmit =
     match.kind === "pool"
-      ? !!games[0] && isLegalGameScore(games[0].a, games[0].b)
-      : !!gamesWinner(games);
+      ? !!games[0] && isLegalGameScoreFor(games[0].a, games[0].b, scoringRule)
+      : !!gamesWinnerFor(games, scoringRule);
 
   const submit = async () => {
     if (
@@ -821,13 +844,13 @@ export function MatchOperationsDialog({
           {nameA} <span className="text-muted-foreground">vs</span> {nameB}
         </DialogTitle>
         <DialogDescription className="text-xs uppercase tracking-wide">
-          {match.tag} · {match.kind === "pool" ? "game to 21" : "best of three"}
+          {match.tag} · {scoringRuleLabel(scoringRule)}
           {courtNumber ? ` · Court ${courtNumber}` : ""} ·{" "}
           {match.status === "in-progress"
             ? `${minutesSince(match.startedAt)}′ on court`
             : isReported
               ? `Finished ${timeLabel(match.endedAt)}`
-              : timeLabel(match.scheduled)}
+              : timeLabel(match.scheduled, timezone)}
         </DialogDescription>
       </DialogHeader>
 
@@ -880,7 +903,7 @@ export function MatchOperationsDialog({
           </div>
           {rows > 1 ? (
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
-              Games 1–3, top to bottom
+              Games 1–{rows}, top to bottom. {gamesNeededToWin(scoringRule)} wins take the match.
             </p>
           ) : null}
         </div>
