@@ -628,6 +628,97 @@ export type Database = {
           },
         ]
       }
+      tournament_day_breaks: {
+        Row: {
+          created_at: string
+          day_id: string
+          end_time: string
+          id: string
+          label: string | null
+          start_time: string
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_id: string
+          end_time: string
+          id?: string
+          label?: string | null
+          start_time: string
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string
+          day_id?: string
+          end_time?: string
+          id?: string
+          label?: string | null
+          start_time?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_day_breaks_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_day_breaks_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournament_day_courts: {
+        Row: {
+          court_id: string
+          created_at: string
+          day_id: string
+          id: string
+          tournament_id: string
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          day_id: string
+          id?: string
+          tournament_id: string
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          day_id?: string
+          id?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_day_courts_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_day_courts_day_id_fkey"
+            columns: ["day_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_day_courts_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournament_days: {
         Row: {
           created_at: string
@@ -753,60 +844,6 @@ export type Database = {
         }
         Relationships: []
       }
-      tournament_day_courts: {
-        Row: {
-          court_id: string
-          created_at: string
-          day_id: string
-          id: string
-          tournament_id: string
-        }
-        Insert: {
-          court_id: string
-          created_at?: string
-          day_id: string
-          id?: string
-          tournament_id: string
-        }
-        Update: {
-          court_id?: string
-          created_at?: string
-          day_id?: string
-          id?: string
-          tournament_id?: string
-        }
-        Relationships: []
-      }
-      tournament_day_breaks: {
-        Row: {
-          created_at: string
-          day_id: string
-          end_time: string
-          id: string
-          label: string | null
-          start_time: string
-          tournament_id: string
-        }
-        Insert: {
-          created_at?: string
-          day_id: string
-          end_time: string
-          id?: string
-          label?: string | null
-          start_time: string
-          tournament_id: string
-        }
-        Update: {
-          created_at?: string
-          day_id?: string
-          end_time?: string
-          id?: string
-          label?: string | null
-          start_time?: string
-          tournament_id?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       player_roster: {
@@ -832,6 +869,10 @@ export type Database = {
       }
     }
     Functions: {
+      activate_tournament: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
       active_tournament_id: { Args: never; Returns: string }
       advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
       apply_day_schedule: {
@@ -874,23 +915,15 @@ export type Database = {
         Returns: string
       }
       create_tournament_draft: { Args: { p_payload: Json }; Returns: string }
-      save_tournament_draft: {
-        Args: { p_payload: Json; p_tournament_id: string }
-        Returns: undefined
-      }
-      save_tournament_days: {
-        Args: { p_days: Json; p_tournament_id: string }
-        Returns: undefined
-      }
-      save_tournament_categories: {
-        Args: { p_categories: Json; p_tournament_id: string }
-        Returns: undefined
-      }
-      tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
-      activate_tournament: { Args: { p_tournament_id: string }; Returns: undefined }
-      delete_tournament_draft: { Args: { p_tournament_id: string }; Returns: undefined }
-      delete_tournament: { Args: { p_tournament_id: string }; Returns: undefined }
       current_staff_role: { Args: never; Returns: string }
+      delete_tournament: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      delete_tournament_draft: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
       has_staff_role: { Args: { needed: string[] }; Returns: boolean }
       is_invited_email: { Args: { value: string }; Returns: boolean }
       normalize_email: { Args: { value: string }; Returns: string }
@@ -929,6 +962,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      save_tournament_categories: {
+        Args: { p_categories: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      save_tournament_days: {
+        Args: { p_days: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      save_tournament_draft: {
+        Args: { p_payload: Json; p_tournament_id: string }
+        Returns: undefined
+      }
       shift_live_schedule_after_match: {
         Args: { p_match_id: string; p_table: string }
         Returns: undefined
@@ -942,6 +987,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

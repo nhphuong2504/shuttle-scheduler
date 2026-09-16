@@ -436,12 +436,26 @@ function SetupPage() {
             />
           ) : null}
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {step !== "review" ? (
-              <Button disabled={busy} onClick={saveAndContinue}>
-                {busy ? "Saving…" : isNew ? "Create draft and continue" : "Save and continue"}
-              </Button>
-            ) : null}
+          {step !== "review" && problems.length ? (
+            <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-warn-foreground">
+                {problems.length} thing{problems.length === 1 ? "" : "s"} to fix on this step
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {problems.map((problem) => (
+                  <li
+                    key={problem}
+                    className="flex items-start gap-2 text-xs text-warn-foreground"
+                  >
+                    <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
+                    {problem}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="sticky bottom-0 z-20 mt-4 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-surface/90 px-4 py-3 shadow-raise backdrop-blur-md">
             {currentIndex > 0 ? (
               <Button
                 variant="ghost"
@@ -451,12 +465,19 @@ function SetupPage() {
                   if (previous) goto(previous.id);
                 }}
               >
-                Back
+                ← Back
               </Button>
             ) : null}
-            {step !== "review" && problems.length ? (
-              <p className="text-xs text-danger-foreground">{problems[0]}</p>
-            ) : null}
+            <span className="font-score text-[11px] text-muted-foreground">
+              Step {currentIndex + 1} / {SETUP_STEPS.length}
+            </span>
+            <div className="ml-auto flex items-center gap-3">
+              {step !== "review" ? (
+                <Button disabled={busy} onClick={saveAndContinue}>
+                  {busy ? "Saving…" : isNew ? "Create draft and continue" : "Save and continue →"}
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
 

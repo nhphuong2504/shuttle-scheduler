@@ -1,5 +1,5 @@
-import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
 import { courtPoolSize, dateRangeLabel, type DraftForm } from "./types";
 
 /**
@@ -11,39 +11,58 @@ export function DraftHeader({ form, isDraft }: { form: DraftForm; isDraft: boole
   const courts = courtPoolSize(form.days);
 
   return (
-    <Panel title="Draft summary">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-display text-base font-semibold">
-            {form.basics.name.trim() || "Untitled tournament"}
-          </span>
+    <Panel title="Draft summary" bodyClassName="p-0">
+      <div className="border-b border-hairline bg-gradient-to-br from-primary/10 to-transparent px-4 py-3">
+        <p className="font-display text-base font-bold leading-tight">
+          {form.basics.name.trim() || "Untitled tournament"}
+        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <Badge variant={isDraft ? "secondary" : "outline"}>
             {isDraft ? "Draft" : "In progress"}
           </Badge>
+          <span className="font-score text-[11px] text-muted-foreground">
+            {dateRangeLabel(form.days)}
+          </span>
         </div>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-          <SummaryItem label="Dates" value={dateRangeLabel(form.days)} />
-          <SummaryItem label="Days" value={String(form.days.length)} />
-          <SummaryItem label="Courts" value={courts ? String(courts) : "None"} />
-          <SummaryItem
-            label="Events"
-            value={activeEvents.length ? activeEvents.map((e) => e.code).join(", ") : "None"}
-          />
-          <SummaryItem label="Max events per player" value={String(form.maxCategoriesPerPlayer)} />
-          <SummaryItem label="Timezone" value={form.basics.venueTimezone || "Not set"} />
-        </dl>
       </div>
+
+      <div className="grid grid-cols-3 divide-x divide-hairline border-b border-hairline">
+        <MiniStat label="Days" value={form.days.length} />
+        <MiniStat label="Courts" value={courts || "—"} />
+        <MiniStat label="Events" value={activeEvents.length} />
+      </div>
+
+      <dl className="divide-y divide-hairline">
+        <SummaryItem
+          label="Event codes"
+          value={activeEvents.length ? activeEvents.map((e) => e.code).join(" · ") : "None yet"}
+        />
+        <SummaryItem label="Max events per player" value={String(form.maxCategoriesPerPlayer)} />
+        <SummaryItem label="Timezone" value={form.basics.venueTimezone || "Not set"} />
+        <SummaryItem label="Venue" value={form.basics.venueName.trim() || "Not set"} />
+      </dl>
     </Panel>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="px-3 py-2.5 text-center">
+      <p className="font-score text-xl font-semibold leading-none">{value}</p>
+      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {label}
+      </p>
+    </div>
   );
 }
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+    <div className="flex items-baseline justify-between gap-3 px-4 py-2">
+      <dt className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="truncate font-score text-sm" title={value}>
+      <dd className="truncate font-score text-xs" title={value}>
         {value}
       </dd>
     </div>

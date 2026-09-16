@@ -37,28 +37,47 @@ export function ReviewStep({
 
   return (
     <div className="space-y-4">
-      <Panel title="Checks">
+      <Panel
+        title="Checks"
+        right={
+          checks.length ? (
+            <span className="font-score text-[11px] text-muted-foreground">
+              {checks.length - blockers.length}/{checks.length} passed
+            </span>
+          ) : null
+        }
+        bodyClassName="p-0"
+      >
         {readinessError ? (
-          <p className="text-sm text-danger-foreground">{readinessError}</p>
+          <p className="p-4 text-sm text-danger-foreground">{readinessError}</p>
         ) : !readiness ? (
-          <p className="text-sm text-muted-foreground">Running checks…</p>
+          <p className="p-4 text-sm text-muted-foreground">Running checks…</p>
         ) : (
           <>
-            <p className="mb-3 text-sm">
-              {ready ? (
-                <span className="font-semibold text-mint-foreground">
-                  All checks passed. This tournament is ready to activate.
-                </span>
-              ) : (
-                <span className="font-semibold">
-                  {blockers.length} check{blockers.length === 1 ? "" : "s"} to resolve before
-                  activation.
-                </span>
+            <div
+              className={cn(
+                "flex items-center gap-3 border-b border-hairline px-4 py-3",
+                ready ? "bg-mint/10" : "bg-warn-surface",
               )}
-            </p>
-            <ul className="space-y-2">
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "grid size-8 shrink-0 place-items-center rounded-full font-score text-sm font-bold",
+                  ready ? "bg-mint/50 text-foreground" : "bg-warn-border/50 text-warn-foreground",
+                )}
+              >
+                {ready ? "✓" : "!"}
+              </span>
+              <p className={cn("text-sm font-semibold", ready ? "" : "text-warn-foreground")}>
+                {ready
+                  ? "All checks passed. This tournament is ready to activate."
+                  : `${blockers.length} check${blockers.length === 1 ? "" : "s"} to resolve before activation.`}
+              </p>
+            </div>
+            <ul className="divide-y divide-hairline">
               {checks.map((check) => (
-                <li key={check.id} className="flex items-start gap-2.5">
+                <li key={check.id} className="flex items-start gap-2.5 px-4 py-2.5">
                   <span
                     className={cn(
                       "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-[10px] font-bold",
@@ -71,7 +90,14 @@ export function ReviewStep({
                     {check.ok ? "✓" : "!"}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-sm">{check.label}</span>
+                    <span
+                      className={cn(
+                        "block text-sm",
+                        check.ok ? "text-muted-foreground" : "font-semibold",
+                      )}
+                    >
+                      {check.label}
+                    </span>
                     {!check.ok && check.detail ? (
                       <span className="block text-xs text-danger-foreground">{check.detail}</span>
                     ) : null}
