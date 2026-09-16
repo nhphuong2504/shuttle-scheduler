@@ -23,11 +23,13 @@ import {
   type DraftForm,
   type SetupStep,
 } from "@/components/tournament-setup/types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import {
   activateTournament,
   createTournamentDraft,
+  deleteTournament,
   deleteTournamentDraft,
   saveTournamentDays,
   saveTournamentDraft,
@@ -35,9 +37,10 @@ import {
   type TournamentDraftInput,
 } from "@/lib/tournament/actions";
 import {
+  useAllTournaments,
   useTournamentDraftData,
-  useTournamentDrafts,
   useTournamentReadiness,
+  type Tournament,
 } from "@/lib/tournament/data";
 import { isScoringRuleValid } from "@/lib/tournament/scoring";
 
@@ -115,7 +118,7 @@ function SetupPage() {
 
   const draftData = useTournamentDraftData(draftId);
   const readinessQuery = useTournamentReadiness(draftId);
-  const draftsQuery = useTournamentDrafts();
+  const tournamentsQuery = useAllTournaments();
 
   const [form, setForm] = useState<DraftForm>(defaultForm);
   const [busy, setBusy] = useState(false);
@@ -229,6 +232,33 @@ function SetupPage() {
     }
   };
 
+  /**
+   * Deletes a tournament whatever its status, including the active one.
+   *
+   * The database cascades every day, court, event, player, entry, match and
+   * result, so the confirmation spells that out rather than asking a bare
+   * yes/no. Invalidate everything afterwards: the desk reads the active
+   * tournament from a cached query, and deleting it must clear that too.
+   */
+  const removeTournament = async (tournament: Tournament) => {
+    const confirmed = window.confirm(
+      `Delete "${tournament.name}"?\n\n` +
+        "This permanently removes the tournament and everything it owns — days, " +
+        "courts, events, players, entries, matches and results. It cannot be undone.",
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      await deleteTournament(tournament.id);
+      await refresh();
+      toast.success(`Deleted ${tournament.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the tournament");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <AppShell title="Tournament setup" subtitle="Only admins can create a tournament.">
@@ -243,7 +273,7 @@ function SetupPage() {
   }
 
   if (!draftParam) {
-    const drafts = draftsQuery.data ?? [];
+    const tournaments = tournamentsQuery.data ?? [];
     return (
       <AppShell
         title="Tournament setup"
@@ -254,36 +284,59 @@ function SetupPage() {
           </Button>
         }
       >
-        <Panel title="Unfinished drafts">
-          {draftsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading drafts…</p>
-          ) : draftsQuery.isError ? (
+        <Panel title="Tournaments">
+          {tournamentsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading tournaments…</p>
+          ) : tournamentsQuery.isError ? (
             <EmptyState
-              title="Could not read drafts"
+              title="Could not read tournaments"
               hint={
-                draftsQuery.error instanceof Error
-                  ? draftsQuery.error.message
+                tournamentsQuery.error instanceof Error
+                  ? tournamentsQuery.error.message
                   : "The tournament schema may not be up to date. Apply the latest migration and reload."
               }
             />
-          ) : drafts.length === 0 ? (
+          ) : tournaments.length === 0 ? (
             <EmptyState
-              title="No drafts"
+              title="No tournaments"
               hint="Start a new tournament to configure it step by step."
             />
           ) : (
             <ul className="divide-y divide-hairline">
-              {drafts.map((draft) => (
-                <li key={draft.id} className="flex flex-wrap items-center gap-3 py-3">
+              {tournaments.map((tournament) => (
+                <li key={tournament.id} className="flex flex-wrap items-center gap-3 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-display text-sm font-semibold">{draft.name}</p>
+                    <p className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-display text-sm font-semibold">
+                        {tournament.name}
+                      </span>
+                      <Badge variant={tournament.status === "draft" ? "secondary" : "outline"}>
+                        {tournamentStatusLabel(tournament)}
+                      </Badge>
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      Started {new Date(draft.created_at).toLocaleString()} · {draft.day_count}{" "}
-                      day(s)
+                      Started {new Date(tournament.created_at).toLocaleString()} ·{" "}
+                      {tournament.day_count} day(s) · {tournament.court_count} court(s)
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => goto("basics", draft.id)}>
-                    Resume
+                  {tournament.status === "draft" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => goto("basics", tournament.id)}
+                    >
+                      Resume
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-danger-foreground"
+                    disabled={busy}
+                    onClick={() => void removeTournament(tournament)}
+                  >
+                    Delete
                   </Button>
                 </li>
               ))}
@@ -296,6 +349,10 @@ function SetupPage() {
               <li>Each step saves into the same draft, so you can stop and come back.</li>
               <li>Nothing reaches the desk until the review step activates the tournament.</li>
               <li>The active tournament stays in charge until a draft takes over.</li>
+              <li>
+                Delete removes a tournament whatever its status, along with everything it owns. It
+                cannot be undone.
+              </li>
             </ul>
           </Panel>
         </div>
@@ -427,6 +484,15 @@ async function saveStep(step: SetupStep, id: string, form: DraftForm): Promise<v
       await saveTournamentDraft(id, toDraftInput(form));
       return;
   }
+}
+
+/**
+ * One badge per row. An activated tournament that the desk is currently scoped to
+ * says so, because deleting that one changes what every other page shows.
+ */
+function tournamentStatusLabel(tournament: Tournament): string {
+  if (tournament.status === "draft") return "Draft";
+  return tournament.is_active ? "In progress · active" : "In progress";
 }
 
 /** Client-side checks per step. The database re-validates everything. */

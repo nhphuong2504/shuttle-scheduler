@@ -889,6 +889,7 @@ export type Database = {
       tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
       activate_tournament: { Args: { p_tournament_id: string }; Returns: undefined }
       delete_tournament_draft: { Args: { p_tournament_id: string }; Returns: undefined }
+      delete_tournament: { Args: { p_tournament_id: string }; Returns: undefined }
       current_staff_role: { Args: never; Returns: string }
       has_staff_role: { Args: { needed: string[] }; Returns: boolean }
       is_invited_email: { Args: { value: string }; Returns: boolean }

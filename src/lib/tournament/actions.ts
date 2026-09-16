@@ -887,6 +887,21 @@ export async function deleteTournamentDraft(tournamentId: string): Promise<void>
 }
 
 /**
+ * Removes a tournament of any status, including an active one, along with
+ * everything it owns. Permanent and not reversible.
+ *
+ * Kept separate from `deleteTournamentDraft`, which deliberately refuses to touch
+ * anything that is not a Draft: that refusal is what protects the wizard's
+ * "Discard draft" button. This is the explicitly destructive path.
+ */
+export async function deleteTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_tournament", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
  * Creates an active tournament in one call. Superseded by the draft wizard, and
  * kept only so any remaining caller still compiles.
  *

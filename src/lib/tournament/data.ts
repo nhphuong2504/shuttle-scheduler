@@ -59,7 +59,7 @@ export const keys = {
   activeTournament: ["active_tournament"] as const,
   tournamentDays: ["tournament_days"] as const,
   tournamentById: ["tournament_by_id"] as const,
-  tournamentDrafts: ["tournament_drafts"] as const,
+  allTournaments: ["all_tournaments"] as const,
   tournamentReadiness: ["tournament_readiness"] as const,
   dayCourts: ["tournament_day_courts"] as const,
   dayBreaks: ["tournament_day_breaks"] as const,
@@ -139,17 +139,18 @@ export function useTournamentById(tournamentId: string | null | undefined) {
   });
 }
 
-/** Every draft, newest first, so the host can pick up an unfinished creation. */
-export function useTournamentDrafts() {
+/**
+ * Every tournament, newest first, whatever its status.
+ *
+ * The setup page lists these so a tournament can be managed — and deleted — after
+ * it leaves Draft, which a drafts-only list cannot show.
+ */
+export function useAllTournaments() {
   return useQuery({
-    queryKey: keys.tournamentDrafts,
+    queryKey: keys.allTournaments,
     queryFn: () =>
       must<Tournament[]>(
-        supabase
-          .from("tournaments")
-          .select("*")
-          .eq("status", "draft")
-          .order("created_at", { ascending: false }),
+        supabase.from("tournaments").select("*").order("created_at", { ascending: false }),
       ),
   });
 }

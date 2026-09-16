@@ -223,3 +223,80 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST "$SUPABASE_URL/rest/v1/rpc/crea
 
 Not advisable, and there is no reason to: the fix only ever removes access that should never
 have been granted. Reverting the `has_staff_role` body would restore the bypass.
+
+## Applying `20260916020000_delete_tournament.sql`
+
+### What it adds
+
+`public.delete_tournament(p_tournament_id uuid)` — removes a tournament **whatever its
+status**, including the active one, along with everything it owns. It backs the Delete button
+on the setup page's tournament list.
+
+### Why it is separate from `delete_tournament_draft`
+
+`delete_tournament_draft` refuses anything that is not a Draft, and that refusal is the whole
+safety story for the wizard's "Discard draft" button. It is a dead end for a host who
+activated a tournament by mistake, or who wants to clear out a finished one, so this adds an
+explicitly destructive sibling instead of relaxing the guard. Both are kept on purpose: one
+refuses, the other does not.
+
+### What cascades, and the two things that do not
+
+Every tournament-owned table references `tournaments(id) ON DELETE CASCADE` — days, courts,
+categories, teams, pools, pool entries, pool matches, draws, draw matches, and the per-day
+court and break rows — so the cascade does the bulk of the work.
+
+Two tables are outside that, for different reasons:
+
+- `desk_activity` is a global audit trail keyed by `match_id`, with no `tournament_id` and no
+  foreign key to tournaments. Its rows would outlive the tournament and keep appearing on the
+  desk as activity for matches that no longer exist, so the function deletes this
+  tournament's rows explicitly, before the matches cascade away and the link is lost.
+- `players` is a **global roster**, not tournament-owned: it has no `tournament_id` and no
+  cascade. Deleting a tournament deliberately leaves people intact, because the same player
+  appears in the other tournaments too.
+
+Deleting the active tournament simply leaves no tournament active — the partial unique index
+that enforces a single active tournament has nothing left to enforce, and the desk falls back
+to its empty state.
+
+### Security
+
+Admin-only, like the rest of the lifecycle RPCs, and it takes the same
+`pg_advisory_xact_lock(hashtext('tournaments'))` as create/activate/discard so a delete cannot
+interleave with an activation mid-flight.
+
+`CREATE FUNCTION` grants EXECUTE to `PUBLIC` by default, so the migration revokes from `anon`
+and `PUBLIC` and re-grants to `authenticated`. The hardening migration matched mutating RPCs by
+name, but it could only revoke the ones that existed when it ran — a function created after it
+is not covered, so every new RPC must repeat this for itself.
+
+### Verify after applying
+
+```sql
+-- anon_can must be false and auth_can true
+SELECT has_function_privilege('anon', 'public.delete_tournament(uuid)', 'EXECUTE') AS anon_can,
+       has_function_privilege('authenticated', 'public.delete_tournament(uuid)', 'EXECUTE') AS auth_can;
+
+-- the ACL must carry no entry with an empty grantee: that entry is PUBLIC
+SELECT proacl FROM pg_proc WHERE proname = 'delete_tournament';
+```
+
+Then confirm the cascade is complete on a throwaway tournament:
+
+```sql
+SELECT public.create_tournament_draft('{"name":"Delete probe"}'::jsonb);
+-- ...configure and activate it, or delete it as a draft...
+SELECT public.delete_tournament('<id>'::uuid);
+
+-- all of these must be zero
+SELECT (SELECT count(*) FROM public.tournament_days        WHERE tournament_id = '<id>'::uuid) AS days,
+       (SELECT count(*) FROM public.categories             WHERE tournament_id = '<id>'::uuid) AS categories,
+       (SELECT count(*) FROM public.tournament_day_courts  WHERE tournament_id = '<id>'::uuid) AS day_courts,
+       (SELECT count(*) FROM public.teams                  WHERE tournament_id = '<id>'::uuid) AS teams;
+```
+
+### Rolling back
+
+`DROP FUNCTION public.delete_tournament(uuid)`. The wizard's Discard path is unaffected: it
+still calls `delete_tournament_draft`, whose draft-only guard this migration never touched.
