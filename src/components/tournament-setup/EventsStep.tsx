@@ -77,20 +77,41 @@ export function EventsStep({
 
   return (
     <div className="space-y-4">
-      <Panel title="Add an event">
-        <div className="flex flex-wrap gap-2">
-          {EVENT_TEMPLATES.map((template) => (
-            <Button
-              key={template.code}
-              size="sm"
-              variant={present.has(template.code) ? "secondary" : "outline"}
-              disabled={present.has(template.code)}
-              onClick={() => addEvent(template)}
-            >
-              <span className="font-score font-semibold">{template.code}</span>
-              <span className="ml-2 text-xs text-muted-foreground">{template.name}</span>
-            </Button>
-          ))}
+      <Panel
+        title="Add an event"
+        right={
+          <span className="font-score text-[11px] text-muted-foreground">
+            {events.length} added
+          </span>
+        }
+      >
+        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {EVENT_TEMPLATES.map((template) => {
+            const added = present.has(template.code);
+            return (
+              <button
+                key={template.code}
+                type="button"
+                disabled={added}
+                onClick={() => addEvent(template)}
+                className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                  added
+                    ? "border-mint bg-mint/10"
+                    : "border-hairline bg-surface hover:border-primary/50 hover:shadow-raise"
+                }`}
+              >
+                <span className="flex w-full items-center justify-between">
+                  <span className="font-score text-base font-bold">{template.code}</span>
+                  <span className="font-score text-[11px] text-muted-foreground">
+                    {added ? "✓" : "+"}
+                  </span>
+                </span>
+                <span className="text-[11px] leading-snug text-muted-foreground">
+                  {template.name}
+                </span>
+              </button>
+            );
+          })}
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Singles and doubles, and the gender the event is open to, are stored with each event so

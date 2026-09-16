@@ -144,19 +144,37 @@ export function DaysStep({
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Courts available
-              </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Courts available
+                </p>
+                <div className="flex items-center gap-1">
+                  <span className="font-score text-[11px] text-muted-foreground">
+                    {day.courts.length} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDay(index, { courts: [...options] })}
+                  >
+                    All
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setDay(index, { courts: [] })}>
+                    None
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
                 {options.map((court) => {
                   const checked = day.courts.includes(court);
                   return (
                     <label
                       key={court}
-                      className={`flex min-w-16 cursor-pointer items-center justify-center rounded-md border px-3 py-1.5 font-score text-sm ${
+                      title={`Court ${court}`}
+                      className={`grid size-10 cursor-pointer place-items-center rounded-lg border font-score text-sm transition-all ${
                         checked
-                          ? "border-primary bg-primary/10 text-foreground"
-                          : "border-hairline text-muted-foreground"
+                          ? "border-primary bg-primary text-primary-foreground shadow-panel"
+                          : "border-hairline bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground"
                       }`}
                     >
                       <input
@@ -165,7 +183,7 @@ export function DaysStep({
                         checked={checked}
                         onChange={(e) => toggleCourt(index, court, e.target.checked)}
                       />
-                      Court {court}
+                      {court}
                     </label>
                   );
                 })}
@@ -173,6 +191,10 @@ export function DaysStep({
                   <p className="text-xs text-muted-foreground">No courts to choose yet.</p>
                 ) : null}
               </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Tap a number to open or close that court for this day. The last tile adds a new
+                court to the pool.
+              </p>
             </div>
 
             <div>
