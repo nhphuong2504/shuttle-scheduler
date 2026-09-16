@@ -2,13 +2,6 @@ import { Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { TournamentEventInput } from "@/lib/tournament/actions";
 import type { DraftForm } from "./types";
 
@@ -21,7 +14,14 @@ interface EventTemplate {
   gender: EventGender;
 }
 
-/** The standard badminton events, as one-click additions. */
+/**
+ * The standard badminton events, as one-click additions.
+ *
+ * Both the shape and who may enter are part of what the event *is*, so neither is
+ * asked for: MS and WS are singles, MD, WD and XD are doubles, and each is open
+ * to the gender in its name. They are carried into the stored event because entry
+ * validation reads them.
+ */
 const EVENT_TEMPLATES: EventTemplate[] = [
   { code: "MS", name: "Men's Singles", entryType: "individual", gender: "men" },
   { code: "WS", name: "Women's Singles", entryType: "individual", gender: "women" },
@@ -29,13 +29,6 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   { code: "WD", name: "Women's Doubles", entryType: "pair", gender: "women" },
   { code: "XD", name: "Mixed Doubles", entryType: "pair", gender: "mixed" },
 ];
-
-const GENDER_LABEL: Record<EventGender, string> = {
-  men: "Men",
-  women: "Women",
-  mixed: "Mixed",
-  open: "Open",
-};
 
 const MAX_CATEGORIES_PER_PLAYER = 5;
 
@@ -114,7 +107,8 @@ export function EventsStep({
           })}
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Singles and doubles, and the gender the event is open to, are stored with each event so
+          Each event already knows its shape and who may enter it: singles for MS and WS, doubles
+          for MD, WD and XD, each open to the gender in its name. Both are stored with the event so
           entry validation can use them.
         </p>
       </Panel>
@@ -135,48 +129,6 @@ export function EventsStep({
                     value={event.name}
                     onChange={(e) => setEvent(event.code, { name: e.target.value })}
                   />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`e-${event.code}-gender`}>Open to</Label>
-                  <Select
-                    value={event.gender}
-                    onValueChange={(next) => {
-                      const gender = next as EventGender;
-                      setEvent(event.code, {
-                        gender,
-                        // Mixed only makes sense as a pair, so coerce the shape.
-                        entryType: gender === "mixed" ? "pair" : event.entryType,
-                      });
-                    }}
-                  >
-                    <SelectTrigger id={`e-${event.code}-gender`} className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="men">{GENDER_LABEL.men}</SelectItem>
-                      <SelectItem value="women">{GENDER_LABEL.women}</SelectItem>
-                      <SelectItem value="mixed">{GENDER_LABEL.mixed}</SelectItem>
-                      <SelectItem value="open">{GENDER_LABEL.open}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`e-${event.code}-shape`}>Format</Label>
-                  <Select
-                    value={event.entryType}
-                    disabled={event.gender === "mixed"}
-                    onValueChange={(next) =>
-                      setEvent(event.code, { entryType: next as "individual" | "pair" })
-                    }
-                  >
-                    <SelectTrigger id={`e-${event.code}-shape`} className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="individual">Singles</SelectItem>
-                      <SelectItem value="pair">Doubles</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor={`e-${event.code}-cap`}>Entry cap</Label>
