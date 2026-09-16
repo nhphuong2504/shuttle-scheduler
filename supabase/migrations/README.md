@@ -151,3 +151,75 @@ Drop `tournament_day_courts` and `tournament_day_breaks`, restore the previous b
 `enforce_two_category_cap`, `enforce_team_shape` and `report_draw_result`, and drop the added
 `tournaments` and `categories` columns. Drafts are safe to delete first; activated
 tournaments are not, because they are the active scope.
+
+## Applying `20260916010000_tournament_auth_hardening.sql`
+
+**Apply this immediately after the creation-flow migration.** It closes a hole that made
+every admin-only RPC callable with the publishable (anon) key, including
+`activate_tournament`.
+
+### The two defects
+
+1. **`has_staff_role()` returned NULL, not false, for a caller with no staff row.**
+   `current_staff_role()` selects from `staff_roles` matching `auth.uid()` or the JWT email.
+   With neither, the SELECT returns no row, so the function returned NULL and so did
+   `has_staff_role()`.
+
+   Every guard in the codebase is written `IF NOT public.has_staff_role(...)`. In PL/pgSQL
+   `NOT NULL` is NULL and `IF NULL THEN` does not run, so the guard silently passed and
+   execution continued. This affected **all 35 guards across eight migrations**, not only the
+   creation-flow ones — which also meant any signed-in user without a staff role could reach
+   them.
+
+2. **`CREATE FUNCTION` grants EXECUTE to PUBLIC by default.** The creation-flow migration
+   granted EXECUTE to `authenticated` but never revoked that implicit PUBLIC grant, so `anon`
+   retained access through PUBLIC. Older RPCs were only safe because an earlier migration
+   revoked them explicitly; `create_tournament` and the seven new draft RPCs were not.
+
+Either defect alone would have been enough. Together they exposed the functions to
+unauthenticated callers.
+
+### What the fix does
+
+- Redefines `has_staff_role()` as `COALESCE(current_staff_role() = ANY(needed), false)`, so
+  "no staff row" is an explicit false. This repairs **every** call site at once, including
+  the RLS policies, which had been denying access only incidentally because NULL is not true.
+- Revokes EXECUTE from `anon` and `PUBLIC` on all seventeen mutating RPCs and re-grants to
+  `authenticated`. It matches by function **name** rather than signature, because several of
+  these were redefined with different argument lists across migrations
+  (`apply_day_schedule` in particular), and a hardcoded signature list would silently miss an
+  overload.
+
+`current_staff_role()` and `has_staff_role()` stay callable by `anon`: the app needs the
+former to render the signed-in role, and RLS policies evaluate the latter for anonymous
+reads, where it now simply returns false. Neither is a write path.
+
+### Verify after applying
+
+```sql
+-- must be false, never NULL, for a sessionless caller
+SELECT public.has_staff_role(ARRAY['admin']);
+
+-- anon must not hold EXECUTE on any mutating RPC
+SELECT p.proname, array_to_string(p.proacl, ' | ') AS acl
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN ('create_tournament_draft','save_tournament_draft','save_tournament_days',
+                    'save_tournament_categories','tournament_readiness','activate_tournament',
+                    'delete_tournament_draft','create_tournament','report_draw_result')
+ORDER BY p.proname;
+```
+
+Then confirm from outside the database that the anon key is refused. Both of these must come
+back `401 permission denied for function`, not `200`:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$SUPABASE_URL/rest/v1/rpc/create_tournament_draft" \
+  -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+  -H 'Content-Type: application/json' -d '{"p_payload":{"name":"probe"}}'
+```
+
+### Rolling back
+
+Not advisable, and there is no reason to: the fix only ever removes access that should never
+have been granted. Reverting the `has_staff_role` body would restore the bypass.

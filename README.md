@@ -230,3 +230,7 @@ adds the draft lifecycle, the venue/organizer fields, per-day courts and breaks,
 gender metadata and configurable scoring rules, so a host can build a tournament in a
 resumable wizard and activate it. See "Tournament creation flow" in the migrations README
 for what it changes and what it deliberately leaves alone.
+
+`20260916010000_tournament_auth_hardening.sql` must be applied straight after it. It closes
+a privilege hole that made every admin-only RPC callable with the publishable key, and is
+covered in its own section of the migrations README.
