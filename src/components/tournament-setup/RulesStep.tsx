@@ -31,6 +31,15 @@ interface StageConfig {
   onRule: (rule: ScoringRule) => void;
   onSlotMinutes: (minutes: number) => void;
   onRestGapMinutes: (minutes: number) => void;
+  /**
+   * Applies a preset's rule and its suggested duration in a single update.
+   *
+   * Choosing a preset changes two fields, and both live inside the same `rules`
+   * object. Calling two separate setters makes each one rebuild that object from
+   * the same render's `form`, so the second call silently discards the first —
+   * which is how the rule used to stay put while only the duration moved.
+   */
+  onChosenPreset: (rule: ScoringRule, slotMinutes: number) => void;
   /** What the duration means, so the label is not just "duration". */
   slotLabel: string;
   restLabel: string;
@@ -65,6 +74,9 @@ export function RulesStep({
         onRule={(rule) => setRules({ placementRule: rule })}
         onSlotMinutes={(minutes) => setRules({ placementSlotMinutes: minutes })}
         onRestGapMinutes={(minutes) => setRules({ placementRestGapMinutes: minutes })}
+        onChosenPreset={(rule, minutes) =>
+          setRules({ placementRule: rule, placementSlotMinutes: minutes })
+        }
         slotLabel="Minutes per placement match"
         restLabel="Minutes of rest between placement matches"
       />
@@ -79,6 +91,9 @@ export function RulesStep({
         onRule={(rule) => setRules({ knockoutRule: rule })}
         onSlotMinutes={(minutes) => setRules({ knockoutSlotMinutes: minutes })}
         onRestGapMinutes={(minutes) => setRules({ knockoutRestGapMinutes: minutes })}
+        onChosenPreset={(rule, minutes) =>
+          setRules({ knockoutRule: rule, knockoutSlotMinutes: minutes })
+        }
         slotLabel="Minutes per knockout match"
         restLabel="Minutes of rest between a player's knockout matches"
       />
@@ -95,6 +110,7 @@ function StageRules({
   onRule,
   onSlotMinutes,
   onRestGapMinutes,
+  onChosenPreset,
   slotLabel,
   restLabel,
 }: Omit<StageConfig, "key">) {
@@ -112,9 +128,12 @@ function StageRules({
       // Keeping the current values reveals the editors without changing the rule.
       return;
     }
-    onRule({ gamesTo: preset.gamesTo, winBy: preset.winBy, bestOf: preset.bestOf });
-    // Following the preset also adopts its suggested duration.
-    onSlotMinutes(preset.suggestedMinutes);
+    // One update for both fields: the rule and the duration it suggests. Following
+    // the preset also adopts its suggested duration, which the host can override.
+    onChosenPreset(
+      { gamesTo: preset.gamesTo, winBy: preset.winBy, bestOf: preset.bestOf },
+      preset.suggestedMinutes,
+    );
   };
 
   return (
