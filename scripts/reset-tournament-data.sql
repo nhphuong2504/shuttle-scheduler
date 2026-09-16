@@ -42,6 +42,11 @@ SELECT 'tournaments' AS table_name, count(*) FROM public.tournaments
 UNION ALL SELECT 'tournament_days', count(*) FROM public.tournament_days
 UNION ALL SELECT 'categories',      count(*) FROM public.categories
 UNION ALL SELECT 'courts',          count(*) FROM public.courts
+-- The per-day court and break rows cascade from tournaments, days and courts,
+-- so they are not deleted explicitly above. Count them here to prove the
+-- cascade reached them.
+UNION ALL SELECT 'tournament_day_courts', count(*) FROM public.tournament_day_courts
+UNION ALL SELECT 'tournament_day_breaks', count(*) FROM public.tournament_day_breaks
 UNION ALL SELECT 'players',         count(*) FROM public.players
 UNION ALL SELECT 'teams',           count(*) FROM public.teams
 UNION ALL SELECT 'pools',           count(*) FROM public.pools
