@@ -150,21 +150,21 @@ export function BasicsStep({
         </p>
       </Panel>
 
-      <Panel title="Notes">
+      <Panel title="Note">
         <div className="space-y-1.5">
-          <Label htmlFor="t-notes">Anything the host should remember</Label>
+          <Label htmlFor="t-notes">A note about the event</Label>
           <Textarea
             id="t-notes"
             value={value.notes}
             rows={4}
             maxLength={NOTES_MAX_LENGTH}
-            placeholder="Parking is behind the hall. Bring the spare nets. Warm-up courts open at 08:00."
+            placeholder="Parking is behind the hall. Warm-up courts open at 08:00. Bring the spare nets."
             onChange={(e) => onChange({ notes: e.target.value })}
           />
           <div className="flex items-start justify-between gap-3">
             <p className="text-[11px] text-muted-foreground">
-              Free text for your own reference. It is never shown to entrants, and nothing in this
-              version is published.
+              Shown to everyone using the desk, so it is worth keeping to what is useful to read.
+              You can change it at any time, including while the event is running.
             </p>
             <span className="shrink-0 font-score text-[11px] text-muted-foreground">
               {value.notes.length}/{NOTES_MAX_LENGTH}

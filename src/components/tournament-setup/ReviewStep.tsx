@@ -126,7 +126,7 @@ export function ReviewStep({
           />
           <div className="sm:col-span-2">
             <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Notes
+              Note
             </dt>
             <dd className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
               {form.basics.notes.trim() || "None"}

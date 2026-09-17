@@ -26,7 +26,7 @@ export function setupStepIndex(step: SetupStep): number {
 
 export interface BasicsForm {
   name: string;
-  /** Free-text notes for the host. Never published to entrants. */
+  /** A public note about the event, shown on the desk to every role. */
   notes: string;
   venueName: string;
   venueAddress: string;

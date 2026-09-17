@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { DeskNote } from "@/components/desk-note";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -123,7 +124,7 @@ function scoreFormValues(rows: number, status: string, initialGames?: GameScore[
 
 function Desk() {
   const qc = useQueryClient();
-  const { canScore, canSchedule, signedIn } = useSession();
+  const { canScore, canSchedule, signedIn, isAdmin } = useSession();
   const live = useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);
@@ -327,6 +328,15 @@ function Desk() {
       }
     >
       <div className="space-y-5">
+        {tournament ? (
+          <DeskNote
+            tournamentId={tournament.id}
+            notes={tournament.notes ?? null}
+            isAdmin={isAdmin}
+            onSaved={() => void qc.invalidateQueries()}
+          />
+        ) : null}
+
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <DeskKpi label="Courts active" value={`${kpis.activeCourts}/${(courts ?? []).length}`} />
           <DeskKpi
