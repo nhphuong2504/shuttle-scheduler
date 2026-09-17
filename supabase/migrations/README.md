@@ -587,6 +587,65 @@ branches from `shift_live_schedule_after_match`, and restore `report_placement_r
 `report_tier_draw_result` without the `PERFORM public.shift_live_schedule_after_match(...)` line.
 The tables themselves are untouched, so nothing else changes.
 
+## Known behaviour: an early report rewrites the rest of that court's day
+
+**Not a bug fix — this documents existing behaviour that is deliberate for now.** It was observed
+while testing the queue, and it is recorded here because the trigger is a normal desk action rather
+than a corruption.
+
+### What happens
+
+`shift_live_schedule_after_match()` gives a later match on a court its start from the previous
+match's **real end**:
+
+```sql
+WHEN previous.actual_end IS NOT NULL THEN previous.actual_end
+```
+
+For a finished match that value is the raw `ended_at`, with no floor. The arm above it, for an
+in-progress match, is written as `GREATEST(previous.shifted_time + previous.duration,
+statement_timestamp())`, so it can never schedule into the past — but the finished arm has neither
+that floor nor a bound of "not earlier than the planned start".
+
+The result: **reporting a match meaningfully before its slot pulls every later match on that court
+forward to the moment it was reported.** The pull is per court, unbounded, and cascades as each
+next match is reported.
+
+### How it shows up
+
+Measured on the seeded field, 8 courts and 31 round-one matches, all reported about 18 hours ahead
+of their 09:00 slot:
+
+* 23 of the 31 rows had `scheduled_time` rewritten to a timestamp within ~1.1 seconds of the
+  report calls.
+* On **every one of the 8 courts** exactly the first match in the sequence kept its planned time —
+  the reflow's own source, which is immovable — and every match behind it was rewritten.
+* The matches that were rewritten were mostly **unplayed**. They were moved to a time that had
+  already passed, so the running order showed them as overdue before anyone had been on court.
+
+Ordinary use is not affected: report a match at or after its slot and the shift is minutes, which is
+the intended "the day is running late / running ahead" adjustment.
+
+### If it happens
+
+A rebuild replans the *movable* matches from the current time, so those recover on their own.
+Reported matches are immovable anchors and keep the rewritten time, so a rebuild will not restore
+the plan for those rows — correct `scheduled_time` on them directly if the displayed time matters.
+Note that the rewritten value is usually when the match was genuinely played, so it is often right
+in its own terms and only wrong as a *plan*.
+
+### The change, if it is ever wanted
+
+Two candidate one-line bounds, in increasing severity:
+
+1. Floor the derived start at `statement_timestamp()`, so an unplayed match can never be moved into
+   the past. This mirrors the guard the in-progress arm already has.
+2. Take `GREATEST(previous.actual_end, current_match.shifted_time)` so a match is never moved
+   earlier than it was planned at all, and only overruns push the rest of the day back.
+
+Both are behavioural changes to a function shared with the round-robin format, which is why they are
+recorded rather than applied.
+
 ## Applying `20260917040000_placement_day_schedule_slot_fix.sql`
 
 **The knockout half of a build could not be written at all.** A build generated the A/B/C/D draws

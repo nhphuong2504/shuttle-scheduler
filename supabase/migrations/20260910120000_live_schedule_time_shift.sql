@@ -1,5 +1,15 @@
 -- Incrementally reflow scheduled matches from the real end of a completed match.
 -- Completed, in-progress, and walkover matches are immutable schedule anchors.
+--
+-- CAVEAT, deliberate for now: a later match on a court is given its start from the
+-- previous match's real end, and for a finished match that is the raw `ended_at`
+-- with no floor. Reporting a match well before its slot therefore pulls the rest of
+-- that court's day forward to the report instant, including unplayed matches, which
+-- end up in the past. Reporting at or after the slot shifts by minutes, which is the
+-- intended behaviour. See the "Known behaviour" section of migrations/README.md for
+-- the measurements and the two one-line bounds that would change it.
+-- This caveat is a comment-only edit made after the migration shipped: the executable
+-- body is unchanged, so there is nothing here to re-apply.
 
 CREATE OR REPLACE FUNCTION public.shift_live_schedule_after_match(
   p_table text,
