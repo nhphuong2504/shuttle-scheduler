@@ -365,7 +365,7 @@ describe("planPlacementDay — placement stage", () => {
       entrants,
       placementMatches: [
         placementMatch("r1-1", "round1", "e1", "e2", {
-          scheduled_time: "2026-09-17T09:00:00.000Z",
+          scheduled_time: "2026-09-17T09:00:00",
         }),
         placementMatch("r1-2", "round1", "e3", "e4", {
           scheduled_time: "2026-09-17T09:30:00.000Z",
@@ -396,8 +396,8 @@ describe("planPlacementDay — placement stage", () => {
         placementMatch("r1-1", "round1", "e1", "e2", {
           status: "reported",
           court_id: "c1",
-          scheduled_time: "2026-09-17T09:00:00.000Z",
-          ended_at: "2026-09-17T09:30:00.000Z",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T09:30:00",
         }),
         placementMatch("r2-1", "round2", "e1", "e3"),
       ],
@@ -564,13 +564,13 @@ describe("planPlacementDay — knockout stage", () => {
           status: "reported",
           ended_at: "2026-09-17T09:45:00.000Z",
           court_id: "c1",
-          scheduled_time: "2026-09-17T09:00:00.000Z",
+          scheduled_time: "2026-09-17T09:00:00",
         }),
         tierMatch("k-b", 1, 2, "e3", "e4", {
           status: "reported",
           ended_at: "2026-09-17T09:45:00.000Z",
           court_id: "c2",
-          scheduled_time: "2026-09-17T09:00:00.000Z",
+          scheduled_time: "2026-09-17T09:00:00",
         }),
         tierMatch("k-final", 2, 1, "e1", "e3", {
           parent_a_id: "k-a",
@@ -1129,5 +1129,241 @@ describe("planPlacementSchedule — anchors reported ahead of their slot", () =>
     const anchor = result.slots.find((slot) => slot.matchId === "r1-1");
     expect(anchor?.start.toISOString()).toBe("2026-09-17T09:00:00.000Z");
     expect(anchor?.end.toISOString()).toBe("2026-09-17T09:40:00.000Z");
+  });
+});
+
+describe("planPlacementSchedule — a played match never fails the batch", () => {
+  /**
+   * Two matches that were both played ahead of schedule can be modelled as
+   * overlapping, because a reported match keeps its whole planned slot as the window
+   * it occupied. The later one then "starts before its dependency ends" on paper,
+   * even though it really started after the dependency had finished.
+   *
+   * That is history, not a scheduling error, and it must not be judged as one: the
+   * whole point of a rebuild is to place what is LEFT after results are in, so
+   * refusing the batch here made a partly played event unschedulable — the build
+   * threw and every remaining knockout stayed without a court or a time.
+   */
+  it("plans around an anchor whose planned slot outlasts its real finish", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      placementMatches: [
+        // Feeder: played early, so its planned slot runs on past its real finish.
+        placementMatch("r1-1", "round1", "e1", "e3", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00.000Z",
+          ended_at: "2026-09-17T08:50:00.000Z",
+        }),
+        // Its dependent, also played early: it starts inside the feeder's modelled
+        // slot, which is what used to invalidate every GRASP run.
+        placementMatch("r2-1", "round2", "e1", "e3", {
+          status: "reported",
+          court_id: "c2",
+          scheduled_time: "2026-09-17T09:15:00.000Z",
+          ended_at: "2026-09-17T09:10:00.000Z",
+          prerequisite_ids: ["r1-1"],
+        }),
+        // Something still to play, so the stage actually runs a schedule.
+        placementMatch("r1-2", "round1", "e2", "e4"),
+      ],
+    });
+
+    expect(result.blocked).toEqual([]);
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r1-2"]);
+    expect(result.summary.anchorCount).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two stages sharing one day
+// ---------------------------------------------------------------------------
+
+const NOON = new Date("2026-09-17T12:00:00").getTime();
+
+describe("planPlacementSchedule — the two stages sharing a day", () => {
+  /**
+   * A rebuild happens while the day is already under way. Every placement match is
+   * reported, so the barrier is open and the knockouts are the only thing left to
+   * place.
+   *
+   * The knockout pass used to plan from the day's opening time rather than from the
+   * clock, so a 12:00 rebuild on a day that opened at 09:00 handed matches a 09:00
+   * start. The desk reads a start time that has gone by as "ready now" and sends a
+   * player out for a slot that never existed.
+   */
+  it("never plans a knockout in the past when the day is rebuilt mid-play", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "knockout",
+      teams,
+      entrants,
+      now: NOON,
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T09:30:00",
+        }),
+      ],
+      tierMatches: [tierMatch("k-1", 1, 1, "e3", "e4")],
+    });
+
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1");
+    expect(knockout).toBeDefined();
+    expect(knockout!.start.getTime()).toBeGreaterThanOrEqual(NOON);
+  });
+
+  /**
+   * A placement match that overran its slot still holds its court. The knockout pass
+   * used to drop every reported placement anchor, so a knockout could be placed on
+   * that court at that time: two matches, one court, one player in both.
+   */
+  it("keeps the knockouts off a court a played placement match still holds", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "knockout",
+      teams,
+      entrants,
+      courts: [court(1)],
+      now: new Date("2026-09-17T09:20:00").getTime(),
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          // Ran twenty minutes long, so the court is not really free until 09:50.
+          ended_at: "2026-09-17T09:50:00",
+        }),
+      ],
+      tierMatches: [tierMatch("k-1", 1, 1, "e3", "e4")],
+    });
+
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1");
+    expect(knockout).toBeDefined();
+    expect(knockout!.start.getTime()).toBeGreaterThanOrEqual(
+      new Date("2026-09-17T09:50:00").getTime(),
+    );
+  });
+
+  /**
+   * Rest is what those anchors are really protecting, so a match whose player is
+   * still resting cannot be pulled forward onto another court either.
+   */
+  it("holds a knockout until the players a placement match used have had their rest", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "knockout",
+      teams,
+      entrants,
+      now: new Date("2026-09-17T09:40:00").getTime(),
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e3", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T09:40:00",
+        }),
+      ],
+      // e1 and e3 played it, so e1's rest gap binds this one.
+      tierMatches: [tierMatch("k-1", 1, 1, "e1", "e2")],
+    });
+
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1");
+    expect(knockout).toBeDefined();
+    // Knockout rest gap is 30 minutes, measured from the placement finish.
+    expect(knockout!.start.getTime()).toBeGreaterThanOrEqual(
+      new Date("2026-09-17T10:10:00").getTime(),
+    );
+  });
+
+  /**
+   * Courts get switched off part way through an event. A match already played on one
+   * of them is still history: it must not refuse the whole build, and it still holds
+   * its players' rest.
+   */
+  it("plans around a played match on a court the day no longer plays on", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "knockout",
+      teams,
+      entrants,
+      // Court two only: the match below was played on court one.
+      courts: [court(2)],
+      now: new Date("2026-09-17T09:40:00").getTime(),
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e3", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T09:40:00",
+        }),
+      ],
+      tierMatches: [tierMatch("k-1", 1, 1, "e1", "e2")],
+    });
+
+    expect(result.blocked).toEqual([]);
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1");
+    expect(knockout).toBeDefined();
+    expect(knockout!.courtNumber).toBe(2);
+    expect(knockout!.start.getTime()).toBeGreaterThanOrEqual(
+      new Date("2026-09-17T10:10:00").getTime(),
+    );
+  });
+
+  /**
+   * A match reported before it was ever laid out on a court has a real finish and no
+   * court. It is an anchor for its players and nothing else, and it must not make the
+   * scheduler refuse the batch for naming a court it never had.
+   */
+  it("accepts a played match that was never given a court", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      now: new Date("2026-09-17T09:40:00").getTime(),
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e3", {
+          status: "walkover",
+          ended_at: "2026-09-17T09:30:00",
+        }),
+        // Something still to play, so the placement stage actually runs.
+        placementMatch("r1-2", "round1", "e2", "e4"),
+      ],
+    });
+
+    expect(result.blocked).toEqual([]);
+    expect(result.summary.anchorCount).toBe(1);
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r1-2"]);
+  });
+
+  /**
+   * Both stages can be placed on one day, and the knockout pass is handed the day's
+   * placement slots as anchors so the two cannot collide. Those anchors are echoes of
+   * slots the placement pass has already recorded, so they must not be recorded a
+   * second time: one match in the plan twice means the preview lists it twice, the
+   * write sends it twice, and a rebuild looks like it moved a match it never touched.
+   */
+  it("records a match once even though both stages are placed on the same day", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "knockout",
+      teams,
+      entrants,
+      now: NOON,
+      // Still to play, so the placement pass runs and places it.
+      placementMatches: [placementMatch("r2-1", "round2", "e1", "e2")],
+      tierMatches: [tierMatch("k-1", 1, 1, "e3", "e4")],
+    });
+
+    const ids = result.slots.map((slot) => slot.matchId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r2-1"]);
+    expect(result.knockoutSlotPayload.map((slot) => slot.match_id)).toEqual(["k-1"]);
   });
 });

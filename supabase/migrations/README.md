@@ -755,6 +755,67 @@ which is the version without `started_at = NULL`.
 
 ---
 
+## Applying `20260917080000_placement_realtime_publication.sql`
+
+Adds the placement tables to the `supabase_realtime` publication, so the desk and the schedule page
+actually receive the changes the new format writes.
+
+### The defect
+
+Every screen subscribes with one `postgres_changes` channel on `public` and invalidates all its
+queries when anything arrives (`useRealtimeRefresh`). Realtime only delivers rows for tables that are
+**members of the publication**, and the placement tables were created without being added to it,
+while `pool_matches`, `draw_matches` and the rest of the round-robin schema already are.
+
+The result is a control desk that shows a `Live` badge and never updates: a result entered on one
+screen does not appear on another, and a freshly built schedule stays invisible until a manual
+reload. Because the badge only reports the channel's own state, nothing looks wrong — the channel is
+genuinely subscribed, it simply never receives anything for these tables. That is why the symptom
+reads as a stale page rather than as a connection problem.
+
+Six tables are added, covering the placement stage and the per-day configuration the schedule page
+edits:
+
+| Table | Why |
+| --- | --- |
+| `placement_entrants` | seeds, tiers and waivers change as a build runs |
+| `placement_matches` | generation, scheduling, start, report, move |
+| `tier_draws` | a build creates the A/B/C/D brackets |
+| `tier_draw_matches` | the knockout fixtures and their times |
+| `tournament_day_courts` | per-day court sets feed the next build |
+| `tournament_day_breaks` | per-day breaks feed the next build |
+
+### Why it is a `DO` block and not six statements
+
+`ALTER PUBLICATION … ADD TABLE` raises an error if the table is already a member, so each table is
+checked against `pg_publication_tables` first. The publication itself is checked too, because it is
+created by the platform rather than by these migrations and may legitimately be absent. Re-running
+the migration is therefore a no-op.
+
+### Verify after applying
+
+Open `/` in two browser windows. Report or move a match in one; the other should update within a
+second or two without a refresh. The same holds for `/placement-schedule`, whose running order is
+now subscribed as well.
+
+```sql
+SELECT tablename
+FROM pg_publication_tables
+WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
+ORDER BY tablename;
+```
+
+All six tables above should be listed.
+
+### Rolling back
+
+```sql
+ALTER PUBLICATION supabase_realtime DROP TABLE public.placement_entrants;
+-- …and the other five. Harmless, but every screen goes back to manual refresh.
+```
+
+---
+
 ## Known behaviour: an early report rewrites the rest of that court's day
 
 **Not a bug fix — this documents existing behaviour that is deliberate for now.** It was observed
@@ -813,6 +874,52 @@ Two candidate one-line bounds, in increasing severity:
 
 Both are behavioural changes to a function shared with the round-robin format, which is why they are
 recorded rather than applied.
+
+---
+
+## Fixed: a played match could stop the whole build
+
+**This one was a bug, not a known behaviour, and it is fixed.** It is written down because its
+symptom was "the schedule didn't update", which reads like a stale page rather than a hard failure.
+
+### What happened
+
+Reporting a match **ahead of its slot** is normal on the desk — the reflow section above shows it
+leaves deliberate traces — and the scheduler models a reported match as occupying its whole planned
+slot (see `fixedRange` in `placement-schedule.ts`). Two matches that were both played early can
+therefore be modelled as overlapping.
+
+At the same time, the GRASP validator checked every match, **anchors included**, against its
+prerequisites:
+
+```ts
+for (const dependencyId of match.dependsOn ?? []) {
+  if (slot.start.getTime() < dependency.end.getTime()) errors.push(…);
+}
+```
+
+For an anchor that check is about history, and history can look violated for the reason above. Every
+GRASP run then produced the same "invalid" verdict, `scheduleGroupStageGrasp` threw
+`Day 1 scheduler produced no valid candidates`, and the build wrote **nothing at all** — not even the
+matches that had nothing to do with the pair involved. The page reported the failure as a toast and
+kept its old running order.
+
+It surfaced on a heavily played field: 63 of 64 placement matches reported, 19 knockout fixtures
+generated, and exactly **0** of them holding a court or a time.
+
+### The fix
+
+`runValidation` now skips the dependency check for fixed matches. A fixed match's time is given
+rather than chosen, so it cannot be a placement the scheduler got wrong; only placements the
+scheduler actually chose are judged. Ordering for movable matches is unchanged, and `dependsOn` is
+still enforced during scheduling (`earliestStart`/`isEligible`), so the guarantee that a round-two
+match follows the round-one match that feeds it is unaffected — it is now simply not re-litigated
+against a match that has already been played.
+
+Regression test: `planPlacementSchedule — a played match never fails the batch` in
+`placement-schedule.test.ts`. It reproduces the exact production error when the guard is removed.
+
+---
 
 ## Applying `20260917040000_placement_day_schedule_slot_fix.sql`
 

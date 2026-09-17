@@ -32,6 +32,16 @@ export interface SchedulerOptions {
    * on an intermediate one.
    */
   hardEnd?: Date | undefined;
+  /**
+   * The earliest a match without a time of its own may start.
+   *
+   * Defaults to `dayStart`, which is what a first build wants: the tournament's own
+   * opening time is authoritative and the wall clock is not. A rebuild passes the
+   * current minute instead, so replanning a day already under way cannot put a match
+   * in the past — the desk would otherwise read a start time that has already gone by
+   * as "ready now" and send a player out for a slot that never existed.
+   */
+  floor?: Date | undefined;
 }
 
 /**
@@ -129,26 +139,33 @@ export function scheduleMatches(
   const playerFreeAt = new Map<string, number>();
   const slots: ScheduledSlot[] = [];
   const unscheduled: string[] = [];
-  // Fresh (non-fixed) matches always start from the chosen day-start time, never from
-  // the current wall-clock time — the tournament start time picked by the desk is
-  // authoritative. Matches already in progress/reported are handled as "fixed" below
-  // and naturally push courtFreeAt/playerFreeAt forward from their real end times.
-  const floor = dayStart.getTime();
+  // Fresh (non-fixed) matches start no earlier than `options.floor` (day one's opening
+  // time on a first build, the current minute on a rebuild) or than the earliest free
+  // court/player, whichever is later. Matches already in progress or reported are
+  // handled as "fixed" below and push courtFreeAt/playerFreeAt forward from their real
+  // end times.
+  const floor = (options.floor ?? dayStart).getTime();
 
-  const fixed = matches.filter(
-    (m) => m.fixed && m.start != null && m.end != null && m.courtNumber != null,
-  );
+  const fixed = matches.filter((m) => m.fixed && m.start != null && m.end != null);
   for (const match of fixed) {
-    const court = courtIds.find((c) => c.number === match.courtNumber);
-    if (!court || match.start == null || match.end == null) continue;
-    const current = courtFreeAt.get(court.id) ?? dayStart.getTime();
-    courtFreeAt.set(court.id, Math.max(current, match.end));
+    if (match.start == null || match.end == null) continue;
+    // A court the day is not playing on cannot host anything new, so its busy window
+    // has nothing to guard — but a match played on it still used its players, so
+    // their rest is recorded either way. A match with no court at all (reported
+    // before it was ever laid out) is the same case with no court to guard.
+    const court =
+      match.courtNumber == null ? undefined : courtIds.find((c) => c.number === match.courtNumber);
+    if (court) {
+      const current = courtFreeAt.get(court.id) ?? dayStart.getTime();
+      courtFreeAt.set(court.id, Math.max(current, match.end));
+    }
     for (const playerId of match.playerIds) {
       playerFreeAt.set(
         playerId,
         Math.max(playerFreeAt.get(playerId) ?? 0, match.end + restGapMinutes * MINUTE),
       );
     }
+    if (!court) continue;
     slots.push({
       matchId: match.id,
       courtId: court.id,

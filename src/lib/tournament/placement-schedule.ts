@@ -387,7 +387,13 @@ function tierItems(input: {
       // needs two sides that have actually been decided: a knockout fixture waiting
       // on its bracket is not a match yet, and listing it would make every
       // not-yet-reached round look like something the desk has to chase.
-      return item.fixed || item.playerIds.length > 0;
+      if (!item.fixed) return item.playerIds.length > 0;
+      // A decided match needs no slot, so it is only ever an anchor — and an anchor
+      // needs a court and a window to hold. A reported row missing either (a walkover
+      // never laid out on a court, or one played on a court that has since been
+      // deleted) cannot be modelled as one, and handing it to the scheduler makes it
+      // refuse the whole batch over a row that is already history. It is left out.
+      return item.start != null && item.end != null && item.courtNumber != null;
     });
 }
 
@@ -488,6 +494,9 @@ function runStageForDay(input: {
     dayStart,
     planningEnd,
     hardEnd,
+    // Same floor as the placement pass: a rebuild must not hand a knockout a start
+    // time that has already gone by, which the desk reads as "ready now".
+    floor: schedulingFloor,
     courts,
     slotMinutes,
     restGapMinutes,
@@ -594,6 +603,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
 
   const everything = [...placementAll, ...knockoutAll];
   const fixedSet = new Set(everything.filter((item) => item.fixed).map((item) => item.id));
+  const knockoutIds = new Set(knockoutAll.map((item) => item.id));
 
   // The queue itself: what is still waiting for a slot. A match leaves its set only
   // when it has been given one, so anything that will not fit today is retried
@@ -657,6 +667,44 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     const daySlots: ScheduledSlot[] = [];
     let dayPlaced = 0;
 
+    /**
+     * Every placement slot this day holds, however it got there: the reported matches
+     * that were played on it, plus whatever pass A places on top.
+     *
+     * Built from the reported matches rather than from pass A's output because pass A
+     * is skipped entirely when nothing movable is left, and the knockout pass still
+     * has to know which courts and players this day has already used. A match that
+     * overran its slot, or one still on court, holds its court for longer than the
+     * clock suggests, so its window has to be handed over even though it is in the
+     * past.
+     */
+    const placementShape = new Map<string, SchedulableMatch>();
+    const placementAnchor = (item: {
+      id: string;
+      categoryId: string;
+      playerIds: string[];
+      start?: number | undefined;
+      end?: number | undefined;
+      courtNumber?: number | undefined;
+    }): SchedulableMatch | null =>
+      item.start == null || item.end == null
+        ? null
+        : {
+            id: item.id,
+            categoryId: item.categoryId,
+            playerIds: item.playerIds,
+            kind: "group",
+            order: 0,
+            fixed: true,
+            start: item.start,
+            end: item.end,
+            courtNumber: item.courtNumber,
+          };
+    for (const item of anchorsOn(placementAll, dayKey)) {
+      const anchor = placementAnchor(item);
+      if (anchor) placementShape.set(item.id, anchor);
+    }
+
     // Pass A — the placement stage.
     if (placementTodo.size) {
       const items = [
@@ -677,7 +725,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
         options: graspOptions,
       });
       for (const slot of run.slots) {
-        if (fixedSet.has(slot.matchId)) continue;
+        if (!placementTodo.has(slot.matchId)) continue;
         placementTodo.delete(slot.matchId);
         dayPlaced++;
       }
@@ -685,24 +733,24 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       if (run.diagnostics) lastDiagnostics = run.diagnostics;
       if (run.deadlockReason && !blockedReason) blockedReason = run.deadlockReason;
     }
+    for (const slot of daySlots) {
+      if (placementShape.has(slot.matchId)) continue;
+      const anchor = placementAnchor({
+        id: slot.matchId,
+        categoryId: slot.categoryId,
+        playerIds: everything.find((item) => item.id === slot.matchId)?.playerIds ?? [],
+        start: slot.start.getTime(),
+        end: slot.end.getTime(),
+        courtNumber: slot.courtNumber,
+      });
+      if (anchor) placementShape.set(slot.matchId, anchor);
+    }
 
     // Pass B — the knockouts. This is the barrier: they are only attempted once the
-    // placement queue has drained. This day's placement slots go in as anchors so
-    // the two stages cannot be double-booked onto one court or one player.
+    // placement queue has drained, and every one of this day's placement slots is an
+    // anchor, so the two stages cannot be double-booked onto one court or one player.
     if (!placementTodo.size && knockoutTodo.size) {
-      const anchors: SchedulableMatch[] = daySlots
-        .filter((slot) => !fixedSet.has(slot.matchId))
-        .map((slot) => ({
-          id: slot.matchId,
-          categoryId: slot.categoryId,
-          playerIds: everything.find((item) => item.id === slot.matchId)?.playerIds ?? [],
-          kind: "group" as const,
-          order: 0,
-          fixed: true,
-          start: slot.start.getTime(),
-          end: slot.end.getTime(),
-          courtNumber: slot.courtNumber,
-        }));
+      const anchors = [...placementShape.values()];
       const items = [
         ...anchorsOn(knockoutAll, dayKey),
         ...anchors,
@@ -721,11 +769,15 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
         restGapMinutes: knockoutRest,
       });
       for (const slot of run.slots) {
-        if (fixedSet.has(slot.matchId)) continue;
+        if (!knockoutTodo.has(slot.matchId)) continue;
         knockoutTodo.delete(slot.matchId);
         dayPlaced++;
       }
-      daySlots.push(...run.slots);
+      // Only this stage's own slots join the plan. The placement anchors handed in
+      // above are echoes of slots pass A has already recorded, and echoing them into
+      // the plan as well would list one match twice in the rebuild preview and write
+      // it twice, so a rebuild would appear to move a match it never touched.
+      daySlots.push(...run.slots.filter((slot) => knockoutIds.has(slot.matchId)));
     }
 
     allSlots.push(...daySlots);

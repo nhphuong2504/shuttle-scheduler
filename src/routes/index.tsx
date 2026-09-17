@@ -103,6 +103,7 @@ import {
   type MatchReadiness,
 } from "@/lib/tournament/desk";
 import { poolIsComplete } from "@/lib/tournament/standings";
+import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -124,12 +125,7 @@ export const Route = createFileRoute("/")({
   component: Desk,
 });
 
-export type DeskMatch = DeskMatchModel & {
-  teams: [string | null, string | null];
-  tag: string;
-  score: string | null;
-  initialGames?: GameScore[] | undefined;
-};
+export type { DeskMatch };
 
 function scoreFormValues(rows: number, status: string, initialGames?: GameScore[]) {
   if (status !== "reported" || !initialGames?.length) {
@@ -229,99 +225,28 @@ function Desk() {
   }, []);
 
   const allMatches = useMemo<DeskMatch[]>(
-    () => [
-      ...(poolMatches ?? []).map((m) => ({
-        id: m.id,
-        kind: "pool" as const,
-        courtId: m.court_id,
-        status: m.status,
-        startedAt: m.started_at,
-        endedAt: m.ended_at,
-        scheduled: m.scheduled_time,
-        teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
-        playerIds: [m.team_a_id, m.team_b_id].flatMap((id) =>
-          id ? teamPlayerIds(teamMap.get(id)) : [],
-        ),
-        tag: catMap.get(m.category_id)?.code ?? "",
-        score: m.status === "reported" ? `${m.score_a}-${m.score_b}` : null,
-        initialGames:
-          m.status === "reported" && m.score_a != null && m.score_b != null
-            ? [{ a: m.score_a, b: m.score_b }]
-            : undefined,
-      })),
-      ...(drawMatches ?? []).map((m) => ({
-        id: m.id,
-        kind: "draw" as const,
-        courtId: m.court_id,
-        status: m.status,
-        startedAt: m.started_at,
-        endedAt: m.ended_at,
-        scheduled: m.scheduled_time,
-        teams: [m.team_a_id, m.team_b_id] as [string | null, string | null],
-        playerIds: [m.team_a_id, m.team_b_id].flatMap((id) =>
-          id ? teamPlayerIds(teamMap.get(id)) : [],
-        ),
-        tag: `Draw ${(draws ?? []).find((d) => d.id === m.draw_id)?.tier ?? ""}`,
-        score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
-        initialGames: m.status === "reported" ? parseGames(m.games) : undefined,
-      })),
-      // The two-round placement format. Its rows carry entrant ids rather than team
-      // ids, so each side is resolved through the entrant before the players can be,
-      // and the desk card shows the entrant's team exactly as the Placement tab does.
-      ...(placementMatches ?? []).map((m) => {
-        const teams = [entrantTeam(m.entrant_a_id), entrantTeam(m.entrant_b_id)] as [
-          string | null,
-          string | null,
-        ];
-        return {
-          id: m.id,
-          kind: "placement" as const,
-          courtId: m.court_id,
-          status: m.status,
-          startedAt: m.started_at,
-          endedAt: m.ended_at,
-          scheduled: m.scheduled_time,
-          teams,
-          playerIds: teams.flatMap((id) => (id ? teamPlayerIds(teamMap.get(id)) : [])),
-          // Which round it is matters to the desk: a make-up match is why one player
-          // appears twice in round two, and a crossover is not a spare qualifier.
-          tag: placementTag(m),
-          score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
-          initialGames: m.status === "reported" ? parseGames(m.games) : undefined,
-        };
+    () =>
+      buildDeskMatches({
+        poolMatches,
+        drawMatches,
+        draws,
+        placementMatches,
+        tierMatches: tierDrawMatches,
+        tierDraws,
+        teams,
+        categories,
+        entrantTeam,
       }),
-      ...(tierDrawMatches ?? []).map((m) => {
-        const teams = [entrantTeam(m.entrant_a_id), entrantTeam(m.entrant_b_id)] as [
-          string | null,
-          string | null,
-        ];
-        return {
-          id: m.id,
-          kind: "tier" as const,
-          courtId: m.court_id,
-          status: m.status,
-          startedAt: m.started_at,
-          endedAt: m.ended_at,
-          scheduled: m.scheduled_time,
-          teams,
-          playerIds: teams.flatMap((id) => (id ? teamPlayerIds(teamMap.get(id)) : [])),
-          tag: `Tier ${(tierDraws ?? []).find((d) => d.id === m.draw_id)?.tier ?? ""}`,
-          score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
-          initialGames: m.status === "reported" ? parseGames(m.games) : undefined,
-        };
-      }),
-    ],
     [
       poolMatches,
       drawMatches,
       draws,
-      catMap,
-      teamMap,
       placementMatches,
       tierDrawMatches,
       tierDraws,
+      teams,
+      categories,
       entrantTeam,
-      placementTag,
     ],
   );
 
@@ -426,12 +351,24 @@ function Desk() {
     };
   });
 
+  /**
+   * Matches that are ready to play but hold no court: generated by a build that has
+   * not placed them yet. This is one shared pool, not a fixture reserved for any
+   * court — the same suggestion therefore appears on every idle court, and only the
+   * first is offered because the desk starts one match at a time. Rebuilding the
+   * schedule clears it.
+   */
   const readyUnassigned = allMatches
     .filter((match) => match.status === "scheduled" && !match.courtId)
     .filter(
       (match) => getMatchReadiness(match, allMatches, restMinutesFor(match), now).state === "ready",
     )
     .sort((a, b) => new Date(a.scheduled ?? 0).getTime() - new Date(b.scheduled ?? 0).getTime());
+
+  /** The pairing the idle courts offer, named once so the card cannot drift. */
+  const nextReadyLabel = readyUnassigned[0]
+    ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
+    : null;
 
   return (
     <AppShell
@@ -477,6 +414,7 @@ function Desk() {
           <div aria-live="polite">
             {latePools.length ||
             overCap.length ||
+            readyUnassigned.length ||
             courtStates.some(({ state }) => state.state === "free-ready") ? (
               <ul className="space-y-1.5 text-sm">
                 {courtStates
@@ -498,6 +436,23 @@ function Desk() {
                       </button>
                     </li>
                   ))}
+                {readyUnassigned.length ? (
+                  <li className="rounded-md bg-warn-surface px-2.5 py-2 text-warn-foreground">
+                    {readyUnassigned.length} match
+                    {readyUnassigned.length === 1 ? " is" : "es are"} ready with no court yet —
+                    build or rebuild the schedule to lay them across the days.{" "}
+                    {tournament?.format === "two_round_placement" ? (
+                      <Link to="/placement-schedule" className="font-semibold underline">
+                        open the schedule
+                      </Link>
+                    ) : (
+                      <Link to="/schedule" className="font-semibold underline">
+                        open the schedule
+                      </Link>
+                    )}
+                    .
+                  </li>
+                ) : null}
                 {latePools.map((p) => (
                   <li
                     key={p.id}
@@ -603,10 +558,9 @@ function Desk() {
                     )}
                   </p>
                   <p className="mt-2 border-t border-hairline pt-2 text-xs text-muted-foreground">
-                    Next:{" "}
                     {state.next ? (
                       <>
-                        {timeLabel(state.next.scheduled)} · {label(state.next.teams[0])} vs{" "}
+                        Next: {timeLabel(state.next.scheduled)} · {label(state.next.teams[0])} vs{" "}
                         {label(state.next.teams[1])}
                         <br />
                         <ReadinessText
@@ -615,10 +569,12 @@ function Desk() {
                           players={playerMap}
                         />
                       </>
-                    ) : readyUnassigned[0] ? (
+                    ) : nextReadyLabel ? (
                       <>
-                        Ready unassigned: {label(readyUnassigned[0].teams[0])} vs{" "}
-                        {label(readyUnassigned[0].teams[1])}
+                        No match scheduled · ready to place: {nextReadyLabel}
+                        {readyUnassigned.length > 1
+                          ? ` · ${readyUnassigned.length - 1} more waiting`
+                          : ""}
                       </>
                     ) : (
                       "nothing queued"

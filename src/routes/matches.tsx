@@ -12,17 +12,20 @@ import { cn } from "@/lib/utils";
 import {
   indexBy,
   teamLabel,
-  teamPlayerIds,
   useActiveTournament,
   useCategories,
   useCourts,
   useDrawMatches,
   useDraws,
+  usePlacementEntrants,
+  usePlacementMatches,
   usePlayers,
   usePoolMatches,
   usePools,
   useRealtimeRefresh,
   useTeams,
+  useTierDrawMatches,
+  useTierDraws,
 } from "@/lib/tournament/data";
 import { gamesLabel, parseGames, timeLabel } from "@/lib/tournament/format";
 import {
@@ -32,7 +35,8 @@ import {
   ruleForStage,
   scoringRuleLabel,
 } from "@/lib/tournament/scoring";
-import { MatchOperationsDialog, type DeskMatch } from "./index";
+import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
+import { MatchOperationsDialog } from "./index";
 
 export const Route = createFileRoute("/matches")({
   head: () => ({
@@ -88,11 +92,44 @@ function FilterChip({
   );
 }
 
+function MatchRow({
+  match,
+  left,
+  label,
+  courtMap,
+  onOpen,
+}: {
+  match: DeskMatch;
+  left: string;
+  label: (id: string | null) => string;
+  courtMap: Map<string, { number: number }>;
+  onOpen: () => void;
+}) {
+  return (
+    <li className="flex flex-wrap items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50">
+      <span className="w-24 font-score text-[11px] font-semibold text-primary">{left}</span>
+      <span className="min-w-[220px] flex-1">
+        {label(match.teams[0])} <span className="text-muted-foreground">vs</span>{" "}
+        {label(match.teams[1])}
+      </span>
+      <span className="font-score text-[11px] text-muted-foreground">
+        {timeLabel(match.scheduled)}
+        {match.courtId ? ` · C${courtMap.get(match.courtId)?.number ?? "?"}` : ""}
+      </span>
+      <StatusPill status={match.status} />
+      <span className="w-20 text-right font-score text-sm">{match.score ?? "—"}</span>
+      <Button size="sm" variant="outline" onClick={onOpen}>
+        Open
+      </Button>
+    </li>
+  );
+}
+
 function MatchesPage() {
   const qc = useQueryClient();
   const { canScore, canSchedule } = useSession();
   useRealtimeRefresh();
-  const [selected, setSelected] = useState<{ id: string; kind: "pool" | "draw" } | null>(null);
+  const [selected, setSelected] = useState<{ id: string } | null>(null);
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -105,6 +142,10 @@ function MatchesPage() {
   const { data: drawMatches } = useDrawMatches();
   const { data: courts } = useCourts();
   const { data: tournament } = useActiveTournament();
+  const { data: placementEntrants } = usePlacementEntrants();
+  const { data: placementMatches } = usePlacementMatches();
+  const { data: tierDraws } = useTierDraws();
+  const { data: tierDrawMatches } = useTierDrawMatches();
 
   /**
    * Knockout scoring follows the tournament's configured rule. Placement matches
@@ -131,6 +172,60 @@ function MatchesPage() {
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
   const refresh = () => qc.invalidateQueries();
 
+  const entrantTeam = useMemo(() => {
+    const map = indexBy(placementEntrants);
+    return (entrantId: string | null) => (entrantId ? (map.get(entrantId)?.team_id ?? null) : null);
+  }, [placementEntrants]);
+
+  /** The A/B/C/D bracket each tier match belongs to, for grouping the knockout tab. */
+  const drawOfTierMatch = useMemo(
+    () => new Map((tierDrawMatches ?? []).map((match) => [match.id, match.draw_id])),
+    [tierDrawMatches],
+  );
+
+  /**
+   * Every match of every format, built the same way the control desk builds them.
+   *
+   * This is what makes the two-round placement format scorable here at all: the list
+   * on this page used to be assembled from the round-robin tables only, so a
+   * placement tournament showed "No pools generated yet" while fifteen matches were
+   * waiting for a result.
+   */
+  const allRows = useMemo(
+    () =>
+      buildDeskMatches({
+        poolMatches,
+        drawMatches,
+        draws,
+        placementMatches,
+        tierMatches: tierDrawMatches,
+        tierDraws,
+        teams,
+        categories,
+        entrantTeam,
+      }),
+    [
+      poolMatches,
+      drawMatches,
+      draws,
+      placementMatches,
+      tierDrawMatches,
+      tierDraws,
+      teams,
+      categories,
+      entrantTeam,
+    ],
+  );
+
+  const keepRow = (row: DeskMatch) => {
+    if (categoryId !== "all" && row.categoryId !== categoryId) return false;
+    if (!matchesStatusFilter(row.status, statusFilter)) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return `${label(row.teams[0])} ${label(row.teams[1])}`.toLowerCase().includes(q);
+  };
+
+  /** The same filters, for the two round-robin lists that render from their own rows. */
   const keep = (opts: { status: string; catId: string; a: string | null; b: string | null }) => {
     if (categoryId !== "all" && opts.catId !== categoryId) return false;
     if (!matchesStatusFilter(opts.status, statusFilter)) return false;
@@ -139,11 +234,26 @@ function MatchesPage() {
     return `${label(opts.a)} ${label(opts.b)}`.toLowerCase().includes(q);
   };
 
+  const rowsFor = (kind: DeskMatch["kind"]) => allRows.filter((row) => row.kind === kind);
+  const visiblePlacement = useMemo(
+    () => rowsFor("placement").filter(keepRow),
+    // keepRow reads the current filters and the player map; the rows are memoised.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allRows, categoryId, statusFilter, query, teamMap, playerMap],
+  );
+  const visibleTier = useMemo(
+    () => rowsFor("tier").filter(keepRow),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allRows, categoryId, statusFilter, query, teamMap, playerMap],
+  );
+
   const visiblePool = useMemo(
     () =>
       (poolMatches ?? []).filter((m) =>
         keep({ status: m.status, catId: m.category_id, a: m.team_a_id, b: m.team_b_id }),
       ),
+    // keep reads the current filters and the player map; the rows are memoised.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [poolMatches, categoryId, statusFilter, query, teamMap, playerMap],
   );
 
@@ -157,59 +267,64 @@ function MatchesPage() {
           b: m.team_b_id,
         }),
       ),
+    // keep and drawMap read the current filters and the player map; the rows are memoised.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [drawMatches, drawMap, categoryId, statusFilter, query, teamMap, playerMap],
   );
 
-  const all = [...visiblePool, ...visibleDraw];
+  /** The group tab holds the pools and the placement rounds; the knockout tab the rest. */
+  const all = [...visiblePool, ...visiblePlacement, ...visibleDraw, ...visibleTier];
   const doneCount = all.filter((m) => m.status === "reported" || m.status === "walkover").length;
   const liveCount = all.filter((m) => m.status === "in-progress").length;
   const pendingCount = all.length - doneCount - liveCount;
 
-  const selectedMatch = useMemo<DeskMatch | null>(() => {
-    if (!selected) return null;
-    if (selected.kind === "pool") {
-      const match = (poolMatches ?? []).find((row) => row.id === selected.id);
-      if (!match) return null;
-      return {
-        id: match.id,
-        kind: "pool",
-        courtId: match.court_id,
-        status: match.status,
-        startedAt: match.started_at,
-        endedAt: match.ended_at,
-        scheduled: match.scheduled_time,
-        teams: [match.team_a_id, match.team_b_id],
-        playerIds: [match.team_a_id, match.team_b_id].flatMap((id) =>
-          id ? teamPlayerIds(teamMap.get(id)) : [],
-        ),
-        tag: catMap.get(match.category_id)?.code ?? "",
-        score: match.status === "reported" ? `${match.score_a}-${match.score_b}` : null,
-        initialGames:
-          match.status === "reported" && match.score_a != null && match.score_b != null
-            ? [{ a: match.score_a, b: match.score_b }]
-            : undefined,
-      };
+  /**
+   * The row the dialog operates on, resolved from the same list the board uses, so
+   * the dialog cannot be handed a row that the list never showed.
+   */
+  const selectedMatch = useMemo<DeskMatch | null>(
+    () => (selected ? (allRows.find((row) => row.id === selected.id) ?? null) : null),
+    [selected, allRows],
+  );
+
+  /**
+   * The placement rounds grouped by event, and the A/B/C/D brackets grouped by draw.
+   *
+   * Grouping here rather than in the row builder keeps the builder about matches
+   * only: the desk draws a court board and has no opinion about panels.
+   */
+  const groupByCategory = (rows: DeskMatch[]) => {
+    const groups = new Map<string, DeskMatch[]>();
+    for (const row of rows) {
+      const list = groups.get(row.categoryId) ?? [];
+      list.push(row);
+      groups.set(row.categoryId, list);
     }
-    const match = (drawMatches ?? []).find((row) => row.id === selected.id);
-    if (!match) return null;
-    const draw = drawMap.get(match.draw_id);
-    return {
-      id: match.id,
-      kind: "draw",
-      courtId: match.court_id,
-      status: match.status,
-      startedAt: match.started_at,
-      endedAt: match.ended_at,
-      scheduled: match.scheduled_time,
-      teams: [match.team_a_id, match.team_b_id],
-      playerIds: [match.team_a_id, match.team_b_id].flatMap((id) =>
-        id ? teamPlayerIds(teamMap.get(id)) : [],
+    return [...groups.entries()];
+  };
+  const groupByDraw = (rows: DeskMatch[]) => {
+    const byDraw = new Map<string, DeskMatch[]>();
+    for (const row of rows) {
+      const drawId = drawOfTierMatch.get(row.id) ?? "";
+      const list = byDraw.get(drawId) ?? [];
+      list.push(row);
+      byDraw.set(drawId, list);
+    }
+    return [...byDraw.entries()];
+  };
+
+  const placementGroups = useMemo(
+    () =>
+      groupByCategory(
+        [...visiblePlacement].sort((a, b) => (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0)),
       ),
-      tag: `${catMap.get(draw?.category_id ?? "")?.code ?? ""} · Draw ${draw?.tier ?? ""}`,
-      score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
-      initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
-    };
-  }, [selected, poolMatches, drawMatches, teamMap, catMap, drawMap]);
+    [visiblePlacement],
+  );
+  const tierGroups = useMemo(
+    () => groupByDraw(visibleTier),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleTier, drawOfTierMatch],
+  );
 
   return (
     <AppShell
@@ -270,11 +385,40 @@ function MatchesPage() {
 
         <Tabs defaultValue="group">
           <TabsList>
-            <TabsTrigger value="group">Group stage ({visiblePool.length})</TabsTrigger>
-            <TabsTrigger value="knockout">Knockout ({visibleDraw.length})</TabsTrigger>
+            <TabsTrigger value="group">
+              Group stage ({visiblePool.length + visiblePlacement.length})
+            </TabsTrigger>
+            <TabsTrigger value="knockout">
+              Knockout ({visibleDraw.length + visibleTier.length})
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="group" className="mt-4 space-y-4">
+            {placementGroups.map(([catId, list]) => (
+              <Panel
+                key={`placement-${catId}`}
+                title={`${catMap.get(catId)?.code ?? "Placement"} · two placement rounds`}
+                right={
+                  <span className="font-score text-[11px] text-muted-foreground">
+                    {list.filter((m) => m.status === "reported").length}/{list.length} reported
+                  </span>
+                }
+                bodyClassName="p-2"
+              >
+                <ul className="divide-y divide-hairline">
+                  {list.map((m) => (
+                    <MatchRow
+                      key={m.id}
+                      match={m}
+                      left={m.tag || "R1"}
+                      label={label}
+                      courtMap={courtMap}
+                      onOpen={() => setSelected({ id: m.id })}
+                    />
+                  ))}
+                </ul>
+              </Panel>
+            ))}
             {(pools ?? []).map((pool) => {
               const list = visiblePool
                 .filter((m) => m.pool_id === pool.id)
@@ -316,7 +460,7 @@ function MatchesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setSelected({ id: m.id, kind: "pool" })}
+                          onClick={() => setSelected({ id: m.id })}
                         >
                           Open
                         </Button>
@@ -326,18 +470,18 @@ function MatchesPage() {
                 </Panel>
               );
             })}
-            {visiblePool.length === 0 ? (
+            {visiblePool.length === 0 && visiblePlacement.length === 0 ? (
               <Panel>
                 <EmptyState
                   title={
                     (pools ?? []).length
                       ? "No group matches match these filters"
-                      : "No pools generated yet"
+                      : "No group matches yet"
                   }
                   hint={
                     (pools ?? []).length
                       ? "Clear the search or pick another event to see more matches."
-                      : "Draw the pools first and the group matches will appear here."
+                      : "Round one appears as soon as the build has created it."
                   }
                 />
               </Panel>
@@ -345,6 +489,34 @@ function MatchesPage() {
           </TabsContent>
 
           <TabsContent value="knockout" className="mt-4 space-y-4">
+            {tierGroups.map(([drawId, list]) => {
+              const draw = (tierDraws ?? []).find((d) => d.id === drawId);
+              return (
+                <Panel
+                  key={`tier-${drawId}`}
+                  title={`${catMap.get(draw?.category_id ?? "")?.code ?? ""} · Draw ${draw?.tier ?? "?"}`}
+                  right={
+                    <span className="font-score text-[11px] text-muted-foreground">
+                      {list.filter((m) => m.status === "reported").length}/{list.length} reported
+                    </span>
+                  }
+                  bodyClassName="p-2"
+                >
+                  <ul className="divide-y divide-hairline">
+                    {list.map((m) => (
+                      <MatchRow
+                        key={m.id}
+                        match={m}
+                        left={m.tag || "Tier"}
+                        label={label}
+                        courtMap={courtMap}
+                        onOpen={() => setSelected({ id: m.id })}
+                      />
+                    ))}
+                  </ul>
+                </Panel>
+              );
+            })}
             {(draws ?? []).map((draw) => {
               const list = visibleDraw
                 .filter((m) => m.draw_id === draw.id)
@@ -390,7 +562,7 @@ function MatchesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setSelected({ id: m.id, kind: "draw" })}
+                            onClick={() => setSelected({ id: m.id })}
                           >
                             Open
                           </Button>
@@ -403,18 +575,18 @@ function MatchesPage() {
                 </Panel>
               );
             })}
-            {visibleDraw.length === 0 ? (
+            {visibleDraw.length === 0 && visibleTier.length === 0 ? (
               <Panel>
                 <EmptyState
                   title={
                     (draws ?? []).length
                       ? "No knockout matches match these filters"
-                      : "No draws generated yet"
+                      : "No knockout matches yet"
                   }
                   hint={
                     (draws ?? []).length
                       ? "Clear the search or pick another event to see more matches."
-                      : "Knockout matches appear once every pool in a category is complete."
+                      : "Brackets appear once every placement match in a category is decided."
                   }
                 />
               </Panel>

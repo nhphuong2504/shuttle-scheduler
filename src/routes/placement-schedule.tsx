@@ -33,6 +33,7 @@ import {
   usePlacementEntrants,
   usePlacementMatches,
   usePlayers,
+  useRealtimeRefresh,
   useTeams,
   useTierDrawMatches,
   useTierDraws,
@@ -135,6 +136,13 @@ function PlacementSchedulePage() {
   const { data: tierMatches } = useTierDrawMatches();
   const { data: dayCourts } = useTournamentDayCourts(tournamentId);
   const { data: dayBreaks } = useTournamentDayBreaks(tournamentId);
+  /**
+   * The desk reports results and moves matches while this page is open, and every
+   * one of those shifts the times below. Without a subscription the running order
+   * silently went stale until the next full reload — which is exactly what a rebuild
+   * is supposed to be checking against.
+   */
+  const realtime = useRealtimeRefresh();
 
   const [drafts, setDrafts] = useState<Record<string, DayWindow>>({});
   // One result for the whole tournament, because there is now one build. Days are
@@ -1194,6 +1202,11 @@ function PlacementSchedulePage() {
           right={
             <span className="font-score text-[11px] text-muted-foreground">
               {rows.length} scheduled
+              {realtime.status === "live"
+                ? " · live"
+                : realtime.status === "connecting"
+                  ? " · connecting"
+                  : " · offline"}
             </span>
           }
           bodyClassName={rows.length ? "p-0" : "p-4"}

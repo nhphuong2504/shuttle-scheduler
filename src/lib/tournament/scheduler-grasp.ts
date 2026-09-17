@@ -2,6 +2,16 @@ import type { BreakWindow, SchedulableMatch, ScheduledSlot } from "./scheduler";
 import { normalizeBreaks, startAfterBreaks } from "./scheduler";
 
 const MINUTE = 60_000;
+
+/**
+ * The court number recorded for an anchor that has no court of its own.
+ *
+ * A match can be reported before it was ever laid out on a court. It still has a
+ * real finish, so it still constrains its players' rest, but there is no court
+ * window to hold. Slots are keyed by number, so "none" needs a value; real court
+ * numbers are 1 and up.
+ */
+const NO_COURT = 0;
 const DEFAULT_RCL_SIZE = 4;
 const DEFAULT_GRASP_RUNS = 75;
 const DEFAULT_SEED = 20_260_912;
@@ -252,19 +262,25 @@ function buildIndexes(matches: GraspSchedulableMatch[], options: NormalizedOptio
     }
 
     if (!match.fixed) continue;
-    if (match.start == null || match.end == null || match.courtNumber == null) {
-      throw new Error(`Fixed match ${match.id} is missing its court, start, or end.`);
+    if (match.start == null || match.end == null) {
+      throw new Error(`Fixed match ${match.id} is missing its start or end.`);
     }
-    const court = courtByNumber.get(match.courtNumber);
-    if (!court)
-      throw new Error(`Fixed match ${match.id} references unavailable court ${match.courtNumber}.`);
     if (match.end <= match.start)
       throw new Error(`Fixed match ${match.id} has an invalid time range.`);
 
+    // A played match is an anchor for its players wherever it happened: the rest gap
+    // runs from its real finish. Only the court window needs a court, so a match with
+    // no court (reported before it was ever laid out) or played on a court the day no
+    // longer plays on keeps its player window and simply holds no court. Throwing
+    // here instead would let one such row — or one switched-off court — refuse an
+    // otherwise valid rebuild, which is exactly when a rebuild matters most.
+    const court = match.courtNumber == null ? undefined : courtByNumber.get(match.courtNumber);
     const window = { matchId: match.id, start: match.start, end: match.end };
-    const courtWindows = fixedByCourt.get(court.id) ?? [];
-    courtWindows.push(window);
-    fixedByCourt.set(court.id, courtWindows);
+    if (court) {
+      const courtWindows = fixedByCourt.get(court.id) ?? [];
+      courtWindows.push(window);
+      fixedByCourt.set(court.id, courtWindows);
+    }
     for (const playerId of uniquePlayers) {
       const playerWindows = fixedByPlayer.get(playerId) ?? [];
       playerWindows.push(window);
@@ -272,8 +288,11 @@ function buildIndexes(matches: GraspSchedulableMatch[], options: NormalizedOptio
     }
     fixedSlots.push({
       matchId: match.id,
-      courtId: court.id,
-      courtNumber: court.number,
+      // Empty for a match with no court of its own. Fixed matches are never written
+      // back, so this cannot reach the database; 0 is the same "no court" sentinel
+      // the validation below expects.
+      courtId: court?.id ?? "",
+      courtNumber: match.courtNumber ?? NO_COURT,
       start: match.start,
       end: match.end,
       categoryId: match.categoryId,
@@ -780,9 +799,13 @@ export function validateGraspSchedule(
     if (!slotByMatch.has(slot.matchId)) slotByMatch.set(slot.matchId, slot);
     const match = matchById.get(slot.matchId);
     if (!match) errors.push(`Scheduled slot references unknown match ${slot.matchId}.`);
-    const court = config.courts.get(slot.courtId);
-    if (!court || court.number !== slot.courtNumber) {
-      errors.push(`Match ${slot.matchId} references invalid court ${slot.courtId}.`);
+    // A played match recorded without a court holds no court window, so there is no
+    // court for the slot to name. Every scheduled match has one.
+    if (slot.courtNumber !== NO_COURT) {
+      const court = config.courts.get(slot.courtId);
+      if (!court || court.number !== slot.courtNumber) {
+        errors.push(`Match ${slot.matchId} references invalid court ${slot.courtId}.`);
+      }
     }
     if (slot.end.getTime() <= slot.start.getTime()) {
       errors.push(`Match ${slot.matchId} has an invalid time range.`);
@@ -863,13 +886,24 @@ export function validateGraspSchedule(
         !slot ||
         match.start == null ||
         match.end == null ||
-        match.courtNumber == null ||
         slot.start.getTime() !== match.start ||
         slot.end.getTime() !== match.end ||
-        slot.courtNumber !== match.courtNumber
+        // A match with no court of its own was never on one, so a court is not
+        // something it can have been moved off. `NO_COURT` is the sentinel the
+        // anchor was recorded under, and it is what `match.courtNumber` is null as.
+        (match.courtNumber != null && slot.courtNumber !== match.courtNumber)
       ) {
         errors.push(`Fixed match ${match.id} was moved or omitted.`);
       }
+      // A fixed match's time is given, not chosen, so its dependency ordering is
+      // history rather than something the scheduler could get wrong. It can look
+      // violated without anything being wrong: a match played ahead of schedule
+      // keeps its planned slot as the window it occupied, so that slot can outlast
+      // the real finish and overlap the next match that was also played early.
+      // Judging that here would fail every GRASP run and refuse the whole batch,
+      // which makes a partly played event impossible to reschedule — exactly when a
+      // rebuild is most needed. Only placements the scheduler chose are checked.
+      continue;
     }
 
     const slot = slotByMatch.get(match.id);

@@ -572,7 +572,7 @@ export function teamPlayerIds(team: Team | undefined): string[] {
   return team.player_2_id ? [team.player_1_id, team.player_2_id] : [team.player_1_id];
 }
 
-export function indexBy<T extends { id: string }>(rows: T[] | undefined): Map<string, T> {
+export function indexBy<T extends { id: string }>(rows: readonly T[] | undefined): Map<string, T> {
   return new Map((rows ?? []).map((r) => [r.id, r]));
 }
 
