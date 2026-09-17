@@ -27,7 +27,25 @@ export type TournamentDayBreak = Database["public"]["Tables"]["tournament_day_br
 export type StaffRole = Database["public"]["Tables"]["staff_roles"]["Row"];
 export type StaffRoleName = "admin" | "registrar" | "scorer" | "scheduler";
 
+/**
+ * The two-round placement format's own tables. These are deliberately separate
+ * from `pools`/`pool_matches`/`draws`/`draw_matches`, which the legacy
+ * round-robin engine still owns, so no hook has to guess which format it is
+ * looking at.
+ */
+export type PlacementEntrant = Database["public"]["Tables"]["placement_entrants"]["Row"];
+export type PlacementMatch = Database["public"]["Tables"]["placement_matches"]["Row"];
+export type TierDraw = Database["public"]["Tables"]["tier_draws"]["Row"];
+export type TierDrawMatch = Database["public"]["Tables"]["tier_draw_matches"]["Row"];
+
+/** The stages the legacy round-robin scheduler knows how to place. */
 export type StageName = "group" | "knockout";
+
+/**
+ * The stages the placement format schedules. `placement` replaces `group` as the
+ * first stage and `knockout` here means the A/B/C/D tier draws.
+ */
+export type PlacementStageName = "placement" | "knockout";
 
 async function must<T>(
   p: PromiseLike<{ data: T | null; error: { message: string } | null }>,
@@ -65,6 +83,10 @@ export const keys = {
   dayBreaks: ["tournament_day_breaks"] as const,
   staffRole: ["staff_role"] as const,
   staffRoles: ["staff_roles"] as const,
+  placementEntrants: ["placement_entrants"] as const,
+  placementMatches: ["placement_matches"] as const,
+  tierDraws: ["tier_draws"] as const,
+  tierDrawMatches: ["tier_draw_matches"] as const,
 };
 
 /** The tournament the desk is currently operating on. */
@@ -529,4 +551,84 @@ export function teamPlayerIds(team: Team | undefined): string[] {
 
 export function indexBy<T extends { id: string }>(rows: T[] | undefined): Map<string, T> {
   return new Map((rows ?? []).map((r) => [r.id, r]));
+}
+
+// ---------------------------------------------------------------------------
+// Two-round placement format
+//
+// These read the format's own tables. Ordered the way the desk reads them:
+// entrants by seed, matches by stage then generation key, and each tier draw's
+// matches by round and slot so a bracket renders top to bottom.
+// ---------------------------------------------------------------------------
+
+export function usePlacementEntrants() {
+  const tournamentId = useActiveTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.placementEntrants, tournamentId),
+    enabled: !!tournamentId,
+    refetchInterval: 20_000,
+    queryFn: () =>
+      must<PlacementEntrant[]>(
+        supabase
+          .from("placement_entrants")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          // Nulls last: unseeded entrants are shown after the seeded order rather
+          // than jumbled into it, which is what makes the pre-lock list readable.
+          .order("seed", { ascending: true, nullsFirst: false }),
+      ),
+  });
+}
+
+export function usePlacementMatches() {
+  const tournamentId = useActiveTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.placementMatches, tournamentId),
+    enabled: !!tournamentId,
+    refetchInterval: 20_000,
+    queryFn: () =>
+      must<PlacementMatch[]>(
+        supabase
+          .from("placement_matches")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("stage")
+          .order("generation_key"),
+      ),
+  });
+}
+
+export function useTierDraws() {
+  const tournamentId = useActiveTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.tierDraws, tournamentId),
+    enabled: !!tournamentId,
+    refetchInterval: 20_000,
+    queryFn: () =>
+      must<TierDraw[]>(
+        supabase
+          .from("tier_draws")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("tier"),
+      ),
+  });
+}
+
+export function useTierDrawMatches() {
+  const tournamentId = useActiveTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.tierDrawMatches, tournamentId),
+    enabled: !!tournamentId,
+    refetchInterval: 20_000,
+    queryFn: () =>
+      must<TierDrawMatch[]>(
+        supabase
+          .from("tier_draw_matches")
+          .select("*")
+          .eq("tournament_id", tournamentId as string)
+          .order("round")
+          .order("slot"),
+      ),
+  });
 }

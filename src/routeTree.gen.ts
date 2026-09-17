@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DrawsRouteImport } from './routes/draws'
 import { Route as MatchesRouteImport } from './routes/matches'
+import { Route as PlacementRouteImport } from './routes/placement'
 import { Route as PoolsRouteImport } from './routes/pools'
 import { Route as RegistrationRouteImport } from './routes/registration'
 import { Route as ScheduleRouteImport } from './routes/schedule'
@@ -37,6 +38,11 @@ const DrawsRoute = DrawsRouteImport.update({
 const MatchesRoute = MatchesRouteImport.update({
   id: '/matches',
   path: '/matches',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlacementRoute = PlacementRouteImport.update({
+  id: '/placement',
+  path: '/placement',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PoolsRoute = PoolsRouteImport.update({
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/draws': typeof DrawsRoute
   '/matches': typeof MatchesRoute
+  '/placement': typeof PlacementRoute
   '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/draws': typeof DrawsRoute
   '/matches': typeof MatchesRoute
+  '/placement': typeof PlacementRoute
   '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/draws': typeof DrawsRoute
   '/matches': typeof MatchesRoute
+  '/placement': typeof PlacementRoute
   '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/draws'
     | '/matches'
+    | '/placement'
     | '/pools'
     | '/registration'
     | '/schedule'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/draws'
     | '/matches'
+    | '/placement'
     | '/pools'
     | '/registration'
     | '/schedule'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/draws'
     | '/matches'
+    | '/placement'
     | '/pools'
     | '/registration'
     | '/schedule'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   DrawsRoute: typeof DrawsRoute
   MatchesRoute: typeof MatchesRoute
+  PlacementRoute: typeof PlacementRoute
   PoolsRoute: typeof PoolsRoute
   RegistrationRoute: typeof RegistrationRoute
   ScheduleRoute: typeof ScheduleRoute
@@ -175,6 +188,13 @@ declare module '@tanstack/react-router' {
       path: '/matches'
       fullPath: '/matches'
       preLoaderRoute: typeof MatchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/placement': {
+      id: '/placement'
+      path: '/placement'
+      fullPath: '/placement'
+      preLoaderRoute: typeof PlacementRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pools': {
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   DrawsRoute: DrawsRoute,
   MatchesRoute: MatchesRoute,
+  PlacementRoute: PlacementRoute,
   PoolsRoute: PoolsRoute,
   RegistrationRoute: RegistrationRoute,
   ScheduleRoute: ScheduleRoute,

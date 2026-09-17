@@ -581,13 +581,19 @@ export interface PlacementGate {
  * required placement matches; a waived entrant is skipped rather than blocking
  * the whole category, which matters because a single void would otherwise stall
  * everything behind it.
+ *
+ * The field size that decides `required` counts only the entrants who are
+ * actually playing. Including waived entrants would change the requirement: two
+ * active entrants plus one waived is still a field of two, which needs one match,
+ * not two. This mirrors `placement_required_matches` in SQL, which filters on
+ * `NOT excluded` for the same reason.
  */
 export function placementGate(
   entrants: readonly PlacementGateEntrant[],
   outcomes: readonly EntrantPlacementOutcome[],
 ): PlacementGate {
-  const fieldSize = entrants.length;
-  const required = requiredPlacementMatches(fieldSize);
+  const playing = entrants.filter((entrant) => !entrant.excluded);
+  const required = requiredPlacementMatches(playing.length);
   const playedById = new Map(outcomes.map((outcome) => [outcome.entrantId, outcome.played]));
 
   const short: { entrantId: string; played: number; required: number }[] = [];

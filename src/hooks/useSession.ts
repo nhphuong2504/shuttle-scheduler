@@ -126,5 +126,12 @@ export function useSession() {
     canScore: can("admin", "scorer"),
     canSchedule: can("admin", "scheduler"),
     canGenerate: can("admin", "registrar"),
+    // The placement format's own gates, matching its RPCs exactly. They are
+    // separate from the round-robin flags because the database roles differ:
+    // `sync_placement_entrants` accepts a registrar, while generating and locking
+    // is scheduler work and reporting is scorer work.
+    canEditPlacementEntrants: can("admin", "registrar", "scheduler"),
+    canGeneratePlacement: can("admin", "scheduler"),
+    canScorePlacement: can("admin", "scorer", "scheduler"),
   };
 }

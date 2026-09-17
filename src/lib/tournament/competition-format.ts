@@ -2,15 +2,23 @@
  * The competition format this app runs.
  *
  * Exactly one format is supported, so it is described once here and rendered by
- * the creation wizard's Structure step and its review summary. The engine that
- * actually generates matches is not built yet; this module is the shared
- * description of the format the engine will have to implement, kept in one place
- * so the wizard and the future engine cannot drift apart.
+ * the creation wizard's Structure step and its review summary. This module is the
+ * shared *description* of the format; the engine that generates matches lives in
+ * `placement.ts` (pairing, make-up matches, tiers), `tier-draw.ts` (the A/B/C/D
+ * brackets) and `placement-seed.ts` (skill-block seeding). Keeping the prose here
+ * rather than inside the engine is what stops the wizard and the engine from
+ * describing the format differently.
  *
  * Structure: a two-round placement stage, then A/B/C/D single-elimination draws.
  * An entrant's two placement results determine their draw:
  *
  *   WW -> A, WL -> B, LW -> C, LL -> D
+ *
+ * An odd entry count does not need a bye, and in fact the placement stage has no
+ * concept of one: it *holds* one entrant out of round one, and that entrant then
+ * plays two make-up matches in round two, one against a round-one winner and one
+ * against a round-one loser. Every entrant therefore plays exactly twice and
+ * reaches a draw with a complete record.
  */
 
 export type PlacementRecord = "WW" | "WL" | "LW" | "LL";
@@ -99,7 +107,7 @@ export const SUPPORTED_FORMAT: CompetitionFormat = {
     rounds: 2,
     matchesPerEntrant: 2,
     detail:
-      "Round one pairs entrants up. Winners meet winners and losers meet losers in round two, so every entrant plays exactly two matches.",
+      "Round one pairs entrants up. Winners meet winners and losers meet losers in round two, so every entrant plays exactly two matches. With an odd entry count one entrant is held out of round one and plays both matches in round two: one against a round-one winner, one against a round-one loser.",
   },
   knockout: {
     name: "Knockout draws",
@@ -116,15 +124,19 @@ export function placementRuleSummary(): string {
 }
 
 /**
- * Whether a category can run this format as specified. Two placement rounds
- * produce the WW/WL/LW/LL records only when the entrant count is even, so an odd
- * count needs a bye and therefore an engine rule that is not decided yet.
+ * How an odd entry count is handled.
+ *
+ * This used to be a blocker: two rounds only produce WW/WL/LW/LL for an even
+ * field, and the fix was undecided. It is decided now — the placement stage holds
+ * one entrant rather than issuing a bye, so an odd count needs no special casing
+ * anywhere. This function returns a host-facing explanation of that, or null when
+ * the count is even, so the UI can still call attention to the held entrant.
  */
-export const EVEN_ENTRANTS_REQUIRED = true;
-
-export function entrantCountCaveat(entrantCount: number | null): string | null {
-  if (entrantCount == null || entrantCount === 0) return null;
-  if (!EVEN_ENTRANTS_REQUIRED) return null;
+export function entrantCountNote(entrantCount: number | null): string | null {
+  if (entrantCount == null || entrantCount <= 2) return null;
   if (entrantCount % 2 === 0) return null;
-  return "An odd number of entrants needs a bye. How a bye counts toward the two placement results is not decided yet.";
+  return (
+    "One entrant is held out of round one and plays both of their placement matches in round two, " +
+    "so nobody has a bye and everyone still plays exactly twice."
+  );
 }

@@ -14,10 +14,14 @@ import { cn } from "@/lib/utils";
  * its scheduling is temporarily disabled until that engine is built. The route
  * files and every library they depend on are untouched, so the pages still exist
  * for a direct URL; only the nav entries are gone.
+ *
+ * Placement is the format that *is* built, so it is the one entry that leads to
+ * its own engine.
  */
 const NAV = [
   { to: "/", label: "Desk" },
   { to: "/registration", label: "Registration" },
+  { to: "/placement", label: "Placement" },
   { to: "/matches", label: "Scores" },
 ] as const;
 

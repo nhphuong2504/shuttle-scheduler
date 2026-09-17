@@ -50,6 +50,9 @@ AS $$
   WHERE category_id = p_category_id AND NOT excluded;
 $$;
 
+REVOKE ALL ON FUNCTION public.placement_required_matches(uuid) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION public.placement_required_matches(uuid) TO authenticated;
+
 -- Decided matches for one entrant. `walkover` counts: it is a real result for
 -- tier purposes even though no games were played.
 CREATE OR REPLACE FUNCTION public.placement_decided_matches(
@@ -68,6 +71,14 @@ AS $$
     AND m.winner_id IS NOT NULL
     AND p_entrant_id IN (m.entrant_a_id, m.entrant_b_id);
 $$;
+
+-- Both helpers are called from inside the SECURITY DEFINER functions below, which
+-- run with the owner's rights, so revoking them from `anon` costs nothing. The
+-- client never calls them: it recomputes the same numbers in TypeScript. Note the
+-- tables themselves are deliberately anon-readable, so this is about keeping the
+-- surface consistent, not about closing a leak.
+REVOKE ALL ON FUNCTION public.placement_decided_matches(uuid, uuid) FROM anon, PUBLIC;
+GRANT EXECUTE ON FUNCTION public.placement_decided_matches(uuid, uuid) TO authenticated;
 
 -------------------------------------------------------------------------------
 -- 2. Entrants and skill levels

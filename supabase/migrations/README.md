@@ -505,3 +505,60 @@ so reporting a placement result does not yet time-shift the rest of the day. Tha
 deliberately left untouched here; the new tables are wired into it when the new format gets its
 scheduler UI.
 
+## Applying `20260917020000_placement_helper_grants.sql`
+
+A two-statement follow-up to the RPC migration above. Apply it after both placement migrations.
+
+### What it fixes
+
+The RPC migration states that every function it creates repeats its own
+`REVOKE ALL ... FROM anon, PUBLIC`, because `CREATE FUNCTION` grants EXECUTE to PUBLIC by default
+and the auth-hardening migration could only close the functions that existed when it ran. Two of
+them did not: the read-only helpers `placement_required_matches` and `placement_decided_matches`.
+
+That was confirmed against the deployed project rather than inferred. Calling each function over
+PostgREST with the publishable key:
+
+| Function                        | Result before            | Expected          |
+| ------------------------------- | ------------------------ | ----------------- |
+| `placement_required_matches`    | `200` (callable by anon) | `401`             |
+| every other placement RPC       | `401 permission denied`  | `401`             |
+
+**This is not a data leak**, and the reason is worth stating so it is not over-read as one:
+
+- Both helpers are `LANGUAGE sql` and **not** `SECURITY DEFINER`, so they run with the caller's
+  rights and stay bound by the RLS policies on the tables they read.
+- Those policies are `USING (true)` with an explicit `GRANT SELECT ... TO anon`, because the desk
+  has a read-only unauthenticated view. An anonymous caller could already read the same rows
+  directly.
+
+So what this closes is a discrepancy between the code and its own stated gating — someone
+auditing the surface from that header comment would have been auditing the wrong set of functions.
+
+### Why it cannot break anything
+
+Neither helper is reachable from the client: the TypeScript engine recomputes both numbers in
+`placement.ts`. The only real callers are the `SECURITY DEFINER` functions in the same file, which
+resolve the call with the owner's rights and are unaffected by the revoke.
+
+### Verify after applying
+
+```sql
+-- both must read false
+SELECT p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN ('placement_required_matches', 'placement_decided_matches')
+ORDER BY p.proname;
+```
+
+Then re-run the round-trip check from the previous section. It must still behave identically: a
+revoked helper is only ever called from inside a `SECURITY DEFINER` function, so the desk's own
+actions are unaffected.
+
+### Rolling back
+
+`GRANT EXECUTE ON FUNCTION ... TO anon, PUBLIC;` for both. There is no reason to: the grant only
+ever exposed a function the client does not call.
+
+

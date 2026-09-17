@@ -478,6 +478,52 @@ describe("placementGate", () => {
     expect(gate.excluded).toBe(1);
     expect(gate.counted).toBe(3);
     expect(gate.ready).toBe(true);
+    // The waived entrant is counted in the field size only if the requirement
+    // were wrongly derived from the unfiltered list; four entrants need two
+    // matches, and one of them has played none.
+    expect(gate.requiredMatches).toBe(2);
+  });
+
+  it("derives the requirement from the playing field, not including waivers", () => {
+    // Two active entrants need ONE match, even with a waived third in the list.
+    // Deriving it from the unfiltered list would demand two and deadlock the
+    // category behind a waiver. This mirrors `placement_required_matches`.
+    const list = [
+      { id: "e1", seed: 1 },
+      { id: "e2", seed: 2 },
+      { id: "e3", seed: 3, excluded: true },
+    ];
+    const outcomes = [
+      {
+        entrantId: "e1",
+        seed: 1,
+        played: 1,
+        wins: 1,
+        losses: 0,
+        firstWon: true,
+        secondWon: null,
+        isHeld: false,
+        record: null,
+        tier: null,
+      },
+      {
+        entrantId: "e2",
+        seed: 2,
+        played: 1,
+        wins: 0,
+        losses: 1,
+        firstWon: false,
+        secondWon: null,
+        isHeld: false,
+        record: null,
+        tier: null,
+      },
+    ];
+
+    const gate = placementGate(list, outcomes);
+    expect(gate.requiredMatches).toBe(1);
+    expect(gate.counted).toBe(2);
+    expect(gate.ready).toBe(true);
   });
 });
 
