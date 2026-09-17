@@ -294,33 +294,6 @@ export type Database = {
           },
         ]
       }
-      players: {
-        Row: {
-          created_at: string
-          email: string | null
-          gender: string | null
-          id: string
-          name: string
-          phone: string | null
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          gender?: string | null
-          id?: string
-          name: string
-          phone?: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          gender?: string | null
-          id?: string
-          name?: string
-          phone?: string | null
-        }
-        Relationships: []
-      }
       placement_entrants: {
         Row: {
           category_id: string
@@ -493,6 +466,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      players: {
+        Row: {
+          created_at: string
+          email: string | null
+          gender: string | null
+          id: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          gender?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          gender?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: []
       }
       pool_entries: {
         Row: {
@@ -1232,7 +1232,10 @@ export type Database = {
       }
       active_tournament_id: { Args: never; Returns: string }
       advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
-      advance_tier_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
+      advance_tier_draw_locked: {
+        Args: { p_draw_id: string }
+        Returns: undefined
+      }
       apply_day_schedule: {
         Args: {
           p_day: number
@@ -1248,7 +1251,7 @@ export type Database = {
         Returns: undefined
       }
       apply_placement_day_schedule: {
-        Args: { p_stage: string; p_slots: Json; p_tournament_id: string }
+        Args: { p_slots: Json; p_stage: string; p_tournament_id: string }
         Returns: undefined
       }
       apply_placement_generation: {
@@ -1310,6 +1313,7 @@ export type Database = {
         Returns: undefined
       }
       normalize_email: { Args: { value: string }; Returns: string }
+      notes_trim: { Args: { p_value: string }; Returns: string }
       placement_check_games: {
         Args: {
           p_best_of: number
@@ -1391,7 +1395,11 @@ export type Database = {
         Returns: undefined
       }
       set_placement_skill: {
-        Args: { p_category_id: string; p_skill_level: string; p_team_id: string }
+        Args: {
+          p_category_id: string
+          p_skill_level: string
+          p_team_id: string
+        }
         Returns: undefined
       }
       shift_live_schedule_after_match: {

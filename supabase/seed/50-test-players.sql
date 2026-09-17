@@ -63,12 +63,14 @@ DECLARE
   -- in round two, which is the format's least obvious path. Sizing a range down
   -- to 2 is the other one worth trying, and exercises the no-round-two case.
   -- -------------------------------------------------------------------------
-  v_ms_lo    int := 1;  v_ms_hi    int := 13;  -- Men's Singles   : 13 entrants, odd
-  v_md_lo    int := 13; v_md_hi    int := 30;  -- Men's Doubles   : 9 pairs, odd
-  v_xd_men_lo int := 23; v_xd_men_hi int := 30; -- Mixed Doubles  : 8 pairs
-  v_ws_lo    int := 1;  v_ws_hi    int := 7;   -- Women's Singles : 7 entrants, odd
-  v_wd_lo    int := 7;  v_wd_hi    int := 16;  -- Women's Doubles : 5 pairs, odd
-  v_xd_women_lo int := 13; v_xd_women_hi int := 20;
+  -- Overlap is deliberate: men 19..23 and women 9..12 land in three categories,
+  -- which is what exercises a cap of 3 rather than 2.
+  v_ms_lo    int := 1;  v_ms_hi    int := 23;  -- Men's Singles   : 23 entrants, odd
+  v_md_lo    int := 9;  v_md_hi    int := 30;  -- Men's Doubles   : 11 pairs, odd
+  v_xd_men_lo int := 19; v_xd_men_hi int := 30; -- Mixed Doubles  : 12 pairs
+  v_ws_lo    int := 1;  v_ws_hi    int := 12;  -- Women's Singles : 12 entrants
+  v_wd_lo    int := 5;  v_wd_hi    int := 16;  -- Women's Doubles : 6 pairs
+  v_xd_women_lo int := 9; v_xd_women_hi int := 20;
 
   v_tournament uuid;
   v_tname      text;
