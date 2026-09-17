@@ -712,6 +712,28 @@ export async function startTierDrawMatch(matchId: string, courtId: string | null
 }
 
 /**
+ * Moves a placement-format match to another court and time, by hand.
+ *
+ * `p_table` is one of the two placement tables, matching the desk's own
+ * table-scoped move for the round-robin format. The database refuses a move onto an
+ * occupied court or a player who is busy or still resting, using the group timings
+ * for the placement rounds and the knockout timings for the brackets.
+ */
+export async function reschedulePlacementMatch(
+  table: "placement_matches" | "tier_draw_matches",
+  matchId: string,
+  courtId: string,
+  scheduledTime: string,
+): Promise<void> {
+  await rpc("reschedule_placement_match", {
+    p_table: table,
+    p_match_id: matchId,
+    p_court_id: courtId,
+    p_scheduled_time: scheduledTime,
+  });
+}
+
+/**
  * Clears a placement result.
  *
  * The database refuses this for a round-one match once round two exists, because

@@ -383,9 +383,9 @@ WW -> Draw A    WL -> Draw B    LW -> Draw C    LL -> Draw D
 
 This is the single easiest thing to get wrong, so it is worth stating plainly:
 
-- **Placement stage — no byes.** An odd entry count *holds* one entrant out of round one. That
+- **Placement stage — no byes.** An odd entry count _holds_ one entrant out of round one. That
   entrant then plays two make-up matches in round two: first the seed-nearest round-one winner,
-  then the seed-nearest loser. Holding is expressed as the *absence* of a row rather than a "bye"
+  then the seed-nearest loser. Holding is expressed as the _absence_ of a row rather than a "bye"
   row, which is what makes it neutral — there is nothing that can accidentally be counted as a
   win, a loss, or one of the entrant's two matches.
 - **Knockout stage — byes allowed, and they go to the highest seed.** A knockout only needs to
@@ -394,12 +394,12 @@ This is the single easiest thing to get wrong, so it is worth stating plainly:
 
 ### What the first migration adds
 
-| Table                 | Holds                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| `placement_entrants`  | One row per team per category, with the skill level, the permanent seed and the tier.   |
-| `placement_matches`   | Rounds one and two, including the make-up and crossover flags and the prerequisite list. |
-| `tier_draws`          | One row per tier: bracket size, entrant count, and the champion once known.             |
-| `tier_draw_matches`   | The bracket rounds, with byes pre-decided and `games` for a best-of-three rule.          |
+| Table                | Holds                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `placement_entrants` | One row per team per category, with the skill level, the permanent seed and the tier.    |
+| `placement_matches`  | Rounds one and two, including the make-up and crossover flags and the prerequisite list. |
+| `tier_draws`         | One row per tier: bracket size, entrant count, and the champion once known.              |
+| `tier_draw_matches`  | The bracket rounds, with byes pre-decided and `games` for a best-of-three rule.          |
 
 Three constraints carry most of the weight:
 
@@ -420,26 +420,26 @@ exist.
 
 All gated on `public.has_staff_role(...)`, matching the role the equivalent round-robin RPC uses.
 
-| RPC                                    | Purpose                                                                                   |
-| -------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `sync_placement_entrants(category)`    | Materialises one entrant per active team; waives withdrawn teams. Idempotent.             |
-| `set_placement_skill(category, team, level)` | The desk's skill override. Refused once seeds are locked.                            |
-| `lock_placement_seeds(category, seeds)` | Writes and freezes the shuffled seed order.                                              |
-| `apply_placement_generation(...)`      | Creates round one.                                                                        |
-| `apply_placement_round_two(...)`       | Creates round two, refused until every round-one result exists.                           |
-| `apply_tier_draws(...)`                | Writes the tier assignment and the four brackets. Re-checks the gate.                    |
-| `advance_tier_draw_locked(draw)`       | Internal: pairs the adjacent slots of a finished round.                                  |
-| `report_placement_result(...)`         | Reports a placement result under the **placement** scoring rule.                          |
-| `report_tier_draw_result(...)`         | Reports a knockout result under the **knockout** rule, then advances the bracket.         |
-| `start_placement_match` / `start_tier_draw_match` | Marks a match in progress without committing a result.                         |
+| RPC                                                 | Purpose                                                                             |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `sync_placement_entrants(category)`                 | Materialises one entrant per active team; waives withdrawn teams. Idempotent.       |
+| `set_placement_skill(category, team, level)`        | The desk's skill override. Refused once seeds are locked.                           |
+| `lock_placement_seeds(category, seeds)`             | Writes and freezes the shuffled seed order.                                         |
+| `apply_placement_generation(...)`                   | Creates round one.                                                                  |
+| `apply_placement_round_two(...)`                    | Creates round two, refused until every round-one result exists.                     |
+| `apply_tier_draws(...)`                             | Writes the tier assignment and the four brackets. Re-checks the gate.               |
+| `advance_tier_draw_locked(draw)`                    | Internal: pairs the adjacent slots of a finished round.                             |
+| `report_placement_result(...)`                      | Reports a placement result under the **placement** scoring rule.                    |
+| `report_tier_draw_result(...)`                      | Reports a knockout result under the **knockout** rule, then advances the bracket.   |
+| `start_placement_match` / `start_tier_draw_match`   | Marks a match in progress without committing a result.                              |
 | `reset_placement_result` / `reset_tier_draw_result` | Clears a result so it can be re-entered, refusing when a later round depends on it. |
-| `apply_placement_day_schedule(...)`    | Persists one GRASP pass for the placement or knockout stage.                              |
+| `apply_placement_day_schedule(...)`                 | Persists one GRASP pass for the placement or knockout stage.                        |
 
 ### Why the pairing algorithms are not in SQL
 
 They live in TypeScript, in `src/lib/tournament/placement.ts` and
 `src/lib/tournament/tier-draw.ts`, where `placement.test.ts` exercises every field size from 3 to
-16 against *every* combination of results and asserts that each entrant plays exactly twice, that
+16 against _every_ combination of results and asserts that each entrant plays exactly twice, that
 no pairing ever repeats, and that a crossover is used exactly when `N mod 4` is 1 or 2.
 
 The SQL here **validates and persists** instead of re-deriving: it re-checks the placement gate,
@@ -611,13 +611,13 @@ it is at right after "Sync entrants" — the next action is **Shuffle & lock see
 
 ### Why it is an RPC rather than client-side deletes
 
-* **Ordering.** `tier_draw_matches` and `tier_draws` both reference `placement_entrants`, and
+- **Ordering.** `tier_draw_matches` and `tier_draws` both reference `placement_entrants`, and
   `tier_draw_matches` references itself. Four round trips from the client can fail halfway and leave
   a tournament with draws but no matches. One function is one transaction.
-* **Authorization.** `placement_entrants` is writable by `admin`/`registrar` and the match tables by
+- **Authorization.** `placement_entrants` is writable by `admin`/`registrar` and the match tables by
   `admin`/`scheduler`, so no single staff role can clear both paths through the table policies. The
   RPC is **admin-only**, which is the only role that should be able to discard a played event.
-* **Locking.** It takes the same `live-schedule` advisory lock as `apply_placement_day_schedule()`
+- **Locking.** It takes the same `live-schedule` advisory lock as `apply_placement_day_schedule()`
   and `shift_live_schedule_after_match()`, so a reset cannot interleave with a build or a reflow.
 
 Scoped to the placement format's own tables. The legacy round-robin tables are untouched.
@@ -643,6 +643,117 @@ deletes, what it clears, the counts it returns, that a second tournament is unto
 second run is harmless, that seeds can be re-locked afterwards without tripping the partial unique
 index, that a waiver is cleared, that `scorer`/`scheduler`/`registrar`/anonymous are all refused,
 and that the function is `SECURITY DEFINER` with no `anon` or `PUBLIC` grant.
+
+## Applying `20260917060000_placement_desk_move.sql`
+
+Adds the missing **move** for the placement format, so the Control Desk can run a placement
+tournament as it runs a round-robin one. `20260917010000` already covers starting, scoring and
+correcting a placement match; moving one by hand was the gap.
+
+### Why it is not a widening of `reschedule_live_match`
+
+`reschedule_live_match()` guards a move through `assert_match_eligible()`, which resolves a match's
+players straight from `team_a_id` / `team_b_id`. A placement match has no team columns: it carries
+entrant ids, and an entrant is what points at a team. Teaching that shared function about the new
+tables would mean editing three duplicated occupancy CTEs inside the guarantee for the live
+round-robin format, and it would cut across the separation between the two formats. So the placement
+format gets its own helper and its own move.
+
+### What it adds
+
+1. **`placement_occupied_matches(p_tournament_id)`** — every placement-format match, with its
+   resolved player list and its real end time. Both guards are then a single interval test over
+   this, instead of repeating a four-branch union twice. It is deliberately **not** filtered to
+   matches that already have a time: a match with no `scheduled_time` has a NULL `starts_at`, so it
+   clashes with nothing, and keeping it in the set is what lets the move resolve the players of a
+   match it is about to place for the first time.
+2. **`reschedule_placement_match(p_table, p_match_id, p_court_id, p_scheduled_time)`** — one
+   function for both placement tables, because the body is identical apart from the duration and the
+   bye guard.
+
+### The guards, and why they are not ceremony
+
+The two rounds of a placement stage are not independent. Round two is generated from the round-one
+winners and losers, and for an odd field the held entrant plays two make-up matches whose opponents
+were picked from those sets. A match moved on top of another player's slot, or inside their rest
+gap, produces a round two that is correct on paper and impossible on court. So the move refuses:
+
+- a **court** that is occupied during the requested time,
+- a **player** who is busy or still inside their rest gap,
+- a move **into the past**,
+- a court belonging to **another tournament**,
+- a match that has **already started** — a started match is an anchor, not a movable row,
+- a match with an **unassigned side**.
+
+Both clashes are measured with the right duration for the stage: the **group** timings for the
+placement rounds and the **knockout** timings for the A/B/C/D brackets. An in-progress match is
+modelled as ending no earlier than now, so an overrun match still holds its court until it is
+reported, and a **bye occupies nothing**.
+
+### Verify after applying
+
+On `/`, open a placement match on the Court board. **Move / delay** should offer a court and a time,
+and:
+
+| Attempt                                   | Expected                                                      |
+| ----------------------------------------- | ------------------------------------------------------------- |
+| Move to a free court and time             | Accepted, and the card moves                                  |
+| Move onto a court busy at that time       | `That court is occupied during the requested time`            |
+| Move a match whose player is playing then | `A player is busy or has not completed the required rest gap` |
+| Move a match into its own rest gap        | Same message                                                  |
+| Move to a past time                       | `A scheduled match cannot be moved into the past`             |
+| Move a bracket match awaiting its teams   | `Both sides must be assigned before this match can be moved`  |
+
+### What this migration deliberately does not do
+
+**Walkovers and voids are not available for the placement format.** `resolve_match_exception()` only
+accepts `pool_matches` and `draw_matches`. Rather than offer a control that fails, the desk hides the
+Walkover and Void buttons for the two placement kinds. A no-show in this format is currently handled
+by correcting the result and, if needed, regenerating the stage.
+
+### Rolling back
+
+```sql
+DROP FUNCTION IF EXISTS public.reschedule_placement_match(text, uuid, uuid, timestamptz);
+DROP FUNCTION IF EXISTS public.placement_occupied_matches(uuid);
+```
+
+The desk's **Move / delay** control then fails with a "function not found" toast, as it did before.
+
+---
+
+## Applying `20260917070000_placement_reset_clears_start.sql`
+
+One-line fix to `reset_placement_result()`: clearing a placement result now also clears `started_at`.
+
+### The defect
+
+`reset_tier_draw_result()` already sets `started_at = NULL`, and so does `reset_and_repair_match()`
+for the round-robin tables. `reset_placement_result()` was the only one that did not, which left a
+placement match **"scheduled" while still carrying a real start time**. That is not cosmetic, because
+two things read `started_at` unconditionally:
+
+- `start_placement_match()` starts from `COALESCE(started_at, statement_timestamp())`. A match that
+  was started, reset and started again therefore kept the **original** start, so the desk showed it as
+  enormously overrun the moment it restarted.
+- `placement_occupied_matches()`, added by `20260917060000` above, measures a match from
+  `COALESCE(started_at, scheduled_time)`. A stale start time makes a reset match occupy a court from
+  the wrong instant, so a hand-move could be refused against a match that is no longer happening.
+
+The whole point of a reset is to put the match back to a clean, replayable state, so the start time
+goes with the result. Nothing else about the function changes.
+
+### Verify after applying
+
+Start a placement match on `/`, clear its result, then start it again. The elapsed timer should
+restart from `0′` rather than showing the time since the **first** start.
+
+### Rolling back
+
+Re-apply the `reset_placement_result` definition from `20260917010000_placement_stage_rpcs.sql`,
+which is the version without `started_at = NULL`.
+
+---
 
 ## Known behaviour: an early report rewrites the rest of that court's day
 
@@ -673,11 +784,11 @@ next match is reported.
 Measured on the seeded field, 8 courts and 31 round-one matches, all reported about 18 hours ahead
 of their 09:00 slot:
 
-* 23 of the 31 rows had `scheduled_time` rewritten to a timestamp within ~1.1 seconds of the
+- 23 of the 31 rows had `scheduled_time` rewritten to a timestamp within ~1.1 seconds of the
   report calls.
-* On **every one of the 8 courts** exactly the first match in the sequence kept its planned time —
+- On **every one of the 8 courts** exactly the first match in the sequence kept its planned time —
   the reflow's own source, which is immovable — and every match behind it was rewritten.
-* The matches that were rewritten were mostly **unplayed**. They were moved to a time that had
+- The matches that were rewritten were mostly **unplayed**. They were moved to a time that had
   already passed, so the running order showed them as overdue before anyone had been on court.
 
 Ordinary use is not affected: report a match at or after its slot and the shift is minutes, which is
@@ -685,11 +796,11 @@ the intended "the day is running late / running ahead" adjustment.
 
 ### If it happens
 
-A rebuild replans the *movable* matches from the current time, so those recover on their own.
+A rebuild replans the _movable_ matches from the current time, so those recover on their own.
 Reported matches are immovable anchors and keep the rewritten time, so a rebuild will not restore
 the plan for those rows — correct `scheduled_time` on them directly if the displayed time matters.
 Note that the rewritten value is usually when the match was genuinely played, so it is often right
-in its own terms and only wrong as a *plan*.
+in its own terms and only wrong as a _plan_.
 
 ### The change, if it is ever wanted
 
@@ -775,10 +886,10 @@ them did not: the read-only helpers `placement_required_matches` and `placement_
 That was confirmed against the deployed project rather than inferred. Calling each function over
 PostgREST with the publishable key:
 
-| Function                        | Result before            | Expected          |
-| ------------------------------- | ------------------------ | ----------------- |
-| `placement_required_matches`    | `200` (callable by anon) | `401`             |
-| every other placement RPC       | `401 permission denied`  | `401`             |
+| Function                     | Result before            | Expected |
+| ---------------------------- | ------------------------ | -------- |
+| `placement_required_matches` | `200` (callable by anon) | `401`    |
+| every other placement RPC    | `401 permission denied`  | `401`    |
 
 **This is not a data leak**, and the reason is worth stating so it is not over-read as one:
 
@@ -846,5 +957,3 @@ Expect MS 13, MD 9, XD 8, WS 7, WD 5 entries, and 50 players carrying a `@shuttl
 The odd fields are deliberate: an odd field is what makes the placement engine hold one entrant out
 of round one and give them two make-up matches in round two, which is the format's least obvious
 path.
-
-

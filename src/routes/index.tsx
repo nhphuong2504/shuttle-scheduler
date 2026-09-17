@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
@@ -33,6 +33,16 @@ import {
   type ScheduleImpact,
 } from "@/lib/tournament/actions";
 import {
+  reportPlacementMatch,
+  reportTierDrawMatch,
+  reschedulePlacementMatch,
+  resetPlacementResult,
+  resetTierDrawResult,
+  scheduleImpactNote,
+  startPlacementMatch,
+  startTierDrawMatch,
+} from "@/lib/tournament/placement-actions";
+import {
   indexBy,
   teamLabel,
   teamPlayerIds,
@@ -42,14 +52,19 @@ import {
   useDeskActivity,
   useDrawMatches,
   useDraws,
+  usePlacementEntrants,
+  usePlacementMatches,
   usePlayers,
   usePoolEntries,
   usePoolMatches,
   usePools,
   useRealtimeRefresh,
   useTeams,
+  useTierDrawMatches,
+  useTierDraws,
   useTournamentDays,
   type Court,
+  type PlacementMatch,
   type Player,
 } from "@/lib/tournament/data";
 import {
@@ -63,6 +78,7 @@ import {
 } from "@/lib/tournament/format";
 import {
   DEFAULT_KNOCKOUT_RULE,
+  DEFAULT_PLACEMENT_RULE,
   gamesNeededToWin,
   LEGACY_GAME_RULE,
   ruleForStage,
@@ -76,9 +92,13 @@ import {
 } from "@/lib/tournament/scheduler";
 import {
   deriveCourtState,
+  deskKindPhase,
+  deskKindScoringStage,
+  deskKindTable,
   finishStatusLabel,
   getMatchReadiness,
   getOperationalKpis,
+  isPlacementKind,
   type DeskMatchModel,
   type MatchReadiness,
 } from "@/lib/tournament/desk";
@@ -140,21 +160,64 @@ function Desk() {
   const { data: tournamentDays } = useTournamentDays();
   const { data: poolEntries } = usePoolEntries();
   const { data: activity } = useDeskActivity(signedIn);
-
-  /**
-   * Knockout scoring follows the tournament's configured rule. Placement matches
-   * stay on the legacy single-game-to-21 rule because `report_pool_result`, which
-   * the database uses for them, still enforces exactly that.
-   */
-  const knockoutRule = useMemo(
-    () => (tournament ? ruleForStage(tournament, "knockout") : DEFAULT_KNOCKOUT_RULE),
-    [tournament],
-  );
+  // The two-round placement format keeps its own tables, so the desk reads them
+  // alongside the round-robin ones rather than instead of them.
+  const { data: placementEntrants } = usePlacementEntrants();
+  const { data: placementMatches } = usePlacementMatches();
+  const { data: tierDraws } = useTierDraws();
+  const { data: tierDrawMatches } = useTierDrawMatches();
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
   const catMap = useMemo(() => indexBy(categories), [categories]);
   const courtMap = useMemo(() => indexBy(courts), [courts]);
+  const entrantMap = useMemo(() => indexBy(placementEntrants), [placementEntrants]);
+
+  /**
+   * A placement match holds entrant ids, and an entrant is what points at a team.
+   * Everything downstream — court readiness, rest gaps, the card label — speaks in
+   * teams, so this is the one place that hop is made.
+   */
+  const entrantTeam = useCallback(
+    (entrantId: string | null) => (entrantId ? (entrantMap.get(entrantId)?.team_id ?? null) : null),
+    [entrantMap],
+  );
+
+  /**
+   * What round a placement match belongs to, which the desk needs on the card: a
+   * make-up match is why one player appears twice in round two, and a crossover is
+   * an official part of tiering rather than a spare qualifier.
+   */
+  const placementTag = useCallback(
+    (match: PlacementMatch) => {
+      const code = catMap.get(match.category_id)?.code;
+      const round =
+        match.stage === "round1"
+          ? "R1"
+          : match.is_makeup
+            ? "R2 make-up"
+            : match.is_crossover
+              ? "R2 crossover"
+              : "R2";
+      return [code, round].filter(Boolean).join(" ");
+    },
+    [catMap],
+  );
+
+  /**
+   * The scoring rule a match is played under. Three stages, three rules: pool
+   * matches are the legacy single game to 21, the placement rounds use the
+   * tournament's placement rule, and both knockout brackets use the knockout rule.
+   */
+  const ruleFor = useCallback(
+    (kind: DeskMatch["kind"]) => {
+      const stage = deskKindScoringStage(kind);
+      if (stage === "legacy") return LEGACY_GAME_RULE;
+      if (tournament) return ruleForStage(tournament, stage);
+      return stage === "placement" ? DEFAULT_PLACEMENT_RULE : DEFAULT_KNOCKOUT_RULE;
+    },
+    [tournament],
+  );
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
 
   const matchPlayerIds = (m: Pick<DeskMatch, "teams">) =>
@@ -202,8 +265,64 @@ function Desk() {
         score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
         initialGames: m.status === "reported" ? parseGames(m.games) : undefined,
       })),
+      // The two-round placement format. Its rows carry entrant ids rather than team
+      // ids, so each side is resolved through the entrant before the players can be,
+      // and the desk card shows the entrant's team exactly as the Placement tab does.
+      ...(placementMatches ?? []).map((m) => {
+        const teams = [entrantTeam(m.entrant_a_id), entrantTeam(m.entrant_b_id)] as [
+          string | null,
+          string | null,
+        ];
+        return {
+          id: m.id,
+          kind: "placement" as const,
+          courtId: m.court_id,
+          status: m.status,
+          startedAt: m.started_at,
+          endedAt: m.ended_at,
+          scheduled: m.scheduled_time,
+          teams,
+          playerIds: teams.flatMap((id) => (id ? teamPlayerIds(teamMap.get(id)) : [])),
+          // Which round it is matters to the desk: a make-up match is why one player
+          // appears twice in round two, and a crossover is not a spare qualifier.
+          tag: placementTag(m),
+          score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
+          initialGames: m.status === "reported" ? parseGames(m.games) : undefined,
+        };
+      }),
+      ...(tierDrawMatches ?? []).map((m) => {
+        const teams = [entrantTeam(m.entrant_a_id), entrantTeam(m.entrant_b_id)] as [
+          string | null,
+          string | null,
+        ];
+        return {
+          id: m.id,
+          kind: "tier" as const,
+          courtId: m.court_id,
+          status: m.status,
+          startedAt: m.started_at,
+          endedAt: m.ended_at,
+          scheduled: m.scheduled_time,
+          teams,
+          playerIds: teams.flatMap((id) => (id ? teamPlayerIds(teamMap.get(id)) : [])),
+          tag: `Tier ${(tierDraws ?? []).find((d) => d.id === m.draw_id)?.tier ?? ""}`,
+          score: m.status === "reported" ? gamesLabel(parseGames(m.games)) : null,
+          initialGames: m.status === "reported" ? parseGames(m.games) : undefined,
+        };
+      }),
     ],
-    [poolMatches, drawMatches, draws, catMap, teamMap],
+    [
+      poolMatches,
+      drawMatches,
+      draws,
+      catMap,
+      teamMap,
+      placementMatches,
+      tierDrawMatches,
+      tierDraws,
+      entrantTeam,
+      placementTag,
+    ],
   );
 
   const refresh = () => qc.invalidateQueries();
@@ -225,7 +344,7 @@ function Desk() {
       }));
 
     const requiredRestMinutes = restGapForKind(
-      current.kind === "pool" ? "group" : "knockout",
+      deskKindPhase(current.kind),
       tournament?.group_rest_gap_minutes ?? 10,
       tournament?.knockout_rest_gap_minutes ?? 30,
     );
@@ -248,18 +367,18 @@ function Desk() {
 
   const overCap = allMatches.filter((m) => {
     const cap =
-      m.kind === "pool"
+      deskKindPhase(m.kind) === "group"
         ? (tournament?.group_slot_minutes ?? 20)
         : (tournament?.knockout_slot_minutes ?? 25);
     return m.status === "in-progress" && (minutesSince(m.startedAt, now) ?? 0) > cap;
   });
 
   const slotMinutesFor = (match: DeskMatch) =>
-    match.kind === "pool"
+    deskKindPhase(match.kind) === "group"
       ? (tournament?.group_slot_minutes ?? 20)
       : (tournament?.knockout_slot_minutes ?? 25);
   const restMinutesFor = (match: DeskMatch) =>
-    match.kind === "pool"
+    deskKindPhase(match.kind) === "group"
       ? (tournament?.group_rest_gap_minutes ?? 10)
       : (tournament?.knockout_rest_gap_minutes ?? 30);
   const courtStates = (courts ?? []).map((court) => ({
@@ -277,7 +396,8 @@ function Desk() {
     if (!days.length) return null;
     const hasRemainingGroups = allMatches.some(
       (match) =>
-        match.kind === "pool" && (match.status === "scheduled" || match.status === "in-progress"),
+        deskKindPhase(match.kind) === "group" &&
+        (match.status === "scheduled" || match.status === "in-progress"),
     );
     // Chase the day that still has group work, otherwise the final day's window.
     const day = hasRemainingGroups ? days[0] : days[days.length - 1];
@@ -670,7 +790,8 @@ function Desk() {
               canSchedule={canSchedule}
               startCheck={startCheck}
               playerMap={playerMap}
-              scoringRule={current.kind === "pool" ? LEGACY_GAME_RULE : knockoutRule}
+              scoringRule={ruleFor(current.kind)}
+              tournamentId={tournament?.id ?? null}
               timezone={tournament?.venue_timezone}
               onDone={() => {
                 refresh();
@@ -696,6 +817,7 @@ export function MatchOperationsDialog({
   startCheck,
   playerMap,
   scoringRule,
+  tournamentId,
   timezone,
   onDone,
 }: {
@@ -711,6 +833,8 @@ export function MatchOperationsDialog({
   playerMap: Map<string, Player>;
   /** The tournament's rule for this match's stage, so scoring follows config. */
   scoringRule: ScoringRule;
+  /** Needed by the placement path, which snapshots the day to report its ripple. */
+  tournamentId: string | null;
   timezone?: string | undefined;
   onDone: () => void;
 }) {
@@ -725,7 +849,9 @@ export function MatchOperationsDialog({
   const [winnerId, setWinnerId] = useState(match.teams[0] ?? "");
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
-  const table = match.kind === "pool" ? "pool_matches" : "draw_matches";
+  const table = deskKindTable(match.kind) as
+    "pool_matches" | "draw_matches" | "placement_matches" | "tier_draw_matches";
+  const isPlacement = isPlacementKind(match.kind);
   const isReported = match.status === "reported";
   const notStarted = match.status !== "in-progress" && !isReported;
   const canEditScores = signedIn && (match.status === "in-progress" || isReported);
@@ -733,7 +859,18 @@ export function MatchOperationsDialog({
     const restWarnings = startCheck?.warnings ?? [];
     try {
       setBusy(true);
-      await startMatch(table, match.id, courtId, restWarnings.length > 0);
+      // The placement tables have their own start RPCs. They take no rest override:
+      // a placement match is never blocked by the rest rule, because the stage's
+      // ordering is already guaranteed by generation rather than by a start check.
+      if (match.kind === "placement") await startPlacementMatch(match.id, courtId);
+      else if (match.kind === "tier") await startTierDrawMatch(match.id, courtId);
+      else
+        await startMatch(
+          table as "pool_matches" | "draw_matches",
+          match.id,
+          courtId,
+          restWarnings.length > 0,
+        );
       toast.success("Match started");
       onDone();
     } catch (e) {
@@ -764,15 +901,25 @@ export function MatchOperationsDialog({
     }
     setBusy(true);
     try {
-      let impact: ScheduleImpact;
-      if (match.kind === "pool") {
+      if (match.kind === "placement" || match.kind === "tier") {
+        if (!tournamentId) throw new Error("No active tournament.");
+        const report = match.kind === "placement" ? reportPlacementMatch : reportTierDrawMatch;
+        const impact = await report(match.id, games, tournamentId);
+        // The placement path reports its ripple in minutes rather than as a plan
+        // diff, so it gets its own note rather than `impactMessage`.
+        const note = scheduleImpactNote(impact);
+        toast.success(
+          [isReported ? "Result corrected" : "Result recorded", note].filter(Boolean).join(" — "),
+        );
+      } else if (match.kind === "pool") {
         const g = games[0];
         if (!g) throw new Error("Enter both scores.");
-        impact = await reportPoolMatch(match.id, g.a, g.b);
+        const impact = await reportPoolMatch(match.id, g.a, g.b);
+        toast.success(impactMessage(isReported ? "Result corrected" : "Result recorded", impact));
       } else {
-        impact = await reportDrawMatch(match.id, games);
+        const impact = await reportDrawMatch(match.id, games);
+        toast.success(impactMessage(isReported ? "Result corrected" : "Result recorded", impact));
       }
-      toast.success(impactMessage(isReported ? "Result corrected" : "Result recorded", impact));
       onDone();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save result");
@@ -783,6 +930,13 @@ export function MatchOperationsDialog({
 
   const resolveException = async () => {
     if (exceptionMode !== "walkover" && exceptionMode !== "void") return;
+    // The placement tables have no exception path yet: `resolve_match_exception` only
+    // accepts the round-robin tables. The buttons are hidden for those kinds, so this
+    // is a guard against a stale dialog rather than a reachable state.
+    if (isPlacement) {
+      toast.error("Walkovers and voids are not available for the placement format yet.");
+      return;
+    }
     if (!note.trim()) {
       toast.error("Add a note explaining this exception.");
       return;
@@ -803,7 +957,7 @@ export function MatchOperationsDialog({
     setBusy(true);
     try {
       const impact = await resolveMatchException(
-        table,
+        table as "pool_matches" | "draw_matches",
         match.id,
         exceptionMode,
         exceptionMode === "walkover" ? winnerId : null,
@@ -827,7 +981,21 @@ export function MatchOperationsDialog({
     }
     setBusy(true);
     try {
-      await rescheduleMatch(table, match.id, moveCourtId, new Date(moveTime).toISOString());
+      if (isPlacement) {
+        await reschedulePlacementMatch(
+          table as "placement_matches" | "tier_draw_matches",
+          match.id,
+          moveCourtId,
+          new Date(moveTime).toISOString(),
+        );
+      } else {
+        await rescheduleMatch(
+          table as "pool_matches" | "draw_matches",
+          match.id,
+          moveCourtId,
+          new Date(moveTime).toISOString(),
+        );
+      }
       toast.success("Match court and time updated");
       onDone();
     } catch (error) {
@@ -1012,7 +1180,7 @@ export function MatchOperationsDialog({
               More actions
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {signedIn ? (
+              {signedIn && !isPlacement ? (
                 <>
                   <Button
                     size="sm"

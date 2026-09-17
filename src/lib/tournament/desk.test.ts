@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveCourtState,
+  deskKindPhase,
+  deskKindScoringStage,
+  deskKindTable,
   finishStatusLabel,
   getMatchReadiness,
   getOperationalKpis,
+  isPlacementKind,
   projectedFinishFromRemaining,
   scheduleVarianceMinutes,
+  type DeskMatchKind,
   type DeskMatchModel,
 } from "./desk";
 
@@ -78,7 +83,13 @@ describe("desk court state", () => {
       status: "in-progress",
       startedAt: at(0),
     });
-    const state = deriveCourtState("c1", [active], () => 20, () => 10, base + 21 * 60_000);
+    const state = deriveCourtState(
+      "c1",
+      [active],
+      () => 20,
+      () => 10,
+      base + 21 * 60_000,
+    );
     expect(state.state).toBe("overrun");
     expect(state.elapsedMinutes).toBe(21);
   });
@@ -118,8 +129,20 @@ describe("desk operational metrics", () => {
       playerIds: ["p3", "p4"],
     });
     const states = [
-      deriveCourtState("c1", [active, next], () => 20, () => 10, base + 21 * 60_000),
-      deriveCourtState("c2", [active, next], () => 20, () => 10, base + 21 * 60_000),
+      deriveCourtState(
+        "c1",
+        [active, next],
+        () => 20,
+        () => 10,
+        base + 21 * 60_000,
+      ),
+      deriveCourtState(
+        "c2",
+        [active, next],
+        () => 20,
+        () => 10,
+        base + 21 * 60_000,
+      ),
     ];
 
     expect(getOperationalKpis(states, [active, next], () => 20, base + 21 * 60_000)).toEqual({
@@ -157,5 +180,58 @@ describe("desk operational metrics", () => {
         match({ id: "late", scheduled: at(0), startedAt: at(7), status: "in-progress" }),
       ),
     ).toBe(7);
+  });
+});
+
+/**
+ * These three mappings are what let one desk board carry both formats. They are
+ * pure, so they are pinned here rather than left to the browser: getting the phase
+ * wrong would silently measure a placement match with the knockout duration, and
+ * getting the table wrong would send the move to the wrong RPC.
+ */
+describe("desk match kinds", () => {
+  it("measures the placement rounds at the group pace and the brackets at the knockout pace", () => {
+    expect(deskKindPhase("pool")).toBe("group");
+    expect(deskKindPhase("placement")).toBe("group");
+    expect(deskKindPhase("draw")).toBe("knockout");
+    expect(deskKindPhase("tier")).toBe("knockout");
+  });
+
+  it("maps every kind to the table the table-scoped RPCs expect", () => {
+    const expected: Record<DeskMatchKind, string> = {
+      pool: "pool_matches",
+      draw: "draw_matches",
+      placement: "placement_matches",
+      tier: "tier_draw_matches",
+    };
+    for (const [kind, table] of Object.entries(expected)) {
+      expect(deskKindTable(kind as DeskMatchKind)).toBe(table);
+    }
+  });
+
+  it("separates the two placement-format kinds from the round-robin ones", () => {
+    expect(isPlacementKind("placement")).toBe(true);
+    expect(isPlacementKind("tier")).toBe(true);
+    expect(isPlacementKind("pool")).toBe(false);
+    expect(isPlacementKind("draw")).toBe(false);
+  });
+
+  it("sends each kind to the right configured scoring rule", () => {
+    // A pool match is pinned to the legacy rule; the other three read tournament
+    // settings, with the placement rounds separate from the brackets.
+    expect(deskKindScoringStage("pool")).toBe("legacy");
+    expect(deskKindScoringStage("placement")).toBe("placement");
+    expect(deskKindScoringStage("draw")).toBe("knockout");
+    expect(deskKindScoringStage("tier")).toBe("knockout");
+  });
+
+  it("agrees with deskKindPhase about which matches share a pace", () => {
+    // The invariant that matters: a match measured with the group timings is never
+    // scored with the knockout rule, and a knockout-paced match never reads the
+    // placement rule. If these two mappings ever drift, a court is planned at one
+    // pace and scored at another.
+    for (const kind of ["pool", "placement", "draw", "tier"] as DeskMatchKind[]) {
+      expect(deskKindPhase(kind) === "group").toBe(deskKindScoringStage(kind) !== "knockout");
+    }
   });
 });

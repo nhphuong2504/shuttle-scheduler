@@ -27,6 +27,7 @@ import {
 import { gamesLabel, parseGames, timeLabel } from "@/lib/tournament/format";
 import {
   DEFAULT_KNOCKOUT_RULE,
+  DEFAULT_PLACEMENT_RULE,
   LEGACY_GAME_RULE,
   ruleForStage,
   scoringRuleLabel,
@@ -39,12 +40,14 @@ export const Route = createFileRoute("/matches")({
       { title: "Score Entry | ShuttleNet Tournament Ops" },
       {
         name: "description",
-        content: "Enter live badminton results so pool standings and knockout draws update immediately.",
+        content:
+          "Enter live badminton results so pool standings and knockout draws update immediately.",
       },
       { property: "og:title", content: "Score Entry | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
-        content: "Enter live badminton results so pool standings and knockout draws update immediately.",
+        content:
+          "Enter live badminton results so pool standings and knockout draws update immediately.",
       },
     ],
   }),
@@ -110,6 +113,12 @@ function MatchesPage() {
    */
   const knockoutRule = useMemo(
     () => (tournament ? ruleForStage(tournament, "knockout") : DEFAULT_KNOCKOUT_RULE),
+    [tournament],
+  );
+
+  /** The placement rounds carry their own configured rule, unlike a pool match. */
+  const placementRule = useMemo(
+    () => (tournament ? ruleForStage(tournament, "placement") : DEFAULT_PLACEMENT_RULE),
     [tournament],
   );
 
@@ -210,7 +219,11 @@ function MatchesPage() {
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Matches shown" value={all.length} />
-          <StatTile label="Awaiting result" value={pendingCount} tone={pendingCount ? "warn" : "normal"} />
+          <StatTile
+            label="Awaiting result"
+            value={pendingCount}
+            tone={pendingCount ? "warn" : "normal"}
+          />
           <StatTile label="On court" value={liveCount} />
           <StatTile label="Completed" value={doneCount} tone="good" />
         </div>
@@ -227,7 +240,11 @@ function MatchesPage() {
               All events
             </FilterChip>
             {(categories ?? []).map((c) => (
-              <FilterChip key={c.id} active={categoryId === c.id} onClick={() => setCategoryId(c.id)}>
+              <FilterChip
+                key={c.id}
+                active={categoryId === c.id}
+                onClick={() => setCategoryId(c.id)}
+              >
                 {c.code}
               </FilterChip>
             ))}
@@ -240,7 +257,11 @@ function MatchesPage() {
                 ["done", "Done"],
               ] as [StatusFilter, string][]
             ).map(([value, text]) => (
-              <FilterChip key={value} active={statusFilter === value} onClick={() => setStatusFilter(value)}>
+              <FilterChip
+                key={value}
+                active={statusFilter === value}
+                onClick={() => setStatusFilter(value)}
+              >
                 {text}
               </FilterChip>
             ))}
@@ -277,9 +298,12 @@ function MatchesPage() {
                         key={m.id}
                         className="flex flex-wrap items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
                       >
-                        <span className="w-10 font-score text-[11px] font-semibold text-primary">R{m.round}</span>
+                        <span className="w-10 font-score text-[11px] font-semibold text-primary">
+                          R{m.round}
+                        </span>
                         <span className="min-w-[220px] flex-1">
-                          {label(m.team_a_id)} <span className="text-muted-foreground">vs</span> {label(m.team_b_id)}
+                          {label(m.team_a_id)} <span className="text-muted-foreground">vs</span>{" "}
+                          {label(m.team_b_id)}
                         </span>
                         <span className="font-score text-[11px] text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
@@ -289,7 +313,11 @@ function MatchesPage() {
                         <span className="w-16 text-right font-score text-sm">
                           {m.status === "reported" ? `${m.score_a}-${m.score_b}` : "—"}
                         </span>
-                        <Button size="sm" variant="outline" onClick={() => setSelected({ id: m.id, kind: "pool" })}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelected({ id: m.id, kind: "pool" })}
+                        >
                           Open
                         </Button>
                       </li>
@@ -301,7 +329,11 @@ function MatchesPage() {
             {visiblePool.length === 0 ? (
               <Panel>
                 <EmptyState
-                  title={(pools ?? []).length ? "No group matches match these filters" : "No pools generated yet"}
+                  title={
+                    (pools ?? []).length
+                      ? "No group matches match these filters"
+                      : "No pools generated yet"
+                  }
                   hint={
                     (pools ?? []).length
                       ? "Clear the search or pick another event to see more matches."
@@ -339,7 +371,8 @@ function MatchesPage() {
                           R{m.round}.{m.slot}
                         </span>
                         <span className="min-w-[220px] flex-1">
-                          {label(m.team_a_id)} <span className="text-muted-foreground">vs</span> {label(m.team_b_id)}
+                          {label(m.team_a_id)} <span className="text-muted-foreground">vs</span>{" "}
+                          {label(m.team_b_id)}
                         </span>
                         <span className="font-score text-[11px] text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
@@ -354,7 +387,11 @@ function MatchesPage() {
                             : "—"}
                         </span>
                         {m.note !== "Bye" ? (
-                          <Button size="sm" variant="outline" onClick={() => setSelected({ id: m.id, kind: "draw" })}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelected({ id: m.id, kind: "draw" })}
+                          >
                             Open
                           </Button>
                         ) : (
@@ -369,7 +406,11 @@ function MatchesPage() {
             {visibleDraw.length === 0 ? (
               <Panel>
                 <EmptyState
-                  title={(draws ?? []).length ? "No knockout matches match these filters" : "No draws generated yet"}
+                  title={
+                    (draws ?? []).length
+                      ? "No knockout matches match these filters"
+                      : "No draws generated yet"
+                  }
                   hint={
                     (draws ?? []).length
                       ? "Clear the search or pick another event to see more matches."
@@ -399,7 +440,14 @@ function MatchesPage() {
               canSchedule={canSchedule}
               startCheck={null}
               playerMap={playerMap}
-              scoringRule={selectedMatch.kind === "pool" ? LEGACY_GAME_RULE : knockoutRule}
+              scoringRule={
+                selectedMatch.kind === "pool"
+                  ? LEGACY_GAME_RULE
+                  : selectedMatch.kind === "placement"
+                    ? placementRule
+                    : knockoutRule
+              }
+              tournamentId={tournament?.id ?? null}
               timezone={tournament?.venue_timezone}
               onDone={() => {
                 refresh();

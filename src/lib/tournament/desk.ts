@@ -1,6 +1,63 @@
 const MINUTE = 60_000;
 
-export type DeskMatchKind = "pool" | "draw";
+/**
+ * Which family a desk match belongs to.
+ *
+ * `pool` and `draw` are the round-robin format. `placement` is a two-round
+ * placement match (round one or round two) and `tier` is an A/B/C/D bracket match.
+ * They are separate members rather than being folded into the existing two because
+ * the two formats keep separate tables, separate RPCs and separate scoring rules —
+ * a desk card has to know which of those to reach for.
+ */
+export type DeskMatchKind = "pool" | "draw" | "placement" | "tier";
+
+/**
+ * Which configured timings a match is measured with.
+ *
+ * The placement rounds are played at the group pace and the tier brackets at the
+ * knockout pace, which is exactly how the placement scheduler lays them out. This
+ * is the single place that mapping lives, so the court board, the overrun alert and
+ * the start check cannot disagree about it.
+ */
+export type DeskPhase = "group" | "knockout";
+
+export function deskKindPhase(kind: DeskMatchKind): DeskPhase {
+  return kind === "pool" || kind === "placement" ? "group" : "knockout";
+}
+
+/** The database table behind a desk match, for the table-scoped RPCs. */
+export function deskKindTable(kind: DeskMatchKind): string {
+  switch (kind) {
+    case "pool":
+      return "pool_matches";
+    case "draw":
+      return "draw_matches";
+    case "placement":
+      return "placement_matches";
+    case "tier":
+      return "tier_draw_matches";
+  }
+}
+
+/** True for the two kinds that belong to the two-round placement format. */
+export function isPlacementKind(kind: DeskMatchKind): boolean {
+  return kind === "placement" || kind === "tier";
+}
+
+/**
+ * Which configured scoring rule a kind is played under.
+ *
+ * `legacy` is the round-robin pool rule: a single game to 21, enforced by
+ * `report_pool_result`, which has no equivalent in the placement format. The
+ * placement rounds and the brackets each read their own tournament settings, so a
+ * placement match can be best of three while a pool match cannot.
+ */
+export type DeskScoringStage = "legacy" | "placement" | "knockout";
+
+export function deskKindScoringStage(kind: DeskMatchKind): DeskScoringStage {
+  if (kind === "pool") return "legacy";
+  return kind === "placement" ? "placement" : "knockout";
+}
 
 export interface DeskMatchModel {
   id: string;
@@ -98,9 +155,7 @@ export function getMatchReadiness(
     const latest = allMatches
       .filter(
         (other) =>
-          other.id !== match.id &&
-          other.endedAt != null &&
-          other.playerIds.includes(playerId),
+          other.id !== match.id && other.endedAt != null && other.playerIds.includes(playerId),
       )
       .sort((a, b) => (asTime(b.endedAt) ?? 0) - (asTime(a.endedAt) ?? 0))[0];
     const ended = asTime(latest?.endedAt ?? null);
@@ -142,8 +197,7 @@ export function deriveCourtState<TMatch extends DeskMatchModel>(
   now: number,
 ): DeskCourtState<TMatch> {
   const playing =
-    allMatches.find((match) => match.courtId === courtId && match.status === "in-progress") ??
-    null;
+    allMatches.find((match) => match.courtId === courtId && match.status === "in-progress") ?? null;
   const next =
     allMatches
       .filter(
@@ -161,14 +215,10 @@ export function deriveCourtState<TMatch extends DeskMatchModel>(
     return {
       courtId,
       state:
-        elapsedMinutes != null && elapsedMinutes > slotMinutesFor(playing)
-          ? "overrun"
-          : "playing",
+        elapsedMinutes != null && elapsedMinutes > slotMinutesFor(playing) ? "overrun" : "playing",
       playing,
       next,
-      readiness: next
-        ? getMatchReadiness(next, allMatches, restGapFor(next), now)
-        : null,
+      readiness: next ? getMatchReadiness(next, allMatches, restGapFor(next), now) : null,
       elapsedMinutes,
       varianceMinutes: scheduleVarianceMinutes(playing),
     };
@@ -221,10 +271,7 @@ export function projectedFinishFromRemaining<TMatch extends DeskMatchModel>(
   return latest;
 }
 
-export function finishStatusLabel(
-  projectedMs: number | null,
-  targetMs: number | null,
-): string {
+export function finishStatusLabel(projectedMs: number | null, targetMs: number | null): string {
   if (projectedMs == null || targetMs == null) return "—";
   const deltaMinutes = Math.round((projectedMs - targetMs) / MINUTE);
   if (deltaMinutes === 0) return "On target";
@@ -246,12 +293,10 @@ export function getOperationalKpis<TMatch extends DeskMatchModel>(
     ).length,
     waitingCourts: courtStates.filter((court) => court.state === "free-blocked").length,
     idleCourts: courtStates.filter((court) => court.state === "idle").length,
-    completedMatches: matches.filter((match) =>
-      ["reported", "walkover"].includes(match.status),
-    ).length,
-    remainingMatches: matches.filter((match) =>
-      ["scheduled", "in-progress"].includes(match.status),
-    ).length,
+    completedMatches: matches.filter((match) => ["reported", "walkover"].includes(match.status))
+      .length,
+    remainingMatches: matches.filter((match) => ["scheduled", "in-progress"].includes(match.status))
+      .length,
     overrunCourts: courtStates.filter((court) => court.state === "overrun").length,
     projectedFinish,
   };
@@ -266,11 +311,7 @@ export function upcomingMatches<TMatch extends DeskMatchModel>(
   return matches
     .filter((match) => {
       const scheduled = asTime(match.scheduled);
-      return (
-        match.status === "scheduled" &&
-        scheduled != null &&
-        scheduled <= horizon
-      );
+      return match.status === "scheduled" && scheduled != null && scheduled <= horizon;
     })
     .sort((a, b) => (asTime(a.scheduled) ?? 0) - (asTime(b.scheduled) ?? 0));
 }
