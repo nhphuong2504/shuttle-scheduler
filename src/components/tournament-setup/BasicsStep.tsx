@@ -8,7 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { BasicsForm } from "./types";
+
+/**
+ * Matches the check constraint on `tournaments.notes`. The database is the real
+ * limit; this just stops the host typing past it.
+ */
+const NOTES_MAX_LENGTH = 2000;
 
 /**
  * A short, curated list of IANA zones. The database accepts any valid zone, so
@@ -141,6 +148,29 @@ export function BasicsStep({
           Organizer details are for the host&apos;s reference. This version has no public
           registration, so nothing is published to entrants.
         </p>
+      </Panel>
+
+      <Panel title="Notes">
+        <div className="space-y-1.5">
+          <Label htmlFor="t-notes">Anything the host should remember</Label>
+          <Textarea
+            id="t-notes"
+            value={value.notes}
+            rows={4}
+            maxLength={NOTES_MAX_LENGTH}
+            placeholder="Parking is behind the hall. Bring the spare nets. Warm-up courts open at 08:00."
+            onChange={(e) => onChange({ notes: e.target.value })}
+          />
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[11px] text-muted-foreground">
+              Free text for your own reference. It is never shown to entrants, and nothing in this
+              version is published.
+            </p>
+            <span className="shrink-0 font-score text-[11px] text-muted-foreground">
+              {value.notes.length}/{NOTES_MAX_LENGTH}
+            </span>
+          </div>
+        </div>
       </Panel>
     </div>
   );

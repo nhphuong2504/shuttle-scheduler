@@ -72,6 +72,7 @@ export function hydrateForm(
   return {
     basics: {
       name: tournament.name,
+      notes: tournament.notes ?? "",
       venueName: tournament.venue_name ?? "",
       venueAddress: tournament.venue_address ?? "",
       venueTimezone: tournament.venue_timezone,

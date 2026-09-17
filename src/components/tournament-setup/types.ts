@@ -26,6 +26,8 @@ export function setupStepIndex(step: SetupStep): number {
 
 export interface BasicsForm {
   name: string;
+  /** Free-text notes for the host. Never published to entrants. */
+  notes: string;
   venueName: string;
   venueAddress: string;
   venueTimezone: string;
@@ -70,6 +72,7 @@ export function defaultForm(): DraftForm {
   return {
     basics: {
       name: "",
+      notes: "",
       venueName: "",
       venueAddress: "",
       venueTimezone: "America/Chicago",

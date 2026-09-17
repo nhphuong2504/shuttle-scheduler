@@ -51,6 +51,7 @@ const DEFAULT_CONFIG = {
   knockout_win_by: 2,
   max_categories_per_player: 2,
   name: "City Open 2026",
+  notes: null,
   organizer_email: null,
   organizer_name: null,
   organizer_phone: null,

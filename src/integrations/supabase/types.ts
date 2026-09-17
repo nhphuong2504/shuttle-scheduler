@@ -774,6 +774,7 @@ export type Database = {
           knockout_win_by: number
           max_categories_per_player: number
           name: string
+          notes: string | null
           organizer_email: string | null
           organizer_name: string | null
           organizer_phone: string | null
@@ -802,6 +803,7 @@ export type Database = {
           knockout_win_by?: number
           max_categories_per_player?: number
           name?: string
+          notes?: string | null
           organizer_email?: string | null
           organizer_name?: string | null
           organizer_phone?: string | null
@@ -830,6 +832,7 @@ export type Database = {
           knockout_win_by?: number
           max_categories_per_player?: number
           name?: string
+          notes?: string | null
           organizer_email?: string | null
           organizer_name?: string | null
           organizer_phone?: string | null

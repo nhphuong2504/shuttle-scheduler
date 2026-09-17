@@ -300,3 +300,56 @@ SELECT (SELECT count(*) FROM public.tournament_days        WHERE tournament_id =
 
 `DROP FUNCTION public.delete_tournament(uuid)`. The wizard's Discard path is unaffected: it
 still calls `delete_tournament_draft`, whose draft-only guard this migration never touched.
+
+## Applying `20260916030000_tournament_notes.sql`
+
+### What it adds
+
+`tournaments.notes` — a free-text note for the host, capped at 2000 characters by a check
+constraint. It is written from the wizard's Basics step and shown in the Review summary. It is
+never published: this version has no public registration or participant-facing screens.
+
+The note is deliberately **not** editable once the tournament is activated, matching the rest of
+the wizard — `save_tournament_draft` still refuses anything that is not a Draft.
+
+### Why both RPCs are redefined
+
+`create_tournament_draft` and `save_tournament_draft` both whitelist their payload keys, so
+neither would have persisted a new field on its own. Both need it: the first step of the wizard
+creates the draft directly and never calls the save path, so a note typed on the Basics step
+would be lost if only the save RPC knew about the column.
+
+`CREATE OR REPLACE FUNCTION` keeps the function's OID and therefore its ACL, so the hardening
+revokes still hold and these redefinitions cannot reopen access to `anon`. That is asserted in
+the verification below rather than assumed.
+
+### Why there is a `notes_trim` helper
+
+`btrim(x)` with no second argument trims **spaces only**. That is fine for the single-line
+fields, but a note is multi-line, so a box containing just a newline would be stored as `"\n"`
+instead of being treated as empty. `public.notes_trim(text)` trims the full whitespace set, and
+is defined once so the two RPCs cannot drift apart.
+
+### Verify after applying
+
+```sql
+-- the column and its limit exist
+SELECT column_name, data_type FROM information_schema.columns
+WHERE table_name = 'tournaments' AND column_name = 'notes';
+
+SELECT conname FROM pg_constraint WHERE conname = 'tournaments_notes_length_check';
+
+-- anon must still be locked out after the functions were replaced
+SELECT has_function_privilege('anon', 'public.save_tournament_draft(uuid, jsonb)', 'EXECUTE') AS anon_can;
+
+-- the round trip, including that an empty box clears the note
+SELECT public.create_tournament_draft('{"name":"Note probe","notes":"  hello  "}'::jsonb);
+SELECT notes FROM public.tournaments WHERE name = 'Note probe';          -- 'hello'
+SELECT public.save_tournament_draft('<id>'::uuid, '{"name":"Note probe","notes":""}'::jsonb);
+SELECT notes FROM public.tournaments WHERE name = 'Note probe';          -- NULL
+```
+
+### Rolling back
+
+`DROP FUNCTION public.notes_trim(text); ALTER TABLE public.tournaments DROP COLUMN notes;` and
+restore the previous bodies of the two draft RPCs.

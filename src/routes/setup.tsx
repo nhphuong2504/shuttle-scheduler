@@ -87,6 +87,7 @@ function toDraftInput(form: DraftForm): TournamentDraftInput {
   return {
     name: form.basics.name,
     format: "two_round_placement",
+    notes: form.basics.notes,
     venueName: form.basics.venueName,
     venueAddress: form.basics.venueAddress,
     venueTimezone: form.basics.venueTimezone,

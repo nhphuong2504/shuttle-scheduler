@@ -707,6 +707,8 @@ export interface CreateTournamentInput {
 export interface TournamentDraftInput {
   name: string;
   format?: string;
+  /** Free-text notes for the host. Empty clears them. */
+  notes?: string | null;
   venueName?: string | null;
   venueAddress?: string | null;
   venueTimezone?: string;
@@ -730,6 +732,7 @@ export interface TournamentDraftInput {
 interface DraftPayload {
   name: string;
   format?: string;
+  notes?: string;
   venue_name?: string;
   venue_address?: string;
   venue_timezone?: string;
@@ -752,6 +755,8 @@ interface DraftPayload {
 function draftBasicsPayload(input: TournamentDraftInput): DraftPayload {
   const payload: DraftPayload = { name: input.name.trim() };
   if (input.format !== undefined) payload.format = input.format;
+  // The RPC treats an empty string as "no note", so clearing the box works.
+  if (input.notes !== undefined) payload.notes = input.notes ?? "";
   if (input.venueName !== undefined) payload.venue_name = input.venueName ?? "";
   if (input.venueAddress !== undefined) payload.venue_address = input.venueAddress ?? "";
   if (input.venueTimezone !== undefined) payload.venue_timezone = input.venueTimezone;
@@ -782,6 +787,7 @@ export async function createTournamentDraft(input: TournamentDraftInput): Promis
     p_payload: {
       name: input.name.trim(),
       format: input.format ?? "two_round_placement",
+      notes: input.notes ?? "",
       venue_name: input.venueName ?? "",
       venue_address: input.venueAddress ?? "",
       venue_timezone: input.venueTimezone ?? "America/Chicago",
