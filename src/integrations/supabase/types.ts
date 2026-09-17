@@ -1327,6 +1327,17 @@ export type Database = {
         Args: { p_category_id: string; p_entrant_id: string }
         Returns: number
       }
+      placement_occupied_matches: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          court_id: string
+          ends_at: string
+          match_id: string
+          match_table: string
+          player_ids: string[]
+          starts_at: string
+        }[]
+      }
       placement_required_matches: {
         Args: { p_category_id: string }
         Returns: number
@@ -1356,6 +1367,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      reschedule_placement_match: {
+        Args: {
+          p_court_id: string
+          p_match_id: string
+          p_scheduled_time: string
+          p_table: string
+        }
+        Returns: undefined
+      }
       reset_and_repair_match: {
         Args: { p_match_id: string; p_table: string }
         Returns: undefined
@@ -1367,6 +1387,10 @@ export type Database = {
       reset_placement_result: {
         Args: { p_match_id: string }
         Returns: undefined
+      }
+      reset_placement_stage: {
+        Args: { p_tournament_id: string }
+        Returns: Json
       }
       reset_tier_draw_result: {
         Args: { p_match_id: string }
