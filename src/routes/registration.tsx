@@ -16,7 +16,14 @@ import {
 } from "@/components/ui/select";
 import { useSession } from "@/hooks/useSession";
 import { createPlayer, createTeam, deleteTeam, setTeamWithdrawn } from "@/lib/tournament/actions";
-import { indexBy, teamLabel, useCategories, usePlayers, useTeams } from "@/lib/tournament/data";
+import {
+  indexBy,
+  teamLabel,
+  useActiveTournament,
+  useCategories,
+  usePlayers,
+  useTeams,
+} from "@/lib/tournament/data";
 
 export const Route = createFileRoute("/registration")({
   head: () => ({
@@ -25,18 +32,63 @@ export const Route = createFileRoute("/registration")({
       {
         name: "description",
         content:
-          "Register players and doubles pairs across the tournament's active badminton categories, capped at two per player.",
+          "Register players and doubles pairs across the tournament's active badminton categories, up to the per-player limit the tournament is configured with.",
       },
       { property: "og:title", content: "Registration | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Register players and doubles pairs across the tournament's active badminton categories, capped at two per player.",
+          "Register players and doubles pairs across the tournament's active badminton categories, up to the per-player limit the tournament is configured with.",
       },
     ],
   }),
   component: RegistrationPage,
 });
+
+/** The column default, used only before the active tournament has loaded. */
+const DEFAULT_CATEGORY_CAP = 2;
+
+/**
+ * The per-player category cap is tournament configuration (1–5), so every piece
+ * of copy has to read it. These live outside the component because the page's
+ * meta strings are built before any hook runs.
+ */
+const CAP_WORDS: Record<number, string> = {
+  1: "single",
+  2: "two",
+  3: "three",
+  4: "four",
+  5: "five",
+};
+
+function capWord(cap: number): string {
+  return CAP_WORDS[cap] ?? String(cap);
+}
+
+function capLabel(cap: number): string {
+  return `At ${capWord(cap)}-category cap`;
+}
+
+function capSubtitle(cap: number): string {
+  const limit =
+    cap === 1
+      ? "Each player may enter a single category."
+      : `Each player may enter up to ${cap} categories.`;
+  return `${limit} Anything beyond that is rejected outright.`;
+}
+
+function capPickerNote(cap: number): string {
+  const other = cap === 1 ? "another category" : `${capWord(cap)} other categories`;
+  return `Players already in ${other} are hidden from these lists.`;
+}
+
+/**
+ * The cap levels the desk watches, as their own tiles rather than one tile for
+ * the configured cap. Keeping both visible is the point: with a cap of three,
+ * the two-category tile is the queue that can still enter and the three-category
+ * tile is who is locked out.
+ */
+const CAP_LEVELS = [2, 3] as const;
 
 function RegistrationPage() {
   const qc = useQueryClient();
@@ -44,6 +96,14 @@ function RegistrationPage() {
   const { data: categories } = useCategories();
   const { data: players } = usePlayers();
   const { data: teams } = useTeams();
+  const { data: tournament } = useActiveTournament();
+
+  /**
+   * The desk's cap check must agree with the `enforce_two_category_cap` trigger,
+   * which reads this same column. Before the tournament loads, fall back to the
+   * column default so the page never claims an unlimited cap.
+   */
+  const categoryCap = tournament?.max_categories_per_player ?? DEFAULT_CATEGORY_CAP;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -60,7 +120,11 @@ function RegistrationPage() {
 
   const categoryCount = useMemo(() => {
     const map = new Map<string, Set<string>>();
+    // Withdrawn entries must not count: the database trigger only counts
+    // `withdrawn = false` rows, so including them here would hide a player from
+    // the eligible list even though the database would happily accept the entry.
     for (const t of teams ?? []) {
+      if (t.withdrawn) continue;
       for (const pid of [t.player_1_id, t.player_2_id]) {
         if (!pid) continue;
         const set = map.get(pid) ?? new Set<string>();
@@ -74,7 +138,7 @@ function RegistrationPage() {
   const atCap = (playerId: string) => {
     const set = categoryCount.get(playerId);
     if (!set) return false;
-    return set.size >= 2 && !set.has(categoryId);
+    return set.size >= categoryCap && !set.has(categoryId);
   };
 
   /** Registration is only open for categories this tournament switched on. */
@@ -142,10 +206,12 @@ function RegistrationPage() {
     const active = all.filter((t) => !t.withdrawn);
     const withdrawn = all.length - active.length;
     const entered = new Set<string>();
-    let atCapCount = 0;
+    // How many players sit at each number of categories. `categoryCount` already
+    // excludes withdrawn entries, so this agrees with the database trigger.
+    const byCount = new Map<number, number>();
     for (const [pid, set] of categoryCount) {
       entered.add(pid);
-      if (set.size >= 2) atCapCount += 1;
+      byCount.set(set.size, (byCount.get(set.size) ?? 0) + 1);
     }
     const totalPlayers = (players ?? []).length;
     return {
@@ -154,16 +220,13 @@ function RegistrationPage() {
       active: active.length,
       withdrawn,
       unassigned: Math.max(0, totalPlayers - entered.size),
-      atCapCount,
+      byCount,
     };
   }, [teams, players, categoryCount]);
 
   return (
-    <AppShell
-      title="Registration"
-      subtitle="Each player may enter a maximum of two categories. A third entry is rejected outright."
-    >
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <AppShell title="Registration" subtitle={capSubtitle(categoryCap)}>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile
           label="Players"
           value={stats.totalPlayers}
@@ -177,7 +240,21 @@ function RegistrationPage() {
           tone={stats.withdrawn > 0 ? "warn" : "normal"}
           hint="Pulled out"
         />
-        <StatTile label="At two-category cap" value={stats.atCapCount} hint="Cannot enter more" />
+        {CAP_LEVELS.map((level) => {
+          const count = stats.byCount.get(level) ?? 0;
+          // At or past the configured cap this level cannot enter again; below
+          // it, the entry is still open, so the tiles say different things.
+          const locked = level >= categoryCap;
+          return (
+            <StatTile
+              key={level}
+              label={capLabel(level)}
+              value={count}
+              tone={locked && count > 0 ? "warn" : "normal"}
+              hint={locked ? "Cannot enter more" : "Can enter another"}
+            />
+          );
+        })}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
@@ -269,9 +346,7 @@ function RegistrationPage() {
               >
                 Add entry
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Players already in two other categories are hidden from these lists.
-              </p>
+              <p className="text-xs text-muted-foreground">{capPickerNote(categoryCap)}</p>
             </div>
           </Panel>
         </div>

@@ -256,8 +256,20 @@ function CategorySection({
   );
   const activeTeams = teams.filter((team) => !team.withdrawn);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
-  const label = (teamId: string | null | undefined) =>
-    teamId ? teamLabel(teamMap.get(teamId), playerMap) : "TBC";
+  // A match row carries ENTRANT ids, not team ids, so naming one needs the
+  // entrant -> team hop. Leaving the hop out does not fail loudly: every lookup
+  // misses and the whole page reads "TBC". The seeding table is the one place
+  // that has a team id to hand, and it passes the entrant id instead so there is
+  // a single, entrant-keyed function rather than one function used two ways.
+  const entrantTeam = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entrant of entrants) map.set(entrant.id, entrant.team_id);
+    return map;
+  }, [entrants]);
+  const labelEntrant = (entrantId: string | null | undefined) => {
+    const teamId = entrantId ? entrantTeam.get(entrantId) : undefined;
+    return teamId ? teamLabel(teamMap.get(teamId), playerMap) : "TBC";
+  };
 
   // The placement stage holds an odd entrant, so this is informational, never a
   // blocker. See `entrantCountNote`.
@@ -323,7 +335,7 @@ function CategorySection({
           <SeedingPanel
             category={category}
             view={view}
-            label={label}
+            label={labelEntrant}
             canEdit={canEdit}
             onRefresh={onRefresh}
           />
@@ -365,14 +377,14 @@ function CategorySection({
             ) : (
               <MatchList
                 matches={view.roundOne}
-                label={label}
+                label={labelEntrant}
                 canScore={canScore}
                 onScore={(match) =>
                   onScore({
                     kind: "placement",
                     matchId: match.id,
-                    title: `${label(match.entrant_a_id)} vs ${label(match.entrant_b_id)}`,
-                    labels: [label(match.entrant_a_id), label(match.entrant_b_id)],
+                    title: `${labelEntrant(match.entrant_a_id)} vs ${labelEntrant(match.entrant_b_id)}`,
+                    labels: [labelEntrant(match.entrant_a_id), labelEntrant(match.entrant_b_id)],
                     rule: placementRule as ScoringRule,
                     initial: match.status === "reported" ? parseGames(match.games) : undefined,
                   })
@@ -426,14 +438,14 @@ function CategorySection({
             ) : (
               <MatchList
                 matches={view.roundTwo}
-                label={label}
+                label={labelEntrant}
                 canScore={canScore}
                 onScore={(match) =>
                   onScore({
                     kind: "placement",
                     matchId: match.id,
-                    title: `${label(match.entrant_a_id)} vs ${label(match.entrant_b_id)}`,
-                    labels: [label(match.entrant_a_id), label(match.entrant_b_id)],
+                    title: `${labelEntrant(match.entrant_a_id)} vs ${labelEntrant(match.entrant_b_id)}`,
+                    labels: [labelEntrant(match.entrant_a_id), labelEntrant(match.entrant_b_id)],
                     rule: placementRule as ScoringRule,
                     initial: match.status === "reported" ? parseGames(match.games) : undefined,
                   })
@@ -452,7 +464,7 @@ function CategorySection({
             matches={matches}
             draws={draws}
             tierMatches={categoryTierMatches}
-            label={label}
+            label={labelEntrant}
             canGenerate={canGenerate}
             canScore={canScore}
             knockoutRule={knockoutRule}
@@ -478,7 +490,7 @@ function SeedingPanel({
 }: {
   category: Category;
   view: CategoryPlacementView;
-  label: (teamId: string | null | undefined) => string;
+  label: (entrantId: string | null | undefined) => string;
   canEdit: boolean;
   onRefresh: () => void;
 }) {
@@ -532,7 +544,7 @@ function SeedingPanel({
                       <td className="font-score text-xs font-semibold text-primary">
                         {entrant.seed ?? "—"}
                       </td>
-                      <td className="pr-2 font-medium">{label(entrant.team_id)}</td>
+                      <td className="pr-2 font-medium">{label(entrant.id)}</td>
                       <td>
                         {canEdit && !view.seedsLocked ? (
                           <select
@@ -628,7 +640,7 @@ function MatchList({
   readOnly,
 }: {
   matches: PlacementMatch[];
-  label: (teamId: string | null | undefined) => string;
+  label: (entrantId: string | null | undefined) => string;
   canScore: boolean;
   canReset: boolean;
   onScore: (match: PlacementMatch) => void;
@@ -727,7 +739,7 @@ function DrawsPanel({
   matches: PlacementMatch[];
   draws: TierDraw[];
   tierMatches: TierDrawMatch[];
-  label: (teamId: string | null | undefined) => string;
+  label: (entrantId: string | null | undefined) => string;
   canGenerate: boolean;
   canScore: boolean;
   knockoutRule: ScoringRule | null;
@@ -898,7 +910,7 @@ function TierMatchRow({
   onReset,
 }: {
   match: TierDrawMatch;
-  label: (teamId: string | null | undefined) => string;
+  label: (entrantId: string | null | undefined) => string;
   canScore: boolean;
   onScore: () => void;
   onReset: () => void;
