@@ -930,7 +930,6 @@ export type Database = {
       has_staff_role: { Args: { needed: string[] }; Returns: boolean }
       is_invited_email: { Args: { value: string }; Returns: boolean }
       normalize_email: { Args: { value: string }; Returns: string }
-      notes_trim: { Args: { p_value: string }; Returns: string }
       report_draw_result: {
         Args: { p_games: Json; p_match_id: string }
         Returns: undefined
@@ -976,10 +975,6 @@ export type Database = {
       }
       save_tournament_draft: {
         Args: { p_payload: Json; p_tournament_id: string }
-        Returns: undefined
-      }
-      set_tournament_notes: {
-        Args: { p_notes: string; p_tournament_id: string }
         Returns: undefined
       }
       shift_live_schedule_after_match: {

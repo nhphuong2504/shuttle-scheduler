@@ -163,8 +163,8 @@ export function BasicsStep({
           />
           <div className="flex items-start justify-between gap-3">
             <p className="text-[11px] text-muted-foreground">
-              Shown to everyone using the desk, so it is worth keeping to what is useful to read.
-              You can change it at any time, including while the event is running.
+              Anything worth saying about the event — parking, warm-up times, kit to bring. Written
+              to be read, not kept as a private reminder.
             </p>
             <span className="shrink-0 font-score text-[11px] text-muted-foreground">
               {value.notes.length}/{NOTES_MAX_LENGTH}

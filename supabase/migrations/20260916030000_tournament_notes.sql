@@ -2,11 +2,13 @@
 -- Free-text notes on a tournament
 -- ============================================================================
 --
--- A public-facing note about the event: parking, warm-up times, kit to bring, a
--- late change to the running order. It is shown on the control desk, which every
--- role uses, so it is written for anyone to read rather than being a private
--- scratchpad. Note that `tournaments` already has a public read policy, so the
--- text is readable by anyone who can read the tournament at all.
+-- A note about the event: parking, warm-up times, kit to bring, anything the host
+-- wants to say. Written on the wizard's Basics step alongside venue name and
+-- address, and shown in the Review summary.
+--
+-- It is not a private scratchpad, so the copy avoids claiming that it is. It is
+-- not published anywhere either: this version has no participant-facing screens,
+-- and the note is only reachable from the admin-only setup wizard.
 --
 -- Both draft RPCs are redefined because both write this field and both whitelist
 -- their payload keys: `create_tournament_draft` inserts it, and `save_tournament_draft`
@@ -26,7 +28,7 @@ ALTER TABLE public.tournaments
 -- `btrim(x)` trims spaces only, which is fine for the single-line fields above
 -- but wrong here: a note is multi-line, so a box containing just a newline would
 -- otherwise be stored as "\n" instead of being treated as empty.
--- `public.notes_trim` is that trim, named once so the three writers cannot drift.
+-- `public.notes_trim` is that trim, named once so both RPCs cannot drift.
 CREATE OR REPLACE FUNCTION public.notes_trim(p_value text)
 RETURNS text
 LANGUAGE sql
@@ -193,44 +195,3 @@ $$;
 -- to anon. Re-granting is harmless and keeps this readable on its own.
 GRANT EXECUTE ON FUNCTION public.create_tournament_draft(jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.save_tournament_draft(uuid, jsonb) TO authenticated;
-
--- ---------------------------------------------------------------------------
--- Editing the note after activation
--- ---------------------------------------------------------------------------
---
--- The draft save path deliberately refuses anything that is not a Draft, because
--- most of what it writes is structure that a running event must not have moved
--- underneath it. The note is different: it exists to carry news, and news does not
--- wait for a draft. Late arrivals, a court taken out of service, a changed warm-up
--- time — all of that is worth saying mid-event, so it gets its own RPC with no
--- status guard.
---
--- Everything else about the tournament stays frozen; this writes one column.
-CREATE OR REPLACE FUNCTION public.set_tournament_notes(
-  p_tournament_id uuid,
-  p_notes text
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NOT public.has_staff_role(ARRAY['admin']) THEN
-    RAISE EXCEPTION 'Not authorized';
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM public.tournaments WHERE id = p_tournament_id) THEN
-    RAISE EXCEPTION 'Unknown tournament';
-  END IF;
-
-  -- The 2000 character check constraint on the column is the real limit and will
-  -- raise its own error if this is exceeded.
-  UPDATE public.tournaments
-  SET notes = public.notes_trim(p_notes)
-  WHERE id = p_tournament_id;
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.set_tournament_notes(uuid, text) FROM anon, PUBLIC;
-GRANT EXECUTE ON FUNCTION public.set_tournament_notes(uuid, text) TO authenticated;

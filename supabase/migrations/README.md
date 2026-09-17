@@ -309,16 +309,14 @@ still calls `delete_tournament_draft`, whose draft-only guard this migration nev
 constraint. It is written from the wizard's Basics step alongside venue name and address, and
 shown in the Review summary.
 
-Unlike the rest of the wizard, the note stays **editable after activation**. It exists to carry
-news — a court out of service, a changed warm-up time, late arrivals — and news does not wait for
-a draft, so it has its own `set_tournament_notes(uuid, text)` RPC with no status guard. Everything
-else about a running tournament stays frozen: `save_tournament_draft` still refuses anything that
-is not a Draft, and this RPC writes one column only.
+It is a note about the event rather than a private scratchpad, and the UI copy says so. It is not
+published anywhere either: this version has no participant-facing screens, so the note is only
+reachable from the admin-only setup wizard.
 
-It is shared information rather than a private scratchpad. It is shown on the control desk, which
-every role uses, so it should be written for anyone to read. Admin-only to write; readable
-wherever the tournament is readable — `tournaments` already carries a public read policy, so no
-new policy is involved.
+The note follows the rest of the wizard for editing: **it is not editable once the tournament is
+activated**, because `save_tournament_draft` refuses anything that is not a Draft and no other
+path writes this column. Making it editable mid-event would mean a new RPC and a surface outside
+the wizard to call it from.
 
 ### Why both RPCs are redefined
 
@@ -336,7 +334,7 @@ the verification below rather than assumed.
 `btrim(x)` with no second argument trims **spaces only**. That is fine for the single-line
 fields, but a note is multi-line, so a box containing just a newline would be stored as `"\n"`
 instead of being treated as empty. `public.notes_trim(text)` trims the full whitespace set, and
-is defined once so all three writers cannot drift apart.
+is defined once so the two RPCs cannot drift apart.
 
 ### Verify after applying
 
@@ -349,22 +347,15 @@ SELECT conname FROM pg_constraint WHERE conname = 'tournaments_notes_length_chec
 
 -- anon must still be locked out after the functions were replaced
 SELECT has_function_privilege('anon', 'public.save_tournament_draft(uuid, jsonb)', 'EXECUTE') AS anon_can;
-SELECT has_function_privilege('anon', 'public.set_tournament_notes(uuid, text)', 'EXECUTE') AS anon_can;
 
 -- the round trip, including that an empty box clears the note
 SELECT public.create_tournament_draft('{"name":"Note probe","notes":"  hello  "}'::jsonb);
 SELECT notes FROM public.tournaments WHERE name = 'Note probe';          -- 'hello'
 SELECT public.save_tournament_draft('<id>'::uuid, '{"name":"Note probe","notes":""}'::jsonb);
 SELECT notes FROM public.tournaments WHERE name = 'Note probe';          -- NULL
-
--- and that it is still writable once the event is running
-SELECT public.activate_tournament('<id>'::uuid);
-SELECT public.set_tournament_notes('<id>'::uuid, 'Court 3 is out of action.');
-SELECT status, notes FROM public.tournaments WHERE id = '<id>'::uuid;    -- in_progress, the new note
 ```
 
 ### Rolling back
 
-`DROP FUNCTION public.set_tournament_notes(uuid, text); DROP FUNCTION public.notes_trim(text);
-ALTER TABLE public.tournaments DROP COLUMN notes;` and restore the previous bodies of the two
-draft RPCs.
+`DROP FUNCTION public.notes_trim(text); ALTER TABLE public.tournaments DROP COLUMN notes;` and
+restore the previous bodies of the two draft RPCs.

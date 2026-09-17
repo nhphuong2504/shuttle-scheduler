@@ -893,22 +893,6 @@ export async function deleteTournamentDraft(tournamentId: string): Promise<void>
 }
 
 /**
- * Rewrites a tournament's note, at any status.
- *
- * Separate from `saveTournamentDraft`, which refuses anything that is not a Draft
- * because most of what it writes is structure a running event must not have moved
- * underneath it. The note is the exception: it carries news, and news does not
- * wait for a draft. Only this one column is written.
- */
-export async function saveTournamentNotes(tournamentId: string, notes: string): Promise<void> {
-  const { error } = await supabase.rpc("set_tournament_notes", {
-    p_tournament_id: tournamentId,
-    p_notes: notes,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/**
  * Removes a tournament of any status, including an active one, along with
  * everything it owns. Permanent and not reversible.
  *
