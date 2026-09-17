@@ -643,4 +643,28 @@ actions are unaffected.
 `GRANT EXECUTE ON FUNCTION ... TO anon, PUBLIC;` for both. There is no reason to: the grant only
 ever exposed a function the client does not call.
 
+## The test field: `../seed/50-test-players.sql`
+
+Not a migration, and the directory is the point. **Nothing in `supabase/seed/` is applied by
+Lovable**, so this file leaves the hosted project alone until it is pasted into the SQL editor.
+Moving it into this directory would instead make it fifty fake entrants in the live tournament on
+the next push.
+
+It inserts 50 players (30 men, 20 women) and registers them in `MS`, `WS`, `MD`, `WD` and `XD`, then
+creates the matching `placement_entrants` rows with skill levels spread across all three seed
+blocks. It does not generate rounds, lock seeds or write results -- those stay the desk's own
+buttons. The file header documents the field plan, the idempotency, and the two commented blocks at
+the end: one to reset the placement stage, one to remove the test data entirely.
+
+It refuses to run if the placement stage is already under way (any `placement_matches`, or locked
+seeds), because adding entrants to a category whose round one was already generated from a smaller
+field corrupts the bracket silently.
+
+### Verify after running
+
+Expect MS 13, MD 9, XD 8, WS 7, WD 5 entries, and 50 players carrying a `@shuttlenet.test` email.
+The odd fields are deliberate: an odd field is what makes the placement engine hold one entrant out
+of round one and give them two make-up matches in round two, which is the format's least obvious
+path.
+
 
