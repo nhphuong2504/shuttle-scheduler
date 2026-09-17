@@ -322,8 +322,31 @@ export function useTournamentDraftData(tournamentId: string | null | undefined) 
  * tournament runs both stages on that day.
  */
 export function stagesForDay(dayNumber: number, dayCount: number): StageName[] {
-  const stages: StageName[] = [];
-  if (dayNumber === 1) stages.push("group");
+  // Expressed through the placement resolver rather than duplicating the day
+  // arithmetic, so the two formats cannot disagree about which days carry a
+  // stage. `group` is the legacy name for what the placement format calls
+  // `placement`, and nothing else differs.
+  return placementStagesForDay(dayNumber, dayCount).map((stage) =>
+    stage === "placement" ? "group" : "knockout",
+  );
+}
+
+/**
+ * The two-round placement format's day layout: placement on day 1, the A/B/C/D
+ * knockouts on the final day.
+ *
+ * A single-day tournament runs both stages that day, which is the case that makes
+ * the ordering matter: placement matches must all finish before any knockout can
+ * start. On a two-stage single day the scheduler relies on the knockout rows being
+ * `awaitingTeams` until their brackets exist, so nothing to play is ever placed
+ * ahead of the stage that feeds it.
+ *
+ * Like the legacy layout, this does not spill a stage across extra days. A second
+ * day is a buffer day with a window but no stage.
+ */
+export function placementStagesForDay(dayNumber: number, dayCount: number): PlacementStageName[] {
+  const stages: PlacementStageName[] = [];
+  if (dayNumber === 1) stages.push("placement");
   if (dayNumber === dayCount && !stages.includes("knockout")) stages.push("knockout");
   return stages;
 }

@@ -9,19 +9,20 @@ import { cn } from "@/lib/utils";
 /**
  * The desk navigation.
  *
- * Pools, Draws and Schedule are deliberately absent: the tournament creation
- * flow replaced the round-robin engine with the two-round placement format, and
- * its scheduling is temporarily disabled until that engine is built. The route
- * files and every library they depend on are untouched, so the pages still exist
- * for a direct URL; only the nav entries are gone.
+ * Pools and Draws are deliberately absent: the tournament creation flow replaced
+ * the round-robin engine with the two-round placement format, and `/schedule` is
+ * wired to the round-robin tables. Those route files and every library they depend
+ * on are untouched, so the pages still exist for a direct URL; only the nav entries
+ * are gone.
  *
- * Placement is the format that *is* built, so it is the one entry that leads to
- * its own engine.
+ * `Placement` and `Schedule` are the format that *is* built, so they are the two
+ * entries that lead to its own engine.
  */
 const NAV = [
   { to: "/", label: "Desk" },
   { to: "/registration", label: "Registration" },
   { to: "/placement", label: "Placement" },
+  { to: "/placement-schedule", label: "Schedule" },
   { to: "/matches", label: "Scores" },
 ] as const;
 

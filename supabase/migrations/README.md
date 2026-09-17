@@ -500,10 +500,92 @@ DROP TABLE IF EXISTS public.tier_draw_matches, public.tier_draws,
 Then restore the previous body of `delete_tournament` without the two new `UNION ALL` branches.
 Dropping is safe: nothing in the round-robin schema references these tables.
 
-**Known gap.** `shift_live_schedule_after_match()` only accepts `pool_matches` and `draw_matches`,
-so reporting a placement result does not yet time-shift the rest of the day. That function is
-deliberately left untouched here; the new tables are wired into it when the new format gets its
-scheduler UI.
+## Applying `20260917030000_placement_live_schedule_shift.sql`
+
+Closes the gap left by the two placement migrations: **reporting a placement result now moves the
+rest of that day.** Before this, `shift_live_schedule_after_match()` only accepted
+`pool_matches` and `draw_matches`, so a placement round that finished 20 minutes late silently ate
+the gap before the next match on that court and the desk only found out when the day ran over.
+
+Apply it after the two placement migrations and the helper-grant one. It is **purely additive** to
+a live database: no table changes, no data changes, no signature changes.
+
+### What it does
+
+Two edits, and the second exists so the first is not dead code:
+
+1. `shift_live_schedule_after_match()` learns about `placement_matches` and `tier_draw_matches`.
+   Five additions at five anchors — a wider table guard, a fourth arm on the source-row lookup, two
+   `UNION ALL` branches, two player-lookup inserts, two write-backs. The ~350 lines of reflow
+   algorithm between them are byte-identical to the previous version.
+2. `report_placement_result()` and `report_tier_draw_result()` call it after committing the result.
+   In the knockout case the bracket is advanced **first**, then the day is reflowed, because
+   advancing can create a match that is now ready to play and a reflow that ran first would not
+   have known about it.
+
+### Why it is additive rather than a rewrite
+
+The reflow function is load-bearing and working, and there is no local database in this repo to
+test a rewrite against. Re-emitting it by hand to add four branches would have put the
+round-robin path at risk for no functional gain.
+
+So the function body was copied out of `20260915000000_tournament_scoping.sql` byte-for-byte and
+the new branches spliced in. `scripts/verify-placement-shift-migration.ps1` proves the result is
+additive: it requires every line of the original function to appear in the new one, in order, with
+exactly three deliberate one-line rewrites standing in for it, and it reports the four insertion
+points. Run it after any edit to the source migration.
+
+```sh
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-placement-shift-migration.ps1
+```
+
+`scripts/generate-placement-shift-migration.ps1` is the script that produced this file from the
+source migration. It reads the source, not this file, so it is deterministic: re-running it
+reproduces the committed migration byte-for-byte, and it fails loudly on a missing or ambiguous
+anchor rather than splicing into the wrong place. It is kept so that editing the source migration
+is a regenerate-and-verify, not a hand-merge.
+
+The safety argument does not rest on the splice being careful, though. Every branch is scoped to
+`source_tournament`, and a tournament has exactly one format, so for a round-robin tournament the
+two new branches match zero rows and for a placement tournament the two legacy ones do. The two
+sets of tables can never both contribute to a single reflow.
+
+### The one addition it would be easy to miss
+
+The source-row lookup was a two-way `IF ... ELSE`. Without a fourth arm, reporting a placement
+result would have looked the match up in `draw_matches`, found nothing, and returned early on
+`source_court IS NULL` — the reflow would have silently done nothing at all, which is the worst
+available failure mode because it looks like success.
+
+### Verify after applying
+
+```sql
+-- the guard accepts all four tables
+SELECT pg_get_functiondef('public.shift_live_schedule_after_match(text, uuid)'::regprocedure)
+  LIKE '%tier_draw_matches%' AS wired_in;                                    -- must be true
+
+-- reporting now reflows: schedule two placement matches on one court, report the
+-- first late, and the second must move
+SELECT id, scheduled_time, status FROM public.placement_matches
+WHERE tournament_id = '<id>'::uuid AND court_id IS NOT NULL ORDER BY scheduled_time;
+```
+
+Then, from the outside, confirm the report RPCs are still closed to `anon` — redefining a function
+with `CREATE OR REPLACE` keeps its OID and therefore its ACL, but this asserts it rather than
+trusting it:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$SUPABASE_URL/rest/v1/rpc/report_placement_result" \
+  -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' \
+  -d '{"p_match_id":"00000000-0000-0000-0000-000000000000","p_games":[]}'      # must be 401
+```
+
+### Rolling back
+
+Restore the previous two function bodies: drop the `placement_matches` / `tier_draw_matches`
+branches from `shift_live_schedule_after_match`, and restore `report_placement_result` /
+`report_tier_draw_result` without the `PERFORM public.shift_live_schedule_after_match(...)` line.
+The tables themselves are untouched, so nothing else changes.
 
 ## Applying `20260917020000_placement_helper_grants.sql`
 

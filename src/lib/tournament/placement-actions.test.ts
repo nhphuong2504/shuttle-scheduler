@@ -10,6 +10,7 @@ import {
   decidedWinners,
   heldEntrantId,
   planSeeds,
+  scheduleImpactNote,
   shuffleSeedFor,
   tierIsDecided,
   tierLabel,
@@ -453,5 +454,36 @@ describe("draw display helpers", () => {
     ]);
     expect([...rounds.keys()]).toEqual([2, 1]);
     expect(rounds.get(1)?.map((m) => m.slot)).toEqual([1, 2]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Schedule impact
+// ---------------------------------------------------------------------------
+
+describe("scheduleImpactNote", () => {
+  it("says nothing when a result moved nothing", () => {
+    // The common case. A "0 matches moved" line on every score entry would train
+    // the desk to ignore the line that actually matters.
+    expect(
+      scheduleImpactNote({ shiftedMatches: 0, largestShiftMinutes: 0, direction: "none" }),
+    ).toBeNull();
+  });
+
+  it("names the direction and the largest shift when a result did move matches", () => {
+    expect(
+      scheduleImpactNote({ shiftedMatches: 3, largestShiftMinutes: 15, direction: "later" }),
+    ).toBe("3 downstream matches moved later, by up to 15 min");
+    expect(
+      scheduleImpactNote({ shiftedMatches: 1, largestShiftMinutes: 5, direction: "earlier" }),
+    ).toBe("1 downstream match moved earlier, by up to 5 min");
+  });
+
+  it("does not claim a direction when matches moved both ways", () => {
+    // A late finish pushes one court later while a freed player pulls another
+    // earlier, so neither direction is the truth.
+    expect(
+      scheduleImpactNote({ shiftedMatches: 2, largestShiftMinutes: 10, direction: "mixed" }),
+    ).toBe("2 downstream matches moved, by up to 10 min");
   });
 });

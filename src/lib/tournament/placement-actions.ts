@@ -484,17 +484,135 @@ export async function generateTierDraws(
 // Results
 // ---------------------------------------------------------------------------
 
-/** Reports a placement result. The database applies the tournament's placement rule. */
-export async function reportPlacementMatch(matchId: string, games: unknown): Promise<void> {
-  await rpc("report_placement_result", { p_match_id: matchId, p_games: games });
+/**
+ * Reports a placement result. The database applies the tournament's placement rule.
+ *
+ * Returns the ripple the result caused. Reporting now reflows the rest of the day,
+ * so a match that finished late pushes everything after it on that court — and the
+ * desk should be told that happened rather than having to notice.
+ */
+export async function reportPlacementMatch(
+  matchId: string,
+  games: unknown,
+  tournamentId: string,
+): Promise<PlacementScheduleImpact> {
+  const { impact } = await withPlacementScheduleImpact(tournamentId, () =>
+    rpc("report_placement_result", { p_match_id: matchId, p_games: games }),
+  );
+  return impact;
 }
 
 /**
- * Reports a knockout result. The database applies the knockout rule and advances
- * the bracket, so the next round may already exist when this resolves.
+ * Reports a knockout result. The database applies the knockout rule, advances the
+ * bracket and then reflows the day, so the next round may already exist and may
+ * already have moved by the time this resolves.
  */
-export async function reportTierDrawMatch(matchId: string, games: unknown): Promise<void> {
-  await rpc("report_tier_draw_result", { p_match_id: matchId, p_games: games });
+export async function reportTierDrawMatch(
+  matchId: string,
+  games: unknown,
+  tournamentId: string,
+): Promise<PlacementScheduleImpact> {
+  const { impact } = await withPlacementScheduleImpact(tournamentId, () =>
+    rpc("report_tier_draw_result", { p_match_id: matchId, p_games: games }),
+  );
+  return impact;
+}
+
+// ---------------------------------------------------------------------------
+// Schedule impact
+// ---------------------------------------------------------------------------
+
+export interface PlacementScheduleImpact {
+  shiftedMatches: number;
+  largestShiftMinutes: number;
+  direction: "earlier" | "later" | "mixed" | "none";
+}
+
+/** Only the still-movable rows: a reported or in-progress match cannot be shifted. */
+type ScheduleSnapshot = Map<string, number>;
+
+async function placementScheduleSnapshot(tournamentId: string): Promise<ScheduleSnapshot> {
+  const snapshot: ScheduleSnapshot = new Map();
+  const [placement, tier] = await Promise.all([
+    supabase
+      .from("placement_matches")
+      .select("id, scheduled_time")
+      .eq("tournament_id", tournamentId)
+      .eq("status", "scheduled"),
+    supabase
+      .from("tier_draw_matches")
+      .select("id, scheduled_time")
+      .eq("tournament_id", tournamentId)
+      .eq("status", "scheduled"),
+  ]);
+  if (placement.error) throw new Error(placement.error.message);
+  if (tier.error) throw new Error(tier.error.message);
+  for (const row of placement.data ?? []) {
+    if (row.scheduled_time) snapshot.set(`p:${row.id}`, new Date(row.scheduled_time).getTime());
+  }
+  for (const row of tier.data ?? []) {
+    if (row.scheduled_time) snapshot.set(`t:${row.id}`, new Date(row.scheduled_time).getTime());
+  }
+  return snapshot;
+}
+
+function comparePlacementSchedule(
+  before: ScheduleSnapshot,
+  after: ScheduleSnapshot,
+): PlacementScheduleImpact {
+  const deltas: number[] = [];
+  for (const [id, next] of after) {
+    const previous = before.get(id);
+    if (previous != null && previous !== next) {
+      deltas.push(Math.round((next - previous) / 60_000));
+    }
+  }
+  const earlier = deltas.some((delta) => delta < 0);
+  const later = deltas.some((delta) => delta > 0);
+  return {
+    shiftedMatches: deltas.length,
+    largestShiftMinutes: deltas.reduce((largest, delta) => Math.max(largest, Math.abs(delta)), 0),
+    direction: earlier && later ? "mixed" : earlier ? "earlier" : later ? "later" : "none",
+  };
+}
+
+/**
+ * Snapshots the schedule, runs the work, and reports what moved.
+ *
+ * The snapshot is taken before and after rather than predicted, because the reflow
+ * runs in SQL across two tables and its result is not something the client should
+ * be re-deriving. Same approach as the legacy `withScheduleImpact`, kept separate
+ * because it reads the placement tables.
+ */
+export async function withPlacementScheduleImpact<T>(
+  tournamentId: string,
+  work: () => Promise<T>,
+): Promise<{ result: T; impact: PlacementScheduleImpact }> {
+  const before = await placementScheduleSnapshot(tournamentId);
+  const result = await work();
+  const after = await placementScheduleSnapshot(tournamentId);
+  return { result, impact: comparePlacementSchedule(before, after) };
+}
+
+/**
+ * A one-line note for the desk, or null when nothing moved.
+ *
+ * Returns null rather than "0 matches moved" on purpose: the common case is that a
+ * result changes nothing, and saying so on every score entry would train the desk
+ * to ignore the line that matters.
+ *
+ * "Downstream" is the honest word: these are the later matches on the same court,
+ * plus any match pulled forward by a freed player — not everything on the day.
+ */
+export function scheduleImpactNote(impact: PlacementScheduleImpact): string | null {
+  if (impact.shiftedMatches === 0) return null;
+  const count = `${impact.shiftedMatches} downstream match${
+    impact.shiftedMatches === 1 ? "" : "es"
+  }`;
+  const distance = `by up to ${impact.largestShiftMinutes} min`;
+  // A mixed reflow has no single direction, so none is claimed.
+  if (impact.direction === "mixed") return `${count} moved, ${distance}`;
+  return `${count} moved ${impact.direction}, ${distance}`;
 }
 
 export async function startPlacementMatch(matchId: string, courtId: string | null): Promise<void> {

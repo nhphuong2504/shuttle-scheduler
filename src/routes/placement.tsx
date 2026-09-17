@@ -20,6 +20,7 @@ import {
   reportTierDrawMatch,
   resetPlacementResult,
   resetTierDrawResult,
+  scheduleImpactNote,
   setPlacementSkill,
   shuffleSeedFor,
   syncPlacementEntrants,
@@ -164,9 +165,13 @@ function PlacementPage() {
           rule={scoring.rule}
           initialGames={scoring.initial}
           onSubmit={async (games) => {
-            if (scoring.kind === "placement") await reportPlacementMatch(scoring.matchId, games);
-            else await reportTierDrawMatch(scoring.matchId, games);
-            toast.success("Result saved");
+            if (!tournament) throw new Error("No active tournament is configured.");
+            const impact =
+              scoring.kind === "placement"
+                ? await reportPlacementMatch(scoring.matchId, games, tournament.id)
+                : await reportTierDrawMatch(scoring.matchId, games, tournament.id);
+            const note = scheduleImpactNote(impact);
+            toast.success(note ? `Result saved · ${note}` : "Result saved");
             refresh();
           }}
         />
