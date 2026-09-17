@@ -1,4 +1,5 @@
-import type { SchedulableMatch, ScheduledSlot } from "./scheduler";
+import type { BreakWindow, SchedulableMatch, ScheduledSlot } from "./scheduler";
+import { normalizeBreaks, startAfterBreaks } from "./scheduler";
 
 const MINUTE = 60_000;
 const DEFAULT_RCL_SIZE = 4;
@@ -25,6 +26,15 @@ export interface GraspOptions {
   seed?: number | undefined;
   debugTrace?: boolean | undefined;
   maxIterationsPerRun?: number | undefined;
+  /** Lunch and similar: play may not run through these. */
+  breaks?: readonly BreakWindow[] | undefined;
+  /**
+   * A wall the run may not cross. Without it `planningEnd` is only a soft signal
+   * and a run happily overruns, which is what a tournament wants on its last day
+   * but not on an intermediate one: a day that cannot stop would absorb the whole
+   * queue and the following days would never be reached.
+   */
+  hardEnd?: Date | undefined;
 }
 
 export interface PlayerConstraint {
@@ -165,6 +175,9 @@ interface NormalizedOptions {
   baseSeed: number;
   debugTrace: boolean;
   maxIterations: number;
+  breaks: BreakWindow[];
+  /** `null` means "no wall": the run may overrun its planning end freely. */
+  hardEnd: number | null;
 }
 
 function nowMs(): number {
@@ -213,6 +226,8 @@ function normalizeOptions(
     debugTrace: options.debugTrace ?? false,
     maxIterations:
       options.maxIterationsPerRun ?? matches.length * Math.max(courts.length, 1) * 6 + 500,
+    breaks: normalizeBreaks(options.breaks, options.planningEnd.getTime()),
+    hardEnd: options.hardEnd?.getTime() ?? null,
   };
 }
 
@@ -561,7 +576,10 @@ function runSchedule(
   const scheduledEnd = new Map(indexes.fixedSlots.map((slot) => [slot.matchId, slot.end]));
   const slots = indexes.fixedSlots.map((slot) => ({ ...slot }));
   const trace: GraspDebugEntry[] = [];
-  let currentTime = options.schedulingFloor;
+  // Every match in a wave starts together, so a break moves the whole wave: a
+  // match cannot be paused part-way through. Snapping here means no candidate is
+  // ever considered at a time that would run into a break.
+  let currentTime = startAfterBreaks(options.schedulingFloor, options.slotMs, options.breaks);
   let categoryOrderDeviationCount = 0;
   let categoryOrderDeviationMagnitude = 0;
   let iterations = 0;
@@ -575,6 +593,11 @@ function runSchedule(
       deadlockReason = `Iteration cap ${options.maxIterations} reached at ${new Date(currentTime).toISOString()}.`;
       break;
     }
+
+    // Past the hard end the day is full, so stop rather than overrun. Everything
+    // still in `remaining` is deferred rather than blocked: it is the caller's
+    // decision whether there is another day to carry it into.
+    if (options.hardEnd != null && currentTime + options.slotMs > options.hardEnd) break;
 
     let assigned = false;
     const constraintCache = new Map<string, PlayerConstraint>();
@@ -688,7 +711,9 @@ function runSchedule(
       deadlockReason = `No future event can make ${remaining.size} remaining match(es) eligible.`;
       break;
     }
-    currentTime = next;
+    // `next` is always greater than the current time, so snapping past a break
+    // still advances and the loop cannot spin.
+    currentTime = startAfterBreaks(next, options.slotMs, options.breaks);
   }
 
   return {

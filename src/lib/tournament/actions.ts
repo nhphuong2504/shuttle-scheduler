@@ -673,6 +673,136 @@ export async function updateTournamentDay(
   if (error) throw new Error(error.message);
 }
 
+/** The durations and rest gaps a build is measured against. */
+export interface TournamentTimingsInput {
+  groupSlotMinutes?: number;
+  knockoutSlotMinutes?: number;
+  groupRestGapMinutes?: number;
+  knockoutRestGapMinutes?: number;
+}
+
+/**
+ * Overrides the durations and rest gaps the schedule is built from.
+ *
+ * A direct table update rather than `save_tournament_draft`, which deliberately
+ * refuses anything that is not a DRAFT row. Overriding mid-event is the point:
+ * the desk finds out on the day that matches are running long, or that players
+ * need longer between them, and must be able to replan without a new tournament.
+ *
+ * The guard rails mirror the readiness check (`slot > 0`, `rest >= 0`) so an
+ * override cannot quietly make a tournament fail its own readiness gate.
+ */
+export async function updateTournamentTimings(
+  tournamentId: string,
+  patch: TournamentTimingsInput,
+): Promise<void> {
+  const payload: {
+    group_slot_minutes?: number;
+    knockout_slot_minutes?: number;
+    group_rest_gap_minutes?: number;
+    knockout_rest_gap_minutes?: number;
+  } = {};
+  if (patch.groupSlotMinutes !== undefined) payload.group_slot_minutes = patch.groupSlotMinutes;
+  if (patch.knockoutSlotMinutes !== undefined)
+    payload.knockout_slot_minutes = patch.knockoutSlotMinutes;
+  if (patch.groupRestGapMinutes !== undefined)
+    payload.group_rest_gap_minutes = patch.groupRestGapMinutes;
+  if (patch.knockoutRestGapMinutes !== undefined)
+    payload.knockout_rest_gap_minutes = patch.knockoutRestGapMinutes;
+  if (!Object.keys(payload).length) return;
+
+  if (payload.group_slot_minutes !== undefined && payload.group_slot_minutes <= 0) {
+    throw new Error("A placement match must last at least one minute.");
+  }
+  if (payload.knockout_slot_minutes !== undefined && payload.knockout_slot_minutes <= 0) {
+    throw new Error("A knockout match must last at least one minute.");
+  }
+  if (payload.group_rest_gap_minutes !== undefined && payload.group_rest_gap_minutes < 0) {
+    throw new Error("The placement rest gap cannot be negative.");
+  }
+  if (payload.knockout_rest_gap_minutes !== undefined && payload.knockout_rest_gap_minutes < 0) {
+    throw new Error("The knockout rest gap cannot be negative.");
+  }
+
+  const { error } = await supabase.from("tournaments").update(payload).eq("id", tournamentId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Replaces which courts a day plays on.
+ *
+ * Deletes by day rather than diffing: the set is small, it has no dependants, and
+ * a diff would need to match rows that carry no natural key. The tournament's own
+ * court pool is left alone, so shrinking a day's set never removes a court that
+ * other days — or an already-scheduled match — still point at.
+ *
+ * An empty set means "no per-day restriction", which the scheduler reads as every
+ * court. That is the same as the pre-existing rows state, so clearing is safe.
+ */
+export async function setTournamentDayCourts(
+  tournamentId: string,
+  dayId: string,
+  courtIds: string[],
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from("tournament_day_courts")
+    .delete()
+    .eq("day_id", dayId);
+  if (deleteError) throw new Error(deleteError.message);
+  if (!courtIds.length) return;
+
+  const { error } = await supabase
+    .from("tournament_day_courts")
+    .insert(courtIds.map((court_id) => ({ tournament_id: tournamentId, day_id: dayId, court_id })));
+  if (error) throw new Error(error.message);
+}
+
+export interface TournamentDayBreakInput {
+  label: string;
+  startTime: string;
+  endTime: string;
+}
+
+/**
+ * Replaces a day's breaks.
+ *
+ * Validated before the delete so a rejected list cannot leave the day with none:
+ * the database check constraint would otherwise fire after the old rows are gone.
+ */
+export async function setTournamentDayBreaks(
+  tournamentId: string,
+  dayId: string,
+  breaks: TournamentDayBreakInput[],
+): Promise<void> {
+  for (const brk of breaks) {
+    if (!brk.startTime || !brk.endTime) {
+      throw new Error("A break needs both a start and an end time.");
+    }
+    // Both are zero-padded 24-hour strings, so lexical order is chronological.
+    if (brk.endTime <= brk.startTime) {
+      throw new Error(`Break "${brk.label || "untitled"}" must end after it starts.`);
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("tournament_day_breaks")
+    .delete()
+    .eq("day_id", dayId);
+  if (deleteError) throw new Error(deleteError.message);
+  if (!breaks.length) return;
+
+  const { error } = await supabase.from("tournament_day_breaks").insert(
+    breaks.map((brk) => ({
+      tournament_id: tournamentId,
+      day_id: dayId,
+      label: brk.label || null,
+      start_time: brk.startTime,
+      end_time: brk.endTime,
+    })),
+  );
+  if (error) throw new Error(error.message);
+}
+
 export interface TournamentCategoryInput {
   code: string;
   name: string;

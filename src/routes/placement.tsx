@@ -12,9 +12,6 @@ import {
   bracketNote,
   bracketRounds,
   buildCategoryView,
-  generatePlacementRoundOne,
-  generatePlacementRoundTwo,
-  generateTierDraws,
   lockPlacementSeeds,
   reportPlacementMatch,
   reportTierDrawMatch,
@@ -90,7 +87,7 @@ interface ScoringRequest {
 
 function PlacementPage() {
   const qc = useQueryClient();
-  const { canEditPlacementEntrants, canGeneratePlacement, canScorePlacement } = useSession();
+  const { canEditPlacementEntrants, canScorePlacement } = useSession();
   const { tournament } = useTournamentScope();
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
@@ -146,7 +143,6 @@ function PlacementPage() {
             draws={(draws ?? []).filter((draw) => draw.category_id === category.id)}
             tierMatches={tierMatches ?? []}
             canEdit={canEditPlacementEntrants}
-            canGenerate={canGeneratePlacement}
             canScore={canScorePlacement}
             placementRule={placementRule}
             knockoutRule={knockoutRule}
@@ -223,7 +219,6 @@ function CategorySection({
   draws,
   tierMatches,
   canEdit,
-  canGenerate,
   canScore,
   placementRule,
   knockoutRule,
@@ -238,7 +233,6 @@ function CategorySection({
   draws: TierDraw[];
   tierMatches: TierDrawMatch[];
   canEdit: boolean;
-  canGenerate: boolean;
   canScore: boolean;
   placementRule: ScoringRule | null;
   knockoutRule: ScoringRule | null;
@@ -355,25 +349,9 @@ function CategorySection({
                 champion of Draw A.
               </p>
             ) : view.roundOne.length === 0 ? (
-              <div className="flex items-center gap-3">
-                <Button
-                  size="sm"
-                  disabled={!canGenerate}
-                  onClick={() =>
-                    run(
-                      () => generatePlacementRoundOne(category.id, entrants),
-                      `${category.code} round one generated`,
-                    )
-                  }
-                >
-                  Generate round one
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {view.heldEntrantId
-                    ? "One entrant will be held out of round one and play both matches in round two."
-                    : "Every entrant is paired."}
-                </span>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Round one has not been generated yet. Match generation runs from the schedule.
+              </p>
             ) : (
               <MatchList
                 matches={view.roundOne}
@@ -415,7 +393,7 @@ function CategorySection({
               </p>
             ) : view.roundOne.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Generate round one first — its results decide who plays whom here.
+                Round one has not been generated yet — its results decide who plays whom here.
               </p>
             ) : roundOneDecided < view.roundOne.length ? (
               <p className="text-xs text-muted-foreground">
@@ -423,18 +401,9 @@ function CategorySection({
                 {view.roundOne.length - roundOneDecided} still to play.
               </p>
             ) : view.roundTwo.length === 0 ? (
-              <Button
-                size="sm"
-                disabled={!canGenerate}
-                onClick={() =>
-                  run(
-                    () => generatePlacementRoundTwo(category.id, entrants, matches),
-                    `${category.code} round two generated`,
-                  )
-                }
-              >
-                Generate round two
-              </Button>
+              <p className="text-xs text-muted-foreground">
+                Round two has not been generated yet. Match generation runs from the schedule.
+              </p>
             ) : (
               <MatchList
                 matches={view.roundTwo}
@@ -458,14 +427,10 @@ function CategorySection({
           </StagePanel>
 
           <DrawsPanel
-            category={category}
             view={view}
-            entrants={entrants}
-            matches={matches}
             draws={draws}
             tierMatches={categoryTierMatches}
             label={labelEntrant}
-            canGenerate={canGenerate}
             canScore={canScore}
             knockoutRule={knockoutRule}
             onRefresh={onRefresh}
@@ -617,8 +582,8 @@ function SeedingPanel({
         ) : null}
         {hasMatches && canEdit ? (
           <p className="text-[11px] text-muted-foreground">
-            Seeding is frozen because placement matches already exist. Regenerate them to change the
-            order.
+            Seeding is frozen because placement matches already exist. The seed order is only
+            editable while the stage is still empty.
           </p>
         ) : null}
       </div>
@@ -720,27 +685,19 @@ function MatchList({
 // ---------------------------------------------------------------------------
 
 function DrawsPanel({
-  category,
   view,
-  entrants,
-  matches,
   draws,
   tierMatches,
   label,
-  canGenerate,
   canScore,
   knockoutRule,
   onRefresh,
   onScore,
 }: {
-  category: Category;
   view: CategoryPlacementView;
-  entrants: PlacementEntrant[];
-  matches: PlacementMatch[];
   draws: TierDraw[];
   tierMatches: TierDrawMatch[];
   label: (entrantId: string | null | undefined) => string;
-  canGenerate: boolean;
   canScore: boolean;
   knockoutRule: ScoringRule | null;
   onRefresh: () => void;
@@ -773,22 +730,11 @@ function DrawsPanel({
                 Waiting on {short} entrant{short === 1 ? "" : "s"}. A waived entrant is skipped
                 rather than blocking the category.
               </p>
-            ) : null}
-            <Button
-              size="sm"
-              disabled={!canGenerate || !view.gate.ready}
-              onClick={async () => {
-                try {
-                  await generateTierDraws(category.id, entrants, matches, hasDraws);
-                  toast.success(`${category.code} draws generated`);
-                  onRefresh();
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Could not generate draws");
-                }
-              }}
-            >
-              Generate A/B/C/D draws
-            </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Draws have not been generated yet. Match generation runs from the schedule.
+              </p>
+            )}
           </>
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -868,34 +814,9 @@ function DrawsPanel({
         )}
 
         {hasDraws ? (
-          <>
-            <p className="text-[11px] text-muted-foreground">
-              Regenerating is only possible before any draw match has been played.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!canGenerate}
-              onClick={async () => {
-                if (
-                  !window.confirm(
-                    "Regenerate the A/B/C/D draws? Any unplayed draw matches are replaced.",
-                  )
-                ) {
-                  return;
-                }
-                try {
-                  await generateTierDraws(category.id, entrants, matches, true);
-                  toast.success(`${category.code} draws regenerated`);
-                  onRefresh();
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Could not regenerate");
-                }
-              }}
-            >
-              Regenerate draws
-            </Button>
-          </>
+          <p className="text-[11px] text-muted-foreground">
+            The brackets are drawn. Clearing them needs match generation from the schedule.
+          </p>
         ) : null}
       </div>
     </Panel>

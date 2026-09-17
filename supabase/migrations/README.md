@@ -587,6 +587,64 @@ branches from `shift_live_schedule_after_match`, and restore `report_placement_r
 `report_tier_draw_result` without the `PERFORM public.shift_live_schedule_after_match(...)` line.
 The tables themselves are untouched, so nothing else changes.
 
+## Applying `20260917040000_placement_day_schedule_slot_fix.sql`
+
+**The knockout half of a build could not be written at all.** A build generated the A/B/C/D draws
+and then failed with `column reference "slot" is ambiguous`, leaving every knockout match
+unscheduled — so the desk saw 20 brackets appear and nothing on court.
+
+### The defect
+
+`apply_placement_day_schedule(p_tournament_id, p_stage, p_slots)` reads its payload in a loop whose
+variable was called `slot`:
+
+```plpgsql
+DECLARE
+  slot jsonb;
+BEGIN
+  ...
+  FOR slot IN SELECT * FROM jsonb_array_elements(COALESCE(p_slots, '[]'::jsonb))
+```
+
+`tier_draw_matches` has a real column named `slot` (the position inside a bracket round). Inside
+the `UPDATE public.tier_draw_matches ... WHERE id = (slot->>'match_id')::uuid` that writes a
+knockout slot, `slot` was therefore ambiguous between the PL/pgSQL variable and the table column,
+and Postgres rejected the entire statement.
+
+The `placement` branch never failed, because `placement_matches` has no `slot` column. That
+asymmetry is the whole reason the bug survived: the placement call commits, the knockout call
+raises, and the client reports a failed rebuild with the knockouts missing.
+
+### The fix
+
+The variable is renamed to `v_slot_json`. Renaming beats qualifying the reference (`v_slot_json`
+has no column to collide with) because the payload is read identically in both branches and only
+one of the two tables collides. The function is otherwise identical to the definition in
+`20260917010000_placement_stage_rpcs.sql`; the `REVOKE`/`GRANT` pair and `NOTIFY pgrst` are
+re-issued so the replaced function keeps its lock-down and the schema cache reloads.
+
+Purely a function replacement: no table changes, no data changes, no signature change. Safe to
+apply at any time, and it takes effect on the next rebuild.
+
+### Verify after applying
+
+Rebuild the schedule from `/placement-schedule`. The summary should now report knockout matches
+being placed alongside the placement rounds, and the running order should show the brackets filling
+in. Then check that no assigned match was left without a court and time:
+
+```sql
+-- expect 0
+select count(*) from public.tier_draw_matches
+where status = 'scheduled' and not is_bye
+  and (scheduled_time is null or court_id is null);
+```
+
+The fix was proved against a real Postgres engine (PGlite) before it was committed: the harness
+applies the **original** definition and confirms it raises `column reference "slot" is ambiguous`,
+then applies this file and confirms a knockout payload writes, that the placement branch still
+writes, that the completeness guard still refuses to leave an assigned match unscheduled, and that
+a byes-only knockout day still clears.
+
 ## Applying `20260917020000_placement_helper_grants.sql`
 
 A two-statement follow-up to the RPC migration above. Apply it after both placement migrations.

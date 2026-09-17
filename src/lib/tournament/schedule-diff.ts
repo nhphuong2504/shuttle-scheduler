@@ -1,11 +1,7 @@
 import type { ScheduledSlot } from "./scheduler";
 
 export type PlanChangeKind =
-  | "unchanged"
-  | "time-moved"
-  | "court-moved"
-  | "both-moved"
-  | "newly-placed";
+  "unchanged" | "time-moved" | "court-moved" | "both-moved" | "newly-placed";
 
 export interface PlanChange {
   matchId: string;
@@ -41,7 +37,7 @@ export interface RemainingMatchRow {
 
 /** Latest predicted end among matches still scheduled or in progress. */
 export function projectedFinishFromRemainingMatches(
-  matches: RemainingMatchRow[],
+  matches: readonly RemainingMatchRow[],
   slotMinutes: number,
   now = Date.now(),
 ): number | null {

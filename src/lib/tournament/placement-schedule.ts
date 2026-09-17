@@ -37,37 +37,78 @@ import type {
   TierDrawMatch,
   Tournament,
   TournamentDay,
+  TournamentDayBreak,
 } from "./data";
 import {
   diffPlan,
   projectedFinishFromRemainingMatches,
   type SchedulePlanDiff,
 } from "./schedule-diff";
-import { scheduleMatches, type SchedulableMatch, type ScheduledSlot } from "./scheduler";
+import {
+  scheduleMatches,
+  type BreakWindow,
+  type SchedulableMatch,
+  type ScheduledSlot,
+} from "./scheduler";
 import {
   scheduleGroupStageGrasp,
-  type GraspScheduleResult,
+  type GraspDiagnostics,
   type GraspSchedulableMatch,
 } from "./scheduler-grasp";
 
 const MINUTE = 60_000;
 
-export interface PlacementDayPlan {
+/**
+ * One day's share of a whole-schedule plan.
+ *
+ * Days are capacity, not build units: a day can hold the tail of one stage and the
+ * head of the next, which is why this reports what landed on it rather than which
+ * stage it was "for".
+ */
+export interface PlacementDayFill {
   day: number;
-  stage: PlacementStageName;
+  date: string;
+  /** Matches newly placed on this day. Anchors are reported separately. */
+  placed: number;
+  /** Slots the day could hold if every court ran back to back across its window. */
+  capacity: number;
+  /** Latest finish on this day, or null when nothing is on it. */
+  lastFinish: string | null;
+  overrunMinutes: number;
+}
+
+export interface PlacementSlotPayload {
+  match_id: string;
+  scheduled_time: string;
+  court_id: string;
+}
+
+/**
+ * A whole tournament's schedule: every day, both stages, one queue.
+ *
+ * Fixed (reported, in-progress and walkover) matches are left out of the payloads,
+ * which is what makes applying a plan a rebuild rather than a rewrite: the writer
+ * clears and re-sets only rows still in `scheduled`.
+ */
+export interface PlacementSchedulePlan {
   tournamentId: string;
+  /** Every slot in the plan, across every day and both stages. */
   slots: ScheduledSlot[];
   fixedMatchIds: string[];
   blocked: string[];
   awaitingTeams: string[];
   diff: SchedulePlanDiff;
   summary: ScheduleSummary;
+  days: PlacementDayFill[];
   /**
-   * Only slots that are allowed to move. Fixed matches are omitted, which is what
-   * makes the persistence call a rebuild rather than a rewrite: the RPC clears and
-   * re-sets only rows still in `scheduled`.
+   * Split by stage because the writer is stage-scoped: `apply_placement_day_schedule`
+   * takes one stage and clears only that stage's rows. Keeping `p_stage` means one
+   * plan becomes two calls rather than a migration to widen the RPC.
    */
-  movableSlotPayload: { match_id: string; scheduled_time: string; court_id: string }[];
+  placementSlotPayload: PlacementSlotPayload[];
+  knockoutSlotPayload: PlacementSlotPayload[];
+  /** Why the scheduler could not place something, for the desk-facing error. */
+  blockedReason: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +158,32 @@ function combineDateTime(date: string, time: string): Date {
   return new Date(`${date}T${normalized}`);
 }
 
+/**
+ * The courts a day actually plays on.
+ *
+ * A tournament created before per-day court sets existed has no rows here, and
+ * the only sensible reading of that is "every court, every day" — so an empty
+ * set falls back rather than leaving a day with nothing to schedule on.
+ */
+export function courtsForDay(
+  allCourts: readonly Court[],
+  dayCourtIds: ReadonlySet<string>,
+): Court[] {
+  if (!dayCourtIds.size) return [...allCourts];
+  return allCourts.filter((court) => dayCourtIds.has(court.id));
+}
+
+/** A day's configured breaks as absolute windows, so the schedulers can step over them. */
+export function breakWindowsFor(
+  day: TournamentDay,
+  breaks: readonly TournamentDayBreak[] | undefined,
+): BreakWindow[] {
+  return (breaks ?? []).map((brk) => ({
+    start: combineDateTime(day.date, brk.start_time).getTime(),
+    end: combineDateTime(day.date, brk.end_time).getTime(),
+  }));
+}
+
 /** A match has a real result, so its time is an anchor rather than a suggestion. */
 function isFixed(status: string): boolean {
   return status === "reported" || status === "in-progress" || status === "walkover";
@@ -127,26 +194,50 @@ function anchorStart(scheduledTime: string | null, startedAt: string | null): nu
   return anchor ? new Date(anchor).getTime() : undefined;
 }
 
-/** The end a fixed match actually occupies, used to feed the next round. */
-function plannedEndOf(
-  status: string,
-  endedAt: string | null,
-  start: number | undefined,
-  slotMinutes: number,
-  floor: number,
-  now: number,
-): number | undefined {
-  if (endedAt && (status === "reported" || status === "walkover")) {
-    return new Date(endedAt).getTime();
+/**
+ * The range a fixed match occupies, returned as a pair so the two can never
+ * disagree about the direction of time.
+ *
+ * Taking a reported match's `ended_at` literally is not enough, because it is not
+ * always after its `scheduled_time`: the desk can report a walkover, or a round
+ * played ahead of schedule, and then the finish precedes the planned start. A match
+ * that ends before it begins is refused by the scheduler, and it refuses the whole
+ * batch rather than the one row, so the planned slot wins in that case. That also
+ * stops the slot being handed to another match while this row still claims it.
+ *
+ * The same reasoning covers a match reported before it was ever given a slot: it
+ * has no start of its own, and one slot is inferred from the finish, because it
+ * cannot have been played without occupying a court for a slot's worth of time.
+ */
+function fixedRange(input: {
+  status: string;
+  scheduledTime: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  slotMinutes: number;
+  floor: number;
+  now: number;
+}): { start: number; end: number } | undefined {
+  const slotMs = input.slotMinutes * MINUTE;
+  const anchored = anchorStart(input.scheduledTime, input.startedAt);
+  const finished = input.endedAt ? new Date(input.endedAt).getTime() : undefined;
+
+  if (input.status === "reported" || input.status === "walkover") {
+    const end = finished ?? (anchored != null ? anchored + slotMs : undefined);
+    if (end == null) return undefined;
+    const start = anchored ?? end - slotMs;
+    return { start, end: Math.max(end, start + slotMs) };
   }
-  const planned = start != null ? start + slotMinutes * MINUTE : undefined;
-  // An in-progress match has no known end yet, so it is modelled as at least one
-  // slot from now: leaving it at its planned end would let the scheduler place
-  // the next match on that court before the running one has finished.
-  if (status === "in-progress" && planned != null) {
-    return Math.max(planned, floor + slotMinutes * MINUTE, now + slotMinutes * MINUTE);
-  }
-  return planned;
+
+  // Anything else is in progress. Its real end is unknown, so it is modelled as at
+  // least one slot from now: leaving it at its planned end would let the next match
+  // start on that court before the running one has finished.
+  const start = anchored ?? finished;
+  if (start == null) return undefined;
+  return {
+    start,
+    end: Math.max(start + slotMs, input.floor + slotMs, input.now + slotMs),
+  };
 }
 
 /**
@@ -181,8 +272,18 @@ function placementItems(input: {
     .filter((match) => match.status !== "void")
     .map((match) => {
       const { playerIds, playersKnown } = playerLookup([match.entrant_a_id, match.entrant_b_id]);
-      const start = anchorStart(match.scheduled_time, match.started_at);
       const fixed = isFixed(match.status);
+      const range = fixed
+        ? fixedRange({
+            status: match.status,
+            scheduledTime: match.scheduled_time,
+            startedAt: match.started_at,
+            endedAt: match.ended_at,
+            slotMinutes,
+            floor,
+            now,
+          })
+        : undefined;
       return {
         id: match.id,
         categoryId: match.category_id,
@@ -203,8 +304,8 @@ function placementItems(input: {
         round: match.stage === "round1" ? 1 : 2,
         dependsOn: match.prerequisite_ids.filter((id) => inBatch.has(id)),
         fixed,
-        start,
-        end: plannedEndOf(match.status, match.ended_at, start, slotMinutes, floor, now),
+        start: range?.start,
+        end: range?.end,
         courtNumber: match.court_id ? courtNumberById.get(match.court_id) : undefined,
       };
     });
@@ -251,8 +352,18 @@ function tierItems(input: {
         const finished = parent?.ended_at ?? parent?.reported_time;
         return finished ? Math.max(acc, new Date(finished).getTime() + restGap * MINUTE) : acc;
       }, 0);
-      const start = anchorStart(match.scheduled_time, match.started_at);
       const fixed = isFixed(match.status);
+      const range = fixed
+        ? fixedRange({
+            status: match.status,
+            scheduledTime: match.scheduled_time,
+            startedAt: match.started_at,
+            endedAt: match.ended_at,
+            slotMinutes,
+            floor,
+            now,
+          })
+        : undefined;
       const categoryId = drawCategory.get(match.draw_id) ?? match.draw_id;
 
       return {
@@ -266,8 +377,8 @@ function tierItems(input: {
         order: match.round * 100 + match.slot,
         earliestStart: parentEnd || undefined,
         fixed,
-        start,
-        end: plannedEndOf(match.status, match.ended_at, start, slotMinutes, floor, now),
+        start: range?.start,
+        end: range?.end,
         courtNumber: match.court_id ? courtNumberById.get(match.court_id) : undefined,
       };
     })
@@ -284,37 +395,141 @@ function tierItems(input: {
 // Planning
 // ---------------------------------------------------------------------------
 
-export interface PlanPlacementDayInput {
-  day: number;
-  stage: PlacementStageName;
+export interface PlanPlacementScheduleInput {
   tournament: Tournament;
-  dayConfig: TournamentDay;
-  courts: Court[];
-  teams: Team[];
-  entrants: PlacementEntrant[];
-  draws: TierDraw[];
-  placementMatches: PlacementMatch[];
-  tierMatches: TierDrawMatch[];
-  categoryOrder: Map<string, number>;
+  /** Every day. Order does not matter; they are sorted by day_number. */
+  days: readonly TournamentDay[];
+  /** The whole court pool. Each day narrows it through `dayCourtIds`. */
+  allCourts: readonly Court[];
+  /** Courts per day id. A day with no entry plays on every court. */
+  dayCourtIds?: ReadonlyMap<string, ReadonlySet<string>> | undefined;
+  /** Breaks per day id. */
+  breaksByDayId?: ReadonlyMap<string, readonly TournamentDayBreak[]> | undefined;
+  teams: readonly Team[];
+  entrants: readonly PlacementEntrant[];
+  draws: readonly TierDraw[];
+  placementMatches: readonly PlacementMatch[];
+  tierMatches: readonly TierDrawMatch[];
+  categoryOrder: ReadonlyMap<string, number>;
   options?: DayOneSchedulerOptions;
   /** Injectable clock, so a rebuild's floor is testable rather than wall-clock. */
   now?: number;
 }
 
+/** A local `YYYY-MM-DD` key, so a fixed match can be attributed to exactly one day. */
+function localDateKey(ms: number): string {
+  const date = new Date(ms);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+interface StageRun {
+  slots: ScheduledSlot[];
+  unscheduled: string[];
+  utilization: number;
+  overrun: boolean;
+  overrunMinutes: number;
+  deadlockReason: string | null;
+  diagnostics: GraspDiagnostics | null;
+}
+
 /**
- * Builds one day's plan for one stage, without writing anything.
+ * Runs one stage across one day.
+ *
+ * Each stage keeps its own duration and rest gap, which is why a day is filled in
+ * two passes rather than one: a placement match holds a court for 20 minutes and a
+ * knockout match for 45, and a single call cannot express both.
+ *
+ * `hardEnd` is what lets the queue spill. Without it a day absorbs everything it is
+ * given and simply runs late, so the following days would never be reached and the
+ * last day's overrun forecast would be the only thing that ever fired.
+ */
+function runStageForDay(input: {
+  stage: PlacementStageName;
+  dayStart: Date;
+  planningEnd: Date;
+  hardEnd: Date | undefined;
+  schedulingFloor: Date;
+  courts: Court[];
+  breaks: readonly BreakWindow[];
+  items: GraspSchedulableMatch[];
+  slotMinutes: number;
+  restGapMinutes: number;
+  options?: DayOneSchedulerOptions | undefined;
+}): StageRun {
+  const { stage, dayStart, planningEnd, hardEnd, schedulingFloor, courts, breaks, items } = input;
+  const { slotMinutes, restGapMinutes, options } = input;
+
+  if (stage === "placement") {
+    const result = scheduleGroupStageGrasp(items, {
+      dayStart,
+      planningEnd,
+      hardEnd,
+      schedulingFloor,
+      courts,
+      slotMinutes,
+      restGapMinutes,
+      breaks,
+      ...options,
+    });
+    return {
+      slots: result.slots,
+      unscheduled: result.unscheduled,
+      utilization: result.utilization,
+      overrun: result.overrun,
+      overrunMinutes: result.overrunMinutes,
+      deadlockReason: result.diagnostics.deadlockReason,
+      diagnostics: result.diagnostics,
+    };
+  }
+
+  const result = scheduleMatches(items as SchedulableMatch[], {
+    dayStart,
+    planningEnd,
+    hardEnd,
+    courts,
+    slotMinutes,
+    restGapMinutes,
+    breaks,
+  });
+  return {
+    slots: result.slots,
+    unscheduled: result.unscheduled,
+    utilization: result.utilization,
+    overrun: result.overrun,
+    overrunMinutes: result.overrunMinutes,
+    deadlockReason: null,
+    diagnostics: null,
+  };
+}
+
+/**
+ * Plans the whole tournament as one queue, without writing anything.
+ *
+ * The queue is the placement stage and then the knockouts. It fills each day in
+ * turn — day one first, spilling into day two, and so on — so a day's stage mix is
+ * an outcome rather than an input, and a day may carry the tail of one stage and
+ * the head of the next.
+ *
+ * The stage barrier is real rather than advisory: the knockouts are only placed on
+ * a day once every placement match has a slot. But it is also already guaranteed
+ * by the generators, because round two cannot exist until every round one result
+ * is in and a knockout round cannot exist until the previous one is decided. That
+ * is why this needs no round-ordering logic of its own: scheduling everything that
+ * exists is the same thing as scheduling in order.
  *
  * A stage's duration and rest gap come from the tournament's group and knockout
- * columns: the placement stage reuses the group columns rather than adding a third
- * pair, because it occupies the same slot in the day as the legacy group stage did.
+ * columns; the placement stage reuses the group columns rather than adding a third
+ * pair, because it occupies the same slot in the day the legacy group stage did.
  */
-export function planPlacementDay(input: PlanPlacementDayInput): PlacementDayPlan {
+export function planPlacementSchedule(input: PlanPlacementScheduleInput): PlacementSchedulePlan {
   const {
-    day,
-    stage,
     tournament,
-    dayConfig,
-    courts,
+    days,
+    allCourts,
+    dayCourtIds,
+    breaksByDayId,
     teams,
     entrants,
     draws,
@@ -325,129 +540,283 @@ export function planPlacementDay(input: PlanPlacementDayInput): PlacementDayPlan
     now = Date.now(),
   } = input;
 
-  if (!courts.length) throw new Error("Load the court list before building a schedule.");
+  if (!days.length) {
+    throw new Error("A tournament needs at least one day before a schedule can be built.");
+  }
+  if (!allCourts.length) throw new Error("Load the court list before building a schedule.");
 
-  const isPlacement = stage === "placement";
-  const slotMinutes = isPlacement
-    ? tournament.group_slot_minutes
-    : tournament.knockout_slot_minutes;
-  const restGap = isPlacement
-    ? tournament.group_rest_gap_minutes
-    : tournament.knockout_rest_gap_minutes;
+  const orderedDays = [...days].sort((a, b) => a.day_number - b.day_number);
+  const nextWholeMinute = Math.ceil(now / MINUTE) * MINUTE;
 
-  const dayStart = combineDateTime(dayConfig.date, dayConfig.start_time);
-  const planningEnd = combineDateTime(dayConfig.date, dayConfig.end_time);
+  const placementSlot = tournament.group_slot_minutes;
+  const placementRest = tournament.group_rest_gap_minutes;
+  const knockoutSlot = tournament.knockout_slot_minutes;
+  const knockoutRest = tournament.knockout_rest_gap_minutes;
+
   const playerLookup = buildPlayerLookup(entrants, teams);
-  const courtNumberById = new Map(courts.map((court) => [court.id, court.number]));
+  const courtNumberById = new Map(allCourts.map((court) => [court.id, court.number]));
   const drawCategory = new Map(draws.map((draw) => [draw.id, draw.category_id]));
 
-  // A rebuild starts from now, never from the original day start: replanning a day
-  // that is already under way must not put matches in the past. A first build
-  // starts from the window instead, because nothing has happened yet and the host
-  // picked that start time deliberately.
-  const existing = isPlacement ? placementMatches : tierMatches;
+  const existing = [...placementMatches, ...tierMatches];
+  // One rebuild flag for the whole tournament, not per stage: a plan that has to
+  // respect what has already been played must do so on every day it touches.
   const isRebuild = existing.some(
     (match) => match.status !== "void" && match.scheduled_time != null,
   );
-  const nextWholeMinute = Math.ceil(now / MINUTE) * MINUTE;
-  const schedulingFloor = isRebuild
-    ? new Date(Math.max(dayStart.getTime(), nextWholeMinute))
-    : dayStart;
 
-  const items: GraspSchedulableMatch[] = isPlacement
-    ? placementItems({
-        matches: placementMatches,
-        playerLookup,
-        courtNumberById,
-        categoryOrder,
-        slotMinutes,
-        floor: schedulingFloor.getTime(),
-        now,
-      })
-    : (tierItems({
-        matches: tierMatches,
-        drawCategory,
-        playerLookup,
-        courtNumberById,
-        categoryOrder,
-        slotMinutes,
-        restGap,
-        floor: schedulingFloor.getTime(),
-        now,
-      }) as GraspSchedulableMatch[]);
+  // Only used to model an in-progress match's end, because each day applies its own
+  // floor at run time. The earliest plausible start keeps that model conservative.
+  const firstDayStart = combineDateTime(orderedDays[0]!.date, orderedDays[0]!.start_time).getTime();
+  const itemFloor = isRebuild ? Math.max(firstDayStart, nextWholeMinute) : firstDayStart;
 
-  const result = isPlacement
-    ? scheduleGroupStageGrasp(items, {
+  // Round one and round two are one stage, so they share a duration and a queue
+  // slot; the queue has two printers, not three.
+  const placementAll = placementItems({
+    matches: placementMatches,
+    playerLookup,
+    courtNumberById,
+    categoryOrder,
+    slotMinutes: placementSlot,
+    floor: itemFloor,
+    now,
+  });
+  const knockoutAll = tierItems({
+    matches: tierMatches,
+    drawCategory,
+    playerLookup,
+    courtNumberById,
+    categoryOrder,
+    slotMinutes: knockoutSlot,
+    restGap: knockoutRest,
+    floor: itemFloor,
+    now,
+  }) as GraspSchedulableMatch[];
+
+  const everything = [...placementAll, ...knockoutAll];
+  const fixedSet = new Set(everything.filter((item) => item.fixed).map((item) => item.id));
+
+  // The queue itself: what is still waiting for a slot. A match leaves its set only
+  // when it has been given one, so anything that will not fit today is retried
+  // tomorrow rather than silently dropped.
+  const placementTodo = new Set(placementAll.filter((item) => !item.fixed).map((item) => item.id));
+  const knockoutTodo = new Set(knockoutAll.filter((item) => !item.fixed).map((item) => item.id));
+
+  const allSlots: ScheduledSlot[] = [];
+  const dayFills: PlacementDayFill[] = [];
+  let totalCapacityMinutes = 0;
+  let usedMinutes = 0;
+  let lastFinishMs: number | null = null;
+  let lastPlanningEndMs = 0;
+  let blockedReason: string | null = null;
+  let lastDiagnostics: GraspDiagnostics | null = null;
+
+  /** This day's anchors, so a fixed match is counted on exactly one day. */
+  const anchorsOn = (items: readonly GraspSchedulableMatch[], dayKey: string) =>
+    items.filter((item) => item.fixed && item.start != null && localDateKey(item.start) === dayKey);
+
+  const daysWithCourts = orderedDays.filter(
+    (day) => courtsForDay(allCourts, dayCourtIds?.get(day.id) ?? new Set()).length > 0,
+  );
+  const lastFilledDayId = daysWithCourts[daysWithCourts.length - 1]?.id ?? null;
+
+  for (const day of orderedDays) {
+    const dayStart = combineDateTime(day.date, day.start_time);
+    const planningEnd = combineDateTime(day.date, day.end_time);
+    const dayKey = localDateKey(dayStart.getTime());
+    lastPlanningEndMs = Math.max(lastPlanningEndMs, planningEnd.getTime());
+
+    const courts = courtsForDay(allCourts, dayCourtIds?.get(day.id) ?? new Set());
+    const capacityMinutes = courts.length
+      ? ((planningEnd.getTime() - dayStart.getTime()) / MINUTE) * courts.length
+      : 0;
+    totalCapacityMinutes += capacityMinutes;
+
+    if (!courts.length) {
+      dayFills.push({
+        day: day.day_number,
+        date: day.date,
+        placed: 0,
+        capacity: 0,
+        lastFinish: null,
+        overrunMinutes: 0,
+      });
+      continue;
+    }
+
+    const breaks = breakWindowsFor(day, breaksByDayId?.get(day.id));
+    // Every day but the last one that has courts is a wall. The last day is left to
+    // overrun, which is where a tournament's overrun forecast belongs: there is
+    // nowhere after it to defer to.
+    const hardEnd = day.id === lastFilledDayId ? undefined : planningEnd;
+    // A rebuild starts from now, never from the day's opening time: replanning a day
+    // already under way must not put matches in the past.
+    const schedulingFloor = isRebuild
+      ? new Date(Math.max(dayStart.getTime(), nextWholeMinute))
+      : dayStart;
+
+    const daySlots: ScheduledSlot[] = [];
+    let dayPlaced = 0;
+
+    // Pass A — the placement stage.
+    if (placementTodo.size) {
+      const items = [
+        ...anchorsOn(placementAll, dayKey),
+        ...placementAll.filter((item) => placementTodo.has(item.id)),
+      ];
+      const run = runStageForDay({
+        stage: "placement",
         dayStart,
         planningEnd,
+        hardEnd,
         schedulingFloor,
         courts,
-        slotMinutes,
-        restGapMinutes: restGap,
-        ...graspOptions,
-      })
-    : scheduleMatches(items as SchedulableMatch[], {
+        breaks,
+        items,
+        slotMinutes: placementSlot,
+        restGapMinutes: placementRest,
+        options: graspOptions,
+      });
+      for (const slot of run.slots) {
+        if (fixedSet.has(slot.matchId)) continue;
+        placementTodo.delete(slot.matchId);
+        dayPlaced++;
+      }
+      daySlots.push(...run.slots);
+      if (run.diagnostics) lastDiagnostics = run.diagnostics;
+      if (run.deadlockReason && !blockedReason) blockedReason = run.deadlockReason;
+    }
+
+    // Pass B — the knockouts. This is the barrier: they are only attempted once the
+    // placement queue has drained. This day's placement slots go in as anchors so
+    // the two stages cannot be double-booked onto one court or one player.
+    if (!placementTodo.size && knockoutTodo.size) {
+      const anchors: SchedulableMatch[] = daySlots
+        .filter((slot) => !fixedSet.has(slot.matchId))
+        .map((slot) => ({
+          id: slot.matchId,
+          categoryId: slot.categoryId,
+          playerIds: everything.find((item) => item.id === slot.matchId)?.playerIds ?? [],
+          kind: "group" as const,
+          order: 0,
+          fixed: true,
+          start: slot.start.getTime(),
+          end: slot.end.getTime(),
+          courtNumber: slot.courtNumber,
+        }));
+      const items = [
+        ...anchorsOn(knockoutAll, dayKey),
+        ...anchors,
+        ...knockoutAll.filter((item) => knockoutTodo.has(item.id)),
+      ] as GraspSchedulableMatch[];
+      const run = runStageForDay({
+        stage: "knockout",
         dayStart,
         planningEnd,
+        hardEnd,
+        schedulingFloor,
         courts,
-        slotMinutes,
-        restGapMinutes: restGap,
+        breaks,
+        items,
+        slotMinutes: knockoutSlot,
+        restGapMinutes: knockoutRest,
       });
+      for (const slot of run.slots) {
+        if (fixedSet.has(slot.matchId)) continue;
+        knockoutTodo.delete(slot.matchId);
+        dayPlaced++;
+      }
+      daySlots.push(...run.slots);
+    }
 
-  const fixedMatchIds = items.filter((item) => item.fixed).map((item) => item.id);
-  const fixedSet = new Set(fixedMatchIds);
-  const { blocked, awaitingTeams } = partitionUnscheduled(result.unscheduled, items);
-  const diff = diffPlan(existing, result.slots, fixedSet, courtNumberById);
+    allSlots.push(...daySlots);
+
+    let dayLastFinish: number | null = null;
+    for (const slot of daySlots) {
+      usedMinutes += (slot.end.getTime() - slot.start.getTime()) / MINUTE;
+      const end = slot.end.getTime();
+      dayLastFinish = dayLastFinish == null ? end : Math.max(dayLastFinish, end);
+      lastFinishMs = lastFinishMs == null ? end : Math.max(lastFinishMs, end);
+    }
+
+    dayFills.push({
+      day: day.day_number,
+      date: day.date,
+      placed: dayPlaced,
+      capacity: capacityMinutes,
+      lastFinish: dayLastFinish != null ? new Date(dayLastFinish).toISOString() : null,
+      overrunMinutes:
+        dayLastFinish != null
+          ? Math.max(0, Math.round((dayLastFinish - planningEnd.getTime()) / MINUTE))
+          : 0,
+    });
+  }
+
+  const { blocked, awaitingTeams } = partitionUnscheduled(
+    [...placementTodo, ...knockoutTodo],
+    everything,
+  );
+
+  const diff = diffPlan(existing, allSlots, fixedSet, courtNumberById);
   diff.unplaceable = blocked;
 
-  const movableSlotPayload = result.slots
-    .filter((slot) => !fixedSet.has(slot.matchId))
-    .map((slot) => ({
-      match_id: slot.matchId,
-      scheduled_time: slot.start.toISOString(),
-      court_id: slot.courtId,
-    }));
-
-  const graspResult = isPlacement ? (result as GraspScheduleResult) : null;
-  // The finish the current schedule already implies, so the desk can be told
-  // whether a rebuild actually moves the end of the day.
+  // What the current schedule already implies, so the desk can be told whether a
+  // rebuild moves the end of the tournament. Each stage is measured with its own
+  // duration, which a single call cannot do.
   const currentFinishMs = isRebuild
-    ? projectedFinishFromRemainingMatches(existing, slotMinutes, now)
+    ? [
+        projectedFinishFromRemainingMatches(placementMatches, placementSlot, now),
+        projectedFinishFromRemainingMatches(tierMatches, knockoutSlot, now),
+      ].reduce<number | null>(
+        (acc, value) => (value == null ? acc : acc == null ? value : Math.max(acc, value)),
+        null,
+      )
     : null;
-  const newFinishMs = result.projectedFinish?.getTime() ?? null;
   const projectedFinishDeltaMinutes =
-    currentFinishMs != null && newFinishMs != null
-      ? Math.round((newFinishMs - currentFinishMs) / MINUTE)
+    currentFinishMs != null && lastFinishMs != null
+      ? Math.round((lastFinishMs - currentFinishMs) / MINUTE)
       : null;
 
   const summary: ScheduleSummary = {
     placed: diff.placedCount,
-    anchorCount: diff.anchorCount,
+    anchorCount: fixedSet.size,
     movedCount: diff.movedCount,
     unscheduled: blocked.length,
     awaitingTeams: awaitingTeams.length,
-    utilization: result.utilization,
-    remainingUtilization: graspResult?.diagnostics.remainingWindowUtilization ?? null,
-    overrun: result.overrun,
-    projectedFinish: result.projectedFinish?.toISOString() ?? null,
+    utilization: totalCapacityMinutes > 0 ? usedMinutes / totalCapacityMinutes : 0,
+    remainingUtilization: lastDiagnostics?.remainingWindowUtilization ?? null,
+    overrun: dayFills.some((fill) => fill.overrunMinutes > 0) || blocked.length > 0,
+    projectedFinish: lastFinishMs != null ? new Date(lastFinishMs).toISOString() : null,
     currentProjectedFinish:
       currentFinishMs != null ? new Date(currentFinishMs).toISOString() : null,
     projectedFinishDeltaMinutes,
-    overrunMinutes: result.overrunMinutes,
-    ...(graspResult ? { diagnostics: graspResult.diagnostics } : {}),
+    overrunMinutes:
+      lastFinishMs != null && lastPlanningEndMs > 0
+        ? Math.max(0, Math.round((lastFinishMs - lastPlanningEndMs) / MINUTE))
+        : 0,
+    ...(lastDiagnostics ? { diagnostics: lastDiagnostics } : {}),
   };
 
+  const payloadFor = (stageIds: ReadonlySet<string>): PlacementSlotPayload[] =>
+    allSlots
+      .filter((slot) => stageIds.has(slot.matchId) && !fixedSet.has(slot.matchId))
+      .map((slot) => ({
+        match_id: slot.matchId,
+        scheduled_time: slot.start.toISOString(),
+        court_id: slot.courtId,
+      }));
+
   return {
-    day,
-    stage,
     tournamentId: tournament.id,
-    slots: result.slots,
-    fixedMatchIds,
+    slots: allSlots,
+    fixedMatchIds: [...fixedSet],
     blocked,
     awaitingTeams,
     diff,
     summary,
-    movableSlotPayload,
+    days: dayFills,
+    placementSlotPayload: payloadFor(new Set(placementAll.map((item) => item.id))),
+    knockoutSlotPayload: payloadFor(new Set(knockoutAll.map((item) => item.id))),
+    blockedReason,
   };
 }
 
@@ -481,25 +850,35 @@ function partitionUnscheduled(
 // ---------------------------------------------------------------------------
 
 /**
- * Writes a plan. Refuses to persist a plan that left a schedulable match out:
- * a half-built day is worse than no day, because a match with players and no court
+ * Writes a whole plan. Refuses to persist one that left a schedulable match out: a
+ * half-built schedule is worse than none, because a match with players and no court
  * looks like a fixture the desk forgot rather than one it never created.
+ *
+ * Two calls rather than one, because `apply_placement_day_schedule` is stage-scoped
+ * and clears only its own stage's rows. Placement goes first so a failure part-way
+ * leaves the earlier stage scheduled rather than the later one orphaned.
  */
-export async function applyPlacementDayPlan(plan: PlacementDayPlan): Promise<void> {
+export async function applyPlacementSchedulePlan(plan: PlacementSchedulePlan): Promise<void> {
   if (plan.blocked.length > 0) {
-    const reason = plan.summary.diagnostics?.deadlockReason;
     throw new Error(
-      reason
-        ? `Cannot apply rebuild: ${plan.blocked.length} match(es) could not be placed. ${reason}`
-        : `Cannot apply rebuild: ${plan.blocked.length} match(es) could not be placed.`,
+      plan.blockedReason
+        ? `Cannot apply the schedule: ${plan.blocked.length} match(es) could not be placed. ${plan.blockedReason}`
+        : `Cannot apply the schedule: ${plan.blocked.length} match(es) could not be placed.`,
     );
   }
-  const { error } = await supabase.rpc("apply_placement_day_schedule", {
-    p_tournament_id: plan.tournamentId,
-    p_stage: plan.stage,
-    p_slots: plan.movableSlotPayload as never,
-  });
-  if (error) throw new Error(error.message);
+
+  const calls: [PlacementStageName, PlacementSlotPayload[]][] = [
+    ["placement", plan.placementSlotPayload],
+    ["knockout", plan.knockoutSlotPayload],
+  ];
+  for (const [stage, slots] of calls) {
+    const { error } = await supabase.rpc("apply_placement_day_schedule", {
+      p_tournament_id: plan.tournamentId,
+      p_stage: stage,
+      p_slots: slots as never,
+    });
+    if (error) throw new Error(error.message);
+  }
 }
 
 /**

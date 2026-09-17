@@ -9,14 +9,17 @@ import type {
   TierDrawMatch,
   Tournament,
   TournamentDay,
+  TournamentDayBreak,
 } from "./data";
 import { placementStagesForDay, stagesForDay } from "./data";
 import {
+  courtsForDay,
   placementMatchLabel,
   placementStageLabel,
-  planPlacementDay,
-  type PlanPlacementDayInput,
+  planPlacementSchedule,
+  type PlanPlacementScheduleInput,
 } from "./placement-schedule";
+import { normalizeBreaks, startAfterBreaks } from "./scheduler";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -207,13 +210,36 @@ function fourTeams(): { teams: Team[]; entrants: PlacementEntrant[] } {
 /** The GRASP options tests use, so a plan is deterministic and quick. */
 const FAST = { graspRuns: 1, seed: 1 } as const;
 
-function plan(input: Partial<PlanPlacementDayInput> & { stage: "placement" | "knockout" }) {
+/**
+ * The planner is whole-tournament now, but most of these cases are about a single
+ * day, so this adapts the old per-day shape onto it.
+ *
+ * `stage` is accepted and ignored: the queue derives a stage from which match table
+ * a row came from, so passing it is what the old planner needed, not what the new
+ * one does. `courts` became `allCourts`, because a day's courts are now a subset of
+ * one pool rather than the whole input.
+ */
+function plan(
+  input: Partial<PlanPlacementScheduleInput> & {
+    stage?: "placement" | "knockout";
+    dayConfig?: TournamentDay;
+    courts?: Court[];
+    breaks?: readonly TournamentDayBreak[];
+    day?: number;
+  },
+) {
   const { teams, entrants } = fourTeams();
-  return planPlacementDay({
-    day: 1,
+  const { stage: _stage, dayConfig = DAY, courts = [court(1), court(2)] } = input;
+  const { breaks, day, ...rest } = input;
+  const dayConfigForPlan: TournamentDay = {
+    ...dayConfig,
+    day_number: day ?? dayConfig.day_number,
+  };
+  return planPlacementSchedule({
     tournament: tournament(),
-    dayConfig: DAY,
-    courts: [court(1), court(2)],
+    days: [dayConfigForPlan],
+    allCourts: courts,
+    breaksByDayId: breaks ? new Map([[dayConfigForPlan.id, breaks]]) : undefined,
     teams,
     entrants,
     draws: [tierDraw("A")],
@@ -222,7 +248,7 @@ function plan(input: Partial<PlanPlacementDayInput> & { stage: "placement" | "kn
     categoryOrder: new Map([["cat1", 1]]),
     options: FAST,
     now: DAY_START,
-    ...input,
+    ...rest,
   });
 }
 
@@ -284,7 +310,7 @@ describe("planPlacementDay — placement stage", () => {
     expect(result.summary.placed).toBe(2);
     // Four players in the batch: two doubles teams.
     expect(result.summary.anchorCount).toBe(0);
-    expect(result.movableSlotPayload).toHaveLength(2);
+    expect(result.placementSlotPayload).toHaveLength(2);
   });
 
   it("starts a first build at the day window, not at the clock", () => {
@@ -321,7 +347,7 @@ describe("planPlacementDay — placement stage", () => {
     expect(result.fixedMatchIds).toEqual(["r1-1"]);
     expect(result.summary.anchorCount).toBe(1);
     expect(result.summary.placed).toBe(1);
-    expect(result.movableSlotPayload.map((slot) => slot.match_id)).toEqual(["r1-2"]);
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r1-2"]);
     // The anchor keeps exactly the time and court it already had.
     const anchor = result.slots.find((slot) => slot.matchId === "r1-1");
     expect(anchor?.start.toISOString()).toBe("2026-09-17T09:00:00.000Z");
@@ -350,7 +376,7 @@ describe("planPlacementDay — placement stage", () => {
     });
 
     const floor = Math.ceil(now / MINUTE) * MINUTE;
-    for (const slot of result.movableSlotPayload) {
+    for (const slot of result.placementSlotPayload) {
       expect(new Date(slot.scheduled_time).getTime()).toBeGreaterThanOrEqual(floor);
     }
   });
@@ -389,21 +415,12 @@ describe("planPlacementDay — placement stage", () => {
   it("uses the group duration and rest gap for the placement stage", () => {
     // The placement stage reuses the group columns; the knockout columns must not
     // leak into it.
-    const { teams, entrants } = fourTeams();
-    const result = planPlacementDay({
-      day: 1,
+    const result = plan({
       stage: "placement",
       tournament: tournament({ group_slot_minutes: 30, knockout_slot_minutes: 45 }),
-      dayConfig: DAY,
       courts: [court(1)],
-      teams,
-      entrants,
       draws: [],
       placementMatches: [placementMatch("r1-1", "round1", "e1", "e2")],
-      tierMatches: [],
-      categoryOrder: new Map(),
-      options: FAST,
-      now: DAY_START,
     });
     expect(result.slots[0]!.end.getTime() - result.slots[0]!.start.getTime()).toBe(30 * MINUTE);
   });
@@ -610,5 +627,507 @@ describe("placementMatchLabel", () => {
   it("falls back to a short id for a match it does not know", () => {
     // Better a short id than an empty cell, which would read as a rendering bug.
     expect(placementMatchLabel("0123456789abcdef", [], [], label)).toBe("01234567");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Breaks
+// ---------------------------------------------------------------------------
+
+function dayBreak(startTime: string, endTime: string): TournamentDayBreak {
+  return {
+    id: `brk-${startTime}`,
+    tournament_id: TOURNAMENT_ID,
+    day_id: DAY.id,
+    label: null,
+    start_time: startTime,
+    end_time: endTime,
+    created_at: "2026-09-17T00:00:00Z",
+  };
+}
+
+describe("startAfterBreaks", () => {
+  // These work in plain minutes: the helper is unit-agnostic, and round numbers
+  // make the arithmetic in the assertions obvious.
+  const MIN = 60_000;
+
+  it("leaves a start alone when there is nothing to step over", () => {
+    expect(startAfterBreaks(0, 30 * MIN, [])).toBe(0);
+  });
+
+  it("moves a match that would straddle a break wholly after it", () => {
+    // A match cannot be paused part-way, so 09:00 + 30min against a 09:20-10:00
+    // break has to become 10:00 rather than 09:00 with a gap in the middle.
+    const breaks = normalizeBreaks([{ start: 9 * 60 * MIN, end: 10 * 60 * MIN }], Infinity);
+    expect(startAfterBreaks(9 * 60 * MIN, 30 * MIN, breaks)).toBe(10 * 60 * MIN);
+  });
+
+  it("allows a match that ends exactly as a break begins", () => {
+    // Touching is not overlapping: play right up to the whistle is fine.
+    const breaks = normalizeBreaks([{ start: 10 * 60 * MIN, end: 11 * 60 * MIN }], Infinity);
+    expect(startAfterBreaks(9 * 60 * MIN, 60 * MIN, breaks)).toBe(9 * 60 * MIN);
+  });
+
+  it("allows a match that starts exactly as a break ends", () => {
+    const breaks = normalizeBreaks([{ start: 9 * 60 * MIN, end: 10 * 60 * MIN }], Infinity);
+    expect(startAfterBreaks(10 * 60 * MIN, 30 * MIN, breaks)).toBe(10 * 60 * MIN);
+  });
+
+  it("steps over back-to-back breaks in one call", () => {
+    // Clearing the first break lands exactly on the second, so a single pass
+    // would leave the match starting inside it.
+    const breaks = normalizeBreaks(
+      [
+        { start: 9 * 60 * MIN, end: 10 * 60 * MIN },
+        { start: 10 * 60 * MIN, end: 11 * 60 * MIN },
+      ],
+      Infinity,
+    );
+    expect(startAfterBreaks(9 * 60 * MIN, 30 * MIN, breaks)).toBe(11 * 60 * MIN);
+  });
+});
+
+describe("normalizeBreaks", () => {
+  it("sorts and merges overlapping and touching windows", () => {
+    expect(
+      normalizeBreaks(
+        [
+          { start: 300, end: 400 },
+          { start: 100, end: 200 },
+          { start: 150, end: 250 },
+        ],
+        Infinity,
+      ),
+    ).toEqual([
+      { start: 100, end: 250 },
+      { start: 300, end: 400 },
+    ]);
+  });
+
+  it("drops windows that cannot be played around", () => {
+    // A zero-length or inverted window is a data-entry slip, not a break.
+    expect(
+      normalizeBreaks(
+        [
+          { start: 200, end: 200 },
+          { start: 400, end: 300 },
+        ],
+        Infinity,
+      ),
+    ).toEqual([]);
+    expect(normalizeBreaks([{ start: NaN, end: 300 }], Infinity)).toEqual([]);
+  });
+
+  it("drops a break that begins after the day is planned to end", () => {
+    // Matches may overrun the plan, so a break past the end would only delay work
+    // that could have happened.
+    expect(normalizeBreaks([{ start: 500, end: 600 }], 500)).toEqual([]);
+    expect(normalizeBreaks([{ start: 499, end: 600 }], 500)).toEqual([{ start: 499, end: 600 }]);
+  });
+});
+
+describe("courtsForDay", () => {
+  const all = [court(1), court(2), court(3)];
+
+  it("uses every court when no per-day set is configured", () => {
+    // Tournaments created before per-day courts existed have no rows, and the only
+    // sensible reading of that is "all courts".
+    expect(courtsForDay(all, new Set()).map((c) => c.number)).toEqual([1, 2, 3]);
+  });
+
+  it("restricts to the day's own courts when a set is configured", () => {
+    expect(courtsForDay(all, new Set(["c1", "c3"])).map((c) => c.number)).toEqual([1, 3]);
+  });
+});
+
+describe("planPlacementDay — the day's own courts", () => {
+  /**
+   * The route restricts the court list to the day's own set before planning. These
+   * prove the planner honours whatever it is handed, which is the boundary that
+   * makes a day configured for fewer courts actually schedule on fewer courts.
+   */
+  it("only places matches on the courts it is given", () => {
+    const result = plan({
+      stage: "placement",
+      courts: [court(3)],
+      draws: [],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r1-2", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.slots).toHaveLength(2);
+    expect(result.slots.every((slot) => slot.courtNumber === 3)).toBe(true);
+  });
+
+  it("uses the extra courts when the day has them", () => {
+    const result = plan({
+      stage: "placement",
+      courts: [court(1), court(2)],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r1-2", "round1", "e3", "e4"),
+      ],
+    });
+
+    // Two independent matches on two courts can share a start time; on one court
+    // the second would have to wait.
+    const starts = new Set(result.slots.map((slot) => slot.start.getTime()));
+    expect(starts.size).toBe(1);
+  });
+});
+
+describe("planPlacementDay — breaks", () => {
+  it("steps the placement stage over a day break", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      breaks: [dayBreak("09:20:00", "10:00:00")],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r1-2", "round1", "e3", "e4"),
+      ],
+    });
+
+    // The 09:00 wave would have run 09:00-09:30, straight through the break.
+    expect(result.slots[0]!.start.getTime()).toBe(DAY_START + 60 * MINUTE);
+    for (const slot of result.slots) {
+      expect(slot.start.getTime()).toBeGreaterThanOrEqual(DAY_START + 60 * MINUTE);
+    }
+  });
+
+  it("steps the knockout stage over a day break", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "knockout",
+      teams,
+      entrants,
+      draws: [tierDraw("A")],
+      breaks: [dayBreak("09:30:00", "11:00:00")],
+      tierMatches: [tierMatch("k-1", 1, 1, "e1", "e2")],
+    });
+
+    // A 45 minute knockout match starting at 09:00 would end at 09:45, inside the
+    // break, so the whole match moves to the far side of it.
+    expect(result.slots[0]!.start.getTime()).toBe(DAY_START + 120 * MINUTE);
+  });
+
+  it("never places a match across a break", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      breaks: [dayBreak("09:30:00", "09:45:00")],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r1-2", "round1", "e3", "e4"),
+      ],
+    });
+
+    const breakStart = DAY_START + 30 * MINUTE;
+    const breakEnd = DAY_START + 45 * MINUTE;
+    for (const slot of result.slots) {
+      const overlaps = slot.start.getTime() < breakEnd && slot.end.getTime() > breakStart;
+      expect(overlaps).toBe(false);
+    }
+  });
+
+  it("ignores a break on a day that has none", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      breaks: [],
+      placementMatches: [placementMatch("r1-1", "round1", "e1", "e2")],
+    });
+    expect(result.slots[0]!.start.getTime()).toBe(DAY_START);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The queue
+// ---------------------------------------------------------------------------
+
+/** A day with a bare window, so a test can pin exactly how many matches it holds. */
+function queueDay(
+  dayNumber: number,
+  start: string,
+  end: string,
+  id = `d${dayNumber}`,
+): TournamentDay {
+  return {
+    id,
+    tournament_id: TOURNAMENT_ID,
+    day_number: dayNumber,
+    date: `2026-09-${String(16 + dayNumber).padStart(2, "0")}`,
+    start_time: start,
+    end_time: end,
+    created_at: "2026-09-17T00:00:00Z",
+  };
+}
+
+/** `count` doubles teams sharing no players, so no match's rest gap binds another. */
+function disjointTeams(count: number): { teams: Team[]; entrants: PlacementEntrant[] } {
+  const teams: Team[] = [];
+  const entrants: PlacementEntrant[] = [];
+  for (let index = 0; index < count; index += 1) {
+    teams.push(team(`team-${index + 1}`, `p${index * 2 + 1}`, `p${index * 2 + 2}`));
+    entrants.push(entrant(`e${index + 1}`, `team-${index + 1}`, index + 1));
+  }
+  return { teams, entrants };
+}
+
+function scheduleQueue(input: {
+  days: TournamentDay[];
+  courts?: Court[];
+  dayCourtIds?: Map<string, ReadonlySet<string>>;
+  placementMatches?: PlacementMatch[];
+  tierMatches?: TierDrawMatch[];
+  tournament?: Tournament;
+  breaksByDayId?: Map<string, readonly TournamentDayBreak[]>;
+  teamCount?: number;
+}) {
+  const { teams, entrants } = disjointTeams(input.teamCount ?? 8);
+  return planPlacementSchedule({
+    tournament: input.tournament ?? tournament({ day_count: input.days.length }),
+    days: input.days,
+    allCourts: input.courts ?? [court(1)],
+    dayCourtIds: input.dayCourtIds,
+    breaksByDayId: input.breaksByDayId,
+    teams,
+    entrants,
+    draws: [tierDraw("A")],
+    placementMatches: input.placementMatches ?? [],
+    tierMatches: input.tierMatches ?? [],
+    categoryOrder: new Map([["cat1", 1]]),
+    options: FAST,
+    now: DAY_START,
+  });
+}
+
+describe("planPlacementSchedule — one queue across days", () => {
+  it("defers what will not fit into the next day instead of overrunning", () => {
+    // One court, a one hour window and 30 minute slots hold exactly two matches.
+    // The other three are not blocked: they belong to day two.
+    const matches = [1, 2, 3, 4, 5].map((n) =>
+      placementMatch(`r1-${n}`, "round1", `e${n * 2 - 1}`, `e${n * 2}`),
+    );
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "10:00:00"), queueDay(2, "09:00:00", "10:00:00")],
+      placementMatches: matches,
+      teamCount: 10,
+    });
+
+    expect(result.slots).toHaveLength(5);
+    expect(result.blocked).toEqual([]);
+
+    const byDay = new Map<number, number>();
+    for (const slot of result.slots) {
+      byDay.set(slot.start.getDate(), (byDay.get(slot.start.getDate()) ?? 0) + 1);
+    }
+    expect(byDay.get(17)).toBe(2);
+    expect(byDay.get(18)).toBe(3);
+    expect(result.days.find((fill) => fill.day === 1)!.placed).toBe(2);
+    expect(result.days.find((fill) => fill.day === 2)!.placed).toBe(3);
+  });
+
+  it("lets the last day overrun, because there is nothing after it", () => {
+    const matches = [1, 2, 3].map((n) =>
+      placementMatch(`r1-${n}`, "round1", `e${n * 2 - 1}`, `e${n * 2}`),
+    );
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "09:30:00")],
+      placementMatches: matches,
+      teamCount: 6,
+    });
+
+    expect(result.slots).toHaveLength(3);
+    expect(result.blocked).toEqual([]);
+    expect(result.days[0]!.overrunMinutes).toBeGreaterThan(0);
+    expect(result.summary.overrun).toBe(true);
+  });
+
+  it("holds the tail of one stage and the head of the next on the same day", () => {
+    // Day one can take a single placement match; day two takes the second one and
+    // then the knockout, which is the shape the whole change exists to allow.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "09:30:00"), queueDay(2, "09:00:00", "18:00:00")],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r2-1", "round2", "e3", "e4"),
+      ],
+      tierMatches: [tierMatch("k-1", 1, 1, "e5", "e6")],
+      teamCount: 6,
+    });
+
+    const onDay = (day: number) => result.slots.filter((slot) => slot.start.getDate() === day);
+    const placementIds = new Set(["r1-1", "r2-1"]);
+
+    const dayTwo = onDay(18);
+    expect(dayTwo.some((slot) => placementIds.has(slot.matchId))).toBe(true);
+    expect(dayTwo.some((slot) => slot.matchId === "k-1")).toBe(true);
+    // Day one is still placement only: the barrier held.
+    expect(onDay(17).every((slot) => placementIds.has(slot.matchId))).toBe(true);
+    expect(onDay(17).some((slot) => slot.matchId === "k-1")).toBe(false);
+  });
+
+  it("never starts a knockout before the last placement match it follows", () => {
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "09:30:00"), queueDay(2, "09:00:00", "18:00:00")],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r2-1", "round2", "e3", "e4"),
+      ],
+      tierMatches: [tierMatch("k-1", 1, 1, "e5", "e6")],
+      teamCount: 6,
+    });
+
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1")!;
+    const lastPlacement = result.slots
+      .filter((slot) => slot.matchId !== "k-1")
+      .reduce((acc, slot) => (slot.end.getTime() > acc ? slot.end.getTime() : acc), 0);
+    expect(knockout.start.getTime()).toBeGreaterThanOrEqual(lastPlacement);
+  });
+
+  it("gives each stage its own duration when both share a court", () => {
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00")],
+      placementMatches: [placementMatch("r1-1", "round1", "e1", "e2")],
+      tierMatches: [tierMatch("k-1", 1, 1, "e3", "e4")],
+      teamCount: 4,
+    });
+
+    const placement = result.slots.find((slot) => slot.matchId === "r1-1")!;
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1")!;
+    expect(placement.end.getTime() - placement.start.getTime()).toBe(30 * MINUTE);
+    expect(knockout.end.getTime() - knockout.start.getTime()).toBe(45 * MINUTE);
+    // One court, so the 30 minute match cannot sit on top of the 45 minute one.
+    expect(placement.end.getTime()).toBeLessThanOrEqual(knockout.start.getTime());
+  });
+
+  it("schedules each day on the courts that day has switched on", () => {
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "09:30:00"), queueDay(2, "09:00:00", "18:00:00")],
+      courts: [court(1), court(2)],
+      dayCourtIds: new Map([
+        ["d1", new Set(["c1"])],
+        ["d2", new Set(["c2"])],
+      ]),
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r1-2", "round1", "e3", "e4"),
+      ],
+      teamCount: 4,
+    });
+
+    for (const slot of result.slots) {
+      const expected = slot.start.getDate() === 17 ? 1 : 2;
+      expect(slot.courtNumber).toBe(expected);
+    }
+  });
+
+  it("leaves a knockout whose bracket is undecided out of the plan entirely", () => {
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00")],
+      placementMatches: [placementMatch("r1-1", "round1", "e1", "e2")],
+      // Round two of a bracket is only created once round one is decided, so this is
+      // the shape of a row that must not be treated as a match yet.
+      tierMatches: [tierMatch("k-2", 2, 1, null, null)],
+      teamCount: 4,
+    });
+
+    expect(result.slots.map((slot) => slot.matchId)).toEqual(["r1-1"]);
+    expect(result.blocked).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Anchors reported before their slot
+// ---------------------------------------------------------------------------
+
+describe("planPlacementSchedule — anchors reported ahead of their slot", () => {
+  /**
+   * A walkover, or a round played ahead of schedule, is reported before the time
+   * the match was given. The finish then precedes the planned start. Reading the
+   * finish literally would make the match end before it began, and the scheduler
+   * rejects the whole batch rather than the one row, so one early report used to
+   * stop every later stage from being scheduled at all.
+   */
+  it("keeps a match reported before its slot on the slot it was given", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e3", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:30:00.000Z",
+          ended_at: "2026-09-17T08:00:00.000Z",
+        }),
+        placementMatch("r1-2", "round1", "e2", "e4"),
+      ],
+    });
+
+    expect(result.blocked).toEqual([]);
+    expect(result.summary.anchorCount).toBe(1);
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r1-2"]);
+
+    // The planned slot is kept whole, so the court is still held until it is due
+    // and cannot be handed to another match in the meantime.
+    const anchor = result.slots.find((slot) => slot.matchId === "r1-1");
+    expect(anchor?.start.toISOString()).toBe("2026-09-17T09:30:00.000Z");
+    expect(anchor?.end.toISOString()).toBe("2026-09-17T10:00:00.000Z");
+  });
+
+  it("infers one slot from the finish when the match was never given a time", () => {
+    // Nothing to anchor to: the row has no court and no scheduled time, which is
+    // the shape of a match reported before it was ever laid out.
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2", {
+          status: "reported",
+          ended_at: "2026-09-17T09:30:00.000Z",
+        }),
+      ],
+    });
+
+    expect(result.blocked).toEqual([]);
+    expect(result.summary.anchorCount).toBe(1);
+  });
+
+  it("still uses the real finish when the match ran past its slot", () => {
+    // The ordinary case must not change: a match that overran is anchored at when
+    // it actually finished, because that is what the following round waits for. A
+    // movable match is included so the stage actually runs and reports its slots.
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e3", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00.000Z",
+          ended_at: "2026-09-17T09:40:00.000Z",
+        }),
+        placementMatch("r1-2", "round1", "e2", "e4"),
+      ],
+    });
+
+    const anchor = result.slots.find((slot) => slot.matchId === "r1-1");
+    expect(anchor?.start.toISOString()).toBe("2026-09-17T09:00:00.000Z");
+    expect(anchor?.end.toISOString()).toBe("2026-09-17T09:40:00.000Z");
   });
 });

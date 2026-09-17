@@ -24,6 +24,74 @@ export interface SchedulerOptions {
   courts: { id: string; number: number }[];
   slotMinutes: number;
   restGapMinutes: number;
+  /** Lunch and similar: play may not run through these. */
+  breaks?: readonly BreakWindow[] | undefined;
+  /**
+   * A wall the run may not cross. Without it `planningEnd` is only a soft signal and
+   * a run overruns freely, which is what a tournament wants on its last day but not
+   * on an intermediate one.
+   */
+  hardEnd?: Date | undefined;
+}
+
+/**
+ * A window play cannot run through, e.g. a lunch break. Absolute epoch
+ * milliseconds, because every scheduler works in numbers internally.
+ */
+export interface BreakWindow {
+  start: number;
+  end: number;
+}
+
+/**
+ * Normalises configured breaks into sorted, merged windows.
+ *
+ * Merging matters because two touching breaks would otherwise need two passes to
+ * step over, and an overlapping pair could leave a match starting inside one.
+ * Breaks beginning after the day's planned end are dropped: matches are allowed
+ * to overrun the plan, so a break past the end would only delay work needlessly.
+ */
+export function normalizeBreaks(
+  breaks: readonly BreakWindow[] | undefined,
+  planningEnd: number,
+): BreakWindow[] {
+  const usable = (breaks ?? [])
+    .filter((brk) => Number.isFinite(brk.start) && Number.isFinite(brk.end) && brk.end > brk.start)
+    .filter((brk) => brk.start < planningEnd)
+    .sort((a, b) => a.start - b.start);
+
+  const merged: BreakWindow[] = [];
+  for (const brk of usable) {
+    const last = merged[merged.length - 1];
+    if (last && brk.start <= last.end) {
+      last.end = Math.max(last.end, brk.end);
+    } else {
+      merged.push({ start: brk.start, end: brk.end });
+    }
+  }
+  return merged;
+}
+
+/**
+ * Pushes a start time forward until a match of `durationMs` no longer overlaps a
+ * break. A match cannot be paused part-way, so one that would straddle a break
+ * moves wholly after it.
+ *
+ * Looping because clearing one break can land inside the next. The bound is the
+ * break count because each pass clears at least one and never moves backwards.
+ */
+export function startAfterBreaks(
+  start: number,
+  durationMs: number,
+  breaks: readonly BreakWindow[],
+): number {
+  let time = start;
+  for (let pass = 0; pass <= breaks.length; pass++) {
+    const overlapping = breaks.find((brk) => time < brk.end && time + durationMs > brk.start);
+    if (!overlapping) return time;
+    time = overlapping.end;
+  }
+  return time;
 }
 
 export interface ScheduledSlot {
@@ -53,6 +121,9 @@ export function scheduleMatches(
 ): ScheduleResult {
   const { dayStart, planningEnd, courts, slotMinutes, restGapMinutes } = options;
   if (!courts.length) throw new Error("No courts are available to schedule.");
+  const slotMs = slotMinutes * MINUTE;
+  const breakWindows = normalizeBreaks(options.breaks, planningEnd.getTime());
+  const hardEnd = options.hardEnd?.getTime() ?? null;
   const courtIds = [...courts].sort((a, b) => a.number - b.number);
   const courtFreeAt = new Map<string, number>(courtIds.map((c) => [c.id, dayStart.getTime()]));
   const playerFreeAt = new Map<string, number>();
@@ -124,13 +195,22 @@ export function scheduleMatches(
           const free = playerFreeAt.get(playerId);
           if (free != null && free > start) start = free;
         }
+        // A match cannot be paused part-way, so one that would straddle a break
+        // moves wholly after it rather than being split.
+        start = startAfterBreaks(start, slotMs, breakWindows);
         if (!best || start < best.start) best = { court, start };
       }
       if (!best) {
         unscheduled.push(match.id);
         continue;
       }
-      const end = best.start + slotMinutes * MINUTE;
+      const end = best.start + slotMs;
+      // Past the hard end the day is full. The match is deferred, not blocked: the
+      // caller decides whether another day can take it.
+      if (hardEnd != null && end > hardEnd) {
+        unscheduled.push(match.id);
+        continue;
+      }
       courtFreeAt.set(best.court.id, end);
       for (const playerId of match.playerIds) {
         playerFreeAt.set(playerId, end + restGapMinutes * MINUTE);

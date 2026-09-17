@@ -21,7 +21,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-import type { PlacementEntrant, PlacementMatch, TierDraw, TierDrawMatch } from "./data";
+import type { Category, PlacementEntrant, PlacementMatch, TierDraw, TierDrawMatch } from "./data";
 import {
   buildPlacementRoundTwo,
   computePlacementOutcomes,
@@ -478,6 +478,94 @@ export async function generateTierDraws(
     p_force: force,
   });
   if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// The queue's generation step
+// ---------------------------------------------------------------------------
+
+/** Why a category was left alone, in the desk's terms rather than an error code. */
+export interface SkippedCategory {
+  categoryId: string;
+  code: string;
+  reason: string;
+}
+
+export interface StageGenerationOutcome {
+  generated: { roundOne: number; roundTwo: number; draws: number };
+  skipped: SkippedCategory[];
+}
+
+export interface GenerateMissingStagesInput {
+  categories: readonly Category[];
+  entrants: readonly PlacementEntrant[];
+  matches: readonly PlacementMatch[];
+  draws: readonly TierDraw[];
+}
+
+/**
+ * Creates whatever stage the queue is waiting on, for every category, in order.
+ *
+ * This is what makes one Build button enough. The generators were moved off the
+ * Placement tab, so without this a build has nothing to schedule — and because
+ * each stage only exists once the previous one is decided, "generate what is
+ * missing, then schedule" is the same thing as "wait for round one, then round
+ * two, then the knockouts". The database enforces that ordering, so this only
+ * has to ask for the next thing rather than sequence anything itself.
+ *
+ * A category that cannot advance is reported rather than thrown: one event with
+ * unlocked seeds must not stop the other four from being scheduled.
+ */
+export async function generateMissingStages(
+  input: GenerateMissingStagesInput,
+): Promise<StageGenerationOutcome> {
+  const outcome: StageGenerationOutcome = {
+    generated: { roundOne: 0, roundTwo: 0, draws: 0 },
+    skipped: [],
+  };
+
+  for (const category of input.categories) {
+    const entrants = input.entrants.filter((entrant) => entrant.category_id === category.id);
+    if (!entrants.length) continue;
+    const matches = input.matches.filter((match) => match.category_id === category.id);
+    const view = buildCategoryView(entrants, matches);
+    const skip = (reason: string) => {
+      outcome.skipped.push({ categoryId: category.id, code: category.code, reason });
+    };
+
+    if (!view.seedsLocked) {
+      skip("seed order is not locked");
+      continue;
+    }
+
+    // `stage` already encodes the gate: it is `round1` until round one is settled,
+    // then `round2`, and `draws` as soon as every entrant has their full record.
+    if (view.stage === "round1") {
+      if (view.roundOne.length > 0 || !view.roundOneExpected) continue;
+      outcome.generated.roundOne += await generatePlacementRoundOne(category.id, entrants);
+      continue;
+    }
+
+    if (view.stage === "round2") {
+      if (view.roundTwo.length > 0 || !view.roundTwoExpected) continue;
+      outcome.generated.roundTwo += await generatePlacementRoundTwo(category.id, entrants, matches);
+      continue;
+    }
+
+    // Draws. A field of one or two reaches here without a round two, which is the
+    // same condition the database enforces.
+    if (input.draws.some((draw) => draw.category_id === category.id)) continue;
+    await generateTierDraws(category.id, entrants, matches);
+    outcome.generated.draws += 1;
+  }
+
+  return outcome;
+}
+
+/** True when `generateMissingStages` created anything, so a refetch is needed. */
+export function stageGenerationChanged(outcome: StageGenerationOutcome): boolean {
+  const { roundOne, roundTwo, draws } = outcome.generated;
+  return roundOne > 0 || roundTwo > 0 || draws > 0;
 }
 
 // ---------------------------------------------------------------------------
