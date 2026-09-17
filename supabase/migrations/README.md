@@ -359,3 +359,149 @@ SELECT notes FROM public.tournaments WHERE name = 'Note probe';          -- NULL
 
 `DROP FUNCTION public.notes_trim(text); ALTER TABLE public.tournaments DROP COLUMN notes;` and
 restore the previous bodies of the two draft RPCs.
+
+## Applying `20260917000000_placement_stage.sql` and `20260917010000_placement_stage_rpcs.sql`
+
+These two add the storage and the RPCs for the **two-round placement** format. Apply them in
+order, exactly the same way as the others (Lovable sync, or paste into the SQL editor and then
+`NOTIFY pgrst, 'reload schema';`).
+
+They are **purely additive**. The legacy round-robin tables (`pools`, `pool_entries`,
+`pool_matches`, `draws`, `draw_matches`) and every function that touches them are left alone, so
+both formats can live in one database and an existing tournament keeps behaving as before.
+
+### The format, in one line
+
+Every entrant plays two placement matches; the two results sort them into one of four
+single-elimination draws.
+
+```
+WW -> Draw A    WL -> Draw B    LW -> Draw C    LL -> Draw D
+```
+
+### The bye rules are opposite, on purpose
+
+This is the single easiest thing to get wrong, so it is worth stating plainly:
+
+- **Placement stage — no byes.** An odd entry count *holds* one entrant out of round one. That
+  entrant then plays two make-up matches in round two: first the seed-nearest round-one winner,
+  then the seed-nearest loser. Holding is expressed as the *absence* of a row rather than a "bye"
+  row, which is what makes it neutral — there is nothing that can accidentally be counted as a
+  win, a loss, or one of the entrant's two matches.
+- **Knockout stage — byes allowed, and they go to the highest seed.** A knockout only needs to
+  eliminate people, and standard seeding absorbs an awkward bracket size by rewarding the
+  strongest entrants.
+
+### What the first migration adds
+
+| Table                 | Holds                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `placement_entrants`  | One row per team per category, with the skill level, the permanent seed and the tier.   |
+| `placement_matches`   | Rounds one and two, including the make-up and crossover flags and the prerequisite list. |
+| `tier_draws`          | One row per tier: bracket size, entrant count, and the champion once known.             |
+| `tier_draw_matches`   | The bracket rounds, with byes pre-decided and `games` for a best-of-three rule.          |
+
+Three constraints carry most of the weight:
+
+- **`placement_matches_pairing_unique`** — an unordered pair of entrants may appear only once
+  across the whole placement stage. This is the database-level guard for the invariant that
+  matters most: nobody faces the same opponent twice, including across the crossover boundary.
+- **`placement_entrants_seed_unique`** — seeds are unique per category, but only once assigned, so
+  every entrant can sit at `NULL` until the seed order is locked.
+- **`placement_required_matches()` / `placement_decided_matches()`** — the two-match gate, with
+  explicit branches for fields of one and two, which cannot produce two matches at all.
+
+The migration also redefines `delete_tournament` to clear `desk_activity` for the new match
+tables. `desk_activity` is keyed by `match_id` with no foreign key to tournaments, so without this
+its rows would outlive the tournament and keep appearing on the desk for matches that no longer
+exist.
+
+### What the second migration adds
+
+All gated on `public.has_staff_role(...)`, matching the role the equivalent round-robin RPC uses.
+
+| RPC                                    | Purpose                                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `sync_placement_entrants(category)`    | Materialises one entrant per active team; waives withdrawn teams. Idempotent.             |
+| `set_placement_skill(category, team, level)` | The desk's skill override. Refused once seeds are locked.                            |
+| `lock_placement_seeds(category, seeds)` | Writes and freezes the shuffled seed order.                                              |
+| `apply_placement_generation(...)`      | Creates round one.                                                                        |
+| `apply_placement_round_two(...)`       | Creates round two, refused until every round-one result exists.                           |
+| `apply_tier_draws(...)`                | Writes the tier assignment and the four brackets. Re-checks the gate.                    |
+| `advance_tier_draw_locked(draw)`       | Internal: pairs the adjacent slots of a finished round.                                  |
+| `report_placement_result(...)`         | Reports a placement result under the **placement** scoring rule.                          |
+| `report_tier_draw_result(...)`         | Reports a knockout result under the **knockout** rule, then advances the bracket.         |
+| `start_placement_match` / `start_tier_draw_match` | Marks a match in progress without committing a result.                         |
+| `reset_placement_result` / `reset_tier_draw_result` | Clears a result so it can be re-entered, refusing when a later round depends on it. |
+| `apply_placement_day_schedule(...)`    | Persists one GRASP pass for the placement or knockout stage.                              |
+
+### Why the pairing algorithms are not in SQL
+
+They live in TypeScript, in `src/lib/tournament/placement.ts` and
+`src/lib/tournament/tier-draw.ts`, where `placement.test.ts` exercises every field size from 3 to
+16 against *every* combination of results and asserts that each entrant plays exactly twice, that
+no pairing ever repeats, and that a crossover is used exactly when `N mod 4` is 1 or 2.
+
+The SQL here **validates and persists** instead of re-deriving: it re-checks the placement gate,
+that every round-one result exists before round two, and that a batch did not silently drop a
+match. A client bug can therefore produce a rejected call, never a corrupt bracket. The one
+exception is `advance_tier_draw_locked`, which is pure set arithmetic with no algorithm to drift.
+
+### Verify after applying
+
+```sql
+-- the tables exist with RLS on
+SELECT relname, relrowsecurity FROM pg_class
+WHERE relname IN ('placement_entrants','placement_matches','tier_draws','tier_draw_matches');
+
+-- no mutating RPC is reachable by anon: every row must read false
+SELECT p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN ('apply_placement_generation','apply_placement_round_two','apply_tier_draws',
+                    'lock_placement_seeds','report_placement_result','report_tier_draw_result',
+                    'apply_placement_day_schedule','sync_placement_entrants')
+ORDER BY p.proname;
+
+-- the no-rematch guard is real: an unordered pair may appear only once
+SELECT least(entrant_a_id, entrant_b_id), greatest(entrant_a_id, entrant_b_id), count(*)
+FROM public.placement_matches GROUP BY 1, 2 HAVING count(*) > 1;
+```
+
+Then regenerate `src/integrations/supabase/types.ts` against the project. **`types.ts` in this
+repo has already been hand-extended with the four new tables and the new functions** so that the
+code compiles before the migration is applied; a regeneration should produce the same shape, and
+any difference means the migration and the committed types have drifted.
+
+Finally run `npm run typecheck && npm run test` — `placement.test.ts` covers the pairing engine
+independently of the database.
+
+### Rolling back
+
+```sql
+DROP FUNCTION IF EXISTS public.apply_placement_day_schedule(uuid, text, jsonb),
+  public.reset_tier_draw_result(uuid), public.reset_placement_result(uuid),
+  public.start_tier_draw_match(uuid, uuid), public.start_placement_match(uuid, uuid),
+  public.report_tier_draw_result(uuid, jsonb), public.report_placement_result(uuid, jsonb),
+  public.advance_tier_draw_locked(uuid),
+  public.apply_tier_draws(uuid, jsonb, jsonb, boolean),
+  public.apply_placement_round_two(uuid, jsonb, boolean),
+  public.apply_placement_generation(uuid, jsonb, boolean),
+  public.lock_placement_seeds(uuid, jsonb),
+  public.set_placement_skill(uuid, uuid, text),
+  public.sync_placement_entrants(uuid),
+  public.placement_check_games(jsonb, int, int, int),
+  public.placement_decided_matches(uuid, uuid),
+  public.placement_required_matches(uuid);
+DROP TABLE IF EXISTS public.tier_draw_matches, public.tier_draws,
+  public.placement_matches, public.placement_entrants;
+```
+
+Then restore the previous body of `delete_tournament` without the two new `UNION ALL` branches.
+Dropping is safe: nothing in the round-robin schema references these tables.
+
+**Known gap.** `shift_live_schedule_after_match()` only accepts `pool_matches` and `draw_matches`,
+so reporting a placement result does not yet time-shift the rest of the day. That function is
+deliberately left untouched here; the new tables are wired into it when the new format gets its
+scheduler UI.
+

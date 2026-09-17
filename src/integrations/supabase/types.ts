@@ -321,6 +321,179 @@ export type Database = {
         }
         Relationships: []
       }
+      placement_entrants: {
+        Row: {
+          category_id: string
+          created_at: string
+          excluded: boolean
+          id: string
+          seed: number | null
+          seed_locked_at: string | null
+          skill_level: string
+          team_id: string
+          tier: string | null
+          tournament_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          excluded?: boolean
+          id?: string
+          seed?: number | null
+          seed_locked_at?: string | null
+          skill_level?: string
+          team_id: string
+          tier?: string | null
+          tournament_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          excluded?: boolean
+          id?: string
+          seed?: number | null
+          seed_locked_at?: string | null
+          skill_level?: string
+          team_id?: string
+          tier?: string | null
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "placement_entrants_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_entrants_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_entrants_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      placement_matches: {
+        Row: {
+          category_id: string
+          court_id: string | null
+          created_at: string
+          ended_at: string | null
+          entrant_a_id: string
+          entrant_b_id: string
+          games: Json
+          generation_key: string
+          id: string
+          is_crossover: boolean
+          is_makeup: boolean
+          note: string | null
+          prerequisite_ids: string[]
+          reported_time: string | null
+          scheduled_time: string | null
+          stage: string
+          started_at: string | null
+          status: string
+          tournament_id: string
+          winner_id: string | null
+        }
+        Insert: {
+          category_id: string
+          court_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          entrant_a_id: string
+          entrant_b_id: string
+          games?: Json
+          generation_key: string
+          id?: string
+          is_crossover?: boolean
+          is_makeup?: boolean
+          note?: string | null
+          prerequisite_ids?: string[]
+          reported_time?: string | null
+          scheduled_time?: string | null
+          stage: string
+          started_at?: string | null
+          status?: string
+          tournament_id: string
+          winner_id?: string | null
+        }
+        Update: {
+          category_id?: string
+          court_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          entrant_a_id?: string
+          entrant_b_id?: string
+          games?: Json
+          generation_key?: string
+          id?: string
+          is_crossover?: boolean
+          is_makeup?: boolean
+          note?: string | null
+          prerequisite_ids?: string[]
+          reported_time?: string | null
+          scheduled_time?: string | null
+          stage?: string
+          started_at?: string | null
+          status?: string
+          tournament_id?: string
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "placement_matches_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_matches_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_matches_entrant_a_id_fkey"
+            columns: ["entrant_a_id"]
+            isOneToOne: false
+            referencedRelation: "placement_entrants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_matches_entrant_b_id_fkey"
+            columns: ["entrant_b_id"]
+            isOneToOne: false
+            referencedRelation: "placement_entrants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_matches_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "placement_entrants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pool_entries: {
         Row: {
           id: string
@@ -628,6 +801,187 @@ export type Database = {
           },
         ]
       }
+      tier_draw_matches: {
+        Row: {
+          court_id: string | null
+          created_at: string
+          draw_id: string
+          ended_at: string | null
+          entrant_a_id: string | null
+          entrant_b_id: string | null
+          games: Json
+          id: string
+          is_bye: boolean
+          note: string | null
+          parent_a_id: string | null
+          parent_b_id: string | null
+          reported_time: string | null
+          round: number
+          scheduled_time: string | null
+          slot: number
+          started_at: string | null
+          status: string
+          tournament_id: string
+          winner_id: string | null
+        }
+        Insert: {
+          court_id?: string | null
+          created_at?: string
+          draw_id: string
+          ended_at?: string | null
+          entrant_a_id?: string | null
+          entrant_b_id?: string | null
+          games?: Json
+          id?: string
+          is_bye?: boolean
+          note?: string | null
+          parent_a_id?: string | null
+          parent_b_id?: string | null
+          reported_time?: string | null
+          round: number
+          scheduled_time?: string | null
+          slot: number
+          started_at?: string | null
+          status?: string
+          tournament_id: string
+          winner_id?: string | null
+        }
+        Update: {
+          court_id?: string | null
+          created_at?: string
+          draw_id?: string
+          ended_at?: string | null
+          entrant_a_id?: string | null
+          entrant_b_id?: string | null
+          games?: Json
+          id?: string
+          is_bye?: boolean
+          note?: string | null
+          parent_a_id?: string | null
+          parent_b_id?: string | null
+          reported_time?: string | null
+          round?: number
+          scheduled_time?: string | null
+          slot?: number
+          started_at?: string | null
+          status?: string
+          tournament_id?: string
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tier_draw_matches_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draw_matches_draw_id_fkey"
+            columns: ["draw_id"]
+            isOneToOne: false
+            referencedRelation: "tier_draws"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draw_matches_entrant_a_id_fkey"
+            columns: ["entrant_a_id"]
+            isOneToOne: false
+            referencedRelation: "placement_entrants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draw_matches_entrant_b_id_fkey"
+            columns: ["entrant_b_id"]
+            isOneToOne: false
+            referencedRelation: "placement_entrants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draw_matches_parent_a_id_fkey"
+            columns: ["parent_a_id"]
+            isOneToOne: false
+            referencedRelation: "tier_draw_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draw_matches_parent_b_id_fkey"
+            columns: ["parent_b_id"]
+            isOneToOne: false
+            referencedRelation: "tier_draw_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draw_matches_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draw_matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "placement_entrants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tier_draws: {
+        Row: {
+          bracket_size: number
+          category_id: string
+          champion_id: string | null
+          created_at: string
+          entrant_count: number
+          id: string
+          tier: string
+          tournament_id: string
+        }
+        Insert: {
+          bracket_size: number
+          category_id: string
+          champion_id?: string | null
+          created_at?: string
+          entrant_count: number
+          id?: string
+          tier: string
+          tournament_id: string
+        }
+        Update: {
+          bracket_size?: number
+          category_id?: string
+          champion_id?: string | null
+          created_at?: string
+          entrant_count?: number
+          id?: string
+          tier?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tier_draws_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draws_champion_id_fkey"
+            columns: ["champion_id"]
+            isOneToOne: false
+            referencedRelation: "placement_entrants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tier_draws_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournament_day_breaks: {
         Row: {
           created_at: string
@@ -878,6 +1232,7 @@ export type Database = {
       }
       active_tournament_id: { Args: never; Returns: string }
       advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
+      advance_tier_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
       apply_day_schedule: {
         Args: {
           p_day: number
@@ -892,8 +1247,29 @@ export type Database = {
         Args: { p_category_id: string; p_force: boolean; p_payload: Json }
         Returns: undefined
       }
+      apply_placement_day_schedule: {
+        Args: { p_stage: string; p_slots: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      apply_placement_generation: {
+        Args: { p_category_id: string; p_force?: boolean; p_matches: Json }
+        Returns: number
+      }
+      apply_placement_round_two: {
+        Args: { p_category_id: string; p_force?: boolean; p_matches: Json }
+        Returns: number
+      }
       apply_pool_generation: {
         Args: { p_category_id: string; p_force: boolean; p_payload: Json }
+        Returns: undefined
+      }
+      apply_tier_draws: {
+        Args: {
+          p_category_id: string
+          p_draws: Json
+          p_force?: boolean
+          p_tiers: Json
+        }
         Returns: undefined
       }
       assert_match_eligible: {
@@ -929,13 +1305,42 @@ export type Database = {
       }
       has_staff_role: { Args: { needed: string[] }; Returns: boolean }
       is_invited_email: { Args: { value: string }; Returns: boolean }
+      lock_placement_seeds: {
+        Args: { p_category_id: string; p_seeds: Json }
+        Returns: undefined
+      }
       normalize_email: { Args: { value: string }; Returns: string }
+      placement_check_games: {
+        Args: {
+          p_best_of: number
+          p_games: Json
+          p_games_to: number
+          p_win_by: number
+        }
+        Returns: string
+      }
+      placement_decided_matches: {
+        Args: { p_category_id: string; p_entrant_id: string }
+        Returns: number
+      }
+      placement_required_matches: {
+        Args: { p_category_id: string }
+        Returns: number
+      }
       report_draw_result: {
+        Args: { p_games: Json; p_match_id: string }
+        Returns: undefined
+      }
+      report_placement_result: {
         Args: { p_games: Json; p_match_id: string }
         Returns: undefined
       }
       report_pool_result: {
         Args: { p_match_id: string; p_score_a: number; p_score_b: number }
+        Returns: undefined
+      }
+      report_tier_draw_result: {
+        Args: { p_games: Json; p_match_id: string }
         Returns: undefined
       }
       reschedule_live_match: {
@@ -953,6 +1358,14 @@ export type Database = {
       }
       reset_match_with_note: {
         Args: { p_match_id: string; p_note: string; p_table: string }
+        Returns: undefined
+      }
+      reset_placement_result: {
+        Args: { p_match_id: string }
+        Returns: undefined
+      }
+      reset_tier_draw_result: {
+        Args: { p_match_id: string }
         Returns: undefined
       }
       resolve_match_exception: {
@@ -977,6 +1390,10 @@ export type Database = {
         Args: { p_payload: Json; p_tournament_id: string }
         Returns: undefined
       }
+      set_placement_skill: {
+        Args: { p_category_id: string; p_skill_level: string; p_team_id: string }
+        Returns: undefined
+      }
       shift_live_schedule_after_match: {
         Args: { p_match_id: string; p_table: string }
         Returns: undefined
@@ -989,6 +1406,18 @@ export type Database = {
           p_table: string
         }
         Returns: undefined
+      }
+      start_placement_match: {
+        Args: { p_court_id?: string; p_match_id: string }
+        Returns: undefined
+      }
+      start_tier_draw_match: {
+        Args: { p_court_id?: string; p_match_id: string }
+        Returns: undefined
+      }
+      sync_placement_entrants: {
+        Args: { p_category_id: string }
+        Returns: number
       }
       tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
     }
