@@ -727,6 +727,59 @@ export async function resetTierDrawResult(matchId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// The whole-stage reset
+// ---------------------------------------------------------------------------
+
+/** What a reset removed, so the desk can be told rather than left guessing. */
+export interface PlacementStageReset {
+  placementMatches: number;
+  tierDraws: number;
+  tierMatches: number;
+  entrants: number;
+}
+
+/**
+ * Discards the entire placement stage: every match, every draw, every result and
+ * the whole schedule, back to a registered field with nothing played.
+ *
+ * The seed order and the waived flags go with it, so this returns the stage to
+ * exactly the state it is in after entrants are synced — the next action is
+ * "Shuffle & lock seeds". Admin-only and irreversible; the caller is expected to
+ * have confirmed with the desk first.
+ */
+export async function resetPlacementStage(tournamentId: string): Promise<PlacementStageReset> {
+  const { data, error } = await supabase.rpc(
+    "reset_placement_stage" as never,
+    {
+      p_tournament_id: tournamentId,
+    } as never,
+  );
+  if (error) throw new Error(error.message);
+  const counts = (data ?? {}) as Partial<PlacementStageReset>;
+  return {
+    placementMatches: counts.placementMatches ?? 0,
+    tierDraws: counts.tierDraws ?? 0,
+    tierMatches: counts.tierMatches ?? 0,
+    entrants: counts.entrants ?? 0,
+  };
+}
+
+/** One line describing what a reset discarded, for the confirmation toast. */
+export function stageResetNote(reset: PlacementStageReset): string {
+  const parts = [
+    reset.placementMatches > 0
+      ? `${reset.placementMatches} placement match${reset.placementMatches === 1 ? "" : "es"}`
+      : null,
+    reset.tierMatches > 0
+      ? `${reset.tierMatches} knockout match${reset.tierMatches === 1 ? "" : "es"}`
+      : null,
+    reset.tierDraws > 0 ? `${reset.tierDraws} draw${reset.tierDraws === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  if (!parts.length) return "Nothing had been played yet — the seeds were unlocked.";
+  return `Removed ${parts.join(", ")}. Seeds and waivers cleared.`;
+}
+
+// ---------------------------------------------------------------------------
 // Derived display helpers
 // ---------------------------------------------------------------------------
 

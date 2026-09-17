@@ -56,7 +56,9 @@ import {
 import { formatProjectedFinishDelta } from "@/lib/tournament/schedule-diff";
 import {
   generateMissingStages,
+  resetPlacementStage,
   stageGenerationChanged,
+  stageResetNote,
   type StageGenerationOutcome,
 } from "@/lib/tournament/placement-actions";
 
@@ -120,7 +122,7 @@ function normalizeTime(value: string) {
 
 function PlacementSchedulePage() {
   const qc = useQueryClient();
-  const { canSchedule } = useSession();
+  const { canSchedule, isAdmin } = useSession();
   const { tournament, days, loading } = useTournamentScope();
   const tournamentId = tournament?.id ?? null;
   const { data: courts } = useCourts();
@@ -626,6 +628,41 @@ function PlacementSchedulePage() {
       : preview.plan.diff.changes.filter((change) => change.kind !== "unchanged")
     : [];
 
+  /**
+   * Discards the whole placement stage and returns it to a registered field.
+   *
+   * Everything unplayed and everything played goes, plus the seed order and the
+   * waivers, so the stage is back to the state it is in after entrants are synced
+   * and the next action is "Shuffle & lock seeds" on the Placement tab. Nothing
+   * here can be undone, hence the explicit confirmation and the admin check.
+   */
+  const resetStage = async () => {
+    if (!tournament) return;
+    const confirmed = window.confirm(
+      "Delete every placement result and the whole schedule?\n\n" +
+        "This removes both placement rounds, the A/B/C/D draws, every result and every " +
+        "scheduled time, and it also clears the seed order and the waivers. The field goes " +
+        "back to a registered field with nothing played, ready to shuffle and lock seeds " +
+        "again. It cannot be undone.",
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      const reset = await resetPlacementStage(tournament.id);
+      // The local summaries describe a schedule that no longer exists, so they are
+      // cleared rather than refreshed: "not built yet" is the truth now.
+      setResult(null);
+      setPreview(null);
+      await qc.invalidateQueries();
+      toast.success(stageResetNote(reset));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not reset the placement stage");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!loading && !tournamentDays.length) {
     return (
       <AppShell title="Court schedule">
@@ -1021,10 +1058,27 @@ function PlacementSchedulePage() {
               >
                 {busy ? "Planning…" : hasSchedule ? "Rebuild schedule" : "Build schedule"}
               </Button>
+              {isAdmin ? (
+                <Button
+                  variant="destructive"
+                  disabled={busy || !tournament}
+                  onClick={() => void resetStage()}
+                >
+                  Delete results & schedule
+                </Button>
+              ) : null}
               {!(courts ?? []).length ? (
                 <span className="text-xs text-danger-foreground">Load the court list first.</span>
               ) : null}
             </div>
+
+            {isAdmin ? (
+              <p className="text-[11px] text-muted-foreground">
+                Delete results &amp; schedule discards every placement and knockout match, every
+                result and the schedule, and also clears the seed order and the waivers — the field
+                goes back to a registered list, ready to shuffle and lock seeds again.
+              </p>
+            ) : null}
 
             {result ? (
               <div className="space-y-2 border-t border-hairline pt-3">

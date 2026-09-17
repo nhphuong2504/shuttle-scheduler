@@ -587,6 +587,63 @@ branches from `shift_live_schedule_after_match`, and restore `report_placement_r
 `report_tier_draw_result` without the `PERFORM public.shift_live_schedule_after_match(...)` line.
 The tables themselves are untouched, so nothing else changes.
 
+## Applying `20260917050000_placement_stage_reset.sql`
+
+Adds `reset_placement_stage(p_tournament_id)` — the **"Delete results & schedule"** button on the
+Court schedule tab. It is the way back to the start of the event without re-registering the field.
+
+### What it does
+
+One transaction that:
+
+1. deletes every `tier_draw_matches` row for the tournament,
+2. deletes every `tier_draws` row,
+3. deletes every `placement_matches` row,
+4. clears the placement state on `placement_entrants` — `seed`, `seed_locked_at`, `tier` and
+   `excluded`.
+
+It returns what it removed, as `{ placementMatches, tierDraws, tierMatches, entrants }`, so the desk
+is told rather than left to guess.
+
+The entrant rows themselves survive. They mirror the registrations, so deleting them would mean
+re-syncing a field that has not changed. Clearing their state is what returns the stage to the point
+it is at right after "Sync entrants" — the next action is **Shuffle & lock seeds**.
+
+### Why it is an RPC rather than client-side deletes
+
+* **Ordering.** `tier_draw_matches` and `tier_draws` both reference `placement_entrants`, and
+  `tier_draw_matches` references itself. Four round trips from the client can fail halfway and leave
+  a tournament with draws but no matches. One function is one transaction.
+* **Authorization.** `placement_entrants` is writable by `admin`/`registrar` and the match tables by
+  `admin`/`scheduler`, so no single staff role can clear both paths through the table policies. The
+  RPC is **admin-only**, which is the only role that should be able to discard a played event.
+* **Locking.** It takes the same `live-schedule` advisory lock as `apply_placement_day_schedule()`
+  and `shift_live_schedule_after_match()`, so a reset cannot interleave with a build or a reflow.
+
+Scoped to the placement format's own tables. The legacy round-robin tables are untouched.
+
+### Verify after applying
+
+The button appears next to **Build the schedule** on `/placement-schedule`, and only for admins. It
+asks for confirmation, then reports what it removed. After it, the Placement tab should show every
+event back at **Shuffle & lock seeds** with no matches:
+
+```sql
+-- both expect 0
+select count(*) from public.placement_matches where tournament_id = '<id>';
+select count(*) from public.tier_draws         where tournament_id = '<id>';
+-- expect 0: nothing left seeded, locked, tiered or waived
+select count(*) from public.placement_entrants
+where tournament_id = '<id>'
+  and (seed is not null or seed_locked_at is not null or tier is not null or excluded);
+```
+
+Proved against a real Postgres engine (PGlite) before it was committed — 19 checks covering what it
+deletes, what it clears, the counts it returns, that a second tournament is untouched, that a
+second run is harmless, that seeds can be re-locked afterwards without tripping the partial unique
+index, that a waiver is cleared, that `scorer`/`scheduler`/`registrar`/anonymous are all refused,
+and that the function is `SECURITY DEFINER` with no `anon` or `PUBLIC` grant.
+
 ## Known behaviour: an early report rewrites the rest of that court's day
 
 **Not a bug fix — this documents existing behaviour that is deliberate for now.** It was observed
@@ -776,6 +833,12 @@ the end: one to reset the placement stage, one to remove the test data entirely.
 It refuses to run if the placement stage is already under way (any `placement_matches`, or locked
 seeds), because adding entrants to a category whose round one was already generated from a smaller
 field corrupts the bracket silently.
+
+**To re-run a test rather than remove the field**, use the **Delete results & schedule** button on
+`/placement-schedule` instead of the reset block in that file. It clears the matches, draws, results
+and schedule, and also the seed order and waivers, so the stage is back to "Shuffle & lock seeds" and
+the field itself is left in place — see `20260917050000_placement_stage_reset.sql` above. The
+commented reset block in the seed file remains the way to clear it from the SQL editor.
 
 ### Verify after running
 
