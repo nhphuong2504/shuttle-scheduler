@@ -707,7 +707,7 @@ export interface CreateTournamentInput {
 export interface TournamentDraftInput {
   name: string;
   format?: string;
-  /** Free-text notes for the host. Empty clears them. */
+  /** A note about the event, written to be read. Empty clears it. */
   notes?: string | null;
   venueName?: string | null;
   venueAddress?: string | null;
