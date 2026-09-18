@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DrawsRouteImport } from './routes/draws'
+import { Route as KnockoutRouteImport } from './routes/knockout'
 import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as PlacementRouteImport } from './routes/placement'
 import { Route as PlacementScheduleRouteImport } from './routes/placement-schedule'
@@ -34,6 +35,11 @@ const AuthRoute = AuthRouteImport.update({
 const DrawsRoute = DrawsRouteImport.update({
   id: '/draws',
   path: '/draws',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KnockoutRoute = KnockoutRouteImport.update({
+  id: '/knockout',
+  path: '/knockout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MatchesRoute = MatchesRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/draws': typeof DrawsRoute
+  '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/draws': typeof DrawsRoute
+  '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/draws': typeof DrawsRoute
+  '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/draws'
+    | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/draws'
+    | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/draws'
+    | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   DrawsRoute: typeof DrawsRoute
+  KnockoutRoute: typeof KnockoutRoute
   MatchesRoute: typeof MatchesRoute
   PlacementRoute: typeof PlacementRoute
   PlacementScheduleRoute: typeof PlacementScheduleRoute
@@ -194,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/draws'
       fullPath: '/draws'
       preLoaderRoute: typeof DrawsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/knockout': {
+      id: '/knockout'
+      path: '/knockout'
+      fullPath: '/knockout'
+      preLoaderRoute: typeof KnockoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/matches': {
@@ -259,6 +279,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   DrawsRoute: DrawsRoute,
+  KnockoutRoute: KnockoutRoute,
   MatchesRoute: MatchesRoute,
   PlacementRoute: PlacementRoute,
   PlacementScheduleRoute: PlacementScheduleRoute,
