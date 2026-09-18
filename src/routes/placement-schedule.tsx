@@ -158,6 +158,8 @@ function PlacementSchedulePage() {
     outcome: StageGenerationOutcome | null;
   } | null>(null);
   const [showAllChanges, setShowAllChanges] = useState(false);
+  /** Day windows, courts, breaks and timings are setup, not day-to-day desk work. */
+  const [showSettings, setShowSettings] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Tournament-wide timing overrides, held as text so a half-typed number is not clobbered. */
   const [timingDrafts, setTimingDrafts] = useState<Record<string, string>>({});
