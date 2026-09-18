@@ -36,6 +36,7 @@ import {
 import { ProblemValidationError, validateProblem, type ProblemIssueKind } from "./preflight";
 import { getSolver, listSolvers, registerSolver, solve } from "./solvers";
 import { assertValidProblem } from "./preflight";
+import { DEFAULT_HYBRID_RUNS, DEFAULT_SOLVER_ID } from "./solvers";
 
 const ASSEMBLY: SolutionAssembly = {
   solverId: "test",
@@ -449,7 +450,7 @@ describe("validateSolution contexts", () => {
 
 describe("solver registry", () => {
   it("lists the built-in strategies in canonical order", () => {
-    expect(listSolvers().map((solver) => solver.id)).toEqual(["grasp", "greedy"]);
+    expect(listSolvers().map((solver) => solver.id)).toEqual(["grasp", "grasp-hybrid", "greedy"]);
   });
 
   it("rejects a duplicate id", () => {
@@ -459,7 +460,29 @@ describe("solver registry", () => {
   });
 
   it("names the known ids when an id is unknown", () => {
-    expect(() => getSolver("nope")).toThrow(/Known solvers: grasp, greedy/);
+    expect(() => getSolver("nope")).toThrow(/Known solvers: grasp, grasp-hybrid, greedy/);
+  });
+
+  it("defaults to the greedy-seeded hybrid at one run", () => {
+    // Pinned on purpose: this is the benchmark's conclusion, not an incidental constant. Moving it
+    // back to plain GRASP would silently restore 75 runs for no measurable quality gain.
+    expect(DEFAULT_SOLVER_ID).toBe("grasp-hybrid");
+    expect(DEFAULT_HYBRID_RUNS).toBe(1);
+  });
+
+  it("routes a bare solve() to that default strategy", () => {
+    const fixture = fixtureById("F1");
+    const solution = solve(fixture.problem);
+    assertValidSolution(fixture.problem, solution);
+    expect(solution.diagnostics.solverId).toBe(DEFAULT_SOLVER_ID);
+    expect(solution.diagnostics.runs).toBe(DEFAULT_HYBRID_RUNS);
+  });
+
+  it("lets a caller name the plain GRASP strategy explicitly", () => {
+    const fixture = fixtureById("F1");
+    const solution = solve(fixture.problem, "grasp", { runs: 1, seed: 7 });
+    assertValidSolution(fixture.problem, solution);
+    expect(solution.diagnostics.solverId).toBe("grasp");
   });
 });
 

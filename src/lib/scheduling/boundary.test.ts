@@ -154,11 +154,11 @@ describe("domain vocabulary", () => {
 });
 
 describe("solver registry", () => {
-  it("exposes both interchangeable strategies plus a default", () => {
+  it("exposes every interchangeable strategy plus a default", () => {
     const ids = listSolvers()
       .map((solver) => solver.id)
       .sort();
-    expect(ids).toEqual(["grasp", "greedy"]);
+    expect(ids).toEqual(["grasp", "grasp-hybrid", "greedy"]);
     expect(hasSolver(DEFAULT_SOLVER_ID)).toBe(true);
     for (const id of ids) expect(hasSolver(id)).toBe(true);
   });
@@ -187,7 +187,7 @@ describe("solver registry", () => {
       planningEnd: 8 * 60 * 60_000,
       floor: 0,
     };
-    for (const id of ["greedy", "grasp"]) {
+    for (const id of ["greedy", "grasp", "grasp-hybrid"]) {
       const solution = solve(problem, id, { seed: 1, runs: 1 });
       expect(solution.assignments.map((assignment) => assignment.matchId)).toEqual(["m1"]);
       expect(solution.unscheduled).toEqual([]);
@@ -396,7 +396,7 @@ describe("pure core", () => {
     const core = await import("./solvers");
 
     const problem = syntheticProblem();
-    for (const id of ["greedy", "grasp"]) {
+    for (const id of ["greedy", "grasp", "grasp-hybrid"]) {
       const solution = core.solve(problem, id, { runs: 4, seed: 3 });
       assertValidSolution(problem, solution);
       expect(solution.unscheduled).toEqual([]);
@@ -421,6 +421,7 @@ describe("pure core", () => {
     expect(core.listSolvers().map((solver) => solver.id)).toEqual([
       "audited-greedy",
       "grasp",
+      "grasp-hybrid",
       "greedy",
     ]);
     assertValidSolution(problem, solution);

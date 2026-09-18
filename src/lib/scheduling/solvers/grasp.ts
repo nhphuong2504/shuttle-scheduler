@@ -486,52 +486,124 @@ function runOnce(
   };
 }
 
-function solveGrasp(problem: SchedulingProblem, options: SolverRunOptions): Solution {
+/**
+ * A scored candidate: the assembled solution, the objective inputs, and the run that produced it.
+ * Metrics are carried alongside the solution so a fold never recomputes them for a loser.
+ */
+export interface SolverCandidate {
+  solution: Solution;
+  metrics: SolutionMetrics;
+  seed: number;
+}
+
+/** Everything one GRASP search needs besides the problem. */
+export interface GraspSearchOptions {
+  /** Reported as `diagnostics.solverId`. A hybrid reports its own id, not GRASP's. */
+  solverId: string;
+  runs: number;
+  rclSize: number;
+  maxIterations: number;
+  fragmentationGapMinutes: number;
+  captureTrace: boolean;
+}
+
+/** The seed of run 0. Run `n` uses `baseSeed + n`, so a run range is a contiguous seed block. */
+export function baseSeedOf(options: SolverRunOptions): number {
+  return (options.seed ?? DEFAULT_SEED) >>> 0;
+}
+
+/**
+ * Resolves `SolverRunOptions` into the concrete search parameters.
+ *
+ * `runsFallback` is per-strategy because the two strategies want different defaults: plain GRASP
+ * still spends 75 runs, while the hybrid's greedy incumbent already covers what those runs buy and
+ * needs only one. Sharing the fold while keeping separate run budgets is the point of this seam.
+ */
+export function graspSearchOptions(
+  problem: SchedulingProblem,
+  options: SolverRunOptions,
+  solverId: string,
+  runsFallback: number = DEFAULT_RUNS,
+): GraspSearchOptions {
+  return {
+    solverId,
+    runs: Math.max(1, Math.floor(options.runs ?? runsFallback)),
+    rclSize: Math.max(1, Math.floor(options.rclSize ?? DEFAULT_RCL_SIZE)),
+    maxIterations: options.maxIterationsPerRun ?? defaultMaxIterations(problem),
+    fragmentationGapMinutes: options.fragmentationGapMinutes ?? DEFAULT_FRAGMENTATION_GAP_MINUTES,
+    captureTrace: options.debugTrace === true,
+  };
+}
+
+/**
+ * Runs `search.runs` GRASP constructions and folds each valid candidate into `incumbent` by the
+ * problem's lexicographic objective. This is the one place a GRASP run is scored, so plain GRASP and
+ * the greedy-seeded hybrid cannot drift apart on how they compare candidates.
+ *
+ * A run that violates a hard constraint is rejected rather than scored; the loop is constructed to
+ * be valid, so that is a guard against a regression, not a routine path. `preferOnTie` decides
+ * equal-scoring candidates, which is the only thing the two strategies do differently: GRASP breaks
+ * ties by seed, while a hybrid keeps the incumbent it already holds.
+ */
+export function searchGrasp(
+  problem: SchedulingProblem,
+  search: GraspSearchOptions,
+  baseSeed: number,
+  incumbent: SolverCandidate | null,
+  preferOnTie: (candidate: SolverCandidate, incumbent: SolverCandidate) => boolean,
+): SolverCandidate | null {
   const indexes = buildIndexes(problem);
-  const runs = Math.max(1, Math.floor(options.runs ?? DEFAULT_RUNS));
-  const rclSize = Math.max(1, Math.floor(options.rclSize ?? DEFAULT_RCL_SIZE));
-  const baseSeed = (options.seed ?? DEFAULT_SEED) >>> 0;
-  const maxIterations = options.maxIterationsPerRun ?? defaultMaxIterations(problem);
-  const fragmentationGapMinutes =
-    options.fragmentationGapMinutes ?? DEFAULT_FRAGMENTATION_GAP_MINUTES;
-  const captureTrace = options.debugTrace === true;
+  const order = objectiveOrderOf(problem);
+  let best = incumbent;
 
-  let best: { solution: Solution; metrics: SolutionMetrics; seed: number } | null = null;
-
-  const assemble = (outcome: RunOutcome): Solution =>
-    buildSolution(problem, outcome.assignments, outcome.unscheduled, {
-      solverId: graspSolver.id,
-      runs,
+  for (let run = 0; run < search.runs; run++) {
+    const seed = (baseSeed + run) >>> 0;
+    const outcome = runOnce(
+      problem,
+      indexes,
+      seed,
+      search.rclSize,
+      search.maxIterations,
+      search.captureTrace,
+    );
+    const solution = buildSolution(problem, outcome.assignments, outcome.unscheduled, {
+      solverId: search.solverId,
+      runs: search.runs,
       seed: outcome.seed,
       deadlockReason: outcome.deadlockReason,
-      fragmentationGapMinutes,
-      ...(captureTrace ? { trace: outcome.trace } : {}),
+      fragmentationGapMinutes: search.fragmentationGapMinutes,
+      ...(search.captureTrace ? { trace: outcome.trace } : {}),
     });
-
-  for (let run = 0; run < runs; run++) {
-    const seed = (baseSeed + run) >>> 0;
-    const outcome = runOnce(problem, indexes, seed, rclSize, maxIterations, captureTrace);
-    const solution = assemble(outcome);
-    // A run that violates a hard constraint is rejected outright rather than scored. The loop is
-    // constructed to be valid, so this is a guard against a regression, not a routine path.
     if (validateSolution(problem, solution).length) continue;
-    const metrics = metricsOf(problem, solution, fragmentationGapMinutes);
-    const order = objectiveOrderOf(problem);
-    if (
-      best == null ||
-      compareMetrics(metrics, best.metrics, order) < 0 ||
-      (compareMetrics(metrics, best.metrics, order) === 0 && seed < best.seed)
-    ) {
-      best = { solution, metrics, seed };
+
+    const candidate: SolverCandidate = {
+      solution,
+      metrics: metricsOf(problem, solution, search.fragmentationGapMinutes),
+      seed,
+    };
+    if (best == null) {
+      best = candidate;
+      continue;
     }
+    const comparison = compareMetrics(candidate.metrics, best.metrics, order);
+    if (comparison < 0 || (comparison === 0 && preferOnTie(candidate, best))) best = candidate;
   }
 
-  if (best) return best.solution;
+  return best;
+}
 
-  // No run produced a valid solution: report every non-fixed match as unscheduled rather than
-  // returning something invalid.
+/**
+ * The last resort when nothing valid was produced: report the fixed matches and mark every
+ * non-fixed match unscheduled, rather than returning something that violates a hard constraint.
+ */
+export function unplacedFallback(
+  problem: SchedulingProblem,
+  search: GraspSearchOptions,
+  seed: number,
+): Solution {
+  const indexes = buildIndexes(problem);
   const fixedAssignments: Assignment[] = [];
-  const fallbackUnscheduled: string[] = [];
+  const unscheduled: string[] = [];
   for (const match of problem.matches) {
     const resource =
       match.resourceId != null ? indexes.resourceById.get(match.resourceId) : undefined;
@@ -545,16 +617,29 @@ function solveGrasp(problem: SchedulingProblem, options: SolverRunOptions): Solu
         groupKey: match.groupKey,
       });
     } else if (!match.fixed) {
-      fallbackUnscheduled.push(match.id);
+      unscheduled.push(match.id);
     }
   }
-  return buildSolution(problem, fixedAssignments, fallbackUnscheduled.sort(compareIds), {
-    solverId: graspSolver.id,
-    runs,
-    seed: baseSeed,
+  return buildSolution(problem, fixedAssignments, unscheduled.sort(compareIds), {
+    solverId: search.solverId,
+    runs: search.runs,
+    seed,
     deadlockReason: "No run produced a valid solution.",
-    fragmentationGapMinutes,
+    fragmentationGapMinutes: search.fragmentationGapMinutes,
   });
+}
+
+function solveGrasp(problem: SchedulingProblem, options: SolverRunOptions): Solution {
+  const search = graspSearchOptions(problem, options, graspSolver.id);
+  const baseSeed = baseSeedOf(options);
+  const best = searchGrasp(
+    problem,
+    search,
+    baseSeed,
+    null,
+    (candidate, incumbent) => candidate.seed < incumbent.seed,
+  );
+  return best?.solution ?? unplacedFallback(problem, search, baseSeed);
 }
 
 export const graspSolver: Solver = {

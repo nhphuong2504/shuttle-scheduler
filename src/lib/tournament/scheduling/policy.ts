@@ -7,9 +7,9 @@
 
 import {
   DEFAULT_FRAGMENTATION_GAP_MINUTES,
+  DEFAULT_HYBRID_RUNS,
   DEFAULT_OBJECTIVE_ORDER,
   DEFAULT_RCL_SIZE,
-  DEFAULT_RUNS,
   DEFAULT_SEED,
   DEFAULT_SOLVER_ID,
   type SchedulingPolicy,
@@ -29,13 +29,18 @@ export interface DayOneSchedulerOptions {
 }
 
 /**
- * The default policy. Options that are absent keep the pinned legacy constants, so a tournament
- * replanned with the same seed stays reproducible.
+ * The default policy. Options that are absent keep the pinned constants, so a tournament replanned
+ * with the same seed stays reproducible.
+ *
+ * The strategy is the greedy-seeded hybrid at one run, which the benchmark in
+ * `.benchmark/hybrid-core.md` justified: it matched the 25-run search on `unscheduled` and
+ * `afterCutoff` on every shape and seed, and it can never do worse than greedy because greedy is
+ * its incumbent.
  */
 export function defaultSchedulingPolicy(options?: DayOneSchedulerOptions): SchedulingPolicy {
   const solverOptions: SolverRunOptions = {
     seed: DEFAULT_SEED,
-    runs: DEFAULT_RUNS,
+    runs: DEFAULT_HYBRID_RUNS,
     rclSize: DEFAULT_RCL_SIZE,
     fragmentationGapMinutes: DEFAULT_FRAGMENTATION_GAP_MINUTES,
     debugTrace: false,

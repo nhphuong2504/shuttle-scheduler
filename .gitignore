@@ -28,6 +28,9 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Local benchmark output (`npm run bench:scheduling` writes its report here)
+.benchmark/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

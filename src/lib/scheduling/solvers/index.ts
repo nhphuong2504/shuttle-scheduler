@@ -11,6 +11,7 @@ import { assertValidProblem } from "../preflight";
 import { compareIds } from "../domain";
 import { greedySolver } from "./greedy";
 import { graspSolver } from "./grasp";
+import { hybridSolver } from "./hybrid";
 import {
   DEFAULT_SOLVER_ID,
   type Solver,
@@ -64,7 +65,8 @@ export function solve(
 
 registerSolver(greedySolver);
 registerSolver(graspSolver);
+registerSolver(hybridSolver);
 
-export { greedySolver, graspSolver };
-export { DEFAULT_SOLVER_ID } from "./types";
+export { greedySolver, graspSolver, hybridSolver };
+export { DEFAULT_HYBRID_RUNS, DEFAULT_SOLVER_ID } from "./types";
 export type { Solver, SolverRunOptions } from "./types";

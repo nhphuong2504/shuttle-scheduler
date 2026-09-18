@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { solve } from "./solvers";
 import { greedySolver } from "./solvers/greedy";
 import { graspSolver } from "./solvers/grasp";
+import { hybridSolver } from "./solvers/hybrid";
 import {
   compareIds,
   compareResources,
@@ -74,6 +75,7 @@ describe("solver interchangeability", () => {
   it("exposes interchangeability through the registry", () => {
     expect(greedySolver.id).toBe("greedy");
     expect(graspSolver.id).toBe("grasp");
+    expect(hybridSolver.id).toBe("grasp-hybrid");
   });
 });
 
