@@ -62,10 +62,13 @@ import {
   useTeams,
   useTierDrawMatches,
   useTierDraws,
+  useTournamentDayBreaks,
+  useTournamentDayCourts,
   useTournamentDays,
   type Court,
   type PlacementMatch,
   type Player,
+  type TournamentDayBreak,
 } from "@/lib/tournament/data";
 import {
   gamesLabel,
@@ -104,6 +107,10 @@ import {
 } from "@/lib/tournament/desk";
 import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
+import { estimateFinish } from "@/lib/tournament/finish-estimate";
+import { FinishEstimate } from "@/components/finish-estimate";
+
+const MINUTE = 60_000;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -162,6 +169,11 @@ function Desk() {
   const { data: placementMatches } = usePlacementMatches();
   const { data: tierDraws } = useTierDraws();
   const { data: tierDrawMatches } = useTierDrawMatches();
+  // The finish forecast runs the same problem the schedule page does, so it needs the
+  // same per-day court sets and breaks. Omitting them would forecast a day playing on
+  // every court in the venue, which is optimistic about capacity, not conservative.
+  const { data: dayCourts } = useTournamentDayCourts(tournament?.id);
+  const { data: dayBreaks } = useTournamentDayBreaks(tournament?.id);
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -310,11 +322,79 @@ function Desk() {
     court,
     state: deriveCourtState(court.id, allMatches, slotMinutesFor, restMinutesFor, now),
   }));
+
+  /**
+   * The tournament-wide finish forecast for the Desk.
+   *
+   * `projectedFinishFromRemaining` only sees rows that already have a time, so an unplaced match
+   * could not move it: it was a floor wearing a forecast's label. The estimator folds in unplaced
+   * matches, unavoidable Placement Round 2 and not-yet-created knockout rounds, so the
+   * on-target/behind label compares like with like.
+   *
+   * Rounded to a five-minute bucket so a 30-second clock tick does not re-run the solved problem
+   * for a number that has not changed, and guarded so a malformed state degrades to the floor
+   * rather than taking the whole desk down.
+   */
+  const estimateNow = Math.floor(now / (5 * MINUTE)) * 5 * MINUTE;
+  const finishEstimate = useMemo(() => {
+    if (!tournament || tournament.format !== "two_round_placement") return null;
+    if (!(tournamentDays ?? []).length || !(courts ?? []).length) return null;
+    const dayCourtIds = new Map<string, Set<string>>();
+    for (const row of dayCourts ?? []) {
+      const set = dayCourtIds.get(row.day_id) ?? new Set<string>();
+      set.add(row.court_id);
+      dayCourtIds.set(row.day_id, set);
+    }
+    const breaksByDayId = new Map<string, TournamentDayBreak[]>();
+    for (const brk of dayBreaks ?? []) {
+      const list = breaksByDayId.get(brk.day_id) ?? [];
+      list.push(brk);
+      breaksByDayId.set(brk.day_id, list);
+    }
+    try {
+      return estimateFinish({
+        tournament,
+        days: tournamentDays ?? [],
+        allCourts: courts ?? [],
+        dayCourtIds,
+        breaksByDayId,
+        teams: teams ?? [],
+        entrants: placementEntrants ?? [],
+        draws: tierDraws ?? [],
+        placementMatches: placementMatches ?? [],
+        tierMatches: tierDrawMatches ?? [],
+        categoryOrder: new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
+        now: estimateNow,
+      });
+    } catch {
+      // A forecast is a nicety; the desk's job is results. Fall back to the floor.
+      return null;
+    }
+  }, [
+    tournament,
+    tournamentDays,
+    courts,
+    dayCourts,
+    dayBreaks,
+    teams,
+    placementEntrants,
+    tierDraws,
+    placementMatches,
+    tierDrawMatches,
+    categories,
+    estimateNow,
+  ]);
+
   const kpis = getOperationalKpis(
     courtStates.map(({ state }) => state),
     allMatches,
     slotMinutesFor,
     now,
+    finishEstimate === null
+      ? undefined
+      : finishEstimate.finish
+        ? Date.parse(finishEstimate.finish)
+        : null,
   );
   const targetFinishMs = useMemo(() => {
     const days = tournamentDays ?? [];
@@ -396,10 +476,14 @@ function Desk() {
             tone={kpis.waitingCourts ? "warn" : "normal"}
           />
           <DeskKpi label="Matches left" value={kpis.remainingMatches} />
-          <DeskKpi
-            label="Projected finish"
-            value={timeLabel(kpis.projectedFinish ? new Date(kpis.projectedFinish) : null)}
-          />
+          {finishEstimate ? (
+            <FinishEstimate estimate={finishEstimate} variant="tile" />
+          ) : (
+            <DeskKpi
+              label="Projected finish"
+              value={timeLabel(kpis.projectedFinish ? new Date(kpis.projectedFinish) : null)}
+            />
+          )}
           <DeskKpi label="Finish status" value={finishStatus} tone={finishStatusTone} />
         </div>
 

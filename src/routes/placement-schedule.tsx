@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
+import { FinishEstimate } from "@/components/finish-estimate";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,7 +59,6 @@ import {
   type PlacementDayFill,
   type PlacementSchedulePlan,
 } from "@/lib/tournament/placement-schedule";
-import { formatProjectedFinishDelta } from "@/lib/tournament/schedule-diff";
 import {
   generateMissingStages,
   resetPlacementStage,
@@ -775,16 +775,16 @@ function PlacementSchedulePage() {
             {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"} ·{" "}
             {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
           </span>
-          {result?.summary.projectedFinish ? (
-            <span>Finishes {timeLabel(result.summary.projectedFinish)}</span>
+          {result?.summary.estimate ? (
+            <FinishEstimate
+              estimate={result.summary.estimate}
+              current={result.summary.currentEstimate}
+            />
           ) : null}
           {result && result.summary.overrunMinutes > 0 ? (
             <span className="text-warn-foreground">
               {result.summary.overrunMinutes} min past close
             </span>
-          ) : null}
-          {result?.summary.projectedFinishDeltaMinutes != null ? (
-            <span>{formatProjectedFinishDelta(result.summary.projectedFinishDeltaMinutes)}</span>
           ) : null}
           {result && result.summary.unscheduled > 0 ? (
             <span className="text-danger-foreground">
@@ -1196,26 +1196,18 @@ function PlacementSchedulePage() {
                     {preview.plan.summary.anchorCount} anchors kept · {preview.plan.summary.placed}{" "}
                     matches replanned · {preview.plan.diff.movedCount} moving
                   </p>
-                  {preview.plan.summary.projectedFinish ? (
+                  {preview.plan.estimate ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Projected finish {timeLabel(preview.plan.summary.projectedFinish)}
+                      <FinishEstimate
+                        estimate={preview.plan.estimate}
+                        current={preview.plan.currentEstimate}
+                      />
                       {preview.plan.summary.overrunMinutes > 0
                         ? ` · ${preview.plan.summary.overrunMinutes} min past the final close`
                         : ""}
                       {preview.plan.summary.remainingUtilization != null
                         ? ` · ${Math.round(preview.plan.summary.remainingUtilization * 100)}% of remaining window`
                         : ""}
-                      {preview.plan.summary.projectedFinishDeltaMinutes != null ? (
-                        <>
-                          {" · "}
-                          {formatProjectedFinishDelta(
-                            preview.plan.summary.projectedFinishDeltaMinutes,
-                          )}
-                          {preview.plan.summary.currentProjectedFinish
-                            ? ` (current ${timeLabel(preview.plan.summary.currentProjectedFinish)})`
-                            : ""}
-                        </>
-                      ) : null}
                     </p>
                   ) : null}
                 </div>

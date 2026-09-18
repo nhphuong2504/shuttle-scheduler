@@ -12,14 +12,11 @@ import type {
   TournamentDay,
 } from "./data";
 import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
+import type { FinishEstimate } from "./finish-estimate";
 import { gamesWinner, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
 import type { SolverDiagnostics } from "@/lib/scheduling";
-import {
-  composeDayPlan,
-  type ComposedAnchor,
-  type ComposedMatch,
-} from "./scheduling/composition";
+import { composeDayPlan, type ComposedAnchor, type ComposedMatch } from "./scheduling/composition";
 import type { DayOneSchedulerOptions } from "./scheduling/policy";
 import type { ScheduledSlot } from "./scheduling/types";
 import {
@@ -377,6 +374,13 @@ export interface ScheduleSummary {
   projectedFinishDeltaMinutes: number | null;
   overrunMinutes: number;
   diagnostics?: SolverDiagnostics | undefined;
+  /**
+   * Placement format only: the forecast from the rebuilt plan, including work with no row yet.
+   * Legacy `planDay` leaves it absent, so its semantics are unchanged.
+   */
+  estimate?: FinishEstimate | undefined;
+  /** Placement format only: the forecast from the current live state, for the delta. */
+  currentEstimate?: FinishEstimate | undefined;
 }
 
 export interface DayPlan {

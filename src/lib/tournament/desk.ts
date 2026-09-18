@@ -284,8 +284,20 @@ export function getOperationalKpis<TMatch extends DeskMatchModel>(
   matches: TMatch[],
   slotMinutesFor: (match: TMatch) => number,
   now: number = Date.now(),
+  /**
+   * The tournament-wide forecast from the finish estimator, when one is available.
+   *
+   * `undefined` keeps the legacy behaviour: the latest end among matches that already have a
+   * time, which is a floor because an unplaced match cannot move it. `null` means the estimator
+   * could not name a finish at all, and is passed through as such rather than falling back to a
+   * floor that would read as "on target" for a tournament that cannot finish.
+   */
+  estimatedFinishMs?: number | null,
 ): OperationalKpis {
-  const projectedFinish = projectedFinishFromRemaining(matches, slotMinutesFor, now);
+  const projectedFinish =
+    estimatedFinishMs === undefined
+      ? projectedFinishFromRemaining(matches, slotMinutesFor, now)
+      : estimatedFinishMs;
 
   return {
     activeCourts: courtStates.filter(
