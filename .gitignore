@@ -16,6 +16,14 @@ dist-ssr
 .nitro
 *.local
 
+# Environment
+# `.env` holds real secrets, including the admin password, and used to be
+# committed. Keep it local. A fresh checkout needs SUPABASE_URL,
+# SUPABASE_PUBLISHABLE_KEY and their VITE_ twins to build.
+.env
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
