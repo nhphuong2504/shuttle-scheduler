@@ -3,13 +3,11 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
-import { PLACEMENT_TIERS, entrantCountNote } from "@/lib/tournament/competition-format";
+import { entrantCountNote } from "@/lib/tournament/competition-format";
 import {
-  bracketNote,
-  bracketRounds,
   buildCategoryView,
   lockPlacementSeeds,
   setPlacementSkill,
@@ -25,34 +23,29 @@ import {
   usePlacementMatches,
   usePlayers,
   useTeams,
-  useTierDrawMatches,
-  useTierDraws,
   useTournamentScope,
   type Category,
   type Player,
   type PlacementEntrant,
   type PlacementMatch,
   type Team,
-  type TierDraw,
-  type TierDrawMatch,
 } from "@/lib/tournament/data";
-import { gamesLabel, parseGames } from "@/lib/tournament/format";
 import { mulberry32 } from "@/lib/tournament/rng";
 
 export const Route = createFileRoute("/placement")({
   head: () => ({
     meta: [
-      { title: "Placement & Draws | ShuttleNet Tournament Ops" },
+      { title: "Placement | ShuttleNet Tournament Ops" },
       {
         name: "description",
         content:
-          "Run the two placement rounds, then the A/B/C/D knockout draws. Every entrant plays two placement matches before the brackets are drawn.",
+          "Set the seed order for a two-round placement tournament and see which Draw A, B, C or D tier each entrant has sorted into. Results are entered on the Scores page.",
       },
-      { property: "og:title", content: "Placement & Draws | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Placement | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Run the two placement rounds, then the A/B/C/D knockout draws. Every entrant plays two placement matches before the brackets are drawn.",
+          "Set the seed order for a two-round placement tournament and see which Draw A, B, C or D tier each entrant has sorted into. Results are entered on the Scores page.",
       },
     ],
   }),
@@ -60,24 +53,13 @@ export const Route = createFileRoute("/placement")({
 });
 
 /**
- * The one screen that runs the two-round placement format end to end: seeds,
- * round one, round two, then the four knockout draws.
+ * Seeding for the two-round placement format: the seed order, the skill blocks it
+ * comes from, and the Draw A/B/C/D tier each entrant has been sorted into.
  *
- * It is a separate route from `/pools` and `/draws` because this format has its
- * own tables. Reusing those pages would have meant a page that has to know which
- * format it is looking at, which is exactly the coupling the separate tables were
- * meant to avoid.
- */
-
-/**
- * The placement stage: seeds, then the two rounds it pairs, then the four
- * knockout draws those rounds sort entrants into.
- *
- * Results are entered on `/matches`, not here. The placement rounds and the tier
- * brackets both appear there, so keeping a second set of score buttons on this
- * page meant two places to enter the same result. What stays here is what only
- * this page knows: the seed order, the rule each round pairs by, and the bracket
- * each entrant landed in.
+ * It is a separate route from `/pools` and `/draws` because this format has its own
+ * tables. It deliberately does not list matches — the two rounds and the four
+ * brackets are all scored on `/matches`, so a match list here was a second copy of
+ * the same table with a second set of score buttons.
  */
 
 function PlacementPage() {
@@ -89,8 +71,6 @@ function PlacementPage() {
   const { data: players } = usePlayers();
   const { data: entrants } = usePlacementEntrants();
   const { data: matches } = usePlacementMatches();
-  const { data: draws } = useTierDraws();
-  const { data: tierMatches } = useTierDrawMatches();
 
   const playerMap = useMemo(() => indexBy(players), [players]);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
@@ -102,7 +82,7 @@ function PlacementPage() {
 
   return (
     <AppShell
-      title="Placement & draws"
+      title="Placement"
       subtitle="Every entrant plays two placement matches. The two results sort them into Draw A (WW), B (WL), C (LW) or D (LL)."
       actions={
         <Button size="sm" variant="outline" asChild>
@@ -136,8 +116,6 @@ function PlacementPage() {
             playerMap={playerMap}
             entrants={(entrants ?? []).filter((entrant) => entrant.category_id === category.id)}
             matches={(matches ?? []).filter((match) => match.category_id === category.id)}
-            draws={(draws ?? []).filter((draw) => draw.category_id === category.id)}
-            tierMatches={tierMatches ?? []}
             canEdit={canEditPlacementEntrants}
             onRefresh={refresh}
           />
@@ -151,44 +129,12 @@ function PlacementPage() {
 // One category
 // ---------------------------------------------------------------------------
 
-/**
- * A stage's panel: a title, a one-line explanation of the rule in play, and a
- * count of what is decided. The explanation lives here rather than in a tooltip
- * because the make-up and crossover rules are the parts of this format a host
- * actually needs told while standing at the desk.
- */
-function StagePanel({
-  title,
-  hint,
-  meta,
-  children,
-}: {
-  title: string;
-  hint: string;
-  meta?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Panel
-      title={title}
-      right={
-        meta ? <span className="font-score text-[11px] text-muted-foreground">{meta}</span> : null
-      }
-    >
-      <p className="mb-3 text-xs text-muted-foreground">{hint}</p>
-      {children}
-    </Panel>
-  );
-}
-
 function CategorySection({
   category,
   teams,
   playerMap,
   entrants,
   matches,
-  draws,
-  tierMatches,
   canEdit,
   onRefresh,
 }: {
@@ -197,20 +143,10 @@ function CategorySection({
   playerMap: Map<string, Player>;
   entrants: PlacementEntrant[];
   matches: PlacementMatch[];
-  draws: TierDraw[];
-  tierMatches: TierDrawMatch[];
   canEdit: boolean;
   onRefresh: () => void;
 }) {
   const view = useMemo(() => buildCategoryView(entrants, matches), [entrants, matches]);
-  // `tierMatches` arrives unfiltered, so scope it through this category's draws.
-  // The draws themselves are already category-filtered, which is what keeps a
-  // tier match from another category out of this bracket.
-  const drawIds = useMemo(() => new Set(draws.map((draw) => draw.id)), [draws]);
-  const categoryTierMatches = useMemo(
-    () => tierMatches.filter((match) => drawIds.has(match.draw_id)),
-    [tierMatches, drawIds],
-  );
   const activeTeams = teams.filter((team) => !team.withdrawn);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   // A match row carries ENTRANT ids, not team ids, so naming one needs the
@@ -231,10 +167,6 @@ function CategorySection({
   // The placement stage holds an odd entrant, so this is informational, never a
   // blocker. See `entrantCountNote`.
   const oddNote = entrantCountNote(view.active.length);
-
-  const roundOneDecided = view.roundOne.filter(
-    (match) => match.status === "reported" || match.status === "walkover",
-  ).length;
 
   async function run(work: () => Promise<unknown>, success: string) {
     try {
@@ -288,87 +220,13 @@ function CategorySection({
           />
         </Panel>
       ) : (
-        <>
-          <SeedingPanel
-            category={category}
-            view={view}
-            label={labelEntrant}
-            canEdit={canEdit}
-            onRefresh={onRefresh}
-          />
-
-          <StagePanel
-            title="Round one"
-            hint="Seeds are split in half and paired across the split, so the halves meet at their boundary rather than the strongest meeting the weakest."
-            meta={`${roundOneDecided}/${view.roundOne.length} decided`}
-          >
-            {!view.seedsLocked ? (
-              <p className="text-xs text-muted-foreground">
-                Lock the seed order first — round one pairs from it.
-              </p>
-            ) : !view.roundOneExpected ? (
-              <p className="text-xs text-muted-foreground">
-                Not applicable. A field of one plays no matches at all — the sole entrant is the
-                champion of Draw A.
-              </p>
-            ) : view.roundOne.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Round one has not been generated yet. Match generation runs from the schedule.
-              </p>
-            ) : (
-              <RoundProgress played={roundOneDecided} total={view.roundOne.length} />
-            )}
-          </StagePanel>
-
-          <StagePanel
-            title="Round two"
-            hint={
-              view.heldEntrantId
-                ? "Winners meet winners and losers meet losers. The held entrant plays one winner and one loser as make-up matches."
-                : "Winners meet winners and losers meet losers."
-            }
-            meta={`${view.roundTwo.length} match${view.roundTwo.length === 1 ? "" : "es"}`}
-          >
-            {!view.seedsLocked ? (
-              <p className="text-xs text-muted-foreground">Waiting on the seed order.</p>
-            ) : !view.roundTwoExpected ? (
-              <p className="text-xs text-muted-foreground">
-                {view.active.length === 1
-                  ? "Not applicable. A field of one needs no placement matches."
-                  : "Not applicable. A field of two plays one match, then the winner takes Draw A and the loser Draw D."}
-              </p>
-            ) : view.roundOne.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Round one has not been generated yet — its results decide who plays whom here.
-              </p>
-            ) : roundOneDecided < view.roundOne.length ? (
-              <p className="text-xs text-muted-foreground">
-                Round two needs every round one result first —{" "}
-                {view.roundOne.length - roundOneDecided} still to play.
-              </p>
-            ) : view.roundTwo.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Round two has not been generated yet. Match generation runs from the schedule.
-              </p>
-            ) : (
-              <RoundProgress
-                played={
-                  view.roundTwo.filter(
-                    (match) => match.status === "reported" || match.status === "walkover",
-                  ).length
-                }
-                total={view.roundTwo.length}
-              />
-            )}
-          </StagePanel>
-
-          <DrawsPanel
-            view={view}
-            draws={draws}
-            tierMatches={categoryTierMatches}
-            label={labelEntrant}
-          />
-        </>
+        <SeedingPanel
+          category={category}
+          view={view}
+          label={labelEntrant}
+          canEdit={canEdit}
+          onRefresh={onRefresh}
+        />
       )}
     </section>
   );
@@ -524,172 +382,6 @@ function SeedingPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Round progress
-// ---------------------------------------------------------------------------
-
-/**
- * The two placement rounds are played on the Scores page, so this is a progress
- * line rather than a table of its own. The pairing rule for the round is the hint
- * above it; the matches themselves, with their score buttons, live in one place.
- */
-function RoundProgress({ played, total }: { played: number; total: number }) {
-  return (
-    <p className="text-xs text-muted-foreground">
-      {played === total ? (
-        <>
-          All {total} match{total === 1 ? "" : "es"} decided.{" "}
-        </>
-      ) : (
-        <>
-          {played} of {total} decided — {total - played} still to play.{" "}
-        </>
-      )}
-      <Link to="/matches" className="font-semibold text-primary underline-offset-2 hover:underline">
-        Enter results in Scores
-      </Link>
-    </p>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Tier draws
-// ---------------------------------------------------------------------------
-
-/**
- * The A/B/C/D brackets.
- *
- * Read-only: results are entered on the Scores page, which lists each bracket's
- * matches grouped by draw. What this panel adds is the shape of the bracket — how
- * many rounds each tier plays and who came out of it — which nothing else shows.
- */
-function DrawsPanel({
-  view,
-  draws,
-  tierMatches,
-  label,
-}: {
-  view: CategoryPlacementView;
-  draws: TierDraw[];
-  tierMatches: TierDrawMatch[];
-  label: (entrantId: string | null | undefined) => string;
-}) {
-  const short = view.gate.short.length;
-  const hasDraws = draws.length > 0;
-
-  return (
-    <Panel
-      title="Tier draws"
-      right={
-        <span className="font-score text-[11px] text-muted-foreground">
-          {hasDraws ? "drawn" : view.gate.ready ? "ready" : `${short} short`}
-        </span>
-      }
-    >
-      <div className="space-y-4">
-        {!hasDraws ? (
-          <>
-            <p className="text-xs text-muted-foreground">
-              Draws open once every entrant has completed{" "}
-              {view.gate.requiredMatches === 0
-                ? "the placement stage"
-                : `${view.gate.requiredMatches} decided placement match${view.gate.requiredMatches === 1 ? "" : "es"}`}
-              . WW goes to Draw A, WL to B, LW to C, LL to D.
-            </p>
-            {short > 0 ? (
-              <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                Waiting on {short} entrant{short === 1 ? "" : "s"}. A waived entrant is skipped
-                rather than blocking the category.
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Draws have not been generated yet. Match generation runs from the schedule.
-              </p>
-            )}
-          </>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {PLACEMENT_TIERS.map((tierMapping) => {
-              const draw = draws.find((entry) => entry.tier === tierMapping.tier);
-              const rounds = draw
-                ? bracketRounds(tierMatches.filter((match) => match.draw_id === draw.id))
-                : new Map<number, TierDrawMatch[]>();
-
-              return (
-                <Panel
-                  key={tierMapping.tier}
-                  title={`${tierMapping.label} · ${tierMapping.title}`}
-                  right={
-                    <span className="font-score text-[10px] text-muted-foreground">
-                      {tierMapping.record}
-                    </span>
-                  }
-                >
-                  {!draw ? (
-                    <p className="text-xs text-muted-foreground">No entrants in this tier.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-[11px] text-muted-foreground">{bracketNote(draw)}</p>
-
-                      {draw.champion_id ? (
-                        <p className="rounded-md border border-hairline bg-mint/10 px-3 py-2 text-xs font-semibold">
-                          Champion: {label(draw.champion_id)}
-                        </p>
-                      ) : null}
-
-                      {[...rounds.entries()].map(([round, roundMatches]) => (
-                        <div key={round} className="space-y-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            {roundName(round, rounds.size)}
-                          </p>
-                          {roundMatches.map((match) => (
-                            <TierMatchRow key={match.id} match={match} label={label} />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Panel>
-              );
-            })}
-          </div>
-        )}
-
-        {hasDraws ? (
-          <p className="text-[11px] text-muted-foreground">
-            The brackets are drawn. Clearing them needs match generation from the schedule.
-          </p>
-        ) : null}
-      </div>
-    </Panel>
-  );
-}
-
-function TierMatchRow({
-  match,
-  label,
-}: {
-  match: TierDrawMatch;
-  label: (entrantId: string | null | undefined) => string;
-}) {
-  const decided = match.status === "reported" || match.status === "walkover";
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-hairline px-2 py-1.5">
-      <div className="min-w-0 text-xs">
-        <span className="font-medium">{label(match.entrant_a_id)}</span>
-        <span className="mx-1.5 text-muted-foreground">vs</span>
-        <span className="font-medium">{label(match.entrant_b_id)}</span>
-        {decided ? (
-          <span className="ml-2 font-score text-[11px] text-muted-foreground">
-            {match.is_bye ? "bye" : gamesLabel(parseGames(match.games))}
-          </span>
-        ) : null}
-      </div>
-      <StatusPill status={match.status} />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Small display helpers
 // ---------------------------------------------------------------------------
 
@@ -706,13 +398,4 @@ function stageLabel(stage: CategoryPlacementView["stage"]): string {
     default:
       return "seeding";
   }
-}
-
-/** "Final", "Semi-final", "Quarter-final", then "Round of N" for big brackets. */
-function roundName(round: number, totalRounds: number): string {
-  const fromEnd = totalRounds - round;
-  if (fromEnd === 0) return "Final";
-  if (fromEnd === 1) return "Semi-final";
-  if (fromEnd === 2) return "Quarter-final";
-  return `Round of ${2 ** (fromEnd + 1)}`;
 }
