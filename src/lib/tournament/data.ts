@@ -528,13 +528,16 @@ export function useStaffRoles() {
 
 export function useRealtimeRefresh() {
   const qc = useQueryClient();
+  // Keep the first server and browser render identical; network state is only
+  // available after hydration.
   const [status, setStatus] = useState<"connecting" | "live" | "offline" | "error">(
-    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting",
+    "connecting",
   );
   const [lastUpdatedAt, setLastUpdatedAt] = useState(() => Date.now());
   useEffect(() => {
     const onOffline = () => setStatus("offline");
     const onOnline = () => setStatus("connecting");
+    if (!navigator.onLine) setStatus("offline");
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
     const channel = supabase
