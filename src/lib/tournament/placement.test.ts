@@ -19,6 +19,7 @@ import {
   assignSeeds,
   buildSkillCounts,
   describeSkillBlocks,
+  followsSkillBlocks,
   skillSkewWarning,
   type SeedableEntrant,
 } from "./placement-seed";
@@ -610,6 +611,38 @@ describe("skill-block seeding", () => {
       { id: "2", skillLevel: "beginner" },
     ]);
     expect(skillSkewWarning(tiny)).toBeNull();
+  });
+
+  it("recognises the shuffled order as following the blocks", () => {
+    const seeds = assignSeeds(sample, mulberry32(7));
+    expect(followsSkillBlocks(seeds.map((entry) => entry.skillLevel))).toBe(true);
+  });
+
+  it("notices an entrant dragged across a block boundary", () => {
+    // A beginner moved to the top: a weaker block now sits above a stronger one.
+    expect(followsSkillBlocks(["beginner", "advanced", "intermediate"])).toBe(false);
+    // The same names in block order are not a deviation at all.
+    expect(followsSkillBlocks(["advanced", "intermediate", "beginner"])).toBe(true);
+  });
+
+  it("does not care about the order within a block", () => {
+    // Inside a block the order was already random, so reordering there is not a
+    // deviation from anything the blocks claimed.
+    expect(followsSkillBlocks(["advanced", "advanced", "beginner", "beginner"])).toBe(true);
+    expect(followsSkillBlocks(["beginner", "beginner", "intermediate"])).toBe(false);
+  });
+
+  it("ranks a missing or unrecognised level as intermediate", () => {
+    // The fallback `buildSkillCounts` applies, so the panel's note cannot disagree
+    // with the block counts printed beside it.
+    expect(followsSkillBlocks(["advanced", null, "beginner"])).toBe(true);
+    expect(followsSkillBlocks([null, "advanced"])).toBe(false);
+    expect(followsSkillBlocks(["beginner", undefined])).toBe(false);
+    expect(followsSkillBlocks(["expert", "advanced"])).toBe(false);
+  });
+
+  it("accepts an empty field", () => {
+    expect(followsSkillBlocks([])).toBe(true);
   });
 });
 

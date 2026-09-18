@@ -298,6 +298,19 @@ export function planSeeds(entrants: readonly PlacementEntrant[], random: RandomF
   return assignSeeds(seedable, random);
 }
 
+/** The RPC payload for a seed order: entrant ids in order, seeded 1..N. */
+function toSeedPayload(
+  entrants: readonly PlacementEntrant[],
+  orderedEntrantIds: readonly string[],
+): { team_id: string; seed: number }[] {
+  const teamIds = teamIdByEntrant(entrants);
+  return orderedEntrantIds.map((entrantId, index) => {
+    const teamId = teamIds.get(entrantId);
+    if (!teamId) throw new Error("A seeded entrant has no team.");
+    return { team_id: teamId, seed: index + 1 };
+  });
+}
+
 /** Writes and freezes the seed order. */
 export async function lockPlacementSeeds(
   categoryId: string,
@@ -305,14 +318,52 @@ export async function lockPlacementSeeds(
   random: RandomFn,
 ): Promise<AssignedSeed[]> {
   const assigned = planSeeds(entrants, random);
-  const teamIds = teamIdByEntrant(entrants);
-  const payload = assigned.map((entry) => {
-    const teamId = teamIds.get(entry.id);
-    if (!teamId) throw new Error("A seeded entrant has no team.");
-    return { team_id: teamId, seed: entry.seed };
+  await rpc("lock_placement_seeds", {
+    p_category_id: categoryId,
+    p_seeds: toSeedPayload(
+      entrants,
+      assigned.map((entry) => entry.id),
+    ),
   });
-  await rpc("lock_placement_seeds", { p_category_id: categoryId, p_seeds: payload });
   return assigned;
+}
+
+/**
+ * Writes an explicit seed order rather than computing one by shuffling.
+ *
+ * This is the drag-to-reorder path on the seeding table. It calls the same RPC as
+ * the shuffle, because the write is identical — a full permutation of the field,
+ * seeds 1..N — and the two differ only in who chose the order. Going through the
+ * same function is what keeps the reorder subject to the same guard: the RPC
+ * refuses once any placement match exists, so a hand-made order cannot silently
+ * disagree with pairings generated from the previous one.
+ *
+ * The order is validated here as well as in the database. The RPC can only report
+ * a count mismatch, which is a poor description of "you named the wrong entrants",
+ * and the caller wants that explanation at the drop rather than from a failed call.
+ */
+export async function savePlacementSeedOrder(
+  categoryId: string,
+  entrants: readonly PlacementEntrant[],
+  orderedEntrantIds: readonly string[],
+): Promise<void> {
+  const active = entrants.filter((entrant) => !entrant.excluded);
+
+  const seen = new Set<string>();
+  for (const entrantId of orderedEntrantIds) {
+    if (seen.has(entrantId)) {
+      throw new Error("The new seed order names the same entrant twice.");
+    }
+    seen.add(entrantId);
+  }
+  if (orderedEntrantIds.length !== active.length || active.some((e) => !seen.has(e.id))) {
+    throw new Error("The new seed order has to name every entrant in the event exactly once.");
+  }
+
+  await rpc("lock_placement_seeds", {
+    p_category_id: categoryId,
+    p_seeds: toSeedPayload(entrants, orderedEntrantIds),
+  });
 }
 
 // ---------------------------------------------------------------------------

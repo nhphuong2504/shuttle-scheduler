@@ -424,7 +424,7 @@ All gated on `public.has_staff_role(...)`, matching the role the equivalent roun
 | --------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `sync_placement_entrants(category)`                 | Materialises one entrant per active team; waives withdrawn teams. Idempotent.       |
 | `set_placement_skill(category, team, level)`        | The desk's skill override. Refused once seeds are locked.                           |
-| `lock_placement_seeds(category, seeds)`             | Writes and freezes the shuffled seed order.                                         |
+| `lock_placement_seeds(category, seeds)`             | Writes the seed order, shuffled or permuted by a drag. Refused if matches exist.    |
 | `apply_placement_generation(...)`                   | Creates round one.                                                                  |
 | `apply_placement_round_two(...)`                    | Creates round two, refused until every round-one result exists.                     |
 | `apply_tier_draws(...)`                             | Writes the tier assignment and the four brackets. Re-checks the gate.               |
@@ -813,6 +813,80 @@ All six tables above should be listed.
 ALTER PUBLICATION supabase_realtime DROP TABLE public.placement_entrants;
 -- …and the other five. Harmless, but every screen goes back to manual refresh.
 ```
+
+---
+
+## Applying `20260917090000_placement_seed_reorder.sql`
+
+Lets the host change the seed order by hand after **Shuffle & lock seeds** — dragging a row on the
+Placement tab, or using the up/down arrows beside it — instead of only being able to re-shuffle.
+
+### What it changes
+
+**No new function.** `lock_placement_seeds()` already accepts a full permutation of the field: seeds
+`1..N`, every non-waived team exactly once. That is precisely what a reorder sends. The shuffle and
+the drag differ only in who chose the order, so they share one RPC and one validation path rather
+than growing a second writer that could drift from the first.
+
+What changes is one guard. It previously refused only a match that had been **decided**:
+
+```sql
+WHERE category_id = p_category_id AND status <> 'scheduled'
+```
+
+That was sufficient while the shuffle was the only caller, because the UI disabled the button as
+soon as any match existed. It is not sufficient once rows can be dragged. A reorder after round one
+has been generated is not a no-op: it permutes the seeds round one was paired *from*, so the matches
+keep their pairings while the numbers beside them change — a bracket that still plays and quietly
+misreports why anyone faced anyone. The check is now for any row at all:
+
+```sql
+IF EXISTS (SELECT 1 FROM public.placement_matches WHERE category_id = p_category_id) THEN
+```
+
+So the order is editable exactly while the placement stage is empty: after locking, and before the
+Court schedule tab's **Build** generates round one. That was already the rule the Placement tab
+enforced by disabling its button, so the only behaviour that changes is that the RPC now refuses a
+state the client was already refusing to ask for.
+
+The way back from a stage that has matches is unchanged and explicit: `reset_placement_stage()`
+clears matches, draws and seeds together, and re-locking is available immediately afterwards.
+
+### Verify after applying
+
+```sql
+-- The order is editable while this returns 0
+select count(*) from public.placement_matches where category_id = '<id>';
+```
+
+On the Placement tab, with seeds locked and no matches: drag a row and the seed numbers renumber
+under the cursor, the panel header reads **saving…** and then **locked** again, and a refresh keeps
+the new order. Once a placement match exists the drag handles disappear and the panel says the order
+is frozen.
+
+### What it deliberately does not do
+
+- **It does not preserve the skill blocks.** A host can drag a beginner to seed 1. The panel says so
+  once the order stops following the blocks, and **Re-shuffle seeds** restores it. Enforcing the
+  blocks here would make the control refuse moves the host can plainly see are legal.
+- **It does not re-generate round one.** A reorder after generation is refused rather than silently
+  rebuilding, because regeneration deletes and recreates the match rows, which would take that
+  stage's schedule and court assignments with it.
+- **It keeps no audit trail.** `seed_locked_at` is refreshed on every write, so it reads as "when
+  this order was last set". Nothing keys off its value — `set_placement_skill()` only tests it for
+  null — so a reorder moving it forward re-labels it rather than changing its meaning.
+
+### Rolling back
+
+Re-apply the `lock_placement_seeds` definition from `20260917010000_placement_stage_rpcs.sql`. The
+drag control is harmless without it, but would start failing on the looser guard's terms. To remove
+the control as well, revert the `SeedingPanel` in `src/routes/placement.tsx`.
+
+Proved against a real Postgres engine (PGlite) before it was committed — 21 checks covering a first
+lock, a hand-made permutation round-tripping, a refreshed lock timestamp, short and duplicate
+payloads being refused, an unknown team being refused, a `scheduled` match now blocking a reorder
+(the case the old predicate let through), a reported match still blocking it, re-locking working
+again after a reset, and `anon`/`PUBLIC` still holding no `EXECUTE` while `authenticated` keeps it.
 
 ---
 

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel } from "@/components/app-shell";
@@ -10,11 +11,13 @@ import { entrantCountNote } from "@/lib/tournament/competition-format";
 import {
   buildCategoryView,
   lockPlacementSeeds,
+  savePlacementSeedOrder,
   setPlacementSkill,
   shuffleSeedFor,
   syncPlacementEntrants,
   type CategoryPlacementView,
 } from "@/lib/tournament/placement-actions";
+import { followsSkillBlocks } from "@/lib/tournament/placement-seed";
 import {
   indexBy,
   teamLabel,
@@ -257,12 +260,110 @@ function SeedingPanel({
 
   const hasMatches = view.matches.length > 0;
 
+  // Reordering is offered only where a new order can actually be written: the seed
+  // order has to exist, and the stage has to be empty. The second condition is not
+  // a UI preference, it is the database's own guard — once round one has been
+  // generated its pairings came from this order, so permuting it afterwards would
+  // leave matches whose seeds no longer explain them.
+  const canReorder = canEdit && view.seedsLocked && !hasMatches;
+
+  const entrantById = useMemo(
+    () => new Map(view.active.map((entrant) => [entrant.id, entrant])),
+    [view.active],
+  );
+  const outcomeById = useMemo(
+    () => new Map(view.outcomes.map((outcome) => [outcome.entrantId, outcome])),
+    [view.outcomes],
+  );
+
+  // The order the table reads. With no seeds written there is no order to speak of,
+  // so this keeps the sort the table always used: seeded entrants by seed, then the
+  // unseeded ones.
+  const storedOrder = useMemo(() => {
+    if (!view.seedsLocked) {
+      return view.outcomes
+        .slice()
+        .sort((a, b) => {
+          if (a.seed === 0 || b.seed === 0) return a.seed === 0 ? 1 : -1;
+          return a.seed - b.seed;
+        })
+        .map((outcome) => outcome.entrantId);
+    }
+    return [...view.active]
+      .sort((a, b) => (a.seed ?? 0) - (b.seed ?? 0))
+      .map((entrant) => entrant.id);
+  }, [view.active, view.outcomes, view.seedsLocked]);
+
+  // Held locally only for the length of a write, so a dropped row moves under the
+  // cursor rather than after a round trip. Re-seeded whenever the stored order
+  // changes, which is what makes a saved reorder and a refetch agree again.
+  const [order, setOrder] = useState<string[]>(storedOrder);
+  useEffect(() => setOrder(storedOrder), [storedOrder]);
+
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // The authoritative record of which row is being dragged. A drag spans several
+  // browser tasks, and React may not have re-rendered between them, so the state
+  // below is only good enough to style the rows — the handlers read this.
+  const dragIdRef = useRef<string | null>(null);
+
+  // Dragging is suspended while a write is in flight. Two overlapping reorders
+  // would race, and the loser would be whichever request happened to land last
+  // rather than whichever the host made last.
+  const canDragNow = canReorder && !saving;
+
+  const rows = order
+    .map((entrantId) => entrantById.get(entrantId))
+    .filter((entrant): entrant is PlacementEntrant => entrant != null);
+
+  const orderFollowsBlocks = followsSkillBlocks(rows.map((entrant) => entrant.skill_level));
+
+  /**
+   * Moves one entrant to another's position and writes the resulting order.
+   *
+   * A failure restores the previous order rather than leaving the screen ahead of
+   * the database: every later pairing is derived from these numbers, so a list that
+   * disagreed with them would be worse than a rejected drag.
+   */
+  async function move(fromId: string, toId: string) {
+    const previous = order;
+    const from = previous.indexOf(fromId);
+    const to = previous.indexOf(toId);
+    if (from < 0 || to < 0 || from === to) return;
+
+    const next = previous.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved as string);
+
+    setOrder(next);
+    setSaving(true);
+    try {
+      await savePlacementSeedOrder(category.id, view.active, next);
+      onRefresh();
+    } catch (error) {
+      setOrder(previous);
+      toast.error(error instanceof Error ? error.message : "Could not save the seed order");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** The arrows, which are the keyboard and touch path to the same move as a drag. */
+  async function step(entrantId: string, delta: number) {
+    const index = order.indexOf(entrantId);
+    const target = order[index + delta];
+    if (index < 0 || !target) return;
+    await move(entrantId, target);
+  }
+
   return (
     <Panel
       title="Seeding"
       right={
         <span className="font-score text-[11px] text-muted-foreground">
-          {view.seedsLocked ? "locked" : "not locked"}
+          {saving ? "saving…" : view.seedsLocked ? "locked" : "not locked"}
         </span>
       }
     >
@@ -273,10 +374,22 @@ function SeedingPanel({
           the seed only.
         </p>
 
+        {canReorder ? (
+          <p className="text-[11px] text-muted-foreground">
+            Drag a row to set the order by hand, or use the arrows. Each change is saved straight
+            away, and the order stops being editable once placement matches exist.
+          </p>
+        ) : null}
+
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
               <tr>
+                {canReorder ? (
+                  <th className="w-16">
+                    <span className="sr-only">Reorder</span>
+                  </th>
+                ) : null}
                 <th className="w-12">Seed</th>
                 <th>Entrant</th>
                 <th>Skill</th>
@@ -285,56 +398,136 @@ function SeedingPanel({
               </tr>
             </thead>
             <tbody>
-              {view.outcomes
-                .slice()
-                .sort((a, b) => {
-                  if (a.seed === 0 || b.seed === 0) return a.seed === 0 ? 1 : -1;
-                  return a.seed - b.seed;
-                })
-                .map((outcome) => {
-                  const entrant = view.active.find((e) => e.id === outcome.entrantId);
-                  if (!entrant) return null;
-                  return (
-                    <tr key={entrant.id}>
-                      <td className="font-score text-xs font-semibold text-primary">
-                        {entrant.seed ?? "—"}
-                      </td>
-                      <td className="pr-2 font-medium">{label(entrant.id)}</td>
-                      <td>
-                        {canEdit && !view.seedsLocked ? (
-                          <select
-                            className="h-7 rounded-md border border-hairline bg-surface px-2 text-xs"
-                            value={entrant.skill_level}
-                            onChange={async (event) => {
-                              try {
-                                await setPlacementSkill(
-                                  category.id,
-                                  entrant.team_id,
-                                  event.target.value,
-                                );
-                                onRefresh();
-                              } catch (error) {
-                                toast.error(
-                                  error instanceof Error ? error.message : "Could not set skill",
-                                );
-                              }
-                            }}
+              {rows.map((entrant, index) => {
+                const outcome = outcomeById.get(entrant.id);
+                const isDropTarget = canDragNow && overId === entrant.id && dragId !== entrant.id;
+                // `data-table` paints a zebra background on `td`, and that rule
+                // outranks a utility class on the row, so the drop highlight is
+                // applied to the cells and inline.
+                const dropProps = isDropTarget
+                  ? {
+                      style: {
+                        backgroundColor: "color-mix(in oklab, var(--primary) 14%, transparent)",
+                      },
+                    }
+                  : {};
+                return (
+                  <tr
+                    key={entrant.id}
+                    draggable={canDragNow}
+                    className={canReorder ? "cursor-grab active:cursor-grabbing" : undefined}
+                    onDragStart={(event) => {
+                      if (!canDragNow) return;
+                      // Firefox refuses to start a drag without a payload, so this
+                      // is what makes the row draggable rather than a nicety.
+                      const payload = entrant.id;
+                      event.dataTransfer.setData("text/plain", payload);
+                      event.dataTransfer.effectAllowed = "move";
+                      dragIdRef.current = payload;
+                      setDragId(payload);
+                    }}
+                    onDragOver={(event) => {
+                      // Read the ref, not the state: `dragover` fires many times per
+                      // drag and only the ref is guaranteed to be current.
+                      const dragging = dragIdRef.current;
+                      if (!canDragNow || dragging === null || dragging === entrant.id) return;
+                      // Without preventDefault the browser refuses the drop outright.
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setOverId(entrant.id);
+                    }}
+                    onDragLeave={() =>
+                      setOverId((current) => (current === entrant.id ? null : current))
+                    }
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      // The ref is emptied before the move so a stray second drop
+                      // cannot replay it. The payload is the fallback for a drag that
+                      // began in another window, where no ref was ever set.
+                      const dropped = dragIdRef.current ?? event.dataTransfer.getData("text/plain");
+                      dragIdRef.current = null;
+                      setDragId(null);
+                      setOverId(null);
+                      if (dropped && dropped !== entrant.id) void move(dropped, entrant.id);
+                    }}
+                    onDragEnd={() => {
+                      dragIdRef.current = null;
+                      setDragId(null);
+                      setOverId(null);
+                    }}
+                  >
+                    {canReorder ? (
+                      <td className="w-16 py-1 pr-0" {...dropProps}>
+                        <div className="flex items-center text-muted-foreground">
+                          <GripVertical className="size-3.5 shrink-0" aria-hidden />
+                          <button
+                            type="button"
+                            draggable={false}
+                            className="rounded p-0.5 hover:bg-muted hover:text-foreground disabled:opacity-30"
+                            aria-label={`Move ${label(entrant.id)} up one seed`}
+                            disabled={index === 0 || saving}
+                            onClick={() => void step(entrant.id, -1)}
                           >
-                            <option value="advanced">Advanced</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="beginner">Beginner</option>
-                          </select>
-                        ) : (
-                          <span className="text-xs capitalize">{entrant.skill_level}</span>
-                        )}
+                            <ChevronUp className="size-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            draggable={false}
+                            className="rounded p-0.5 hover:bg-muted hover:text-foreground disabled:opacity-30"
+                            aria-label={`Move ${label(entrant.id)} down one seed`}
+                            disabled={index === rows.length - 1 || saving}
+                            onClick={() => void step(entrant.id, 1)}
+                          >
+                            <ChevronDown className="size-3.5" />
+                          </button>
+                        </div>
                       </td>
-                      <td className="text-right font-score text-xs">
-                        {outcome.played}/{view.requiredMatches}
-                      </td>
-                      <td className="font-score text-xs">{outcome.tier ?? "—"}</td>
-                    </tr>
-                  );
-                })}
+                    ) : null}
+                    <td className="font-score text-xs font-semibold text-primary" {...dropProps}>
+                      {/* The live position, so a drag reads correctly before its write
+                          lands. Before the seeds are written there is nothing to number. */}
+                      {view.seedsLocked ? index + 1 : "—"}
+                    </td>
+                    <td className="pr-2 font-medium" {...dropProps}>
+                      {label(entrant.id)}
+                    </td>
+                    <td {...dropProps}>
+                      {canEdit && !view.seedsLocked ? (
+                        <select
+                          className="h-7 rounded-md border border-hairline bg-surface px-2 text-xs"
+                          value={entrant.skill_level}
+                          onChange={async (event) => {
+                            try {
+                              await setPlacementSkill(
+                                category.id,
+                                entrant.team_id,
+                                event.target.value,
+                              );
+                              onRefresh();
+                            } catch (error) {
+                              toast.error(
+                                error instanceof Error ? error.message : "Could not set skill",
+                              );
+                            }
+                          }}
+                        >
+                          <option value="advanced">Advanced</option>
+                          <option value="intermediate">Intermediate</option>
+                          <option value="beginner">Beginner</option>
+                        </select>
+                      ) : (
+                        <span className="text-xs capitalize">{entrant.skill_level}</span>
+                      )}
+                    </td>
+                    <td className="text-right font-score text-xs" {...dropProps}>
+                      {outcome?.played ?? 0}/{view.requiredMatches}
+                    </td>
+                    <td className="font-score text-xs" {...dropProps}>
+                      {outcome?.tier ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -344,6 +537,14 @@ function SeedingPanel({
           {counts.beginner} beginner
           {view.excluded.length > 0 ? ` · ${view.excluded.length} waived` : ""}
         </p>
+
+        {canReorder && !orderFollowsBlocks ? (
+          <p className="rounded-md border border-warn-border bg-warn-surface px-3 py-2 text-[11px] font-medium text-warn-foreground">
+            This order no longer follows the skill blocks: a weaker block is seeded above a stronger
+            one. It is still a valid order — every pairing rule reads the seed and nothing else —
+            and "Re-shuffle seeds" puts the blocks back.
+          </p>
+        ) : null}
 
         {canEdit ? (
           <Button

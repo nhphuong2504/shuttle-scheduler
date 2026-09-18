@@ -102,6 +102,44 @@ export function describeSkillBlocks(counts: SkillCounts): SkillBlock[] {
 }
 
 /**
+ * Which block is stronger, as a sortable number. Derived from `SKILL_LEVELS`
+ * rather than written out, so the two orders cannot drift apart.
+ */
+const SKILL_RANK = new Map<SkillLevel, number>(SKILL_LEVELS.map((level, index) => [level, index]));
+
+/**
+ * Whether a seed order still groups entrants by the block they reported.
+ *
+ * `assignSeeds` follows the blocks by construction: every advanced entrant, then
+ * every intermediate, then every beginner. A host can reorder the list by hand
+ * afterwards, and this is what the seeding table reads to say so rather than
+ * letting the panel keep claiming an order it no longer has.
+ *
+ * The test is a rank that never goes backwards: a weaker block may follow a
+ * stronger one, never the reverse. That is exactly the contiguity the blocks had
+ * when they were written, and it deliberately does not care about order *within*
+ * a block, which was always random.
+ *
+ * Display only. Nothing downstream reads this, because every pairing rule reads
+ * `seed` and nothing else — so a hand-made order is a legitimate order, just not
+ * the one the blocks would have produced.
+ *
+ * Takes plain strings rather than `SkillLevel` because the caller reads them
+ * straight off database rows, where the column is unconstrained text. Anything
+ * unrecognised ranks as `DEFAULT_SKILL_LEVEL`, which is the same fallback
+ * `buildSkillCounts` applies.
+ */
+export function followsSkillBlocks(levels: readonly (string | null | undefined)[]): boolean {
+  let previous = -1;
+  for (const level of levels) {
+    const rank = SKILL_RANK.get(isSkillLevel(level) ? level : DEFAULT_SKILL_LEVEL) as number;
+    if (rank < previous) return false;
+    previous = rank;
+  }
+  return true;
+}
+
+/**
  * Assigns every entrant a permanent seed: contiguous blocks by skill, shuffled
  * within each block. Returns entrants ordered by seed.
  *
