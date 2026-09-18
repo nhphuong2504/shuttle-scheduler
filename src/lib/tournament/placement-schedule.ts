@@ -173,6 +173,22 @@ export function courtsForDay(
   return allCourts.filter((court) => dayCourtIds.has(court.id));
 }
 
+/**
+ * A day's window as absolute milliseconds, both ends together.
+ *
+ * Parsing lives here rather than at each call site because a bare `YYYY-MM-DD` is
+ * read as UTC midnight, which is a day earlier everywhere west of Greenwich —
+ * `dayDateLabel` in `format.ts` exists for the same reason. Returning the pair as
+ * one value also makes it impossible to pair a start from one day with an end from
+ * another.
+ */
+export function dayWindowBounds(day: TournamentDay): { start: number; end: number } {
+  return {
+    start: combineDateTime(day.date, day.start_time).getTime(),
+    end: combineDateTime(day.date, day.end_time).getTime(),
+  };
+}
+
 /** A day's configured breaks as absolute windows, so the schedulers can step over them. */
 export function breakWindowsFor(
   day: TournamentDay,
@@ -182,6 +198,62 @@ export function breakWindowsFor(
     start: combineDateTime(day.date, brk.start_time).getTime(),
     end: combineDateTime(day.date, brk.end_time).getTime(),
   }));
+}
+
+/**
+ * One day's slice of a running order, with the day it came from.
+ *
+ * `day` is the tournament day rather than a date, so a caller can label the slice
+ * with the day number the rest of the app uses.
+ */
+export interface DaySlice<T> {
+  day: TournamentDay;
+  rows: T[];
+}
+
+/**
+ * Splits rows into one slice per tournament day, in day order.
+ *
+ * A row belongs to the last day that had already started when it did, which is the
+ * same rule the planner works to: matches are placed inside a day's window, and the
+ * last day is allowed to overrun its closing time, so a row can legitimately start
+ * after its own day's `end_time` — including after midnight, on the next calendar
+ * date. Bucketing by calendar date would file such a row under the following day, or
+ * under no day at all; bucketing by "which day had opened" cannot.
+ *
+ * Every day comes back, including one with no rows: a two-day tournament should show
+ * two days even before the second has anything on it, which is the whole point of
+ * the view. Rows are returned in the order they were given, so a caller that hands
+ * them over sorted by time gets each slice sorted by time.
+ *
+ * A row that starts before the first day opened is attributed to the first day. In
+ * practice that is a match reported early, and showing it on the day it belongs to
+ * beats hiding it.
+ */
+export function sliceRowsByDay<T>(
+  rows: readonly T[],
+  days: readonly TournamentDay[],
+  startOf: (row: T) => Date,
+): DaySlice<T>[] {
+  const ordered = [...days].sort((a, b) => a.day_number - b.day_number);
+  const slices: DaySlice<T>[] = ordered.map((day) => ({ day, rows: [] }));
+  if (!slices.length) return slices;
+
+  const starts = ordered.map((day) => dayWindowBounds(day).start);
+
+  for (const row of rows) {
+    const at = startOf(row).getTime();
+    // `starts` is ascending, so the last one at or before the row is the day it fell
+    // in. NaN — an unparseable time — fails every comparison and lands on the first
+    // day, which is the same place a row from before opening goes.
+    let index = 0;
+    for (let candidate = 0; candidate < starts.length; candidate += 1) {
+      if (starts[candidate]! <= at) index = candidate;
+    }
+    slices[index]!.rows.push(row);
+  }
+
+  return slices;
 }
 
 /** A match has a real result, so its time is an anchor rather than a suggestion. */

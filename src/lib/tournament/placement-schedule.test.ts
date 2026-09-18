@@ -17,6 +17,7 @@ import {
   placementMatchLabel,
   placementStageLabel,
   planPlacementSchedule,
+  sliceRowsByDay,
   type PlanPlacementScheduleInput,
 } from "./placement-schedule";
 import { normalizeBreaks, startAfterBreaks } from "./scheduler";
@@ -1475,5 +1476,102 @@ describe("planPlacementSchedule — the two stages sharing a day", () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r2-1"]);
     expect(result.knockoutSlotPayload.map((slot) => slot.match_id)).toEqual(["k-1"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Slicing a running order by day
+// ---------------------------------------------------------------------------
+
+describe("sliceRowsByDay", () => {
+  /** A row is anything with a start, so the slice helper is testable without a match. */
+  const row = (id: string, at: string) => ({ id, start: new Date(at) });
+  const startOf = (r: { start: Date }) => r.start;
+
+  it("keeps every day, including one with nothing on it", () => {
+    // The reason this view exists: a two-day tournament shows two days, so the
+    // second is visible before anything has been placed on it.
+    const slices = sliceRowsByDay(
+      [row("a", "2026-09-17T09:00:00")],
+      [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "18:00:00")],
+      startOf,
+    );
+
+    expect(slices.map((slice) => slice.day.day_number)).toEqual([1, 2]);
+    expect(slices[0]!.rows.map((r) => r.id)).toEqual(["a"]);
+    expect(slices[1]!.rows).toEqual([]);
+  });
+
+  it("puts a row that runs past midnight on the day that opened", () => {
+    // Day one closes at 23:59 and day two opens at 00:00, so a row on either side of
+    // midnight is what a calendar-date grouping would split wrongly. Bucketing by
+    // "which day had already opened" is what keeps it on the right one, and this is
+    // the shape the live two-day event actually has.
+    const slices = sliceRowsByDay(
+      [row("late", "2026-09-17T23:50:00"), row("early", "2026-09-18T00:10:00")],
+      [queueDay(1, "23:36:00", "23:59:00"), queueDay(2, "00:00:00", "01:30:00")],
+      startOf,
+    );
+
+    expect(slices[0]!.rows.map((r) => r.id)).toEqual(["late"]);
+    expect(slices[1]!.rows.map((r) => r.id)).toEqual(["early"]);
+  });
+
+  it("keeps a row that overruns the last day on that last day", () => {
+    // The last day is allowed to overrun its closing time, so a row starting after
+    // `end_time` — here past midnight, on the next calendar date — still belongs to
+    // the day it is the tail of. This is the case that would fall off the end of the
+    // schedule if rows were matched to a day by calendar date.
+    const slices = sliceRowsByDay(
+      [row("overrun", "2026-09-19T00:20:00")],
+      [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "23:30:00")],
+      startOf,
+    );
+
+    expect(slices[0]!.rows).toEqual([]);
+    expect(slices[1]!.rows.map((r) => r.id)).toEqual(["overrun"]);
+  });
+
+  it("attributes a row from before opening to the first day", () => {
+    // A match reported early is a real row with a real time; showing it on the first
+    // day beats dropping it from a schedule it is part of.
+    const slices = sliceRowsByDay(
+      [row("early", "2026-09-17T08:40:00")],
+      [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "18:00:00")],
+      startOf,
+    );
+
+    expect(slices[0]!.rows.map((r) => r.id)).toEqual(["early"]);
+  });
+
+  it("orders days by day number, not by the order they were given", () => {
+    const slices = sliceRowsByDay(
+      [],
+      [queueDay(2, "09:00:00", "18:00:00"), queueDay(1, "09:00:00", "18:00:00")],
+      startOf,
+    );
+
+    expect(slices.map((slice) => slice.day.day_number)).toEqual([1, 2]);
+  });
+
+  it("preserves the given order of rows inside a day", () => {
+    // The caller hands rows over sorted by time, so each slice has to come back
+    // sorted by time. A slice that re-ordered them would put the running order out
+    // of order.
+    const slices = sliceRowsByDay(
+      [
+        row("first", "2026-09-17T09:00:00"),
+        row("second", "2026-09-17T10:00:00"),
+        row("third", "2026-09-17T11:00:00"),
+      ],
+      [queueDay(1, "09:00:00", "18:00:00")],
+      startOf,
+    );
+
+    expect(slices[0]!.rows.map((r) => r.id)).toEqual(["first", "second", "third"]);
+  });
+
+  it("returns nothing for a tournament with no days", () => {
+    expect(sliceRowsByDay([row("a", "2026-09-17T09:00:00")], [], startOf)).toEqual([]);
   });
 });

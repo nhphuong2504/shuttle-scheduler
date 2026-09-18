@@ -37,6 +37,23 @@ export function minutesSince(
   return Math.floor((now - d.getTime()) / 60000);
 }
 
+/**
+ * A short local date for a day heading, e.g. "Thu, Sep 17" or "Thu 17 Sep"
+ * depending on the locale.
+ *
+ * Takes the `YYYY-MM-DD` the database stores and parses it at local midnight rather
+ * than as an instant: `new Date("2026-09-17")` is UTC midnight, which reads as the
+ * previous day everywhere west of Greenwich.
+ *
+ * The date is returned unchanged if it does not parse, so a malformed row shows the
+ * raw value instead of "Invalid Date".
+ */
+export function dayDateLabel(date: string): string {
+  const at = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(at.getTime())) return date;
+  return at.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+
 export function signed(n: number): string {
   return n > 0 ? `+${n}` : `${n}`;
 }

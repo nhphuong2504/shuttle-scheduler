@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/useSession";
 import {
   setTournamentDayBreaks,
@@ -45,12 +46,14 @@ import {
   type TierDrawMatch,
   type TournamentDay,
 } from "@/lib/tournament/data";
-import { timeLabel } from "@/lib/tournament/format";
+import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import {
   applyPlacementSchedulePlan,
   courtsForDay,
+  dayWindowBounds,
   placementMatchLabel,
   planPlacementSchedule,
+  sliceRowsByDay,
   type PlacementDayFill,
   type PlacementSchedulePlan,
 } from "@/lib/tournament/placement-schedule";
@@ -452,6 +455,44 @@ function PlacementSchedulePage() {
       (a, b) => a.start.getTime() - b.start.getTime(),
     );
   }, [placementMatches, tierMatches, draws, categoryMap, courtMap, labelEntrant]);
+
+  const daySlices = useMemo(
+    () => sliceRowsByDay(rows, tournamentDays, (row) => row.start),
+    [rows, tournamentDays],
+  );
+
+  /**
+   * Which day's running order is on screen.
+   *
+   * Held as `null` until a tab is clicked so the opening view can be derived rather
+   * than stored: the derived value is recomputed for free if the days load late or
+   * the windows change, and a click still wins from then on. Deliberately not reset
+   * by a realtime refresh — a board that jumps to another day while someone is
+   * reading it is worse than one showing a day that has just emptied.
+   */
+  const [pickedDayId, setPickedDayId] = useState<string | null>(null);
+
+  /**
+   * The day to open on: whichever window contains now, else the first day with
+   * something on it, else the first day.
+   *
+   * A live event is why "now" comes first — on the second morning the desk wants
+   * day two, not the day that finished yesterday. The later fallbacks are what a
+   * not-yet-built schedule gets.
+   */
+  const activeDayId = useMemo(() => {
+    if (pickedDayId && daySlices.some((slice) => slice.day.id === pickedDayId)) {
+      return pickedDayId;
+    }
+    const now = Date.now();
+    const containing = daySlices.find((slice) => {
+      const { start, end } = dayWindowBounds(slice.day);
+      return now >= start && now <= end;
+    });
+    if (containing) return containing.day.id;
+    const firstWithRows = daySlices.find((slice) => slice.rows.length > 0);
+    return (firstWithRows ?? daySlices[0])?.day.id ?? "";
+  }, [daySlices, pickedDayId]);
 
   const matchLabel = (matchId: string) =>
     placementMatchLabel(matchId, placementMatches ?? [], tierMatches ?? [], labelEntrant);
@@ -1031,49 +1072,100 @@ function PlacementSchedulePage() {
           title="Running order"
           right={
             <span className="font-score text-[11px] text-muted-foreground">
-              {result ? `${result.summary.placed} placed this session` : "all scheduled matches"}
+              {result
+                ? `${result.summary.placed} placed this session`
+                : `${rows.length} scheduled · ${daySlices.length} day${daySlices.length === 1 ? "" : "s"}`}
             </span>
           }
-          bodyClassName={rows.length ? "p-0" : "p-4"}
+          bodyClassName={rows.length || daySlices.length ? "p-0" : "p-4"}
         >
-          {rows.length === 0 ? (
+          {rows.length === 0 && daySlices.length === 0 ? (
             <EmptyState
               title="Nothing scheduled yet"
               hint="Build the schedule to place the first day's matches across the courts."
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="w-16">Time</th>
-                    <th className="w-16">Court</th>
-                    <th className="w-14">Cat</th>
-                    <th className="w-28">Stage</th>
-                    <th className="w-28">Status</th>
-                    <th>Match</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td className="font-score text-xs font-semibold">{timeLabel(row.start)}</td>
-                      <td>
-                        <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-[11px] font-semibold text-primary">
-                          C{row.courtNumber || "—"}
-                        </span>
-                      </td>
-                      <td className="font-score text-xs">{row.categoryCode}</td>
-                      <td className="text-xs text-muted-foreground">{row.stage}</td>
-                      <td>
-                        <StatusPill status={row.status} />
-                      </td>
-                      <td>{row.label}</td>
-                    </tr>
+            <Tabs value={activeDayId} onValueChange={setPickedDayId}>
+              {/* One tab per tournament day, so a two-day event reads as two days
+                  rather than one list running past midnight. Days are never hidden:
+                  a day that has nothing on it yet still gets a tab, which is what
+                  makes the second day visible before it is built. */}
+              <div className="border-b border-hairline px-3 py-2">
+                <TabsList className="h-auto flex-wrap justify-start">
+                  {daySlices.map((slice) => (
+                    <TabsTrigger key={slice.day.id} value={slice.day.id}>
+                      Day {slice.day.day_number}
+                      <span className="ml-1.5 font-score text-[11px] text-muted-foreground">
+                        {slice.rows.length}
+                      </span>
+                    </TabsTrigger>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TabsList>
+              </div>
+
+              {daySlices.map((slice) => (
+                <TabsContent key={slice.day.id} value={slice.day.id} className="mt-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">
+                      {dayDateLabel(slice.day.date)}
+                    </span>
+                    <span>
+                      {windowFor(slice.day).start}–{windowFor(slice.day).end}
+                    </span>
+                    <span>
+                      {slice.rows.length} match{slice.rows.length === 1 ? "" : "es"}
+                    </span>
+                    <span>{courtsFor(slice.day).length} courts</span>
+                  </div>
+
+                  {slice.rows.length === 0 ? (
+                    // Padded, because the panel body is full-bleed for the table and
+                    // the empty state's own border would otherwise sit on the edge.
+                    <div className="p-3">
+                      <EmptyState
+                        title="Nothing on this day yet"
+                        hint="Build or rebuild the schedule to place matches here."
+                      />
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th className="w-16">Time</th>
+                            <th className="w-16">Court</th>
+                            <th className="w-14">Cat</th>
+                            <th className="w-28">Stage</th>
+                            <th className="w-28">Status</th>
+                            <th>Match</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {slice.rows.map((row) => (
+                            <tr key={row.id}>
+                              <td className="font-score text-xs font-semibold">
+                                {timeLabel(row.start)}
+                              </td>
+                              <td>
+                                <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-[11px] font-semibold text-primary">
+                                  C{row.courtNumber || "—"}
+                                </span>
+                              </td>
+                              <td className="font-score text-xs">{row.categoryCode}</td>
+                              <td className="text-xs text-muted-foreground">{row.stage}</td>
+                              <td>
+                                <StatusPill status={row.status} />
+                              </td>
+                              <td>{row.label}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
           )}
         </Panel>
       </div>
