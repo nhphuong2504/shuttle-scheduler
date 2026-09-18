@@ -1,10 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
-import { GamesDialog } from "@/components/placement/GamesDialog";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { PLACEMENT_TIERS, entrantCountNote } from "@/lib/tournament/competition-format";
@@ -13,11 +12,6 @@ import {
   bracketRounds,
   buildCategoryView,
   lockPlacementSeeds,
-  reportPlacementMatch,
-  reportTierDrawMatch,
-  resetPlacementResult,
-  resetTierDrawResult,
-  scheduleImpactNote,
   setPlacementSkill,
   shuffleSeedFor,
   syncPlacementEntrants,
@@ -42,9 +36,8 @@ import {
   type TierDraw,
   type TierDrawMatch,
 } from "@/lib/tournament/data";
-import { gamesLabel, parseGames, type GameScore } from "@/lib/tournament/format";
+import { gamesLabel, parseGames } from "@/lib/tournament/format";
 import { mulberry32 } from "@/lib/tournament/rng";
-import { ruleForStage, type ScoringRule } from "@/lib/tournament/scoring";
 
 export const Route = createFileRoute("/placement")({
   head: () => ({
@@ -76,18 +69,20 @@ export const Route = createFileRoute("/placement")({
  * meant to avoid.
  */
 
-interface ScoringRequest {
-  kind: "placement" | "knockout";
-  matchId: string;
-  title: string;
-  labels: [string, string];
-  rule: ScoringRule;
-  initial: GameScore[] | undefined;
-}
+/**
+ * The placement stage: seeds, then the two rounds it pairs, then the four
+ * knockout draws those rounds sort entrants into.
+ *
+ * Results are entered on `/matches`, not here. The placement rounds and the tier
+ * brackets both appear there, so keeping a second set of score buttons on this
+ * page meant two places to enter the same result. What stays here is what only
+ * this page knows: the seed order, the rule each round pairs by, and the bracket
+ * each entrant landed in.
+ */
 
 function PlacementPage() {
   const qc = useQueryClient();
-  const { canEditPlacementEntrants, canScorePlacement } = useSession();
+  const { canEditPlacementEntrants } = useSession();
   const { tournament } = useTournamentScope();
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
@@ -96,13 +91,9 @@ function PlacementPage() {
   const { data: matches } = usePlacementMatches();
   const { data: draws } = useTierDraws();
   const { data: tierMatches } = useTierDrawMatches();
-  const [scoring, setScoring] = useState<ScoringRequest | null>(null);
 
   const playerMap = useMemo(() => indexBy(players), [players]);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
-
-  const placementRule = tournament ? ruleForStage(tournament, "placement") : null;
-  const knockoutRule = tournament ? ruleForStage(tournament, "knockout") : null;
 
   const refresh = () => qc.invalidateQueries();
 
@@ -113,6 +104,11 @@ function PlacementPage() {
     <AppShell
       title="Placement & draws"
       subtitle="Every entrant plays two placement matches. The two results sort them into Draw A (WW), B (WL), C (LW) or D (LL)."
+      actions={
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/matches">Enter results in Scores</Link>
+        </Button>
+      }
     >
       {wrongFormat ? (
         <div className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-xs font-medium text-warn-foreground">
@@ -143,35 +139,10 @@ function PlacementPage() {
             draws={(draws ?? []).filter((draw) => draw.category_id === category.id)}
             tierMatches={tierMatches ?? []}
             canEdit={canEditPlacementEntrants}
-            canScore={canScorePlacement}
-            placementRule={placementRule}
-            knockoutRule={knockoutRule}
             onRefresh={refresh}
-            onScore={setScoring}
           />
         ))}
       </div>
-
-      {scoring ? (
-        <GamesDialog
-          open
-          onOpenChange={(open) => !open && setScoring(null)}
-          title={scoring.title}
-          sideLabels={scoring.labels}
-          rule={scoring.rule}
-          initialGames={scoring.initial}
-          onSubmit={async (games) => {
-            if (!tournament) throw new Error("No active tournament is configured.");
-            const impact =
-              scoring.kind === "placement"
-                ? await reportPlacementMatch(scoring.matchId, games, tournament.id)
-                : await reportTierDrawMatch(scoring.matchId, games, tournament.id);
-            const note = scheduleImpactNote(impact);
-            toast.success(note ? `Result saved · ${note}` : "Result saved");
-            refresh();
-          }}
-        />
-      ) : null}
     </AppShell>
   );
 }
@@ -219,11 +190,7 @@ function CategorySection({
   draws,
   tierMatches,
   canEdit,
-  canScore,
-  placementRule,
-  knockoutRule,
   onRefresh,
-  onScore,
 }: {
   category: Category;
   teams: Team[];
@@ -233,11 +200,7 @@ function CategorySection({
   draws: TierDraw[];
   tierMatches: TierDrawMatch[];
   canEdit: boolean;
-  canScore: boolean;
-  placementRule: ScoringRule | null;
-  knockoutRule: ScoringRule | null;
   onRefresh: () => void;
-  onScore: (request: ScoringRequest) => void;
 }) {
   const view = useMemo(() => buildCategoryView(entrants, matches), [entrants, matches]);
   // `tierMatches` arrives unfiltered, so scope it through this category's draws.
@@ -353,24 +316,7 @@ function CategorySection({
                 Round one has not been generated yet. Match generation runs from the schedule.
               </p>
             ) : (
-              <MatchList
-                matches={view.roundOne}
-                label={labelEntrant}
-                canScore={canScore}
-                onScore={(match) =>
-                  onScore({
-                    kind: "placement",
-                    matchId: match.id,
-                    title: `${labelEntrant(match.entrant_a_id)} vs ${labelEntrant(match.entrant_b_id)}`,
-                    labels: [labelEntrant(match.entrant_a_id), labelEntrant(match.entrant_b_id)],
-                    rule: placementRule as ScoringRule,
-                    initial: match.status === "reported" ? parseGames(match.games) : undefined,
-                  })
-                }
-                onReset={(match) => run(() => resetPlacementResult(match.id), "Result cleared")}
-                canReset={canScore}
-                readOnly={!placementRule}
-              />
+              <RoundProgress played={roundOneDecided} total={view.roundOne.length} />
             )}
           </StagePanel>
 
@@ -405,23 +351,13 @@ function CategorySection({
                 Round two has not been generated yet. Match generation runs from the schedule.
               </p>
             ) : (
-              <MatchList
-                matches={view.roundTwo}
-                label={labelEntrant}
-                canScore={canScore}
-                onScore={(match) =>
-                  onScore({
-                    kind: "placement",
-                    matchId: match.id,
-                    title: `${labelEntrant(match.entrant_a_id)} vs ${labelEntrant(match.entrant_b_id)}`,
-                    labels: [labelEntrant(match.entrant_a_id), labelEntrant(match.entrant_b_id)],
-                    rule: placementRule as ScoringRule,
-                    initial: match.status === "reported" ? parseGames(match.games) : undefined,
-                  })
+              <RoundProgress
+                played={
+                  view.roundTwo.filter(
+                    (match) => match.status === "reported" || match.status === "walkover",
+                  ).length
                 }
-                onReset={(match) => run(() => resetPlacementResult(match.id), "Result cleared")}
-                canReset={canScore}
-                readOnly={!placementRule}
+                total={view.roundTwo.length}
               />
             )}
           </StagePanel>
@@ -431,10 +367,6 @@ function CategorySection({
             draws={draws}
             tierMatches={categoryTierMatches}
             label={labelEntrant}
-            canScore={canScore}
-            knockoutRule={knockoutRule}
-            onRefresh={onRefresh}
-            onScore={onScore}
           />
         </>
       )}
@@ -592,91 +524,30 @@ function SeedingPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Match lists
+// Round progress
 // ---------------------------------------------------------------------------
 
-function MatchList({
-  matches,
-  label,
-  canScore,
-  canReset,
-  onScore,
-  onReset,
-  readOnly,
-}: {
-  matches: PlacementMatch[];
-  label: (entrantId: string | null | undefined) => string;
-  canScore: boolean;
-  canReset: boolean;
-  onScore: (match: PlacementMatch) => void;
-  onReset: (match: PlacementMatch) => void;
-  readOnly: boolean;
-}) {
+/**
+ * The two placement rounds are played on the Scores page, so this is a progress
+ * line rather than a table of its own. The pairing rule for the round is the hint
+ * above it; the matches themselves, with their score buttons, live in one place.
+ */
+function RoundProgress({ played, total }: { played: number; total: number }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th className="w-20">Match</th>
-            <th>Entrants</th>
-            <th>Type</th>
-            <th>Score</th>
-            <th>Status</th>
-            <th className="text-right" />
-          </tr>
-        </thead>
-        <tbody>
-          {matches.map((match) => {
-            const decided = match.status === "reported" || match.status === "walkover";
-            return (
-              <tr key={match.id}>
-                <td className="font-score text-xs text-muted-foreground">{match.generation_key}</td>
-                <td className="pr-2 font-medium">
-                  {label(match.entrant_a_id)}
-                  <span className="mx-1.5 text-muted-foreground">vs</span>
-                  {label(match.entrant_b_id)}
-                  {match.winner_id ? (
-                    <span className="ml-2 text-[11px] text-muted-foreground">
-                      → {label(match.winner_id)}
-                    </span>
-                  ) : null}
-                </td>
-                <td className="text-[11px] text-muted-foreground">
-                  {match.is_makeup ? "Make-up" : match.is_crossover ? "Crossover" : "—"}
-                </td>
-                <td className="font-score text-xs">
-                  {decided ? gamesLabel(parseGames(match.games)) : "—"}
-                </td>
-                <td>
-                  <StatusPill status={match.status} />
-                </td>
-                <td className="pl-2 text-right">
-                  {readOnly ? null : decided ? (
-                    canReset ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          if (window.confirm("Clear this result so it can be re-entered?")) {
-                            onReset(match);
-                          }
-                        }}
-                      >
-                        Reset
-                      </Button>
-                    ) : null
-                  ) : canScore ? (
-                    <Button size="sm" variant="outline" onClick={() => onScore(match)}>
-                      Enter score
-                    </Button>
-                  ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <p className="text-xs text-muted-foreground">
+      {played === total ? (
+        <>
+          All {total} match{total === 1 ? "" : "es"} decided.{" "}
+        </>
+      ) : (
+        <>
+          {played} of {total} decided — {total - played} still to play.{" "}
+        </>
+      )}
+      <Link to="/matches" className="font-semibold text-primary underline-offset-2 hover:underline">
+        Enter results in Scores
+      </Link>
+    </p>
   );
 }
 
@@ -684,24 +555,23 @@ function MatchList({
 // Tier draws
 // ---------------------------------------------------------------------------
 
+/**
+ * The A/B/C/D brackets.
+ *
+ * Read-only: results are entered on the Scores page, which lists each bracket's
+ * matches grouped by draw. What this panel adds is the shape of the bracket — how
+ * many rounds each tier plays and who came out of it — which nothing else shows.
+ */
 function DrawsPanel({
   view,
   draws,
   tierMatches,
   label,
-  canScore,
-  knockoutRule,
-  onRefresh,
-  onScore,
 }: {
   view: CategoryPlacementView;
   draws: TierDraw[];
   tierMatches: TierDrawMatch[];
   label: (entrantId: string | null | undefined) => string;
-  canScore: boolean;
-  knockoutRule: ScoringRule | null;
-  onRefresh: () => void;
-  onScore: (request: ScoringRequest) => void;
 }) {
   const short = view.gate.short.length;
   const hasDraws = draws.length > 0;
@@ -772,36 +642,7 @@ function DrawsPanel({
                             {roundName(round, rounds.size)}
                           </p>
                           {roundMatches.map((match) => (
-                            <TierMatchRow
-                              key={match.id}
-                              match={match}
-                              label={label}
-                              canScore={canScore}
-                              onScore={() =>
-                                onScore({
-                                  kind: "knockout",
-                                  matchId: match.id,
-                                  title: `${label(match.entrant_a_id)} vs ${label(match.entrant_b_id)}`,
-                                  labels: [label(match.entrant_a_id), label(match.entrant_b_id)],
-                                  rule: knockoutRule as ScoringRule,
-                                  initial:
-                                    match.status === "reported"
-                                      ? parseGames(match.games)
-                                      : undefined,
-                                })
-                              }
-                              onReset={async () => {
-                                try {
-                                  await resetTierDrawResult(match.id);
-                                  toast.success("Result cleared");
-                                  onRefresh();
-                                } catch (error) {
-                                  toast.error(
-                                    error instanceof Error ? error.message : "Could not reset",
-                                  );
-                                }
-                              }}
-                            />
+                            <TierMatchRow key={match.id} match={match} label={label} />
                           ))}
                         </div>
                       ))}
@@ -826,15 +667,9 @@ function DrawsPanel({
 function TierMatchRow({
   match,
   label,
-  canScore,
-  onScore,
-  onReset,
 }: {
   match: TierDrawMatch;
   label: (entrantId: string | null | undefined) => string;
-  canScore: boolean;
-  onScore: () => void;
-  onReset: () => void;
 }) {
   const decided = match.status === "reported" || match.status === "walkover";
   return (
@@ -843,32 +678,13 @@ function TierMatchRow({
         <span className="font-medium">{label(match.entrant_a_id)}</span>
         <span className="mx-1.5 text-muted-foreground">vs</span>
         <span className="font-medium">{label(match.entrant_b_id)}</span>
-        {match.is_bye ? (
-          <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-            bye
-          </span>
-        ) : decided ? (
+        {decided ? (
           <span className="ml-2 font-score text-[11px] text-muted-foreground">
-            {gamesLabel(parseGames(match.games))}
+            {match.is_bye ? "bye" : gamesLabel(parseGames(match.games))}
           </span>
         ) : null}
       </div>
-      {match.is_bye ? null : decided ? (
-        canScore ? (
-          <button
-            className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
-            onClick={() => {
-              if (window.confirm("Clear this result?")) onReset();
-            }}
-          >
-            reset
-          </button>
-        ) : null
-      ) : canScore ? (
-        <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={onScore}>
-          Score
-        </Button>
-      ) : null}
+      <StatusPill status={match.status} />
     </div>
   );
 }
