@@ -47,6 +47,7 @@ import {
   type TournamentDay,
 } from "@/lib/tournament/data";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
+import { roundName } from "@/lib/tournament/draws";
 import {
   applyPlacementSchedulePlan,
   courtsForDay,
@@ -442,7 +443,14 @@ function PlacementSchedulePage() {
         const draw = (draws ?? []).find((entry) => entry.id === match.draw_id);
         return {
           id: match.id,
-          stage: `Draw ${draw?.tier ?? "?"} R${match.round}`,
+          // The round is named from the bracket size, not from how many rounds the
+          // draw has rows for: later rounds are only created once the round before
+          // is decided, so counting them would call the opening round of a
+          // half-played draw "Final". Falls back to the raw round number if the
+          // draw has not loaded, since the size is what the name is derived from.
+          stage: `Draw ${draw?.tier ?? "?"} · ${
+            draw ? roundName(draw.bracket_size, match.round) : `R${match.round}`
+          }`,
           categoryCode: draw ? (categoryMap.get(draw.category_id)?.code ?? "") : "",
           courtNumber: match.court_id ? (courtMap.get(match.court_id)?.number ?? 0) : 0,
           start: new Date(match.scheduled_time as string),
@@ -1135,7 +1143,7 @@ function PlacementSchedulePage() {
                             <th className="w-16">Time</th>
                             <th className="w-16">Court</th>
                             <th className="w-14">Cat</th>
-                            <th className="w-28">Stage</th>
+                            <th className="w-40">Stage</th>
                             <th className="w-28">Status</th>
                             <th>Match</th>
                           </tr>

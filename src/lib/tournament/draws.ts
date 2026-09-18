@@ -117,6 +117,24 @@ export function buildFirstRound(entrants: Entrant[]): {
   return { bracketSize, byes: Math.max(bracketSize - seeded.length, 0), pairs, seeded };
 }
 
+/**
+ * The label for one round of a knockout bracket.
+ *
+ * The single source of truth for round naming, shared by both formats: the pooled
+ * draws view and the placement format's A/B/C/D tier draws. It used to exist twice,
+ * spelled differently in each place — "Semifinal" here and "Semi-final" in the
+ * Knockout tab — so the same round of the same kind of bracket read two ways
+ * depending on which screen you were on.
+ *
+ * The round is derived from the bracket size rather than from how many rounds the
+ * draw currently has matches for, which matters because later rounds are created
+ * only once the round before them is decided. Counting the rounds present would
+ * label the opening round of a half-played 16-draw "Final", since one round is all
+ * there is at that point.
+ *
+ * `teamsLeft` falls by half each round, so it names the round the way a bracket is
+ * usually read: 32 left is the round of 32, down to 2 for the final.
+ */
 export function roundName(bracketSize: number, round: number): string {
   const teamsLeft = bracketSize / Math.pow(2, round - 1);
   if (teamsLeft === 1) return "Champion";

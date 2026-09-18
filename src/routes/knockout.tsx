@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS } from "@/lib/tournament/competition-format";
+import { roundName } from "@/lib/tournament/draws";
 import { bracketNote, bracketRounds, buildCategoryView } from "@/lib/tournament/placement-actions";
 import {
   indexBy,
@@ -251,7 +252,7 @@ function BracketSection({
                     {[...rounds.entries()].map(([round, roundMatches]) => (
                       <div key={round} className="space-y-1">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          {roundName(round, rounds.size)}
+                          {roundName(draw.bracket_size, round)}
                         </p>
                         {roundMatches.map((match) => (
                           <TierMatchRow key={match.id} match={match} label={label} />
@@ -293,13 +294,4 @@ function TierMatchRow({
       <StatusPill status={match.status} />
     </div>
   );
-}
-
-/** "Final", "Semi-final", "Quarter-final", then "Round of N" for big brackets. */
-function roundName(round: number, totalRounds: number): string {
-  const fromEnd = totalRounds - round;
-  if (fromEnd === 0) return "Final";
-  if (fromEnd === 1) return "Semi-final";
-  if (fromEnd === 2) return "Quarter-final";
-  return `Round of ${2 ** (fromEnd + 1)}`;
 }
