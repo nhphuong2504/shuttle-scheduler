@@ -158,6 +158,8 @@ function PlacementSchedulePage() {
     outcome: StageGenerationOutcome | null;
   } | null>(null);
   const [showAllChanges, setShowAllChanges] = useState(false);
+  /** Day windows, courts, breaks and timings are setup, not day-to-day desk work. */
+  const [showSettings, setShowSettings] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Tournament-wide timing overrides, held as text so a half-typed number is not clobbered. */
   const [timingDrafts, setTimingDrafts] = useState<Record<string, string>>({});
@@ -695,518 +697,341 @@ function PlacementSchedulePage() {
   return (
     <AppShell
       title="Court schedule"
-      subtitle="Place the two placement rounds and the A/B/C/D knockouts across the courts. Reported and in-progress matches are anchors, so a rebuild can only move what has not been played."
+      subtitle="One running order for the whole tournament. Matches already played or on court never move."
       actions={
-        <span className="text-xs text-muted-foreground">
-          {tournament
-            ? `${tournament.name} · ${dayCount} day${dayCount === 1 ? "" : "s"} · ` +
-              `${tournament.group_slot_minutes}/${tournament.knockout_slot_minutes} min slots`
-            : ""}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSettings((value) => !value)}
+            aria-expanded={showSettings}
+          >
+            {showSettings ? "Hide settings" : "Settings"}
+          </Button>
+          <Button
+            disabled={!canSchedule || busy || !tournament || !(courts ?? []).length}
+            onClick={() => void (hasSchedule ? previewRebuild() : build())}
+          >
+            {busy ? "Planning…" : hasSchedule ? "Rebuild schedule" : "Build schedule"}
+          </Button>
+        </div>
       }
     >
-      <div className="space-y-6">
-        <div
-          className={`rounded-lg border px-3 py-2.5 text-sm ${
-            hasSchedule
-              ? "border-warn-border bg-warn-surface text-warn-foreground"
-              : "border-hairline bg-surface text-muted-foreground"
-          }`}
-        >
-          <p className="font-semibold text-foreground">
-            {hasSchedule ? "Rebuild mode" : "Before the first build"}
-          </p>
-          <p className="mt-0.5 text-xs">
-            {hasSchedule
-              ? "A rebuild plans from the current time and keeps reported, walkover and in-progress matches exactly where they are."
-              : "One build fills every day in order. Round two is only generated once every round one result is in, so build again after a round completes and the queue picks up where it left off."}
-          </p>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-xs text-muted-foreground">
+          <span className="font-score font-semibold text-foreground">
+            {rows.length} match{rows.length === 1 ? "" : "es"} scheduled
+          </span>
+          <span>
+            {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"} ·{" "}
+            {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
+          </span>
+          {result?.summary.projectedFinish ? (
+            <span>Finishes {timeLabel(result.summary.projectedFinish)}</span>
+          ) : null}
+          {result && result.summary.overrunMinutes > 0 ? (
+            <span className="text-warn-foreground">
+              {result.summary.overrunMinutes} min past close
+            </span>
+          ) : null}
+          {result?.summary.projectedFinishDeltaMinutes != null ? (
+            <span>{formatProjectedFinishDelta(result.summary.projectedFinishDeltaMinutes)}</span>
+          ) : null}
+          {result && result.summary.unscheduled > 0 ? (
+            <span className="text-danger-foreground">
+              {result.summary.unscheduled} could not be placed
+            </span>
+          ) : null}
+          <span className="ml-auto">
+            {realtime.status === "live"
+              ? "Live"
+              : realtime.status === "connecting"
+                ? "Connecting…"
+                : "Offline"}
+          </span>
         </div>
 
-        <Panel
-          title="Scheduling inputs"
-          right={
-            <span className="font-score text-[11px] text-muted-foreground">
-              {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"} ·{" "}
-              {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
-            </span>
-          }
-        >
-          <div className="space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Everything the build is measured against. An override applies to the next build or
-              rebuild — matches already on court or already reported are never moved to suit it.
-            </p>
+        {!(courts ?? []).length ? (
+          <p className="rounded-lg bg-danger-surface px-3 py-2 text-xs text-danger-foreground">
+            No courts are configured, so there is nothing to schedule onto.
+          </p>
+        ) : null}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {timingFields.map((timing) => (
-                <div key={timing.key}>
-                  <Label htmlFor={`timing-${timing.key}`} className="text-xs text-muted-foreground">
-                    {timing.label}
-                  </Label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Input
-                      id={`timing-${timing.key}`}
-                      type="number"
-                      min={timing.min}
-                      className="h-9 w-24"
-                      disabled={!canSchedule || busy}
-                      value={timingText(timing.key, timing.value)}
-                      onChange={(event) =>
-                        setTimingDrafts((prev) => ({ ...prev, [timing.key]: event.target.value }))
-                      }
-                      onBlur={(event) =>
-                        void saveTiming(
-                          timing.field,
-                          timing.key,
-                          timing.value,
-                          timing.min,
-                          event.target.value,
-                        )
-                      }
-                    />
-                    <span className="text-xs text-muted-foreground">min</span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{timing.hint}</p>
-                </div>
+        {result && result.skipped.length > 0 ? (
+          <div className="rounded-lg bg-warn-surface px-3 py-2 text-xs text-warn-foreground">
+            <p className="font-semibold">Left alone</p>
+            <ul className="mt-0.5 space-y-0.5">
+              {result.skipped.map((entry) => (
+                <li key={entry.categoryId}>
+                  {entry.code}: {entry.reason}
+                </li>
               ))}
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold text-foreground">Per day</p>
-              <div className="mt-2 overflow-x-auto">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th className="w-14">Day</th>
-                      <th className="w-40">Window</th>
-                      <th className="w-28">Courts</th>
-                      <th className="w-52">Breaks</th>
-                      <th>Last build</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tournamentDays.map((day) => {
-                      const window = windowFor(day);
-                      const dayBreaks_ = breaksForDay(day.id);
-                      const fill = result?.days.find((entry) => entry.day === day.day_number);
-                      return (
-                        <tr key={day.id}>
-                          <td className="font-score text-xs font-semibold">D{day.day_number}</td>
-                          <td className="font-score text-xs">
-                            {window.start}–{window.end}
-                          </td>
-                          <td className="font-score text-xs">
-                            {courtsFor(day).length} of {(courts ?? []).length}
-                          </td>
-                          <td className="text-xs text-muted-foreground">
-                            {dayBreaks_.length
-                              ? dayBreaks_
-                                  .map(
-                                    (brk) =>
-                                      `${brk.start_time.slice(0, 5)}–${brk.end_time.slice(0, 5)}`,
-                                  )
-                                  .join(", ")
-                              : "none"}
-                            {breaksDirty(day) ? " · unsaved" : ""}
-                          </td>
-                          <td className="text-xs text-muted-foreground">
-                            {fill
-                              ? `${fill.placed} placed${fill.lastFinish ? ` · to ${timeLabel(fill.lastFinish)}` : ""}`
-                              : "not built in this session"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Days are capacity: the queue fills D1 first and spills on. Edit a day's window,
-                courts and breaks on its panel below.
-              </p>
-            </div>
+            </ul>
           </div>
-        </Panel>
+        ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          {tournamentDays.map((day) => {
-            const window = windowFor(day);
-            const fill = result?.days.find((entry) => entry.day === day.day_number);
-            return (
-              <Panel
-                key={day.id}
-                title={`Day ${day.day_number}`}
-                right={
-                  fill ? (
-                    <span className="font-score text-[11px] text-muted-foreground">
-                      {fill.placed} placed
-                      {fill.overrunMinutes > 0 ? ` · ${fill.overrunMinutes} min over` : ""}
-                    </span>
-                  ) : (
-                    <span className="font-score text-[11px] text-muted-foreground">
-                      {courtsFor(day).length} courts · {window.start}–{window.end}
-                    </span>
-                  )
-                }
-              >
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div>
-                      <Label
-                        htmlFor={`day-${day.id}-date`}
-                        className="text-xs text-muted-foreground"
-                      >
-                        Date
-                      </Label>
+        {showSettings ? (
+          <Panel
+            title="Settings"
+            right={
+              <span className="font-score text-[11px] text-muted-foreground">
+                applies to the next build
+              </span>
+            }
+          >
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {timingFields.map((timing) => (
+                  <div key={timing.key}>
+                    <Label
+                      htmlFor={`timing-${timing.key}`}
+                      className="text-xs text-muted-foreground"
+                    >
+                      {timing.label}
+                    </Label>
+                    <div className="mt-1 flex items-center gap-2">
                       <Input
-                        id={`day-${day.id}-date`}
-                        type="date"
-                        className="mt-1 h-9 w-36"
-                        value={window.date}
+                        id={`timing-${timing.key}`}
+                        type="number"
+                        min={timing.min}
+                        className="h-9 w-24"
                         disabled={!canSchedule || busy}
-                        onChange={(event) => setWindow(day, { date: event.target.value })}
+                        value={timingText(timing.key, timing.value)}
+                        onChange={(event) =>
+                          setTimingDrafts((prev) => ({ ...prev, [timing.key]: event.target.value }))
+                        }
+                        onBlur={(event) =>
+                          void saveTiming(
+                            timing.field,
+                            timing.key,
+                            timing.value,
+                            timing.min,
+                            event.target.value,
+                          )
+                        }
                       />
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor={`day-${day.id}-start`}
-                        className="text-xs text-muted-foreground"
-                      >
-                        Start
-                      </Label>
-                      <Input
-                        id={`day-${day.id}-start`}
-                        type="time"
-                        className="mt-1 h-9 w-28"
-                        value={window.start}
-                        disabled={!canSchedule || busy}
-                        onChange={(event) => setWindow(day, { start: event.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label
-                        htmlFor={`day-${day.id}-end`}
-                        className="text-xs text-muted-foreground"
-                      >
-                        End
-                      </Label>
-                      <Input
-                        id={`day-${day.id}-end`}
-                        type="time"
-                        className="mt-1 h-9 w-28"
-                        value={window.end}
-                        disabled={!canSchedule || busy}
-                        onChange={(event) => setWindow(day, { end: event.target.value })}
-                      />
+                      <span className="text-xs text-muted-foreground">min</span>
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      Courts — {courtsFor(day).length} of {(courts ?? []).length} switched on
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(courts ?? []).map((court) => {
-                        const on = courtsFor(day).some((entry) => entry.id === court.id);
-                        return (
-                          <Button
-                            key={court.id}
-                            size="sm"
-                            variant={on ? "default" : "outline"}
-                            className="font-score h-7 w-11 px-0"
-                            disabled={!canSchedule || busy}
-                            aria-pressed={on}
-                            onClick={() => void toggleDayCourt(day, court.id)}
-                          >
-                            C{court.number}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Matches are only ever placed on the courts a day has switched on.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">Breaks</p>
-                      <div className="flex gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={!canSchedule || busy}
-                          onClick={() =>
-                            updateBreakRows(day.id, [
-                              ...breakRows(day),
-                              { label: "", start: "12:00", end: "13:00" },
-                            ])
-                          }
-                        >
-                          Add break
-                        </Button>
-                        {breaksDirty(day) ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={!canSchedule || busy}
-                            onClick={() => void saveBreaks(day)}
-                          >
-                            Save breaks
-                          </Button>
-                        ) : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {tournamentDays.map((day) => {
+                  const window = windowFor(day);
+                  return (
+                    <div
+                      key={day.id}
+                      className="space-y-3 rounded-lg border border-hairline bg-surface p-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-display text-sm font-semibold">Day {day.day_number}</p>
+                        <span className="font-score text-[11px] text-muted-foreground">
+                          {courtsFor(day).length} of {(courts ?? []).length} courts
+                        </span>
                       </div>
-                    </div>
-                    {breakRows(day).length === 0 ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        No breaks — play runs straight through the window.
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {breakRows(day).map((row, index) => (
-                          <div key={index} className="flex flex-wrap items-center gap-1.5">
-                            <Input
-                              className="h-8 w-28"
-                              placeholder="Lunch"
-                              value={row.label}
+
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div>
+                          <Label
+                            htmlFor={`day-${day.id}-date`}
+                            className="text-xs text-muted-foreground"
+                          >
+                            Date
+                          </Label>
+                          <Input
+                            id={`day-${day.id}-date`}
+                            type="date"
+                            className="mt-1 h-9 w-36"
+                            value={window.date}
+                            disabled={!canSchedule || busy}
+                            onChange={(event) => setWindow(day, { date: event.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label
+                            htmlFor={`day-${day.id}-start`}
+                            className="text-xs text-muted-foreground"
+                          >
+                            Start
+                          </Label>
+                          <Input
+                            id={`day-${day.id}-start`}
+                            type="time"
+                            className="mt-1 h-9 w-28"
+                            value={window.start}
+                            disabled={!canSchedule || busy}
+                            onChange={(event) => setWindow(day, { start: event.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label
+                            htmlFor={`day-${day.id}-end`}
+                            className="text-xs text-muted-foreground"
+                          >
+                            End
+                          </Label>
+                          <Input
+                            id={`day-${day.id}-end`}
+                            type="time"
+                            className="mt-1 h-9 w-28"
+                            value={window.end}
+                            disabled={!canSchedule || busy}
+                            onChange={(event) => setWindow(day, { end: event.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {(courts ?? []).map((court) => {
+                          const on = courtsFor(day).some((entry) => entry.id === court.id);
+                          return (
+                            <Button
+                              key={court.id}
+                              size="sm"
+                              variant={on ? "default" : "outline"}
+                              className="font-score h-7 w-11 px-0"
                               disabled={!canSchedule || busy}
-                              onChange={(event) =>
-                                updateBreakRows(
-                                  day.id,
-                                  breakRows(day).map((entry, i) =>
-                                    i === index ? { ...entry, label: event.target.value } : entry,
-                                  ),
-                                )
-                              }
-                            />
-                            <Input
-                              type="time"
-                              className="h-8 w-24"
-                              value={row.start}
-                              disabled={!canSchedule || busy}
-                              onChange={(event) =>
-                                updateBreakRows(
-                                  day.id,
-                                  breakRows(day).map((entry, i) =>
-                                    i === index ? { ...entry, start: event.target.value } : entry,
-                                  ),
-                                )
-                              }
-                            />
-                            <span className="text-xs text-muted-foreground">to</span>
-                            <Input
-                              type="time"
-                              className="h-8 w-24"
-                              value={row.end}
-                              disabled={!canSchedule || busy}
-                              onChange={(event) =>
-                                updateBreakRows(
-                                  day.id,
-                                  breakRows(day).map((entry, i) =>
-                                    i === index ? { ...entry, end: event.target.value } : entry,
-                                  ),
-                                )
-                              }
-                            />
+                              aria-pressed={on}
+                              onClick={() => void toggleDayCourt(day, court.id)}
+                            >
+                              C{court.number}
+                            </Button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">Breaks</p>
+                          <div className="flex gap-1.5">
                             <Button
                               size="sm"
                               variant="ghost"
                               disabled={!canSchedule || busy}
                               onClick={() =>
-                                updateBreakRows(
-                                  day.id,
-                                  breakRows(day).filter((_, i) => i !== index),
-                                )
+                                updateBreakRows(day.id, [
+                                  ...breakRows(day),
+                                  { label: "", start: "12:00", end: "13:00" },
+                                ])
                               }
                             >
-                              Remove
+                              Add break
                             </Button>
+                            {breaksDirty(day) ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={!canSchedule || busy}
+                                onClick={() => void saveBreaks(day)}
+                              >
+                                Save
+                              </Button>
+                            ) : null}
                           </div>
-                        ))}
+                        </div>
+                        {breakRows(day).length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            No breaks — play runs straight through.
+                          </p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {breakRows(day).map((row, index) => (
+                              <div key={index} className="flex flex-wrap items-center gap-1.5">
+                                <Input
+                                  className="h-8 w-28"
+                                  placeholder="Lunch"
+                                  value={row.label}
+                                  disabled={!canSchedule || busy}
+                                  onChange={(event) =>
+                                    updateBreakRows(
+                                      day.id,
+                                      breakRows(day).map((entry, i) =>
+                                        i === index
+                                          ? { ...entry, label: event.target.value }
+                                          : entry,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <Input
+                                  type="time"
+                                  className="h-8 w-24"
+                                  value={row.start}
+                                  disabled={!canSchedule || busy}
+                                  onChange={(event) =>
+                                    updateBreakRows(
+                                      day.id,
+                                      breakRows(day).map((entry, i) =>
+                                        i === index
+                                          ? { ...entry, start: event.target.value }
+                                          : entry,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <span className="text-xs text-muted-foreground">to</span>
+                                <Input
+                                  type="time"
+                                  className="h-8 w-24"
+                                  value={row.end}
+                                  disabled={!canSchedule || busy}
+                                  onChange={(event) =>
+                                    updateBreakRows(
+                                      day.id,
+                                      breakRows(day).map((entry, i) =>
+                                        i === index ? { ...entry, end: event.target.value } : entry,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={!canSchedule || busy}
+                                  onClick={() =>
+                                    updateBreakRows(
+                                      day.id,
+                                      breakRows(day).filter((_, i) => i !== index),
+                                    )
+                                  }
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <p className="text-[11px] text-muted-foreground">
-                      A match that would run through a break moves wholly after it.
-                    </p>
-                  </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-                  {(courts ?? []).length ? null : (
-                    <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
-                      No courts are configured, so there is nothing to schedule onto.
-                    </p>
-                  )}
-                </div>
-              </Panel>
-            );
-          })}
-        </div>
-
-        <Panel
-          title="Build the schedule"
-          right={
-            <span className="font-score text-[11px] text-muted-foreground">
-              one queue · {result ? `${result.summary.placed} placed` : "not built yet"}
-            </span>
-          }
-        >
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              One button. It creates whatever stage is next — round one from the locked seeds, round
-              two once every round one result is in, then the A/B/C/D draws — and lays the queue out
-              across the days. It fills D1 first and spills into the following days, so a day can
-              hold the tail of one stage and the head of the next. Because a stage only exists once
-              the previous one is decided, the stages cannot be scheduled out of order.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                disabled={!canSchedule || busy || !tournament || !(courts ?? []).length}
-                onClick={() => void (hasSchedule ? previewRebuild() : build())}
-              >
-                {busy ? "Planning…" : hasSchedule ? "Rebuild schedule" : "Build schedule"}
-              </Button>
               {isAdmin ? (
-                <Button
-                  variant="destructive"
-                  disabled={busy || !tournament}
-                  onClick={() => void resetStage()}
-                >
-                  Delete results & schedule
-                </Button>
-              ) : null}
-              {!(courts ?? []).length ? (
-                <span className="text-xs text-danger-foreground">Load the court list first.</span>
+                <div className="flex flex-wrap items-center gap-3 border-t border-hairline pt-3">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={busy || !tournament}
+                    onClick={() => void resetStage()}
+                  >
+                    Delete results &amp; schedule
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    Clears every match, result, seed order and waiver. Cannot be undone.
+                  </span>
+                </div>
               ) : null}
             </div>
-
-            {isAdmin ? (
-              <p className="text-[11px] text-muted-foreground">
-                Delete results &amp; schedule discards every placement and knockout match, every
-                result and the schedule, and also clears the seed order and the waivers — the field
-                goes back to a registered list, ready to shuffle and lock seeds again.
-              </p>
-            ) : null}
-
-            {result ? (
-              <div className="space-y-2 border-t border-hairline pt-3">
-                {result.generated.roundOne + result.generated.roundTwo + result.generated.draws >
-                0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Generated for this build:{" "}
-                    {[
-                      result.generated.roundOne > 0
-                        ? `${result.generated.roundOne} round one match${
-                            result.generated.roundOne === 1 ? "" : "es"
-                          }`
-                        : null,
-                      result.generated.roundTwo > 0
-                        ? `${result.generated.roundTwo} round two match${
-                            result.generated.roundTwo === 1 ? "" : "es"
-                          }`
-                        : null,
-                      result.generated.draws > 0
-                        ? `${result.generated.draws} draw bracket${result.generated.draws === 1 ? "" : "s"}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                ) : null}
-                {result.skipped.length > 0 ? (
-                  <div className="rounded-md bg-warn-surface px-2 py-1.5 text-xs text-warn-foreground">
-                    <p className="font-semibold">Left alone</p>
-                    <ul className="mt-0.5 space-y-0.5">
-                      {result.skipped.map((entry) => (
-                        <li key={entry.categoryId}>
-                          {entry.code}: {entry.reason}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                <p className="font-score text-sm">
-                  {result.summary.placed} match{result.summary.placed === 1 ? "" : "es"} placed ·{" "}
-                  {result.summary.anchorCount} anchors kept ·{" "}
-                  {Math.round(
-                    (result.summary.remainingUtilization ?? result.summary.utilization) * 100,
-                  )}
-                  % of all court time used
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {result.summary.movedCount > 0
-                    ? `${result.summary.movedCount} match${result.summary.movedCount === 1 ? "" : "es"} moved · `
-                    : ""}
-                  {result.summary.projectedFinish
-                    ? `projected finish ${timeLabel(result.summary.projectedFinish)}`
-                    : "nothing scheduled"}
-                  {result.summary.overrunMinutes > 0
-                    ? ` · ${result.summary.overrunMinutes} min past the final close`
-                    : ""}
-                  {result.summary.projectedFinishDeltaMinutes != null
-                    ? ` · ${formatProjectedFinishDelta(result.summary.projectedFinishDeltaMinutes)}`
-                    : ""}
-                </p>
-                <div className="overflow-x-auto">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th className="w-14">Day</th>
-                        <th className="w-24">Placed</th>
-                        <th className="w-32">Last finish</th>
-                        <th className="w-32">Overrun</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.days.map((fill) => (
-                        <tr key={fill.day}>
-                          <td className="font-score text-xs font-semibold">D{fill.day}</td>
-                          <td className="font-score text-xs">{fill.placed}</td>
-                          <td className="font-score text-xs">
-                            {fill.lastFinish ? timeLabel(fill.lastFinish) : "—"}
-                          </td>
-                          <td className="font-score text-xs">
-                            {fill.overrunMinutes > 0 ? `${fill.overrunMinutes} min` : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {result.summary.awaitingTeams > 0 ? (
-                  <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-                    {result.summary.awaitingTeams} match
-                    {result.summary.awaitingTeams === 1 ? "" : "es"} waiting on a bracket that has
-                    not been decided yet.
-                  </p>
-                ) : null}
-                {result.summary.unscheduled > 0 ? (
-                  <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
-                    {result.summary.unscheduled} match
-                    {result.summary.unscheduled === 1 ? "" : "es"} could not be placed — desk
-                    intervention needed.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Not built in this session. The running order below shows whatever is already
-                scheduled.
-              </p>
-            )}
-          </div>
-        </Panel>
+          </Panel>
+        ) : null}
 
         <Panel
           title="Running order"
           right={
             <span className="font-score text-[11px] text-muted-foreground">
-              {rows.length} scheduled
-              {realtime.status === "live"
-                ? " · live"
-                : realtime.status === "connecting"
-                  ? " · connecting"
-                  : " · offline"}
+              {result ? `${result.summary.placed} placed this session` : "all scheduled matches"}
             </span>
           }
           bodyClassName={rows.length ? "p-0" : "p-4"}
@@ -1214,7 +1039,7 @@ function PlacementSchedulePage() {
           {rows.length === 0 ? (
             <EmptyState
               title="Nothing scheduled yet"
-              hint="Build the placement stage to place the first day's matches across the courts."
+              hint="Build the schedule to place the first day's matches across the courts."
             />
           ) : (
             <div className="overflow-x-auto">
@@ -1252,6 +1077,7 @@ function PlacementSchedulePage() {
           )}
         </Panel>
       </div>
+
 
       <Dialog open={!!preview} onOpenChange={(open) => !open && setPreview(null)}>
         <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-2xl">
