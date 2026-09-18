@@ -1,4 +1,4 @@
-import type { ScheduledSlot } from "./scheduler";
+import type { ScheduledSlot } from "./scheduling/types";
 
 export type PlanChangeKind =
   "unchanged" | "time-moved" | "court-moved" | "both-moved" | "newly-placed";

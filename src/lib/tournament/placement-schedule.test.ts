@@ -20,7 +20,7 @@ import {
   sliceRowsByDay,
   type PlanPlacementScheduleInput,
 } from "./placement-schedule";
-import { normalizeBreaks, startAfterBreaks } from "./scheduler";
+import { normalizeBreaks, startAfterBreaks } from "@/lib/scheduling";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -937,6 +937,26 @@ describe("planPlacementSchedule — one queue across days", () => {
     expect(result.days.find((fill) => fill.day === 2)!.placed).toBe(3);
   });
 
+  it("reports lateness only, so an incomplete but on-time plan is not an overrun", () => {
+    // Two placement matches waiting on each other can never be placed. Nothing is placed late,
+    // so there is no lateness; the incompleteness stays in the unscheduled list on its own.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00")],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2", { prerequisite_ids: ["r2-1"] }),
+        placementMatch("r2-1", "round2", "e3", "e4", { prerequisite_ids: ["r1-1"] }),
+      ],
+      teamCount: 4,
+    });
+
+    expect(result.slots).toEqual([]);
+    expect([...result.blocked].sort()).toEqual(["r1-1", "r2-1"]);
+    expect(result.summary.unscheduled).toBe(2);
+    expect(result.summary.overrunMinutes).toBe(0);
+    expect(result.summary.overrun).toBe(false);
+    expect(result.blockedReason).toMatch(/waiting on each other/);
+  });
+
   it("lets the last day overrun, because there is nothing after it", () => {
     const matches = [1, 2, 3].map((n) =>
       placementMatch(`r1-${n}`, "round1", `e${n * 2 - 1}`, `e${n * 2}`),
@@ -1286,6 +1306,48 @@ describe("planPlacementSchedule — a played match never fails the batch", () =>
     expect(result.blocked).toEqual([]);
     expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r1-2"]);
     expect(result.summary.anchorCount).toBe(2);
+  });
+
+  /**
+   * The mirror image of the case above, and the one the live data hit: two matches
+   * played back to back on ONE court, both reported well inside a slot.
+   *
+   * Stretching each of them to a whole slot made them overlap on their own resource.
+   * The problem validator refuses two fixed matches sharing a resource at overlapping
+   * times, and it is right to — that is a double booking — but the overlap was an
+   * artefact of the stretch, so a partly played event whose play was simply quick
+   * became unschedulable and the build threw before it placed anything at all.
+   */
+  it("does not turn a quick pair on one court into a resource conflict", () => {
+    const { teams, entrants } = fourTeams();
+    const result = plan({
+      stage: "placement",
+      teams,
+      entrants,
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e3", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00.000Z",
+          started_at: "2026-09-17T09:00:00.000Z",
+          ended_at: "2026-09-17T09:00:40.000Z",
+        }),
+        // Same court, forty seconds later: inside one slot of the match above.
+        placementMatch("r1-2", "round1", "e2", "e4", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:01:00.000Z",
+          started_at: "2026-09-17T09:01:00.000Z",
+          ended_at: "2026-09-17T09:01:35.000Z",
+        }),
+        // Something still to play, so the stage actually runs a schedule.
+        placementMatch("r2-1", "round2", "e1", "e2", { prerequisite_ids: ["r1-1"] }),
+      ],
+    });
+
+    expect(result.blocked).toEqual([]);
+    expect(result.summary.anchorCount).toBe(2);
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["r2-1"]);
   });
 });
 

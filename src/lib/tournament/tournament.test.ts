@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { buildFirstRound, seedEntrants, totalMatchesInDraw } from "./draws";
 import {
@@ -18,16 +18,10 @@ import {
 } from "./scoring";
 import { gamesWinner, gamesWinnerFor, isLegalGameScore, isLegalGameScoreFor } from "./format";
 import { circleMethod, planPoolSizes, poolMatchCount } from "./pools";
-import {
-  scheduleGroupStageGrasp,
-  validateGraspSchedule,
-  type GraspOptions,
-  type GraspSchedulableMatch,
-} from "./scheduler-grasp";
 import { applyDayPlan, planDay, type DayPlan } from "./actions";
 import type { Court, PoolMatch, Team, Tournament, TournamentDay } from "./data";
 import { stagesForDay } from "./data";
-import { checkStartConstraints, scheduleMatches } from "./scheduler";
+import { checkStartConstraints } from "./scheduling/live-constraints";
 import { computeStandings, poolIsComplete } from "./standings";
 
 /**
@@ -481,598 +475,6 @@ describe("draws", () => {
   });
 });
 
-describe("scheduler", () => {
-  it("places later matches after rest and has no hard end cap", () => {
-    const courts = [
-      { id: "c1", number: 1 },
-      { id: "c2", number: 2 },
-    ];
-    const dayStart = new Date("2026-09-12T08:00:00");
-    const planningEnd = new Date("2026-09-12T17:00:00");
-    const result = scheduleMatches(
-      [
-        {
-          id: "m1",
-          categoryId: "MS",
-          categoryOrder: 1,
-          playerIds: ["p1"],
-          kind: "group",
-          order: 1,
-        },
-        {
-          id: "m2",
-          categoryId: "MS",
-          categoryOrder: 1,
-          playerIds: ["p1"],
-          kind: "group",
-          order: 2,
-        },
-      ],
-      { dayStart, planningEnd, courts, slotMinutes: 20, restGapMinutes: 10 },
-    );
-    const first = result.slots.find((s) => s.matchId === "m1")!;
-    const second = result.slots.find((s) => s.matchId === "m2")!;
-    expect((second.start.getTime() - first.end.getTime()) / 60000).toBe(10);
-  });
-
-  it("respects parent earliest start for knockouts", () => {
-    const courts = [{ id: "c1", number: 1 }];
-    const dayStart = new Date("2026-09-13T08:00:00");
-    const planningEnd = new Date("2026-09-13T17:00:00");
-    const parentEnd = new Date("2026-09-13T10:00:00").getTime();
-    const result = scheduleMatches(
-      [
-        {
-          id: "sf",
-          categoryId: "MS",
-          playerIds: ["p1", "p2"],
-          kind: "knockout",
-          order: 201,
-          earliestStart: parentEnd + 30 * 60000,
-        },
-      ],
-      { dayStart, planningEnd, courts, slotMinutes: 25, restGapMinutes: 30 },
-    );
-    expect(result.slots[0]?.start.toISOString()).toBe(
-      new Date(parentEnd + 30 * 60000).toISOString(),
-    );
-  });
-});
-
-describe("Day 1 GRASP scheduler", () => {
-  const dayStart = new Date("2026-09-12T08:00:00Z");
-  const planningEnd = new Date("2026-09-12T17:00:00Z");
-  const courts = [
-    { id: "c1", number: 1 },
-    { id: "c2", number: 2 },
-  ];
-  const options: GraspOptions = {
-    dayStart,
-    planningEnd,
-    courts,
-    slotMinutes: 20,
-    restGapMinutes: 10,
-    graspRuns: 8,
-    seed: 1234,
-  };
-  const matches: GraspSchedulableMatch[] = [
-    {
-      id: "m1",
-      categoryId: "MS",
-      categoryOrder: 1,
-      poolId: "pool-a",
-      playerIds: ["p1", "p2"],
-      kind: "group",
-      order: 1,
-      round: 1,
-    },
-    {
-      id: "m2",
-      categoryId: "MS",
-      categoryOrder: 1,
-      poolId: "pool-a",
-      playerIds: ["p1", "p3"],
-      kind: "group",
-      order: 2,
-      round: 2,
-    },
-    {
-      id: "m3",
-      categoryId: "WS",
-      categoryOrder: 2,
-      poolId: "pool-b",
-      playerIds: ["p4", "p5"],
-      kind: "group",
-      order: 1,
-      round: 1,
-    },
-    {
-      id: "m4",
-      categoryId: "XD",
-      categoryOrder: 3,
-      poolId: "pool-c",
-      playerIds: ["p2", "p6", "p7", "p8"],
-      kind: "group",
-      order: 1,
-      round: 1,
-    },
-  ];
-
-  it("is deterministic for the same input, options, and seed", () => {
-    const first = scheduleGroupStageGrasp(matches, options);
-    const second = scheduleGroupStageGrasp(matches, options);
-    expect(second.slots).toEqual(first.slots);
-    expect(second.unscheduled).toEqual(first.unscheduled);
-    expect(second.diagnostics.winningSeed).toBe(first.diagnostics.winningSeed);
-  });
-
-  it("never places an unplayed match before a rebuild scheduling floor", () => {
-    const schedulingFloor = new Date(dayStart.getTime() + 2 * 60 * 60_000);
-    const result = scheduleGroupStageGrasp([matches[0]!], {
-      ...options,
-      schedulingFloor,
-      graspRuns: 1,
-    });
-    expect(result.slots[0]?.start).toEqual(schedulingFloor);
-
-    const invalid = {
-      ...result.slots[0]!,
-      start: new Date(schedulingFloor.getTime() - 20 * 60_000),
-      end: schedulingFloor,
-    };
-    expect(
-      validateGraspSchedule([matches[0]!], [invalid], [], {
-        ...options,
-        schedulingFloor,
-      }).errors,
-    ).toContain("Match m1 starts before the scheduling floor.");
-  });
-
-  it("calculates displayed utilization from the configured time window", () => {
-    const result = scheduleGroupStageGrasp([matches[0]!], {
-      ...options,
-      courts: [{ id: "c1", number: 1 }],
-      planningEnd: new Date(dayStart.getTime() + 60 * 60_000),
-      graspRuns: 1,
-    });
-    expect(result.utilization).toBeCloseTo(1 / 3);
-    expect(result.diagnostics.courtUtilization).toBe(1);
-  });
-
-  it("produces a schedule that independently passes all hard constraints", () => {
-    const result = scheduleGroupStageGrasp(matches, options);
-    expect(result.unscheduled).toEqual([]);
-    expect(validateGraspSchedule(matches, result.slots, result.unscheduled, options)).toEqual({
-      valid: true,
-      errors: [],
-    });
-
-    const p1Slots = result.slots
-      .filter((slot) => ["m1", "m2"].includes(slot.matchId))
-      .sort((a, b) => a.start.getTime() - b.start.getTime());
-    expect(
-      (p1Slots[1]!.start.getTime() - p1Slots[0]!.end.getTime()) / 60_000,
-    ).toBeGreaterThanOrEqual(10);
-  });
-
-  it("preserves fixed matches and schedules around their court and player windows", () => {
-    const fixedStart = dayStart.getTime() + 20 * 60_000;
-    const fixedEnd = fixedStart + 20 * 60_000;
-    const fixedMatches: GraspSchedulableMatch[] = [
-      {
-        id: "fixed",
-        categoryId: "MS",
-        playerIds: ["fixed-player"],
-        kind: "group",
-        order: 1,
-        fixed: true,
-        start: fixedStart,
-        end: fixedEnd,
-        courtNumber: 1,
-      },
-      {
-        id: "before",
-        categoryId: "WS",
-        playerIds: ["other-player"],
-        kind: "group",
-        order: 1,
-      },
-      {
-        id: "same-player",
-        categoryId: "MS",
-        playerIds: ["fixed-player"],
-        kind: "group",
-        order: 2,
-      },
-    ];
-    const result = scheduleGroupStageGrasp(fixedMatches, {
-      ...options,
-      courts: [{ id: "c1", number: 1 }],
-      graspRuns: 2,
-      rclSize: 1,
-    });
-    const fixed = result.slots.find((slot) => slot.matchId === "fixed")!;
-    const samePlayer = result.slots.find((slot) => slot.matchId === "same-player")!;
-    expect(fixed).toMatchObject({
-      courtId: "c1",
-      courtNumber: 1,
-      start: new Date(fixedStart),
-      end: new Date(fixedEnd),
-    });
-    expect(samePlayer.start.getTime()).toBeGreaterThanOrEqual(fixedEnd + 10 * 60_000);
-  });
-
-  it("uses best-first ranking when the RCL size is one", () => {
-    const result = scheduleGroupStageGrasp(
-      [
-        {
-          id: "later",
-          categoryId: "MS",
-          categoryOrder: 1,
-          playerIds: ["p-later"],
-          kind: "group",
-          order: 2,
-          round: 2,
-        },
-        {
-          id: "earlier",
-          categoryId: "MS",
-          categoryOrder: 1,
-          playerIds: ["p-earlier"],
-          kind: "group",
-          order: 1,
-          round: 1,
-        },
-      ],
-      { ...options, courts: [{ id: "c1", number: 1 }], graspRuns: 1, rclSize: 1 },
-    );
-    expect(result.slots[0]?.matchId).toBe("earlier");
-  });
-
-  it("treats round and category order as soft priorities and honors dependencies", () => {
-    const dependencyMatches: GraspSchedulableMatch[] = [
-      {
-        id: "early-category-later-start",
-        categoryId: "preferred",
-        categoryOrder: 1,
-        playerIds: ["p1"],
-        kind: "group",
-        order: 1,
-        round: 1,
-        earliestStart: dayStart.getTime() + 60 * 60_000,
-      },
-      {
-        id: "parent",
-        categoryId: "available",
-        categoryOrder: 2,
-        playerIds: ["p2"],
-        kind: "group",
-        order: 2,
-        round: 2,
-      },
-      {
-        id: "child",
-        categoryId: "available",
-        categoryOrder: 2,
-        playerIds: ["p3"],
-        kind: "group",
-        order: 3,
-        round: 3,
-        dependsOn: ["parent"],
-      },
-    ];
-    const result = scheduleGroupStageGrasp(dependencyMatches, {
-      ...options,
-      courts: [{ id: "c1", number: 1 }],
-      graspRuns: 1,
-      rclSize: 1,
-    });
-    const parent = result.slots.find((slot) => slot.matchId === "parent")!;
-    const child = result.slots.find((slot) => slot.matchId === "child")!;
-    expect(parent.start).toEqual(dayStart);
-    expect(child.start.getTime()).toBeGreaterThanOrEqual(parent.end.getTime());
-  });
-
-  it("captures an explainable assignment trace only when requested", () => {
-    const debug = vi.spyOn(console, "debug").mockImplementation(() => undefined);
-    const result = scheduleGroupStageGrasp(matches, {
-      ...options,
-      graspRuns: 2,
-      debugTrace: true,
-    });
-    expect(result.trace).toHaveLength(matches.length);
-    expect(result.trace?.[0]).toMatchObject({
-      eligibleCandidateCount: expect.any(Number),
-      selectedMatch: expect.any(String),
-      randomSeed: result.diagnostics.winningSeed,
-    });
-    expect(result.trace?.[0]?.rankedCandidates.length).toBeGreaterThan(0);
-    expect(result.trace?.[0]?.RCLCandidates.length).toBeGreaterThan(0);
-    expect(debug).toHaveBeenCalledTimes(matches.length);
-    debug.mockRestore();
-  });
-
-  it("terminates and reports circular dependencies as a deadlock", () => {
-    const circular: GraspSchedulableMatch[] = [
-      {
-        id: "a",
-        categoryId: "MS",
-        playerIds: ["p1"],
-        kind: "group",
-        order: 1,
-        dependsOn: ["b"],
-      },
-      {
-        id: "b",
-        categoryId: "MS",
-        playerIds: ["p2"],
-        kind: "group",
-        order: 2,
-        dependsOn: ["a"],
-      },
-    ];
-    const result = scheduleGroupStageGrasp(circular, {
-      ...options,
-      graspRuns: 3,
-      maxIterationsPerRun: 10,
-    });
-    expect(result.unscheduled).toEqual(["a", "b"]);
-    expect(result.diagnostics.deadlockedRunCount).toBe(3);
-  });
-
-  it("independently reports overlaps, moved fixed matches, and omissions", () => {
-    const fixedStart = dayStart.getTime();
-    const invalidMatches: GraspSchedulableMatch[] = [
-      {
-        id: "m1",
-        categoryId: "MS",
-        playerIds: ["shared"],
-        kind: "group",
-        order: 1,
-      },
-      {
-        id: "m2",
-        categoryId: "MS",
-        playerIds: ["shared"],
-        kind: "group",
-        order: 2,
-      },
-      {
-        id: "fixed",
-        categoryId: "WS",
-        playerIds: ["fixed-player"],
-        kind: "group",
-        order: 1,
-        fixed: true,
-        start: fixedStart,
-        end: fixedStart + 20 * 60_000,
-        courtNumber: 2,
-      },
-      {
-        id: "omitted",
-        categoryId: "XD",
-        playerIds: ["missing"],
-        kind: "group",
-        order: 1,
-      },
-    ];
-    const slots = [
-      {
-        matchId: "m1",
-        courtId: "c1",
-        courtNumber: 1,
-        start: new Date(fixedStart),
-        end: new Date(fixedStart + 20 * 60_000),
-        categoryId: "MS",
-        overrun: false,
-      },
-      {
-        matchId: "m2",
-        courtId: "c1",
-        courtNumber: 1,
-        start: new Date(fixedStart + 10 * 60_000),
-        end: new Date(fixedStart + 30 * 60_000),
-        categoryId: "MS",
-        overrun: false,
-      },
-      {
-        matchId: "fixed",
-        courtId: "c1",
-        courtNumber: 1,
-        start: new Date(fixedStart + 40 * 60_000),
-        end: new Date(fixedStart + 60 * 60_000),
-        categoryId: "WS",
-        overrun: false,
-      },
-    ];
-    const validation = validateGraspSchedule(invalidMatches, slots, [], options);
-    expect(validation.valid).toBe(false);
-    expect(validation.errors.some((error) => error.includes("Court c1 overlaps"))).toBe(true);
-    expect(validation.errors.some((error) => error.includes("Player shared overlaps"))).toBe(true);
-    expect(validation.errors.some((error) => error.includes("Fixed match fixed was moved"))).toBe(
-      true,
-    );
-    expect(validation.errors.some((error) => error.includes("Match omitted appears 0 times"))).toBe(
-      true,
-    );
-  });
-
-  it("returns complete non-negative scoring diagnostics", () => {
-    const result = scheduleGroupStageGrasp(matches, options);
-    expect(result.diagnostics).toMatchObject({
-      unscheduledMatches: 0,
-      validCandidateCount: 8,
-      invalidCandidateCount: 0,
-      deadlockedRunCount: 0,
-    });
-    expect(result.diagnostics.courtIdleMinutes).toBeGreaterThanOrEqual(0);
-    expect(result.diagnostics.categoryFragmentation).toBeGreaterThanOrEqual(0);
-    expect(result.diagnostics.categoryOrderDeviationMagnitude).toBeGreaterThanOrEqual(0);
-    expect(result.diagnostics.averageRuntimePerRun).toBeGreaterThanOrEqual(0);
-  });
-
-  it("schedules about 230 matches across 8 courts within the performance budget", () => {
-    const synthetic = Array.from({ length: 230 }, (_, index): GraspSchedulableMatch => ({
-      id: `synthetic-${index.toString().padStart(3, "0")}`,
-      categoryId: `category-${index % 8}`,
-      categoryOrder: index % 8,
-      poolId: `pool-${Math.floor(index / 10)}`,
-      playerIds: [`player-${index}-a`, `player-${index}-b`],
-      kind: "group",
-      order: (index % 5) + 1,
-      round: (index % 5) + 1,
-    }));
-    const started = performance.now();
-    const result = scheduleGroupStageGrasp(synthetic, {
-      dayStart,
-      planningEnd,
-      courts: courtsFor(DEFAULT_CONFIG),
-      slotMinutes: 20,
-      restGapMinutes: 10,
-      seed: 9876,
-    });
-    expect(result.unscheduled).toEqual([]);
-    expect(performance.now() - started).toBeLessThan(20_000);
-  }, 25_000);
-});
-
-describe("Day 1 rebuild hardening", () => {
-  const dayStart = new Date("2026-09-12T08:00:00Z");
-  const planningEnd = new Date("2026-09-12T17:00:00Z");
-  const schedulingFloor = new Date("2026-09-12T13:00:00Z");
-  const options: GraspOptions = {
-    dayStart,
-    planningEnd,
-    schedulingFloor,
-    courts: [{ id: "c1", number: 1 }],
-    slotMinutes: 20,
-    restGapMinutes: 10,
-    graspRuns: 4,
-    seed: 4242,
-  };
-
-  it("schedules around in-progress anchors that started later than scheduled_time", () => {
-    const reportedStart = dayStart.getTime() + 4 * 60 * 60_000;
-    const reportedEnd = reportedStart + 35 * 60_000;
-    const liveStart = dayStart.getTime() + 4 * 60 * 60_000 + 48 * 60_000;
-    const liveEnd = Math.max(liveStart + 20 * 60_000, schedulingFloor.getTime() + 20 * 60_000);
-    const rebuildMatches: GraspSchedulableMatch[] = [
-      {
-        id: "reported",
-        categoryId: "MS",
-        playerIds: ["p1", "p2"],
-        kind: "group",
-        order: 1,
-        fixed: true,
-        start: reportedStart,
-        end: reportedEnd,
-        courtNumber: 1,
-      },
-      {
-        id: "live",
-        categoryId: "MS",
-        playerIds: ["p1", "p3"],
-        kind: "group",
-        order: 2,
-        round: 2,
-        fixed: true,
-        start: liveStart,
-        end: liveEnd,
-        courtNumber: 1,
-      },
-      {
-        id: "next",
-        categoryId: "WS",
-        playerIds: ["p4", "p5"],
-        kind: "group",
-        order: 1,
-        round: 1,
-      },
-    ];
-
-    const result = scheduleGroupStageGrasp(rebuildMatches, options);
-    expect(result.unscheduled).toEqual([]);
-    const nextSlot = result.slots.find((slot) => slot.matchId === "next");
-    expect(nextSlot?.start.getTime()).toBeGreaterThanOrEqual(liveEnd);
-    expect(nextSlot?.start.getTime()).toBeGreaterThanOrEqual(schedulingFloor.getTime());
-    expect(
-      validateGraspSchedule(rebuildMatches, result.slots, result.unscheduled, options).valid,
-    ).toBe(true);
-  });
-
-  it("does not invalidate candidates because two fixed anchors overlap historically", () => {
-    const firstStart = dayStart.getTime() + 4 * 60 * 60_000;
-    const firstEnd = firstStart + 35 * 60_000;
-    const secondStart = dayStart.getTime() + 4 * 60 * 60_000 + 20 * 60_000;
-    const secondEnd = secondStart + 20 * 60_000;
-    const rebuildMatches: GraspSchedulableMatch[] = [
-      {
-        id: "first",
-        categoryId: "MS",
-        playerIds: ["p1", "p2"],
-        kind: "group",
-        order: 1,
-        fixed: true,
-        start: firstStart,
-        end: firstEnd,
-        courtNumber: 1,
-      },
-      {
-        id: "second",
-        categoryId: "MS",
-        playerIds: ["p1", "p3"],
-        kind: "group",
-        order: 2,
-        fixed: true,
-        start: secondStart,
-        end: secondEnd,
-        courtNumber: 1,
-      },
-      {
-        id: "next",
-        categoryId: "WS",
-        playerIds: ["p4", "p5"],
-        kind: "group",
-        order: 1,
-      },
-    ];
-
-    const result = scheduleGroupStageGrasp(rebuildMatches, options);
-    expect(result.unscheduled).toEqual([]);
-    expect(
-      validateGraspSchedule(rebuildMatches, result.slots, result.unscheduled, options).valid,
-    ).toBe(true);
-  });
-
-  it("reports remaining-window utilization during a mid-day rebuild", () => {
-    const movable: GraspSchedulableMatch[] = [
-      {
-        id: "m1",
-        categoryId: "MS",
-        playerIds: ["p1", "p2"],
-        kind: "group",
-        order: 1,
-        round: 1,
-      },
-      {
-        id: "m2",
-        categoryId: "WS",
-        playerIds: ["p3", "p4"],
-        kind: "group",
-        order: 1,
-        round: 1,
-      },
-    ];
-    const result = scheduleGroupStageGrasp(movable, {
-      ...options,
-      schedulingFloor,
-      graspRuns: 2,
-    });
-    expect(result.diagnostics.remainingWindowUtilization).not.toBeNull();
-    expect(result.diagnostics.remainingWindowUtilization).toBeGreaterThan(0);
-  });
-});
-
 describe("applyDayPlan", () => {
   it("refuses to apply when blocked matches remain", async () => {
     const plan: DayPlan = {
@@ -1186,16 +588,15 @@ describe("start constraints", () => {
 });
 
 /**
- * Golden plan for a default-config tournament.
+ * Integration invariants for a whole day of group-stage planning.
  *
- * The scoping refactor moved slot minutes, rest gaps, day windows, court count and
- * day count out of the code and into the active tournament row. This test runs the
- * scheduler against a tournament configured exactly like the desk always ran (8
- * courts, 2 days, four categories — `DEFAULT_CONFIG`) and pins the resulting
- * group-stage plan. If a future change alters placement for the default config,
- * this fails.
+ * This suite used to pin the exact court-by-court order the legacy GRASP produced. That is
+ * incidental output: a valid day depends on the orderings, not on which of two equally good
+ * courts a match lands on. So these tests assert the properties a desk actually relies on — every
+ * match placed, no court or participant double-booked, rest respected, and the bound the fixture's
+ * own arithmetic implies — and leave the search free to pick.
  */
-describe("default tournament golden plan", () => {
+describe("group-stage day plan", () => {
   const CATEGORY_CODES = ["MS", "MD", "WD", "XD"] as const;
 
   /** A deterministic four-category morning: 16 teams in four pools of four. */
@@ -1250,95 +651,102 @@ describe("default tournament golden plan", () => {
     return { teams, poolMatches, categoryOrder };
   }
 
-  /** Wall-clock minutes, so the golden does not move with the test runner's timezone. */
-  function clock(iso: string): string {
-    const at = new Date(iso);
-    return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
-  }
-
-  it("places every group match and finishes inside the day-1 window", () => {
+  function planGolden(overrides: Partial<Tournament> = {}) {
     const { teams, poolMatches, categoryOrder } = goldenFixture();
     const courts = courtsFor(DEFAULT_CONFIG);
-    const plan = planDay(
-      1,
-      "group",
-      DEFAULT_CONFIG,
-      DAY_ONE,
+    return {
       courts,
-      teams,
       poolMatches,
-      [],
-      new Map(),
-      categoryOrder,
-      { seed: 4242 },
-    );
+      teams,
+      plan: planDay(
+        1,
+        "group",
+        { ...DEFAULT_CONFIG, ...overrides },
+        DAY_ONE,
+        courts,
+        teams,
+        poolMatches,
+        [],
+        new Map(),
+        categoryOrder,
+        { seed: 4242 },
+      ),
+    };
+  }
 
-    const courtNumber = new Map(courts.map((court) => [court.id, court.number]));
-    const schedule = plan.movableSlotPayload
-      .map(
-        (slot) =>
-          `court ${courtNumber.get(slot.court_id) ?? "?"} ${clock(slot.scheduled_time)} ${slot.match_id}`,
-      )
-      .sort();
-
+  it("places every group match exactly once, within the day window", () => {
+    const { plan, poolMatches, courts, teams } = planGolden();
     expect(plan.blocked).toEqual([]);
     expect(plan.awaitingTeams).toEqual([]);
     expect(plan.summary.placed).toBe(poolMatches.length);
-    expect(schedule).toEqual([
-      "court 1 09:00 match-MD-3",
-      "court 1 09:30 match-MD-2",
-      "court 1 10:00 match-MD-5",
-      "court 2 09:00 match-MS-3",
-      "court 2 09:30 match-MS-5",
-      "court 2 10:00 match-MD-6",
-      "court 3 09:00 match-WD-5",
-      "court 3 09:30 match-WD-2",
-      "court 3 10:00 match-MS-1",
-      "court 4 09:00 match-XD-3",
-      "court 4 09:30 match-XD-5",
-      "court 4 10:00 match-WD-4",
-      "court 5 09:00 match-MS-4",
-      "court 5 09:30 match-WD-1",
-      "court 5 10:00 match-MS-2",
-      "court 6 09:00 match-MD-4",
-      "court 6 09:30 match-MD-1",
-      "court 6 10:00 match-WD-3",
-      "court 7 09:00 match-WD-6",
-      "court 7 09:30 match-MS-6",
-      "court 7 10:00 match-XD-2",
-      "court 8 09:00 match-XD-4",
-      "court 8 09:30 match-XD-6",
-      "court 8 10:00 match-XD-1",
-    ]);
-    // The whole group stage fits in one hour of wall clock on eight courts.
-    expect(plan.summary.projectedFinish).not.toBeNull();
-    expect(clock(plan.summary.projectedFinish as string)).toBe("10:20");
+    expect(plan.slots).toHaveLength(poolMatches.length);
     expect(plan.summary.overrun).toBe(false);
+    void courts;
+    void teams;
+  });
+
+  it("places later matches after rest and has no hard end cap", () => {
+    const { plan, poolMatches, teams, courts } = planGolden();
+    const dayEnd = new Date(`${DAY_ONE.date}T${DAY_ONE.end_time}`).getTime();
+    expect(plan.summary.overrun).toBe(false);
+    expect(plan.summary.projectedFinish).not.toBeNull();
+    expect(new Date(plan.summary.projectedFinish as string).getTime()).toBeLessThanOrEqual(dayEnd);
+
+    const playerOfTeam = new Map(
+      teams.map((team) => [
+        team.id,
+        [team.player_1_id, ...(team.player_2_id ? [team.player_2_id] : [])],
+      ]),
+    );
+    const source = new Map(poolMatches.map((match) => [match.id, match]));
+    const playersOf = (matchId: string): string[] => {
+      const match = source.get(matchId);
+      if (!match) return [];
+      return [
+        ...(playerOfTeam.get(match.team_a_id ?? "") ?? []),
+        ...(playerOfTeam.get(match.team_b_id ?? "") ?? []),
+      ];
+    };
+    const courtIds = new Set(courts.map((court) => court.id));
+
+    for (const slot of plan.slots) {
+      expect(courtIds.has(slot.courtId)).toBe(true);
+      expect(slot.end.getTime() - slot.start.getTime()).toBe(
+        DEFAULT_CONFIG.group_slot_minutes * 60_000,
+      );
+    }
+    for (const a of plan.slots) {
+      for (const b of plan.slots) {
+        if (a.matchId === b.matchId) continue;
+        if (a.courtId === b.courtId) {
+          expect(a.end.getTime() <= b.start.getTime() || b.end.getTime() <= a.start.getTime()).toBe(
+            true,
+          );
+        }
+        const shared = playersOf(a.matchId).filter((id) => playersOf(b.matchId).includes(id));
+        if (!shared.length) continue;
+        const gap =
+          a.start.getTime() <= b.start.getTime()
+            ? b.start.getTime() - a.end.getTime()
+            : a.start.getTime() - b.end.getTime();
+        expect(gap).toBeGreaterThanOrEqual(DEFAULT_CONFIG.group_rest_gap_minutes * 60_000);
+      }
+    }
   });
 
   it("takes slot minutes and rest gaps from the tournament row, not from constants", () => {
-    const { teams, poolMatches, categoryOrder } = goldenFixture();
-    const courts = courtsFor(DEFAULT_CONFIG);
-    const stretched = planDay(
-      1,
-      "group",
-      { ...DEFAULT_CONFIG, group_slot_minutes: 30 },
-      DAY_ONE,
-      courts,
-      teams,
-      poolMatches,
-      [],
-      new Map(),
-      categoryOrder,
-      { seed: 4242 },
-    );
+    const overrides = { group_slot_minutes: 30 } as const;
+    const { plan, poolMatches } = planGolden(overrides);
+    expect(plan.summary.placed).toBe(poolMatches.length);
 
-    const starts = [
-      ...new Set(stretched.movableSlotPayload.map((slot) => clock(slot.scheduled_time))),
-    ].sort();
-    // 30-minute slots plus the 10-minute group rest gap makes a 40-minute cadence.
-    expect(starts).toEqual(["09:00", "09:40", "10:20"]);
-    expect(clock(stretched.summary.projectedFinish as string)).toBe("10:50");
+    // Bound, not a pinned pattern: with 30-minute slots and a 10-minute rest gap, the three
+    // rounds of a pool cannot be closer than 40 minutes apart, so the day needs at least the
+    // 2 x 40 = 80 minutes after the first start.
+    const starts = [...plan.slots.map((slot) => slot.start.getTime())].sort((a, b) => a - b);
+    const first = starts[0]!;
+    expect(new Set(starts).size).toBeGreaterThanOrEqual(2);
+    expect(starts[starts.length - 1]! - first).toBeGreaterThanOrEqual(80 * 60_000);
+    expect(plan.summary.overrun).toBe(false);
   });
 });
 

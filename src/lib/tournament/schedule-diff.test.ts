@@ -5,7 +5,7 @@ import {
   formatProjectedFinishDelta,
   projectedFinishFromRemainingMatches,
 } from "./schedule-diff";
-import type { ScheduledSlot } from "./scheduler";
+import type { ScheduledSlot } from "./scheduling/types";
 
 const courtNumberById = new Map([
   ["c1", 1],

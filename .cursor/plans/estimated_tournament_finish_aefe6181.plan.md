@@ -1,173 +1,337 @@
 ---
 name: Estimated tournament finish
-overview: Replace the current finish time — which is only the end of the last match that has a slot — with a labelled estimate that always answers "when does this tournament end", covering matches that could not be placed and bracket rounds that do not exist yet. Shown on the Schedule tab, the Build/Rebuild preview, and the Desk.
+overview: >-
+  Always answer "when does this tournament finish" without changing what the real
+  planner places and without creating or persisting any future bracket rounds. Keep
+  placedFinish as the floor (max end over placed slots) and add a separate forecast
+  that folds in unplaced/blocked matches, existing matches, and inevitable-but-uncreated
+  knockout rounds, produced by one pure read-only estimator that reuses the real
+  scheduling primitives and never writes.
 todos:
-  - id: extract-loop
-    content: Extract the per-day scheduling loop out of planPlacementSchedule into an internal runSchedule(items, ...) so the estimate can reuse it with extra items instead of duplicating it. Production callers pass no extra items, so behavior is unchanged.
+  - id: grasp-verify
+    content: >-
+      Re-confirm in scheduleGroupStageGrasp how player rest, match eligibility and
+      ordering/dependencies are enforced (dependsOn is precedence; shared placeholder
+      playerIds are rest only), and record the finding in the estimator module docstring
+      before writing synthetic items.
     status: pending
-  - id: arithmetic
-    content: "Add expected/synthetic round arithmetic to src/lib/tournament/finish-estimate.ts: expected = round===1 ? bracketSize/2 - byes : bracketSize/2**round; synthetic = max(0, expected - existing playable rows in that round)"
+  - id: module
+    content: >-
+      Add src/lib/tournament/finish-estimate.ts (pure/read-only). roundWorkload():
+      expected = round===1 ? bracketSize/2 - byes : bracketSize/2**round; synthetic =
+      max(0, expected - existingPlayableInRound). Synthetic-item builder. estimateFinish()
+      returning { finish, placedFinish, unplacedMatches, uncreatedMatches, deficitMinutes,
+      basis }. Must not mutate slots, payloads, blocked, draw rows or DB state.
     status: pending
-  - id: synthetic-items
-    content: Build synthetic GraspSchedulableMatch items per missing round with fresh placeholder playerIds and explicit dependsOn on their two feeders, so feeder precedence comes from dependsOn and the round-to-round rest gap from shared placeholders
+  - id: reuse
+    content: >-
+      Reuse the planner's own scheduling: extract the per-day loop into a shared
+      runPlanDays() (or reuse scheduleGroupStageGrasp directly via the existing
+      runStageForDay) so the estimator runs the same constraints with real+synthetic
+      items. Production passes no synthetic items and keeps scheduleMatches for its
+      knockout pass, so its behavior is unchanged. If extraction cannot be proven
+      behavior-preserving, fall back to an estimator-only sweep.
     status: pending
-  - id: estimate
-    content: Add estimateFinish() returning { finish, placedFinish, unplacedMatches, uncreatedMatches, deficitMinutes, basis } with basis placed|projected|overflow, mutating no slots, payloads, blocked or draw rows
+  - id: dependencies
+    content: >-
+      Enforce feeder precedence with dependsOn only. Copy real knockout rows and add a
+      dependsOn derived from parent_a_id/parent_b_id when the parent is in the batch; never
+      mutate the originals. Round-one synthetics get fresh placeholders; a later synthetic
+      shares one placeholder with each feeder so playerFreeAt gives the between-rounds rest
+      gap. Never rely on shared placeholders for precedence.
     status: pending
   - id: wire
-    content: Call the estimate from planPlacementSchedule, expose it on PlacementSchedulePlan, and make projectedFinishDeltaMinutes/currentProjectedFinish compare forecast against forecast
+    content: >-
+      Call the estimator from planPlacementSchedule, surface existing unplaced items from
+      its own todo sets (not a rebuild), add an estimate field to PlacementSchedulePlan
+      beside summary, and make currentProjectedFinish/projectedFinishDeltaMinutes compare
+      forecast against forecast (never placedFinish against a forecast). Add FinishEstimate
+      to the planner output and summary shape (legacy planDay keeps its current semantics).
     status: pending
   - id: ui
-    content: Add one shared FinishEstimate component implementing the honesty rules and use it in the Schedule summary bar, the rebuild preview, and the Desk KPI so the three surfaces cannot invent their own wording
+    content: >-
+      Add one shared FinishEstimate component/formatter implementing the honesty rules and
+      use it in the /placement-schedule summary bar, the rebuild preview, and the Desk KPI
+      so the three surfaces cannot invent their own wording.
     status: pending
   - id: desk
-    content: Extend the Desk projectedFinish KPI (desk.ts, index.tsx) to count the remainder so its on-target/behind label stops comparing a floor against the target
+    content: >-
+      Extend the Desk projected-finish KPI (desk.ts, index.tsx) to count the remainder so
+      its on-target/behind label stops comparing a floor against the target.
     status: pending
   - id: tests
-    content: "Tests: zero placed, all placed (basis placed), blocked/unplaced, future uncreated rounds, partially-created round, sizes 2/4/8/16/32, byes, one-entrant draw, feeder precedence, rest between synthetic rounds, overflow, placedFinish <= finish, and real+synthetic == full playable bracket"
+    content: >-
+      Tests: zero placed (estimate still exists), everything placed (basis placed, finish
+      === placedFinish), existing blocked/unplaced match, future uncreated rounds,
+      partially-created later round, sizes 2/4/8/16/32, byes, one-entrant draw, feeder
+      precedence, rest between synthetic rounds, overflow, placedFinish <= finish,
+      real+synthetic == complete playable bracket.
     status: pending
   - id: verify
-    content: npx tsc --noEmit, full npx vitest run, ESLint on changed files, live check on /placement-schedule and /, and a deliberately reproduced blocked/overflow case
+    content: >-
+      npx tsc --noEmit, full npx vitest run, ESLint on changed files, live check on
+      /placement-schedule and /, and a deliberately reproduced blocked/overflow case.
+    status: pending
+  - id: report
+    content: >-
+      Report the exact estimation model, how synthetic feeder dependencies are enforced,
+      how partially-created rounds are counted, what overflow means and how it renders,
+      files changed, tests added, full test/typecheck/lint status, and whether any
+      production scheduling behavior changed.
     status: pending
 isProject: false
 ---
 
-# Always show an estimated tournament finish
+# Always answer "when does this tournament finish?"
 
-## Scheduler behavior, verified
+## Goal and guardrails
 
-Requirement 2 asked for verification before assuming. Findings, all from reading the source:
+The question the UI must always be able to answer is **"when is this tournament expected to
+finish?"** Two rules frame every decision below:
 
-**Player rest is enforced through shared player ids.** The run records `playerFreeAt.set(playerId, end + restMs)` after placing a match (`scheduler-grasp.ts:730`), and `isEligible` refuses a court while any of the match's players is still resting (`scheduler-grasp.ts:422`).
+- **The real planner is unchanged.** Production still places only matches that exist, and a real
+  Build still creates knockout rounds only as results arrive. No synthetic round is ever created
+  or persisted for the estimate.
+- **The floor and the forecast are separate numbers.** `placedFinish` stays the exact maximum end
+  over actually placed slots. A new `finish` forecasts the whole tournament and includes
+  (a) placed matches, (b) existing but unplaced/blocked matches, and (c) inevitable knockout
+  matches that have not been created yet.
 
-**Eligibility** requires, in order (`scheduler-grasp.ts:399`): the match is still remaining, is not `fixed`, is not `playersKnown === false`, and has `playerIds.length > 0`.
+## Scheduler behavior, verified (do this before writing synthetic items)
 
-**Ordering/dependencies are an explicit mechanism — `dependsOn` — not a side effect of shared players.**
+All findings are read from `src/lib/tournament/scheduler-grasp.ts`; they are the reason the
+design below does not assume anything.
 
-```416:419:src/lib/tournament/scheduler-grasp.ts
-  for (const dependencyId of match.dependsOn ?? []) {
-    const dependencyEnd = scheduledEnd.get(dependencyId);
-    if (dependencyEnd == null || dependencyEnd > currentTime) return false;
-  }
+- **Player rest is `playerFreeAt`.** A placed match records
+  `playerFreeAt.set(playerId, end + restMs)` (line 730) and `isEligible` refuses a court while any
+  of the match's players is still resting (line 423).
+- **Eligibility** requires, in order (lines 399–409): the match is still remaining, is not `fixed`,
+  is not `playersKnown === false`, and has `playerIds.length > 0`.
+- **Ordering/dependencies are an explicit mechanism — `dependsOn` — not a side effect of shared
+  players.**
+
+```ts
+for (const dependencyId of match.dependsOn ?? []) {
+  const dependencyEnd = scheduledEnd.get(dependencyId);
+  if (dependencyEnd == null || dependencyEnd > currentTime) return false;
+}
 ```
 
-This confirms the warning in the brief: **shared placeholder `playerIds` on their own do not enforce feeder precedence.** A null `scheduledEnd` entry means the dependency is unscheduled, and the child is refused outright — the one place in the scheduler that treats "not yet scheduled" as hard-blocking rather than deferring.
+  A dependency that is absent from `scheduledEnd` blocks the child outright; it does not defer.
+  `earliestEligibleTime` also uses a dependency's end but adds **no** rest gap (line 373), so
+  `dependsOn` alone does not provide the between-rounds rest.
 
-**Fixed matches do seed `scheduledEnd`**, so a synthetic child may depend on an already-placed match:
+- **Shared placeholder `playerIds` on their own do NOT enforce feeder precedence.** They only
+  contribute rest. A Final could still be chosen before its Semifinals if precedence rested on
+  shared ids. Precedence must come from `dependsOn`; shared placeholders are used *only* for rest.
+- **Fixed matches seed `scheduledEnd`** (line 628), so a synthetic child may depend on an
+  already-placed real match.
+- **The production knockout path does not use GRASP.** `runStageForDay` calls `scheduleMatches`
+  from `scheduler.ts` for the knockout pass, and `scheduleMatches` has no `dependsOn` support. Real
+  knockout rows get their only ordering from `earliestStart` computed from *finished* parents
+  (`tierItems`), which is why production can never place a later round early — later rounds do not
+  exist. The estimate must therefore run the **GRASP** scheduler for its knockout forecast, which
+  makes the forecast an approximation of production (documented, not hidden).
+- **The last day is unbounded.** `hardEnd` is suppressed for the last day that has courts
+  (`placement-schedule.ts:776`), which is exactly where a tournament overrun belongs and where the
+  estimator's "extend the final day" answer comes from.
+- **There is no `byes` column** on `tier_draws` (`types.ts:930-940`). Derive
+  `byes = bracket_size - entrant_count`.
 
-```628:628:src/lib/tournament/scheduler-grasp.ts
-  const scheduledEnd = new Map(indexes.fixedSlots.map((slot) => [slot.matchId, slot.end]));
+## Deliverable: one pure/read-only module
+
+New `src/lib/tournament/finish-estimate.ts`. It must not mutate slots, payloads, `blocked`, draw
+rows, or any database state, and must make no network/RPC calls.
+
+### Result shape
+
+```ts
+export interface FinishEstimate {
+  /** Projected end of the whole tournament, or null when no finish can be named. */
+  finish: string | null;
+  /** Max end over actually placed slots. The floor; never below it. */
+  placedFinish: string | null;
+  /** Existing matches that have players but no slot (real work still to place). */
+  unplacedMatches: number;
+  /** Inevitable knockout matches that do not exist as rows yet. */
+  uncreatedMatches: number;
+  /** Wall-clock minutes past the final close, only when the work fits by extending. */
+  deficitMinutes: number | null;
+  basis: "placed" | "projected" | "overflow";
+  /** Optional, for wording only: remaining = unplacedMatches + uncreatedMatches. */
+  remainingMatches?: number;
+  /** Optional, for wording only: configured day count, for "Cannot finish in N days". */
+  days?: number;
+}
 ```
 
-**A second, separate finding the brief did not anticipate.** The production knockout path does not use GRASP at all:
+`deficitMinutes` is **wall-clock extension of the final day only**. Never put total
+match/court-minutes in it: when only unscheduled workload is known, report the match count
+(`unplacedMatches` + `uncreatedMatches`) instead, labelled as matches.
 
-```565:565:src/lib/tournament/placement-schedule.ts
-  const result = scheduleMatches(items as SchedulableMatch[], {
-```
+## Round arithmetic (expected minus existing, never `playedRounds`)
 
-And `scheduleMatches` in `scheduler.ts` has **no `dependsOn` support whatsoever** — its loop only reads `playerIds`, `earliestStart`, `order` and `categoryOrder` (`scheduler.ts:199` onward). It cannot model bracket precedence.
-
-### What this means for the design
-
-- Precedence comes from **`dependsOn`** — an existing, production, verifiable mechanism. The plan uses it explicitly; nothing is assumed.
-- **Shared placeholder players are used only for the between-rounds rest gap**, which `dependsOn` does not provide: `earliestEligibleTime` adds a dependency's end with no rest (`scheduler-grasp.ts:373`).
-- The estimator must run on **GRASP, not `scheduleMatches`**, because only GRASP has `dependsOn`. This makes the knockout forecast an approximation of the production knockout path, which must be documented rather than hidden. It is a forecast-side choice only; production keeps using `scheduleMatches`.
-- GRASP takes a single `slotMinutes`, and placement and knockout run at different durations — which is exactly why the planner fills a day in two passes. The estimate therefore runs **one GRASP pass per stage**, mirroring that structure.
-
-## What is wrong today
-
-The finish time is `lastFinishMs`, the maximum end over **placed slots only**.
-
-- **It vanishes.** With nothing placed, `lastFinishMs` is `null` and the "Finishes 23:59" chip disappears entirely.
-- **It lies.** A blocked match never moves it, so the chip still reads the official close while matches have nowhere to go.
-- **It cannot see the future.** Rounds after the current one do not exist as rows:
-
-```51:51:src/lib/tournament/tier-draw.ts
-  /** Round one only. Later rounds are created as results come in. */
-  matches: TierBracketMatch[];
-```
-
-The Desk has the same floor from a separate calculation, `projectedFinishFromRemaining` in `desk.ts:251`.
-
-## The estimate
-
-Two numbers, no longer conflated:
-
-- `placedFinish` — max end over placed slots. Exact, unchanged, and the floor the estimate can never go below.
-- `finish` — the projected end of the whole tournament.
-
-### Synthetic workload, from expected minus existing
-
-Per draw and per round, as specified — not from a count of created rounds, because a later round may be partially created:
+Per draw and per round:
 
 ```ts
 const expected = round === 1 ? bracketSize / 2 - byes : bracketSize / 2 ** round;
 const synthetic = Math.max(0, expected - existingPlayableInRound);
 ```
 
-`existingPlayableInRound` counts rows that are actually played — excluding `is_bye` and `status === "void"`, matching the filter real items already use in `tierItems` (`placement-schedule.ts:416`). Counting bye rows as existing work would double-count against the `- byes` term.
+`existingPlayableInRound` counts rows that are actually playable, excluding `is_bye` and
+`status === "void"` — the same filter `tierItems` already uses. Counting bye rows as existing work
+would double-count against the `- byes` term. Because a later round can be partially created, this
+counts rows, not created rounds, and clamps at zero.
 
-Worked checks from the brief: `bracket_size 16` with R1 8/8, R2 2/4, R3 0/2, R4 0/1 gives `2 + 2 + 1 = 5`; and `bracket_size 8, 6 entrants, 2 byes` gives `2 + 2 + 1 = 5 = entrants - 1`. Guarded: `bracketSize <= 1` yields no rounds, so a champion-only draw contributes nothing.
+Must handle, and be tested for:
 
-### Synthetic items and their dependencies
+- bracket sizes **2 / 4 / 8 / 16 / 32** (round count `log2(bracketSize)`);
+- **byes** (`bracket_size - entrant_count`) subtracted in round 1 only;
+- **partially created later rounds** (e.g. 16: R1 8/8, R2 2/4, R3 0/2, R4 0/1 → 2 + 2 + 1 = 5);
+- **a one-entrant / champion-only draw** (`bracketSize <= 1` or `championId` set → zero rounds,
+  zero synthetic);
+- bye sanity: 8 bracket, 6 entrants, 2 byes → R1 2 + R2 2 + R3 1 = 5 = entrants − 1.
 
-Each synthetic match is a `GraspSchedulableMatch` with:
+## Synthetic items and feeder precedence
 
-- `dependsOn: [feederA, feederB]` — the two matches of the round below that feed it. Both real and synthetic feeders are in the batch, so every dependency resolves to something the run will schedule; a dependency on something absent would block the child permanently, per the `== null` rule above.
-- `playerIds` sharing one player with each feeder, so `playerFreeAt` enforces the round-to-round rest gap. Fresh placeholders for round-one synthetic matches, so parallel matches in a round do not contend with each other.
-- `playersKnown` left `undefined`, and never `false`, since `false` is itself disqualifying.
+For each draw, index existing knockout rows by `(round, slot)` and walk rounds 1..R:
+
+1. If a real row exists at `(round, slot)`, use its id as the feeder for the next round and keep
+   its real `parent_a_id`/`parent_b_id` relationship.
+2. Otherwise create a synthetic `GraspSchedulableMatch` (id namespaced, e.g.
+   `est:<drawId>:<round>:<slot>`) whose **`dependsOn` is the two feeders for that slot**, i.e. the
+   ids at `(round-1, 2*slot-1)` and `(round-1, 2*slot)`, real or synthetic. Precedence is enforced
+   solely by `dependsOn`, so no child can be placed before its feeders end.
+3. **Real knockout rows are copied** and given a `dependsOn` derived from
+   `parent_a_id`/`parent_b_id` when the parent is in the batch. The originals are never mutated;
+   without this, a real Semifinal could be placed before a real Quarterfinal because production
+   ordering lives in `earliestStart`, not `dependsOn`.
+4. Synthetic `playerIds`: round-one synthetics get fresh placeholder pairs so parallel matches do
+   not contend; a later synthetic **shares one placeholder with each feeder**, so `playerFreeAt`
+   adds the round-to-round rest gap. Shared placeholders are never the precedence mechanism.
+5. `playersKnown` stays `undefined` (never `false`, which is itself disqualifying), and
+   `earliestStart` is left unset so the run's own constraints decide the clock.
+
+Synthetic placement-stage items are **not** created: the placement format's round two is
+out of scope for the estimate (its size is not a bracket) and no other stage has uncreated rounds.
 
 ## Reuse rather than duplication
 
-Requirement 6 asks for the planner's existing items rather than a parallel rebuild. The cleanest way is to extract the per-day loop already inside `planPlacementSchedule` into an internal `runSchedule(items, …)`.
+- The estimator consumes the planner's **own** items and todo sets (`placementAll`, `knockoutAll`,
+  `placementTodo`, `knockoutTodo`, fixed set, days, courts, breaks, options). It does not rebuild
+  them, and it surfaces unplaced work from the planner's leftovers rather than recomputing it.
+- It runs the same real constraints — court availability, match duration, player/rest constraints,
+  knockout rest, feeder dependencies, tournament-day windows, breaks — by reusing
+  `scheduleGroupStageGrasp` via the existing `runStageForDay` primitive.
+- Preferred wiring: extract the per-day loop out of `planPlacementSchedule` into an internal
+  `runPlanDays(...)` used by both callers. Production passes only real items and keeps
+  `scheduleMatches` for the knockout pass; the estimator passes real + synthetic items and selects
+  GRASP for the knockout pass so `dependsOn` is honoured. The existing planner test suite is the
+  guard that production behavior is unchanged.
+- If that extraction cannot be shown to be behavior-preserving, do **not** force it: implement the
+  smallest estimator-only day sweep that calls the same `scheduleGroupStageGrasp` primitive, and
+  leave the production loop untouched.
+- Synthetic slots are read for timing and then discarded. They never enter `slots`, payloads,
+  `diff` or `blocked`, so nothing synthetic can reach the database.
+- Use a fixed `seed` and a bounded `graspRuns` so the same state does not report a different finish
+  on every render.
 
-- `planPlacementSchedule` calls it with the real items only — no synthetic items, so its behavior is unchanged.
-- The estimator calls it with real items plus synthetic items and reads only the finish and what remained unscheduled.
-- Synthetic slots are read for timing and then discarded. They never enter `slots`, `payloads`, `blocked` or `diff`, so nothing can reach the database.
+## Three bases and overflow, honestly
 
-This touches shared code that production depends on, which is the main risk in the plan. The existing 220-test suite covers the planner heavily and is the guard; the extraction is mechanical and must not change behavior when no extra items are passed.
+- **`"placed"`** — nothing forecast. `finish === placedFinish`. Reads `Finishes 01:30`.
+- **`"projected"`** — forecast work exists and all of it fits inside the windows. Reads
+  `Estimated finish ~01:45 · 7 matches still to place` (remaining = unplaced + uncreated).
+- **`"overflow"`** — work exists that the configured windows cannot contain. The official close is
+  never presented as the finish. Two rendered cases:
+  - everything can be placed but only past the final close → report the **wall-clock extension**:
+    `Needs ~40 min beyond the tournament window` and
+    `Estimated finish ~02:10 if courts remain available` (`deficitMinutes` set).
+  - something still cannot be placed even with the final day extended → do **not** name a finish;
+    report the **match count**: `Cannot finish in 2 days · 4 matches still need capacity`
+    (`finish === null`, `deficitMinutes === null`).
 
-## Overflow, honestly
+## One shared UI component
 
-`deficitMinutes` must not conflate match-minutes with wall-clock minutes. The two cases are kept distinct:
+Add a single `<FinishEstimate estimate={…} />` (plus its formatter) that owns every wording rule
+above, and use it in all three surfaces:
 
-- Work that fits nowhere at all (blocked by precedence, courts or players) — report a **match count**: `Cannot finish in 2 days · 4 matches still need capacity`.
-- Work that only fits by overrunning the final day's close — report **wall-clock extension** of the final day, which the run already computes as `overrunMinutes` because `hardEnd` is suppressed for the last day: `Needs ~40 min beyond the tournament window · estimated finish ~02:10 if courts stay available`.
+- `/placement-schedule` summary bar (replaces the bare `Finishes …` chip and the
+  `projectedFinishDeltaMinutes` span),
+- the rebuild preview's "Projected finish" block,
+- the Desk / dashboard finish KPI.
 
-## The three bases
+The three surfaces must not independently invent wording.
 
-- `"placed"` — nothing forecast. `finish === placedFinish`. Reads `Finishes 01:30`.
-- `"projected"` — forecast work exists but all of it fits inside the windows. Reads `Estimated finish ~01:45 · 7 matches still to place`.
-- `"overflow"` — something does not fit, or fits only past the final close. `finish` is not presented as the official finish.
+## Rebuild comparison: forecast against forecast
 
-During a rebuild, `currentProjectedFinish` and the new estimate must both be forecasts, so `projectedFinishDeltaMinutes` never compares an estimate against a floor (requirement 9).
+- Add the estimate to `PlacementSchedulePlan` beside `summary`; keep `lastFinishMs` as
+  `placedFinish`.
+- Compute `currentProjectedFinish` and `projectedFinishDeltaMinutes` from the **same estimator and
+  the same semantics** on both sides: the current DB state's forecast vs the rebuilt plan's
+  forecast. Never compare a forecast on one side with `placedFinish` on the other.
+- The shared `ScheduleSummary` is also used by the legacy `planDay`; add fields additively so the
+  legacy path keeps its current meaning, and have the placement route read the estimate instead.
 
 ## Changes by file
 
-- New `src/lib/tournament/finish-estimate.ts` — `roundWorkload` arithmetic, the synthetic-item builder, and `estimateFinish()` returning `{ finish, placedFinish, unplacedMatches, uncreatedMatches, deficitMinutes, basis }`. Pure: no writes, no persistence.
-- `src/lib/tournament/placement-schedule.ts` — extract `runSchedule`; call the estimate; add the fields to `PlacementSchedulePlan` beside `summary`; keep `lastFinishMs` as `placedFinish`; fix the rebuild comparison to forecast-against-forecast.
-- New shared component (alongside the existing tournament components) — one `<FinishEstimate estimate={…} />` implementing the wording rules, used by all three surfaces.
-- `src/routes/placement-schedule.tsx` — summary chip (~line 778) and the rebuild preview's "Projected finish" (~line 1199) both render the shared component.
+- **New** `src/lib/tournament/finish-estimate.ts` — `roundWorkload`, the synthetic-item builder,
+  and `estimateFinish()`; pure, read-only, no persistence.
+- `src/lib/tournament/placement-schedule.ts` — reuse/extract the day loop, parameterize the
+  knockout scheduler for the estimator, call the estimator with the planner's items and todo sets,
+  surface the estimate on `PlacementSchedulePlan`, and make the rebuild delta forecast-vs-forecast.
+- **New** shared `FinishEstimate` component (alongside the existing tournament components).
+- `src/routes/placement-schedule.tsx` — render the shared component in the summary bar and rebuild
+  preview.
 - `src/lib/tournament/desk.ts` — count the remainder so the KPI is not a floor.
-- `src/routes/index.tsx` — pass the remainder and `tierDraws` (already fetched there, already carrying `bracket_size`) into the KPI call at ~line 313.
-- New `src/lib/tournament/finish-estimate.test.ts`.
+- `src/routes/index.tsx` — pass the remainder and `tierDraws` (already fetched, already carrying
+  `bracket_size`/`entrant_count`) into the KPI call.
+- **New** `src/lib/tournament/finish-estimate.test.ts`.
 
 ## Out of scope
 
-- The legacy round-robin `/schedule` page — not in `NAV`, untouched unless compilation requires it.
+- The legacy round-robin `/schedule` page and `planDay` — untouched unless compilation or shared
+  types require it.
 - Creating or persisting future rounds. A real Build still creates rounds only as results arrive.
-- Any change to `scheduleMatches`, GRASP or the planner's placement decisions.
+- Any change to `scheduleMatches`, GRASP, or the planner's placement decisions.
 
 ## Risks
 
-- **Optimism, disclosed in the UI.** The forecast assumes perfect flow: no overruns, no re-shuffles, no desk intervention. It is a forecast and the copy must say so.
-- **The knockout forecast uses GRASP, production does not.** GRASP respects `dependsOn` and rest; `scheduleMatches` is a simpler greedy pass. The estimate can therefore differ from a real knockout build. Documented in the module, not silently assumed.
-- **Refactoring the shared loop.** Largest risk; mitigated by the existing planner test suite and by passing no extra items on the production path.
-- **Heuristic non-determinism.** GRASP is seeded and runs multiple restarts; the estimate must pass a fixed `seed` so the same schedule does not report a different finish on each render.
+- **Optimism, disclosed in the UI.** The forecast assumes perfect flow: no overruns, no
+  re-shuffles, no desk intervention. The copy must say it is an estimate.
+- **The knockout forecast uses GRASP, production does not.** `scheduleMatches` is a simpler greedy
+  pass with no `dependsOn`; the estimate can therefore differ from a real knockout build.
+  Documented in the module.
+- **Adding `dependsOn` to real knockout copies.** This is estimator-only and must never touch the
+  item objects production uses.
+- **Refactoring the shared day loop.** Largest risk; mitigated by the existing planner suite and by
+  passing no synthetic items on the production path, with the standalone fallback above.
+- **Heuristic non-determinism.** Pass a fixed seed and bounded run count.
 
-## Verification
+## Tests (at least)
+
+- zero placed matches: the estimate still exists;
+- everything placed: `basis === "placed"` and `finish` equals `placedFinish`;
+- an existing blocked/unplaced match is counted and forecast;
+- future uncreated rounds are counted;
+- a partially-created later round is counted from rows, not rounds;
+- bracket sizes 2 / 4 / 8 / 16 / 32;
+- byes;
+- a one-entrant draw;
+- feeder precedence: no synthetic child round may occur before its feeder matches end;
+- rest between synthetic rounds;
+- overflow;
+- `placedFinish <= finish` whenever a clock-time forecast exists;
+- `expected real + synthetic` equals the complete playable bracket size;
+- the worked partial state (16: 8/8, 2/4, 0/2, 0/1 → synthetic 5) and the bye sanity state
+  (8: 6 entrants, 2 byes → 5 = entrants − 1).
+
+## Verification and final report
 
 - `npx tsc --noEmit`; full `npx vitest run`; ESLint on changed files.
-- Tests as enumerated in the todos, including the two worked examples from the brief, feeder precedence (no synthetic child round may start before its feeders end), and rest between synthetic rounds.
-- Live check on `/placement-schedule` and `/`, plus a deliberately reproduced blocked/overflow case — the current live tournament (66 matches, 2 days, nothing blocked) exercises only the clean path.
-- Final report to cover: the estimation model, how synthetic precedence is enforced, how partially-created rounds are counted, what overflow means and how it renders, files changed, tests added, check status, and an explicit statement that production scheduling behavior is unchanged.
+- Live check on `/placement-schedule` and `/`, plus a deliberately reproduced blocked/overflow
+  case — the current live tournament (66 matches, 2 days, nothing blocked) exercises only the
+  clean path.
+- Final report: the exact estimation model implemented; how synthetic feeder dependencies are
+  enforced; how partially-created rounds are counted; what overflow means and how it is displayed;
+  files changed; tests added; full test/typecheck/lint status; and an explicit statement of whether
+  any production scheduling behavior changed.

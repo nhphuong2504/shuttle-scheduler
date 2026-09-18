@@ -26,7 +26,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-import type { ScheduleSummary, DayOneSchedulerOptions } from "./actions";
+import type { ScheduleSummary } from "./actions";
 import type {
   Court,
   PlacementEntrant,
@@ -44,17 +44,10 @@ import {
   projectedFinishFromRemainingMatches,
   type SchedulePlanDiff,
 } from "./schedule-diff";
-import {
-  scheduleMatches,
-  type BreakWindow,
-  type SchedulableMatch,
-  type ScheduledSlot,
-} from "./scheduler";
-import {
-  scheduleGroupStageGrasp,
-  type GraspDiagnostics,
-  type GraspSchedulableMatch,
-} from "./scheduler-grasp";
+import { composeDayPlan, type ComposedMatch } from "./scheduling/composition";
+import type { DayOneSchedulerOptions } from "./scheduling/policy";
+import type { ScheduledSlot } from "./scheduling/types";
+import type { SolverDiagnostics, TimeWindow } from "@/lib/scheduling";
 
 const MINUTE = 60_000;
 
@@ -193,7 +186,7 @@ export function dayWindowBounds(day: TournamentDay): { start: number; end: numbe
 export function breakWindowsFor(
   day: TournamentDay,
   breaks: readonly TournamentDayBreak[] | undefined,
-): BreakWindow[] {
+): TimeWindow[] {
   return (breaks ?? []).map((brk) => ({
     start: combineDateTime(day.date, brk.start_time).getTime(),
     end: combineDateTime(day.date, brk.end_time).getTime(),
@@ -270,15 +263,23 @@ function anchorStart(scheduledTime: string | null, startedAt: string | null): nu
  * The range a fixed match occupies, returned as a pair so the two can never
  * disagree about the direction of time.
  *
- * Taking a reported match's `ended_at` literally is not enough, because it is not
- * always after its `scheduled_time`: the desk can report a walkover, or a round
+ * A reported match is modelled by the interval it actually took. Its `ended_at` is
+ * not always after its `scheduled_time`: the desk can report a walkover, or a round
  * played ahead of schedule, and then the finish precedes the planned start. A match
- * that ends before it begins is refused by the scheduler, and it refuses the whole
- * batch rather than the one row, so the planned slot wins in that case. That also
- * stops the slot being handed to another match while this row still claims it.
+ * that ends before it begins is refused by the scheduler, which refuses the whole
+ * batch rather than the one row, so a finish at or before the start falls back to one
+ * slot and the pair always points forward.
  *
- * The same reasoning covers a match reported before it was ever given a slot: it
- * has no start of its own, and one slot is inferred from the finish, because it
+ * Stretching every reported match to a whole slot regardless of its real finish is a
+ * legacy guard that is deliberately not carried over. A finished row claims nothing,
+ * so there is no slot left to protect, and the stretch manufactured overlaps between
+ * rows that were simply played faster than a slot. The problem validator refuses two
+ * fixed matches sharing a resource at overlapping times, and it is right to: the
+ * overlap was an artefact of the guard, so it rejected the whole batch over history
+ * that never actually conflicted.
+ *
+ * A match reported before it was ever given a slot is the one case with no interval
+ * of its own: it has no start, so one slot is inferred from the finish, because it
  * cannot have been played without occupying a court for a slot's worth of time.
  */
 function fixedRange(input: {
@@ -298,7 +299,7 @@ function fixedRange(input: {
     const end = finished ?? (anchored != null ? anchored + slotMs : undefined);
     if (end == null) return undefined;
     const start = anchored ?? end - slotMs;
-    return { start, end: Math.max(end, start + slotMs) };
+    return end > start ? { start, end } : { start, end: start + slotMs };
   }
 
   // Anything else is in progress. Its real end is unknown, so it is modelled as at
@@ -313,13 +314,29 @@ function fixedRange(input: {
 }
 
 /**
- * Placement matches, in the shape the GRASP scheduler wants.
+ * A tournament-side item before the day's courts are known.
  *
- * `dependsOn` is filled from `prerequisite_ids`, but only for prerequisites that
+ * `courtNumber` is the declared court, resolved by `runStageForDay` against the day's own court
+ * list: a match on a court the day has becomes a pinned match, one on any other court becomes a
+ * participant/time anchor. Resolving late is what lets one item list feed several days that play
+ * on different courts.
+ */
+export interface StageItem extends ComposedMatch {
+  courtNumber?: number | undefined;
+}
+
+/**
+ * Placement matches, as generic scheduling input.
+ *
+ * `dependencies` is filled from `prerequisite_ids`, but only for prerequisites that
  * are themselves in this batch. A prerequisite that is void or missing would
- * otherwise be a dependency the scheduler can never satisfy, which turns one
+ * otherwise be a dependency the solver can never satisfy, which turns one
  * abandoned match into an unschedulable day — so it is dropped and the match is
  * left to the desk.
+ *
+ * A fixed match keeps its `courtNumber` rather than a resolved resource id: only the
+ * day that runs it knows which courts are open, and `runStageForDay` turns it into a
+ * pinned match or a participant anchor accordingly.
  */
 function placementItems(input: {
   matches: readonly PlacementMatch[];
@@ -330,9 +347,10 @@ function placementItems(input: {
   courtNumberById: ReadonlyMap<string, number>;
   categoryOrder: ReadonlyMap<string, number>;
   slotMinutes: number;
+  restGap: number;
   floor: number;
   now: number;
-}): GraspSchedulableMatch[] {
+}): StageItem[] {
   const { matches, playerLookup, courtNumberById, categoryOrder, slotMinutes, floor, now } = input;
   // Non-void rows are the schedulable universe, and the set a prerequisite must
   // be a member of to be honoured.
@@ -359,22 +377,20 @@ function placementItems(input: {
       return {
         id: match.id,
         categoryId: match.category_id,
-        categoryOrder: categoryOrder.get(match.category_id) ?? 0,
-        // No pool to complete: a placement category is its own completion unit,
-        // so the scheduler's completion-pressure term falls back to the category.
-        poolId: null,
-        playerIds,
-        playersKnown,
-        kind: "group" as const,
-        // Round one ranks before round two, but only as a late tie-break: GRASP
-        // prioritises the most constrained player first. That is sufficient here
+        participantIds: playerIds,
+        participantsKnown: playersKnown,
+        durationMinutes: slotMinutes,
+        restAfterMinutes: input.restGap,
+        // No pool to complete: a placement category is its own completion unit.
+        groupKey: match.category_id,
+        // Round one ranks before round two, but only as a late tie-break: the solver
+        // prioritises the most constrained participant first. That is sufficient here
         // because round two is only generated once every round-one result is in,
         // so a round-one match is always a fixed anchor by the time a round-two
-        // match is movable — and a fixed anchor constrains its players directly.
-        // The two rounds cannot compete for the same court slot.
-        order: match.stage === "round1" ? 1 : 2,
-        round: match.stage === "round1" ? 1 : 2,
-        dependsOn: match.prerequisite_ids.filter((id) => inBatch.has(id)),
+        // match is movable — and a fixed anchor constrains its participants directly.
+        sequence: match.stage === "round1" ? 1 : 2,
+        softOrder: categoryOrder.get(match.category_id) ?? 0,
+        dependencies: match.prerequisite_ids.filter((id) => inBatch.has(id)),
         fixed,
         start: range?.start,
         end: range?.end,
@@ -384,7 +400,7 @@ function placementItems(input: {
 }
 
 /**
- * Tier-draw matches, in the shape the greedy scheduler wants.
+ * Tier-draw matches, as generic scheduling input.
  *
  * A match with an undecided side is dropped rather than listed as awaiting teams:
  * it is not a match yet, and including it would make every not-yet-reached round
@@ -404,7 +420,7 @@ function tierItems(input: {
   restGap: number;
   floor: number;
   now: number;
-}): SchedulableMatch[] {
+}): StageItem[] {
   const { matches, drawCategory, playerLookup, courtNumberById, categoryOrder } = input;
   const { slotMinutes, restGap, floor, now } = input;
 
@@ -417,7 +433,7 @@ function tierItems(input: {
     .map((match) => {
       const { playerIds, playersKnown } = playerLookup([match.entrant_a_id, match.entrant_b_id]);
       // A knockout match may not start until both of its feeders have finished,
-      // plus the player rest gap — including when a feeder was decided by a bye
+      // plus the participant rest gap — including when a feeder was decided by a bye
       // rather than played.
       const parentEnd = [match.parent_a_id, match.parent_b_id].reduce((acc, parentId) => {
         const parent = parentId ? byId.get(parentId) : undefined;
@@ -441,13 +457,14 @@ function tierItems(input: {
       return {
         id: match.id,
         categoryId,
-        categoryOrder: categoryOrder.get(categoryId) ?? 0,
-        poolId: null,
-        playerIds,
-        playersKnown,
-        kind: "knockout" as const,
-        order: match.round * 100 + match.slot,
-        earliestStart: parentEnd || undefined,
+        participantIds: playerIds,
+        participantsKnown: playersKnown,
+        durationMinutes: slotMinutes,
+        restAfterMinutes: restGap,
+        groupKey: categoryId,
+        sequence: match.round * 100 + match.slot,
+        softOrder: categoryOrder.get(categoryId) ?? 0,
+        ...(parentEnd ? { eligibleFrom: parentEnd } : {}),
         fixed,
         start: range?.start,
         end: range?.end,
@@ -459,13 +476,12 @@ function tierItems(input: {
       // needs two sides that have actually been decided: a knockout fixture waiting
       // on its bracket is not a match yet, and listing it would make every
       // not-yet-reached round look like something the desk has to chase.
-      if (!item.fixed) return item.playerIds.length > 0;
-      // A decided match needs no slot, so it is only ever an anchor — and an anchor
-      // needs a court and a window to hold. A reported row missing either (a walkover
-      // never laid out on a court, or one played on a court that has since been
-      // deleted) cannot be modelled as one, and handing it to the scheduler makes it
-      // refuse the whole batch over a row that is already history. It is left out.
-      return item.start != null && item.end != null && item.courtNumber != null;
+      if (!item.fixed) return item.participantIds.length > 0;
+      // A decided match needs no slot of its own, so it is only ever an anchor — and
+      // an anchor needs a window to hold. A reported row with no window cannot be
+      // modelled, so it is left out rather than making the problem invalid over a row
+      // that is already history. A missing court is fine: it just anchors instead.
+      return item.start != null && item.end != null;
     });
 }
 
@@ -509,7 +525,34 @@ interface StageRun {
   overrun: boolean;
   overrunMinutes: number;
   deadlockReason: string | null;
-  diagnostics: GraspDiagnostics | null;
+  diagnostics: SolverDiagnostics | null;
+}
+
+/**
+ * Turns a day's items into a well-formed problem.
+ *
+ * A fixed item is pinned to its court when the day is playing on it, and becomes a participant
+ * anchor otherwise. Either way the item keeps its own duration and window: each item carries the
+ * timing of the stage it belongs to, so a placement anchor handed to the knockout pass is still 30
+ * minutes long and does not become a 45-minute match.
+ *
+ * The stage's rest gap *is* applied to every item, decided ones included. Rest belongs to the run,
+ * not to the row — a placement match's 20-minute gap is a placement-stage fact, and the same match
+ * is a 30-minute-rest anchor once the knockout pass is the one scheduling — which is why the
+ * override is here rather than on the item.
+ */
+function resolveStageItems(
+  items: readonly StageItem[],
+  courts: readonly Court[],
+  restGapMinutes: number,
+): ComposedMatch[] {
+  const courtIdByNumber = new Map(courts.map((court) => [court.number, court.id]));
+  return items.map((item) => {
+    const base: ComposedMatch = { ...item, restAfterMinutes: restGapMinutes };
+    if (!item.fixed) return base;
+    const courtId = item.courtNumber == null ? undefined : courtIdByNumber.get(item.courtNumber);
+    return courtId == null ? { ...base, anchorOnly: true } : { ...base, resourceId: courtId };
+  });
 }
 
 /**
@@ -530,58 +573,48 @@ function runStageForDay(input: {
   hardEnd: Date | undefined;
   schedulingFloor: Date;
   courts: Court[];
-  breaks: readonly BreakWindow[];
-  items: GraspSchedulableMatch[];
+  breaks: readonly TimeWindow[];
+  items: StageItem[];
   slotMinutes: number;
   restGapMinutes: number;
   options?: DayOneSchedulerOptions | undefined;
 }): StageRun {
-  const { stage, dayStart, planningEnd, hardEnd, schedulingFloor, courts, breaks, items } = input;
-  const { slotMinutes, restGapMinutes, options } = input;
-
-  if (stage === "placement") {
-    const result = scheduleGroupStageGrasp(items, {
-      dayStart,
-      planningEnd,
-      hardEnd,
-      schedulingFloor,
-      courts,
-      slotMinutes,
-      restGapMinutes,
-      breaks,
-      ...options,
-    });
-    return {
-      slots: result.slots,
-      unscheduled: result.unscheduled,
-      utilization: result.utilization,
-      overrun: result.overrun,
-      overrunMinutes: result.overrunMinutes,
-      deadlockReason: result.diagnostics.deadlockReason,
-      diagnostics: result.diagnostics,
-    };
-  }
-
-  const result = scheduleMatches(items as SchedulableMatch[], {
+  const {
     dayStart,
     planningEnd,
     hardEnd,
-    // Same floor as the placement pass: a rebuild must not hand a knockout a start
-    // time that has already gone by, which the desk reads as "ready now".
-    floor: schedulingFloor,
+    schedulingFloor,
     courts,
-    slotMinutes,
-    restGapMinutes,
     breaks,
+    items,
+  } = input;
+  const { options } = input;
+  const { restGapMinutes } = input;
+
+  const composed = composeDayPlan({
+    matches: resolveStageItems(items, courts, restGapMinutes),
+    resources: courts.map((court) => ({
+      id: court.id,
+      order: court.number,
+      label: `Court ${court.number}`,
+    })),
+    horizonStart: dayStart.getTime(),
+    planningEnd: planningEnd.getTime(),
+    hardEnd: hardEnd ? hardEnd.getTime() : null,
+    floor: schedulingFloor.getTime(),
+    breaks,
+    ...(options ? { options } : {}),
   });
+
+  const solution = composed.solution;
   return {
-    slots: result.slots,
-    unscheduled: result.unscheduled,
-    utilization: result.utilization,
-    overrun: result.overrun,
-    overrunMinutes: result.overrunMinutes,
-    deadlockReason: null,
-    diagnostics: null,
+    slots: composed.slots,
+    unscheduled: [...solution.unscheduled],
+    utilization: solution.windowUtilization,
+    overrun: solution.knownOverrun,
+    overrunMinutes: solution.knownOverrunMinutes,
+    deadlockReason: solution.diagnostics.deadlockReason,
+    diagnostics: solution.diagnostics,
   };
 }
 
@@ -658,6 +691,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     courtNumberById,
     categoryOrder,
     slotMinutes: placementSlot,
+    restGap: placementRest,
     floor: itemFloor,
     now,
   });
@@ -671,7 +705,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     restGap: knockoutRest,
     floor: itemFloor,
     now,
-  }) as GraspSchedulableMatch[];
+  });
 
   const everything = [...placementAll, ...knockoutAll];
   const fixedSet = new Set(everything.filter((item) => item.fixed).map((item) => item.id));
@@ -689,10 +723,10 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   let usedMinutes = 0;
   let lastFinishMs: number | null = null;
   let lastPlanningEndMs = 0;
-  let lastDiagnostics: GraspDiagnostics | null = null;
+  let lastDiagnostics: SolverDiagnostics | null = null;
 
   /** This day's anchors, so a fixed match is counted on exactly one day. */
-  const anchorsOn = (items: readonly GraspSchedulableMatch[], dayKey: string) =>
+  const anchorsOn = (items: readonly StageItem[], dayKey: string) =>
     items.filter((item) => item.fixed && item.start != null && localDateKey(item.start) === dayKey);
 
   const daysWithCourts = orderedDays.filter(
@@ -727,17 +761,24 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
    * schedulable. The player window is kept, because the rest gap does cross
    * midnight, and the end time is the whole point of the exercise.
    */
-  const carriedAnchors: GraspSchedulableMatch[] = [];
+  const carriedAnchors: StageItem[] = [];
   const carriedIds = new Set<string>();
-  const carrySlot = (slot: ScheduledSlot): GraspSchedulableMatch => {
+  const carrySlot = (slot: ScheduledSlot): StageItem => {
     const item = everything.find((entry) => entry.id === slot.matchId);
     return {
       id: slot.matchId,
       categoryId: slot.categoryId,
-      categoryOrder: item?.categoryOrder,
-      playerIds: item?.playerIds ?? [],
-      kind: item?.kind ?? "group",
-      order: item?.order ?? 0,
+      participantIds: item?.participantIds ?? [],
+      participantsKnown: item?.participantsKnown,
+      durationMinutes: item?.durationMinutes ?? 0,
+      // The rest gap crosses midnight even though the court does not, so it is carried.
+      restAfterMinutes: item?.restAfterMinutes,
+      groupKey: item?.groupKey ?? slot.categoryId,
+      sequence: item?.sequence,
+      softOrder: item?.softOrder,
+      // No court on purpose: an earlier day's court has no bearing on a later day's,
+      // and naming one the later day does not have would make the problem invalid.
+      anchorOnly: true,
       fixed: true,
       start: slot.start.getTime(),
       end: slot.end.getTime(),
@@ -793,23 +834,26 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
      * clock suggests, so its window has to be handed over even though it is in the
      * past.
      */
-    const placementShape = new Map<string, SchedulableMatch>();
+    const placementShape = new Map<string, StageItem>();
     const placementAnchor = (item: {
       id: string;
       categoryId: string;
-      playerIds: string[];
+      participantIds: readonly string[];
       start?: number | undefined;
       end?: number | undefined;
       courtNumber?: number | undefined;
-    }): SchedulableMatch | null =>
+    }): StageItem | null =>
       item.start == null || item.end == null
         ? null
         : {
             id: item.id,
             categoryId: item.categoryId,
-            playerIds: item.playerIds,
-            kind: "group",
-            order: 0,
+            participantIds: [...item.participantIds],
+            participantsKnown: true,
+            durationMinutes: placementSlot,
+            restAfterMinutes: placementRest,
+            groupKey: item.categoryId,
+            sequence: 0,
             fixed: true,
             start: item.start,
             end: item.end,
@@ -855,7 +899,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       const anchor = placementAnchor({
         id: slot.matchId,
         categoryId: slot.categoryId,
-        playerIds: everything.find((item) => item.id === slot.matchId)?.playerIds ?? [],
+        participantIds: everything.find((item) => item.id === slot.matchId)?.participantIds ?? [],
         start: slot.start.getTime(),
         end: slot.end.getTime(),
         courtNumber: slot.courtNumber,
@@ -868,12 +912,12 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     // anchor, so the two stages cannot be double-booked onto one court or one player.
     if (!placementTodo.size && knockoutTodo.size) {
       const anchors = [...placementShape.values()];
-      const items = [
+      const items: StageItem[] = [
         ...anchorsOn(knockoutAll, dayKey),
         ...anchors,
         ...carriedAnchors,
         ...knockoutAll.filter((item) => knockoutTodo.has(item.id)),
-      ] as GraspSchedulableMatch[];
+      ];
       const run = runStageForDay({
         stage: "knockout",
         dayStart,
@@ -978,7 +1022,10 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     awaitingTeams: awaitingTeams.length,
     utilization: totalCapacityMinutes > 0 ? usedMinutes / totalCapacityMinutes : 0,
     remainingUtilization: lastDiagnostics?.remainingWindowUtilization ?? null,
-    overrun: dayFills.some((fill) => fill.overrunMinutes > 0) || blocked.length > 0,
+    // Lateness only. The unscheduled list is the incompleteness signal and carries it on its own,
+    // so a day that closes on time but cannot place everything reports no overrun. Folding the two
+    // together used to make an incomplete plan claim it ran past the day end.
+    overrun: dayFills.some((fill) => fill.overrunMinutes > 0),
     projectedFinish: lastFinishMs != null ? new Date(lastFinishMs).toISOString() : null,
     currentProjectedFinish:
       currentFinishMs != null ? new Date(currentFinishMs).toISOString() : null,
@@ -1024,13 +1071,13 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
  */
 function partitionUnscheduled(
   unscheduled: readonly string[],
-  items: readonly GraspSchedulableMatch[],
+  items: readonly ComposedMatch[],
 ): { blocked: string[]; awaitingTeams: string[] } {
   const blocked: string[] = [];
   const awaitingTeams: string[] = [];
   for (const id of unscheduled) {
     const item = items.find((match) => match.id === id);
-    if (!item || item.playersKnown === false || item.playerIds.length === 0) {
+    if (!item || item.participantsKnown === false || item.participantIds.length === 0) {
       awaitingTeams.push(id);
     } else {
       blocked.push(id);
@@ -1060,15 +1107,15 @@ function partitionUnscheduled(
 function explainBlocked(
   blocked: readonly string[],
   input: {
-    items: readonly GraspSchedulableMatch[];
-    scheduledIds: ReadonlySet<string>;
-    /** Knockouts still queued because the placement stage has not drained. */
-    heldByPlacement: ReadonlySet<string>;
-  },
+  items: readonly StageItem[],
+  scheduledIds: ReadonlySet<string>,
+  /** Knockouts still queued because the placement stage has not drained. */
+  heldByPlacement: ReadonlySet<string>;
+},
 ): string {
   const byId = new Map(input.items.map((item) => [item.id, item]));
   const blockedIds = new Set(blocked);
-  const dependsOn = (id: string) => byId.get(id)?.dependsOn ?? [];
+  const dependsOn = (id: string) => byId.get(id)?.dependencies ?? [];
 
   const orphaned = blocked.flatMap((id) =>
     dependsOn(id)

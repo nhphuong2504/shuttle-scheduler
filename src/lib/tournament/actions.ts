@@ -14,19 +14,19 @@ import type {
 import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
 import { gamesWinner, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
+import type { SolverDiagnostics } from "@/lib/scheduling";
 import {
-  scheduleGroupStageGrasp,
-  type GraspDiagnostics,
-  type GraspOptions,
-  type GraspScheduleResult,
-  type GraspSchedulableMatch,
-} from "./scheduler-grasp";
+  composeDayPlan,
+  type ComposedAnchor,
+  type ComposedMatch,
+} from "./scheduling/composition";
+import type { DayOneSchedulerOptions } from "./scheduling/policy";
+import type { ScheduledSlot } from "./scheduling/types";
 import {
   diffPlan,
   projectedFinishFromRemainingMatches,
   type SchedulePlanDiff,
 } from "./schedule-diff";
-import { scheduleMatches, type SchedulableMatch, type ScheduledSlot } from "./scheduler";
 import { computeStandings, poolIsComplete } from "./standings";
 
 async function ok<T>(
@@ -376,7 +376,7 @@ export interface ScheduleSummary {
   currentProjectedFinish: string | null;
   projectedFinishDeltaMinutes: number | null;
   overrunMinutes: number;
-  diagnostics?: GraspDiagnostics | undefined;
+  diagnostics?: SolverDiagnostics | undefined;
 }
 
 export interface DayPlan {
@@ -393,25 +393,17 @@ export interface DayPlan {
   movableSlotPayload: { match_id: string; scheduled_time: string; court_id: string }[];
 }
 
-export type DayOneSchedulerOptions = Pick<
-  GraspOptions,
-  | "categoryFragmentationGapMinutes"
-  | "rclSize"
-  | "graspRuns"
-  | "seed"
-  | "debugTrace"
-  | "maxIterationsPerRun"
->;
+export type { DayOneSchedulerOptions };
 
 function partitionUnscheduled(
-  unscheduled: string[],
-  items: GraspSchedulableMatch[],
+  unscheduled: readonly string[],
+  items: readonly ComposedMatch[],
 ): { blocked: string[]; awaitingTeams: string[] } {
   const blocked: string[] = [];
   const awaitingTeams: string[] = [];
   for (const id of unscheduled) {
     const item = items.find((match) => match.id === id);
-    if (!item || item.playersKnown === false || item.playerIds.length === 0) {
+    if (!item || item.participantsKnown === false || item.participantIds.length === 0) {
       awaitingTeams.push(id);
     } else {
       blocked.push(id);
@@ -468,112 +460,184 @@ export function planDay(
   const schedulingFloor = isGroupRebuild
     ? new Date(Math.max(dayStart.getTime(), nextWholeMinute))
     : dayStart;
-  const items: GraspSchedulableMatch[] = isGroupStage
-    ? poolMatches
-        .filter((m) => m.status !== "void")
-        .map((m) => {
-          const ids = playersOf(m.team_a_id, m.team_b_id);
-          const playersKnown = Boolean(
-            m.team_a_id && m.team_b_id && teamById.has(m.team_a_id) && teamById.has(m.team_b_id),
-          );
-          if ((m.team_a_id || m.team_b_id) && ids.length === 0) {
-            throw new Error("A scheduled group match is missing player records.");
-          }
-          const start = anchorStart(m.scheduled_time, m.started_at);
-          const fixed =
-            m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
-          const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
-          const end =
-            m.ended_at && (m.status === "reported" || m.status === "walkover")
-              ? new Date(m.ended_at).getTime()
-              : m.status === "in-progress" && plannedEnd != null
-                ? Math.max(plannedEnd, schedulingFloor.getTime() + slotMinutes * 60_000)
-                : plannedEnd;
-          return {
+
+  const allowedCourtIds = new Set(courts.map((court) => court.id));
+  const fallbackCourtId = courts[0]!.id;
+  /**
+   * A fixed match must name a court. A match whose recorded court is not one this day is playing
+   * on falls back to the first court, which keeps it pinned instead of making the problem invalid.
+   */
+  const fixedCourtId = (courtId: string | null): string =>
+    courtId && allowedCourtIds.has(courtId) ? courtId : fallbackCourtId;
+
+  /**
+   * A fixed match with a court is a `ScheduleMatch`; one without (reported before it was ever laid
+   * out) becomes a `ParticipantAnchor`, so it occupies no court but its players still get their
+   * rest and its end still counts toward the day's real finish. A fixed match with no times at all
+   * is dropped, as the legacy engine did.
+   */
+  const items: ComposedMatch[] = [];
+  const anchors: ComposedAnchor[] = [];
+
+  if (isGroupStage) {
+    for (const m of poolMatches) {
+      if (m.status === "void") continue;
+      const ids = playersOf(m.team_a_id, m.team_b_id);
+      const participantsKnown = Boolean(
+        m.team_a_id && m.team_b_id && teamById.has(m.team_a_id) && teamById.has(m.team_b_id),
+      );
+      if ((m.team_a_id || m.team_b_id) && ids.length === 0) {
+        throw new Error("A scheduled group match is missing player records.");
+      }
+      const start = anchorStart(m.scheduled_time, m.started_at);
+      const fixed =
+        m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+      const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
+      const end =
+        m.ended_at && (m.status === "reported" || m.status === "walkover")
+          ? new Date(m.ended_at).getTime()
+          : m.status === "in-progress" && plannedEnd != null
+            ? Math.max(plannedEnd, schedulingFloor.getTime() + slotMinutes * 60_000)
+            : plannedEnd;
+
+      if (fixed && start != null && end != null) {
+        if (m.court_id && allowedCourtIds.has(m.court_id)) {
+          items.push({
             id: m.id,
             categoryId: m.category_id,
-            categoryOrder: categoryOrder.get(m.category_id) ?? 0,
-            poolId: m.pool_id,
-            playerIds: ids,
-            playersKnown,
-            kind: "group" as const,
-            order: m.round,
-            round: m.round,
-            fixed,
+            participantIds: ids,
+            participantsKnown,
+            durationMinutes: slotMinutes,
+            restAfterMinutes: restGap,
+            groupKey: m.pool_id,
+            sequence: m.round,
+            softOrder: categoryOrder.get(m.category_id) ?? 0,
+            fixed: true,
             start,
             end,
-            courtNumber: courts.find((c) => c.id === m.court_id)?.number,
-          };
-        })
-    : drawMatches
-        .filter((m) => !m.is_bye && m.status !== "void")
-        .map((m) => {
-          const ids = playersOf(m.team_a_id, m.team_b_id);
-          if (m.team_a_id && m.team_b_id && ids.length === 0) {
-            throw new Error("A scheduled knockout match is missing player records.");
-          }
-          const parents = drawMatches.filter(
-            (p) => p.id === m.parent_a_id || p.id === m.parent_b_id,
-          );
-          const parentEnd = parents.reduce((acc, p) => {
-            const t = p.ended_at ?? p.reported_time;
-            return t ? Math.max(acc, new Date(t).getTime() + restGap * 60_000) : acc;
-          }, 0);
-          const start = anchorStart(m.scheduled_time, m.started_at);
-          const fixed =
-            m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
-          const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
-          return {
+            resourceId: m.court_id,
+          });
+        } else {
+          anchors.push({
             id: m.id,
-            categoryId: drawCategory.get(m.draw_id) ?? m.draw_id,
-            categoryOrder: categoryOrder.get(drawCategory.get(m.draw_id) ?? "") ?? 0,
-            playerIds: ids,
-            kind: "knockout" as const,
-            order: m.round * 100 + m.slot,
-            earliestStart: parentEnd || undefined,
-            fixed,
+            participantIds: ids,
             start,
-            end:
-              m.ended_at && (m.status === "reported" || m.status === "walkover")
-                ? new Date(m.ended_at).getTime()
-                : m.status === "in-progress" && plannedEnd != null
-                  ? Math.max(plannedEnd, Date.now() + slotMinutes * 60_000)
-                  : plannedEnd,
-            courtNumber: courts.find((c) => c.id === m.court_id)?.number,
-          };
-        })
-        .filter(
-          (m) =>
-            m.fixed ||
-            (m.playerIds.length > 0 &&
-              drawMatches.find((d) => d.id === m.id)?.status !== "reported"),
-        );
+            end,
+            restAfterMinutes: restGap,
+          });
+        }
+        continue;
+      }
+      if (fixed) continue;
 
-  const result = isGroupStage
-    ? scheduleGroupStageGrasp(items, {
-        dayStart,
-        planningEnd,
-        schedulingFloor,
-        courts,
-        slotMinutes,
-        restGapMinutes: restGap,
-        ...graspOptions,
-      })
-    : scheduleMatches(items as SchedulableMatch[], {
-        dayStart,
-        planningEnd,
-        courts,
-        slotMinutes,
-        restGapMinutes: restGap,
+      items.push({
+        id: m.id,
+        categoryId: m.category_id,
+        participantIds: ids,
+        participantsKnown,
+        durationMinutes: slotMinutes,
+        restAfterMinutes: restGap,
+        groupKey: m.pool_id,
+        sequence: m.round,
+        softOrder: categoryOrder.get(m.category_id) ?? 0,
       });
+    }
+  } else {
+    for (const m of drawMatches) {
+      if (m.is_bye || m.status === "void") continue;
+      const ids = playersOf(m.team_a_id, m.team_b_id);
+      if (m.team_a_id && m.team_b_id && ids.length === 0) {
+        throw new Error("A scheduled knockout match is missing player records.");
+      }
+      const parents = drawMatches.filter((p) => p.id === m.parent_a_id || p.id === m.parent_b_id);
+      const parentEnd = parents.reduce((acc, p) => {
+        const t = p.ended_at ?? p.reported_time;
+        return t ? Math.max(acc, new Date(t).getTime() + restGap * 60_000) : acc;
+      }, 0);
+      const start = anchorStart(m.scheduled_time, m.started_at);
+      const fixed =
+        m.status === "reported" || m.status === "in-progress" || m.status === "walkover";
+      const plannedEnd = start != null ? start + slotMinutes * 60_000 : undefined;
+      const end =
+        m.ended_at && (m.status === "reported" || m.status === "walkover")
+          ? new Date(m.ended_at).getTime()
+          : m.status === "in-progress" && plannedEnd != null
+            ? Math.max(plannedEnd, Date.now() + slotMinutes * 60_000)
+            : plannedEnd;
+      const categoryId = drawCategory.get(m.draw_id) ?? m.draw_id;
 
-  const fixedMatchIds = items.filter((item) => item.fixed).map((item) => item.id);
+      if (fixed && start != null && end != null) {
+        if (m.court_id && allowedCourtIds.has(m.court_id)) {
+          items.push({
+            id: m.id,
+            categoryId,
+            participantIds: ids,
+            participantsKnown: ids.length > 0,
+            durationMinutes: slotMinutes,
+            restAfterMinutes: restGap,
+            groupKey: categoryId,
+            sequence: m.round * 100 + m.slot,
+            softOrder: categoryOrder.get(categoryId) ?? 0,
+            fixed: true,
+            start,
+            end,
+            resourceId: m.court_id,
+          });
+        } else {
+          anchors.push({
+            id: m.id,
+            participantIds: ids,
+            start,
+            end,
+            restAfterMinutes: restGap,
+          });
+        }
+        continue;
+      }
+      if (fixed) continue;
+      if (!(ids.length > 0 && m.status !== "reported")) continue;
+
+      items.push({
+        id: m.id,
+        categoryId,
+        participantIds: ids,
+        participantsKnown: true,
+        durationMinutes: slotMinutes,
+        restAfterMinutes: restGap,
+        groupKey: categoryId,
+        sequence: m.round * 100 + m.slot,
+        softOrder: categoryOrder.get(categoryId) ?? 0,
+        ...(parentEnd ? { eligibleFrom: parentEnd } : {}),
+      });
+    }
+  }
+
+  const composed = composeDayPlan({
+    matches: items,
+    resources: courts.map((court) => ({
+      id: court.id,
+      order: court.number,
+      label: `Court ${court.number}`,
+    })),
+    ...(anchors.length ? { anchors } : {}),
+    horizonStart: dayStart.getTime(),
+    planningEnd: planningEnd.getTime(),
+    floor: schedulingFloor.getTime(),
+    ...(graspOptions ? { options: graspOptions } : {}),
+  });
+  const solution = composed.solution;
+  const resultSlots = composed.slots;
+
+  const fixedMatchIds = [
+    ...items.filter((item) => item.fixed).map((item) => item.id),
+    ...anchors.map((anchor) => anchor.id),
+  ];
   const fixedSet = new Set(fixedMatchIds);
-  const { blocked, awaitingTeams } = partitionUnscheduled(result.unscheduled, items);
+  const { blocked, awaitingTeams } = partitionUnscheduled(solution.unscheduled, items);
   const courtNumberById = new Map(courts.map((court) => [court.id, court.number]));
   const diff = diffPlan(
     isGroupStage ? poolMatches : drawMatches,
-    result.slots,
+    resultSlots,
     fixedSet,
     courtNumberById,
   );
@@ -581,7 +645,7 @@ export function planDay(
 
   const poolEnds: Record<string, string> = {};
   if (isGroupStage) {
-    for (const slot of result.slots) {
+    for (const slot of resultSlots) {
       const match = poolMatches.find((m) => m.id === slot.matchId);
       if (!match) continue;
       const prev = poolEnds[match.pool_id];
@@ -591,7 +655,7 @@ export function planDay(
     }
   }
 
-  const movableSlotPayload = result.slots
+  const movableSlotPayload = resultSlots
     .filter((slot) => !fixedSet.has(slot.matchId))
     .map((slot) => ({
       match_id: slot.matchId,
@@ -599,12 +663,11 @@ export function planDay(
       court_id: slot.courtId,
     }));
 
-  const graspResult = isGroupStage ? (result as GraspScheduleResult) : null;
   const currentFinishMs =
     isGroupStage && isGroupRebuild
       ? projectedFinishFromRemainingMatches(poolMatches, slotMinutes)
       : null;
-  const newFinishMs = result.projectedFinish?.getTime() ?? null;
+  const newFinishMs = solution.knownFinish;
   const projectedFinishDeltaMinutes =
     currentFinishMs != null && newFinishMs != null
       ? Math.round((newFinishMs - currentFinishMs) / 60_000)
@@ -615,22 +678,22 @@ export function planDay(
     movedCount: diff.movedCount,
     unscheduled: blocked.length,
     awaitingTeams: awaitingTeams.length,
-    utilization: result.utilization,
-    remainingUtilization: graspResult?.diagnostics.remainingWindowUtilization ?? null,
-    overrun: result.overrun,
-    projectedFinish: result.projectedFinish?.toISOString() ?? null,
+    utilization: solution.windowUtilization,
+    remainingUtilization: solution.diagnostics.remainingWindowUtilization,
+    overrun: solution.knownOverrun,
+    projectedFinish: newFinishMs != null ? new Date(newFinishMs).toISOString() : null,
     currentProjectedFinish:
       currentFinishMs != null ? new Date(currentFinishMs).toISOString() : null,
     projectedFinishDeltaMinutes,
-    overrunMinutes: result.overrunMinutes,
-    ...(graspResult ? { diagnostics: graspResult.diagnostics } : {}),
+    overrunMinutes: solution.knownOverrunMinutes,
+    diagnostics: solution.diagnostics,
   };
 
   return {
     day,
     stage,
     tournamentId: tournament.id,
-    slots: result.slots,
+    slots: resultSlots,
     fixedMatchIds,
     blocked,
     awaitingTeams,

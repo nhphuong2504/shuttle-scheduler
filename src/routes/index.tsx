@@ -89,7 +89,7 @@ import {
   checkStartConstraints,
   restGapForKind,
   type StartConstraints,
-} from "@/lib/tournament/scheduler";
+} from "@/lib/tournament/scheduling/live-constraints";
 import {
   deriveCourtState,
   deskKindPhase,
