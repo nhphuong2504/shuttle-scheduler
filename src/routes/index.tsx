@@ -801,6 +801,7 @@ export function MatchOperationsDialog({
   const [busy, setBusy] = useState(false);
   const [confirmRestOpen, setConfirmRestOpen] = useState(false);
   const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
   const [note, setNote] = useState("");
   const [winnerId, setWinnerId] = useState(match.teams[0] ?? "");
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
@@ -811,6 +812,21 @@ export function MatchOperationsDialog({
   const isReported = match.status === "reported";
   const notStarted = match.status !== "in-progress" && !isReported;
   const canEditScores = signedIn && (match.status === "in-progress" || isReported);
+
+  /**
+   * Clearing a result, offered for the placement tables.
+   *
+   * This lived on the placement page, which no longer enters scores at all, so
+   * without it here a mis-reported placement or bracket result could be corrected
+   * but never taken back. Scoped to those two kinds because they are the ability
+   * being moved; the pool and draw tables are untouched.
+   *
+   * The database still has the final say: it refuses a round-one result once round
+   * two was built from it, which the wording under the button says up front rather
+   * than letting the desk find out from a failure.
+   */
+  const canClearResult = isReported && isPlacement && signedIn;
+
   const runStart = async () => {
     const restWarnings = startCheck?.warnings ?? [];
     try {
@@ -879,6 +895,27 @@ export function MatchOperationsDialog({
       onDone();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save result");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Puts a reported placement or bracket match back to unplayed.
+   *
+   * The database decides whether it is allowed — a round-one result is refused once
+   * round two exists — so this reports whatever it says rather than pre-judging it.
+   */
+  const clearResult = async () => {
+    setBusy(true);
+    try {
+      if (match.kind === "placement") await resetPlacementResult(match.id);
+      else await resetTierDrawResult(match.id);
+      toast.success("Result cleared");
+      setClearOpen(false);
+      onDone();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not clear the result");
     } finally {
       setBusy(false);
     }
@@ -1245,6 +1282,47 @@ export function MatchOperationsDialog({
             ) : null}
           </div>
         ) : null}
+        {canClearResult ? (
+          <div className="border-t border-hairline pt-3">
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              onClick={() => setClearOpen(true)}
+            >
+              Clear result
+            </Button>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Sends this match back to unplayed so the score can be entered again. A round-one
+              result cannot be cleared once round two was built from it — regenerate round two
+              instead.
+            </p>
+          </div>
+        ) : null}
+        <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear this result?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {nameA} vs {nameB} goes back to unplayed and the score is discarded. You can enter
+                it again afterwards.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy}>Keep the result</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={busy}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void clearResult();
+                }}
+              >
+                Clear result
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         {!signedIn ? (
           <p className="text-xs text-muted-foreground">Sign in at the desk to enter scores.</p>
         ) : null}
