@@ -629,6 +629,50 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   );
   const lastFilledDayId = daysWithCourts[daysWithCourts.length - 1]?.id ?? null;
 
+  /**
+   * Slots placed by an earlier day, handed to the days after it as anchors.
+   *
+   * A run builds `scheduledEnd` from its own fixed items only, and `isEligible`
+   * treats a dependency that is missing from that map as unsatisfiable forever:
+   * `scheduledEnd.get(id) == null` fails the check rather than deferring it. So a
+   * match placed on Monday is invisible to Tuesday's run, and anything depending on
+   * it can never be placed — it deadlocks with a message that blames the day's
+   * window, and because one stuck placement match also stops the knockout pass, a
+   * single unresolved prerequisite can refuse the whole build.
+   *
+   * That is not hypothetical: the two make-up matches of the placement format
+   * depend on other round-two matches, so any tournament whose round two spans a
+   * day boundary hits it. Carrying the earlier days' slots forward is what makes a
+   * dependency across midnight resolvable.
+   *
+   * These are anchors, not results: they are already in `allSlots` and in the
+   * payload, so they are filtered back out of every slot list below rather than
+   * recorded twice.
+   *
+   * The court is deliberately dropped. An earlier day's slot has no bearing on a
+   * later day's courts — the days do not overlap in time — and a day is entitled to
+   * play on a different set of courts, so naming one the later day does not have
+   * would fail the run's own court validation and refuse a build that is perfectly
+   * schedulable. The player window is kept, because the rest gap does cross
+   * midnight, and the end time is the whole point of the exercise.
+   */
+  const carriedAnchors: GraspSchedulableMatch[] = [];
+  const carriedIds = new Set<string>();
+  const carrySlot = (slot: ScheduledSlot): GraspSchedulableMatch => {
+    const item = everything.find((entry) => entry.id === slot.matchId);
+    return {
+      id: slot.matchId,
+      categoryId: slot.categoryId,
+      categoryOrder: item?.categoryOrder,
+      playerIds: item?.playerIds ?? [],
+      kind: item?.kind ?? "group",
+      order: item?.order ?? 0,
+      fixed: true,
+      start: slot.start.getTime(),
+      end: slot.end.getTime(),
+    };
+  };
+
   for (const day of orderedDays) {
     const dayStart = combineDateTime(day.date, day.start_time);
     const planningEnd = combineDateTime(day.date, day.end_time);
@@ -709,6 +753,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     if (placementTodo.size) {
       const items = [
         ...anchorsOn(placementAll, dayKey),
+        ...carriedAnchors,
         ...placementAll.filter((item) => placementTodo.has(item.id)),
       ];
       const run = runStageForDay({
@@ -729,7 +774,9 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
         placementTodo.delete(slot.matchId);
         dayPlaced++;
       }
-      daySlots.push(...run.slots);
+      // An earlier day's slots come back out of the run as echoes of their own
+      // anchors. They are already recorded, so only this day's work joins the day.
+      daySlots.push(...run.slots.filter((slot) => !carriedIds.has(slot.matchId)));
       if (run.diagnostics) lastDiagnostics = run.diagnostics;
       if (run.deadlockReason && !blockedReason) blockedReason = run.deadlockReason;
     }
@@ -754,6 +801,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       const items = [
         ...anchorsOn(knockoutAll, dayKey),
         ...anchors,
+        ...carriedAnchors,
         ...knockoutAll.filter((item) => knockoutTodo.has(item.id)),
       ] as GraspSchedulableMatch[];
       const run = runStageForDay({
@@ -776,11 +824,23 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       // Only this stage's own slots join the plan. The placement anchors handed in
       // above are echoes of slots pass A has already recorded, and echoing them into
       // the plan as well would list one match twice in the rebuild preview and write
-      // it twice, so a rebuild would appear to move a match it never touched.
-      daySlots.push(...run.slots.filter((slot) => knockoutIds.has(slot.matchId)));
+      // it twice, so a rebuild would appear to move a match it never touched. An
+      // earlier day's slots are filtered out for the same reason.
+      daySlots.push(
+        ...run.slots.filter(
+          (slot) => knockoutIds.has(slot.matchId) && !carriedIds.has(slot.matchId),
+        ),
+      );
     }
 
     allSlots.push(...daySlots);
+
+    // Hand this day's placements to the days after it, so their dependencies on it
+    // are knowable. See `carriedAnchors`.
+    for (const slot of daySlots) {
+      carriedIds.add(slot.matchId);
+      carriedAnchors.push(carrySlot(slot));
+    }
 
     let dayLastFinish: number | null = null;
     for (const slot of daySlots) {

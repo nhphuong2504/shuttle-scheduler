@@ -1031,6 +1031,93 @@ describe("planPlacementSchedule — one queue across days", () => {
     }
   });
 
+  it("places a match that depends on one the previous day already placed", () => {
+    // A dependency is only knowable to a run if the run was handed it as an anchor:
+    // `isEligible` fails a dependency missing from `scheduledEnd` instead of
+    // deferring it. The make-up form of the placement format depends on other
+    // round-two matches, so a round two spanning a day boundary puts a dependency on
+    // the far side of it. Before the carry, the dependent was never eligible: it
+    // deadlocked, and since one stuck placement match also stops the knockout pass,
+    // a single unresolved prerequisite refused the entire build.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "09:30:00"), queueDay(2, "09:00:00", "18:00:00")],
+      placementMatches: [
+        placementMatch("r2-a", "round2", "e1", "e2"),
+        placementMatch("r2-b", "round2", "e3", "e4"),
+        placementMatch("r2-makeup", "round2", "e1", "e3", {
+          is_makeup: true,
+          prerequisite_ids: ["r2-a", "r2-b"],
+        }),
+      ],
+      teamCount: 4,
+    });
+
+    expect(result.blocked).toEqual([]);
+    expect(result.slots.map((slot) => slot.matchId).sort()).toEqual(["r2-a", "r2-b", "r2-makeup"]);
+
+    const byId = new Map(result.slots.map((slot) => [slot.matchId, slot]));
+    const makeup = byId.get("r2-makeup")!;
+    // Day one takes exactly one of the two feeders — which one is the scheduler's
+    // choice — so the make-up's dependency on it crosses the boundary, and the
+    // make-up itself can only be placed on day two.
+    const feeders = [byId.get("r2-a")!, byId.get("r2-b")!];
+    expect(feeders.filter((slot) => slot.start.getDate() === 17)).toHaveLength(1);
+    expect(makeup.start.getDate()).toBe(18);
+    // And both dependencies hold, including the one on the earlier day.
+    for (const feeder of feeders) {
+      expect(makeup.start.getTime()).toBeGreaterThanOrEqual(feeder.end.getTime());
+    }
+  });
+
+  it("keeps the rest gap across a day boundary", () => {
+    // The player window a carried slot leaves behind has to survive the carry for
+    // the same reason its end time does. Day two opens ten minutes after day one's
+    // only match ends, which is inside the pair's 20 minute gap, so the carried
+    // window — not the day's own floor — is what has to push the second match out.
+    const dayTwoOpen = new Date("2026-09-18T00:00:00").getTime();
+    const result = scheduleQueue({
+      days: [queueDay(1, "23:20:00", "23:59:00"), queueDay(2, "00:00:00", "18:00:00")],
+      placementMatches: [
+        placementMatch("r1-1", "round1", "e1", "e2"),
+        placementMatch("r1-2", "round1", "e1", "e2"),
+      ],
+      teamCount: 4,
+    });
+
+    const byId = new Map(result.slots.map((slot) => [slot.matchId, slot]));
+    const a = byId.get("r1-1")!;
+    const b = byId.get("r1-2")!;
+    const [first, second] = a.start.getTime() <= b.start.getTime() ? [a, b] : [b, a];
+    // The boundary really was crossed, and the gap is what set the start.
+    expect(second.start.getTime()).toBeGreaterThan(dayTwoOpen);
+    expect(second.start.getTime()).toBe(first.end.getTime() + 20 * MINUTE);
+  });
+
+  it("does not list a carried slot twice, nor write it twice", () => {
+    // The carry hands earlier days' slots to later runs as anchors, and a run
+    // returns its anchors in `slots`. They are already recorded, so echoing them
+    // back would duplicate the match in the plan and write it twice, and a rebuild
+    // would appear to move a match it never touched.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "09:30:00"), queueDay(2, "09:00:00", "18:00:00")],
+      placementMatches: [
+        placementMatch("r2-a", "round2", "e1", "e2"),
+        placementMatch("r2-b", "round2", "e3", "e4"),
+        placementMatch("r2-makeup", "round2", "e1", "e3", {
+          is_makeup: true,
+          prerequisite_ids: ["r2-a", "r2-b"],
+        }),
+      ],
+      teamCount: 4,
+    });
+
+    const slotIds = result.slots.map((slot) => slot.matchId);
+    expect(new Set(slotIds).size).toBe(slotIds.length);
+    const written = result.placementSlotPayload.map((slot) => slot.match_id);
+    expect(new Set(written).size).toBe(written.length);
+    expect(written.sort()).toEqual(["r2-a", "r2-b", "r2-makeup"]);
+  });
+
   it("leaves a knockout whose bracket is undecided out of the plan entirely", () => {
     const result = scheduleQueue({
       days: [queueDay(1, "09:00:00", "18:00:00")],
