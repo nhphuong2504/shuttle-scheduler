@@ -617,7 +617,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   let usedMinutes = 0;
   let lastFinishMs: number | null = null;
   let lastPlanningEndMs = 0;
-  let blockedReason: string | null = null;
   let lastDiagnostics: GraspDiagnostics | null = null;
 
   /** This day's anchors, so a fixed match is counted on exactly one day. */
@@ -778,7 +777,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       // anchors. They are already recorded, so only this day's work joins the day.
       daySlots.push(...run.slots.filter((slot) => !carriedIds.has(slot.matchId)));
       if (run.diagnostics) lastDiagnostics = run.diagnostics;
-      if (run.deadlockReason && !blockedReason) blockedReason = run.deadlockReason;
     }
     for (const slot of daySlots) {
       if (placementShape.has(slot.matchId)) continue;
@@ -868,6 +866,18 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     everything,
   );
 
+  // Described from the final set rather than from whichever run stopped first. The
+  // old wording was that run's: "No future event can make 1 remaining match(es)
+  // eligible", which named a count that could disagree with the list printed under
+  // it and never said what was actually wrong.
+  const blockedReason = blocked.length
+    ? explainBlocked(blocked, {
+        items: everything,
+        scheduledIds: new Set(allSlots.map((slot) => slot.matchId)),
+        heldByPlacement: placementTodo.size > 0 ? new Set(knockoutTodo) : new Set(),
+      })
+    : null;
+
   const diff = diffPlan(existing, allSlots, fixedSet, courtNumberById);
   diff.unplaceable = blocked;
 
@@ -955,6 +965,89 @@ function partitionUnscheduled(
     }
   }
   return { blocked, awaitingTeams };
+}
+
+/**
+ * What is wrong with the matches that could not be placed, in the cause-and-effect
+ * order a desk needs to fix them.
+ *
+ * The old message was the first deadlocking run's: "No future event can make 1
+ * remaining match(es) eligible". It named a count that could disagree with the list
+ * printed under it, and never said what was wrong. Three causes reach here and they
+ * need opposite responses — a prerequisite that is not scheduled at all, a knockout
+ * held behind the placement stage, and a set that is waiting on itself — so each is
+ * named.
+ *
+ * The first is a guard rather than a routine path: `placementItems` drops
+ * prerequisites that are not in the batch precisely so one abandoned match cannot
+ * make a day unschedulable. It is kept because the shape it describes is the one
+ * this planner has actually failed in before — a prerequisite placed by an earlier
+ * day was invisible to a later day's run — and a message that names it is what turns
+ * the next one of those from an hour of guessing into an obvious answer.
+ */
+function explainBlocked(
+  blocked: readonly string[],
+  input: {
+    items: readonly GraspSchedulableMatch[];
+    scheduledIds: ReadonlySet<string>;
+    /** Knockouts still queued because the placement stage has not drained. */
+    heldByPlacement: ReadonlySet<string>;
+  },
+): string {
+  const byId = new Map(input.items.map((item) => [item.id, item]));
+  const blockedIds = new Set(blocked);
+  const dependsOn = (id: string) => byId.get(id)?.dependsOn ?? [];
+
+  const orphaned = blocked.flatMap((id) =>
+    dependsOn(id)
+      .filter(
+        (dependencyId) =>
+          // Still waiting its own slot is not a cause: it is placed first. Neither
+          // scheduled nor waiting means nothing in this plan will ever place it.
+          !input.scheduledIds.has(dependencyId) && !blockedIds.has(dependencyId),
+      )
+      .map((dependencyId) => ({ id, dependencyId })),
+  );
+  const held = blocked.filter((id) => input.heldByPlacement.has(id));
+
+  /**
+   * Whether the placement stage is stuck with itself.
+   *
+   * It cannot drain for capacity reasons — the last day is allowed to overrun — so a
+   * placement match that no day took is either missing a prerequisite or waiting on
+   * one of its own. Knockouts are excluded: they carry no `dependsOn` at all, their
+   * ordering is the stage barrier, so they would read as "able to start" and mask it.
+   */
+  const placementStuck = blocked.filter((id) => !input.heldByPlacement.has(id));
+  const mutual =
+    placementStuck.length > 0 &&
+    !placementStuck.some((id) =>
+      dependsOn(id).every((dependencyId) => input.scheduledIds.has(dependencyId)),
+    );
+
+  const reasons: string[] = [];
+  if (orphaned.length) {
+    const distinct = [...new Set(orphaned.map((entry) => entry.id))];
+    // The prerequisite is named because the list of blocked matches below names only
+    // the match, never what it is waiting for.
+    reasons.push(
+      `${distinct.length} ${distinct.length === 1 ? "is" : "are"} waiting on a prerequisite that this plan never schedules (${orphaned[0]!.dependencyId})`,
+    );
+  } else if (mutual) {
+    reasons.push(
+      `${placementStuck.length} placement ${placementStuck.length === 1 ? "match is" : "matches are"} waiting on each other, so none of them can go first`,
+    );
+  }
+  // Named after the cause, never before it: knockouts are only ever held because
+  // placement did not drain, so leading with them would point at the symptom.
+  if (held.length) {
+    reasons.push(
+      `${held.length} knockout ${held.length === 1 ? "match is" : "matches are"} held behind the placement stage`,
+    );
+  }
+  if (reasons.length) return `${reasons.join(", and ")}.`;
+
+  return "Each has every prerequisite placed, but no court and a free pair of players come free at the same time.";
 }
 
 // ---------------------------------------------------------------------------

@@ -1078,7 +1078,6 @@ function PlacementSchedulePage() {
         </Panel>
       </div>
 
-
       <Dialog open={!!preview} onOpenChange={(open) => !open && setPreview(null)}>
         <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-2xl">
           {preview ? (
@@ -1127,7 +1126,9 @@ function PlacementSchedulePage() {
                       {preview.plan.blocked.length} match
                       {preview.plan.blocked.length === 1 ? "" : "es"} could not be placed.
                     </p>
-                    {preview.plan.summary.diagnostics?.deadlockReason ? (
+                    {preview.plan.blockedReason ? (
+                      <p className="mt-1 text-xs">{preview.plan.blockedReason}</p>
+                    ) : preview.plan.summary.diagnostics?.deadlockReason ? (
                       <p className="mt-1 text-xs">
                         {preview.plan.summary.diagnostics.deadlockReason}
                       </p>

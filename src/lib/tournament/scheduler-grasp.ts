@@ -531,6 +531,39 @@ function compareRanked(a: RankedCandidate, b: RankedCandidate): number {
   );
 }
 
+/**
+ * Why no future moment can make what is left eligible.
+ *
+ * "No future event can make 1 remaining match(es) eligible" is true and useless: it
+ * reports a count and hides the cause. A match whose prerequisite is not scheduled,
+ * and is not itself waiting in this run, will never start however long the clock
+ * runs, and the pair it names is where to look — that is the shape a prerequisite
+ * left behind by an earlier day used to take, and naming it is what makes the next
+ * one of those diagnosable. Everything else that stops here is deliberately not
+ * blamed on capacity, because a dependency cycle reaches here too.
+ */
+function describeDeadlock(
+  remaining: Set<string>,
+  indexes: StaticIndexes,
+  scheduledEnd: Map<string, number>,
+): string {
+  const orphaned: string[] = [];
+  for (const matchId of [...remaining].sort()) {
+    const match = indexes.matchById.get(matchId);
+    if (!match) continue;
+    const missing = (match.dependsOn ?? []).filter(
+      (dependencyId) => !scheduledEnd.has(dependencyId) && !remaining.has(dependencyId),
+    );
+    if (missing.length) orphaned.push(`${matchId} waits on ${missing[0]}`);
+  }
+  if (orphaned.length) {
+    return `Stuck: ${orphaned.join("; ")}. Nothing in this run schedules that prerequisite.`;
+  }
+  // Deliberately does not blame capacity: a cycle reaches here too, and the two need
+  // opposite responses.
+  return `${remaining.size} match(es) are waiting, but no court, player or prerequisite frees anything up.`;
+}
+
 function nextFutureEvent(
   currentTime: number,
   remaining: Set<string>,
@@ -727,7 +760,7 @@ function runSchedule(
     );
     if (next == null) {
       deadlocked = true;
-      deadlockReason = `No future event can make ${remaining.size} remaining match(es) eligible.`;
+      deadlockReason = describeDeadlock(remaining, indexes, scheduledEnd);
       break;
     }
     // `next` is always greater than the current time, so snapping past a break

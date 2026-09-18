@@ -1118,6 +1118,29 @@ describe("planPlacementSchedule — one queue across days", () => {
     expect(written.sort()).toEqual(["r2-a", "r2-b", "r2-makeup"]);
   });
 
+  it("names the placement cause before the knockouts held behind it", () => {
+    // A cycle in the placement stage cannot drain, so the knockout is held behind it.
+    // The knockouts are the symptom, and a message that led with them would send the
+    // desk to the wrong stage.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00")],
+      placementMatches: [
+        placementMatch("a", "round2", "e1", "e2", { prerequisite_ids: ["b"] }),
+        placementMatch("b", "round2", "e3", "e4", { prerequisite_ids: ["a"] }),
+      ],
+      tierMatches: [tierMatch("k-1", 1, 1, "e5", "e6")],
+      teamCount: 6,
+    });
+
+    expect([...result.blocked].sort()).toEqual(["a", "b", "k-1"]);
+    expect(result.blockedReason).toMatch(/waiting on each other/);
+    expect(result.blockedReason).toMatch(/held behind the placement stage/);
+    // The cause comes first.
+    expect(result.blockedReason!.indexOf("waiting on each other")).toBeLessThan(
+      result.blockedReason!.indexOf("held behind"),
+    );
+  });
+
   it("leaves a knockout whose bracket is undecided out of the plan entirely", () => {
     const result = scheduleQueue({
       days: [queueDay(1, "09:00:00", "18:00:00")],
