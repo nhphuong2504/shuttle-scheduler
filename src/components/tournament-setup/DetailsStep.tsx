@@ -1,7 +1,4 @@
-import { useState } from "react";
-
 import { Panel } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -45,10 +42,8 @@ const TIMEZONE_OPTIONS = [
 ];
 
 /**
- * Everything the tournament needs to exist: a name, the dates and a timezone.
- *
- * Venue, organizer and the note are real but rarely decisive, so they sit behind
- * one toggle instead of filling the first screen with fields nobody has to answer.
+ * Everything the tournament needs to exist: a name, the dates and a timezone,
+ * followed by the venue and organizer contact details shown on the same screen.
  */
 export function DetailsStep({
   form,
@@ -59,7 +54,6 @@ export function DetailsStep({
   onChange: (patch: Partial<DraftForm>) => void;
   isNew: boolean;
 }) {
-  const [showMore, setShowMore] = useState(false);
   const basics = form.basics;
   const setBasics = (patch: Partial<BasicsForm>) => onChange({ basics: { ...basics, ...patch } });
 
@@ -149,19 +143,7 @@ export function DetailsStep({
         </div>
       </Panel>
 
-      <div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setShowMore((open) => !open)}
-        >
-          {showMore ? "Hide venue and contact" : "Add venue and contact (optional)"}
-        </Button>
-      </div>
-
-      {showMore ? (
-        <Panel title="Venue and contact">
+      <Panel title="Venue and contact">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="t-venue">Venue</Label>
@@ -224,8 +206,7 @@ export function DetailsStep({
               </p>
             </div>
           </div>
-        </Panel>
-      ) : null}
+      </Panel>
     </div>
   );
 }
