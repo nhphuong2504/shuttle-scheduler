@@ -22,9 +22,29 @@ export default defineConfig({
   forbidOnly: Boolean(process.env["CI"]),
   retries: 0,
   reporter: [["list"]],
+  /**
+   * Bounded so a slow route cannot take the whole run down with it.
+   *
+   * The default worker count is derived from the machine, and the default test timeout is
+   * 30s. Together those were the cause of a cascading failure: the four contrast sweeps
+   * each visit all 12 routes, so under a busy dev server they would sit on every worker
+   * for 30s at a time, and the tests queued behind them would then hit their own 30s limit
+   * and fail for a reason that had nothing to do with what they assert. Two changes fix
+   * that structurally rather than by hoping the machine is quiet: a worker count that is
+   * stated rather than inferred (so a run is reproducible across machines, which matters
+   * more here than squeezing out the last second), and a test timeout with realistic room
+   * for a cold Vite transform of the heaviest route.
+   */
+  workers: process.env["CI"] ? 2 : 4,
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   use: {
     baseURL: BASE_URL,
     trace: "retain-on-failure",
+    // Navigation gets its own budget so a slow first paint reports as a navigation
+    // problem rather than as whichever assertion happened to be running.
+    navigationTimeout: 45_000,
+    actionTimeout: 15_000,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

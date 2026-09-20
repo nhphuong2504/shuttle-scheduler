@@ -22,5 +22,125 @@
   },
   "/setup": {
     "rules": []
+  },
+  "/setup#dark": {
+    "rules": []
+  },
+  "/#dark": {
+    "rules": []
+  },
+  "/registration#dark": {
+    "rules": []
+  },
+  "/placement#dark": {
+    "rules": []
+  },
+  "/draws#dark": {
+    "rules": []
+  },
+  "/knockout#dark": {
+    "rules": []
+  },
+  "/placement-schedule#dark": {
+    "rules": []
+  },
+  "/matches#dark": {
+    "rules": []
+  },
+  "/auth#dark": {
+    "rules": []
+  },
+  "/pools#dark": {
+    "rules": []
+  },
+  "/schedule#dark": {
+    "rules": []
+  },
+  "/staff": {
+    "rules": []
+  },
+  "/auth": {
+    "rules": []
+  },
+  "/pools": {
+    "rules": []
+  },
+  "/schedule": {
+    "rules": []
+  },
+  "/staff#dark": {
+    "rules": []
+  },
+  "/registration#compact": {
+    "rules": []
+  },
+  "/placement#compact": {
+    "rules": []
+  },
+  "/draws#compact": {
+    "rules": []
+  },
+  "/knockout#compact": {
+    "rules": []
+  },
+  "/placement-schedule#compact": {
+    "rules": []
+  },
+  "/matches#compact": {
+    "rules": []
+  },
+  "/setup#compact": {
+    "rules": []
+  },
+  "/staff#compact": {
+    "rules": []
+  },
+  "/auth#compact": {
+    "rules": []
+  },
+  "/pools#compact": {
+    "rules": []
+  },
+  "/schedule#compact": {
+    "rules": []
+  },
+  "/#dark+compact": {
+    "rules": []
+  },
+  "/registration#dark+compact": {
+    "rules": []
+  },
+  "/placement#dark+compact": {
+    "rules": []
+  },
+  "/#compact": {
+    "rules": []
+  },
+  "/draws#dark+compact": {
+    "rules": []
+  },
+  "/knockout#dark+compact": {
+    "rules": []
+  },
+  "/placement-schedule#dark+compact": {
+    "rules": []
+  },
+  "/matches#dark+compact": {
+    "rules": []
+  },
+  "/setup#dark+compact": {
+    "rules": []
+  },
+  "/staff#dark+compact": {
+    "rules": []
+  },
+  "/auth#dark+compact": {
+    "rules": []
+  },
+  "/pools#dark+compact": {
+    "rules": []
+  },
+  "/schedule#dark+compact": {
+    "rules": []
   }
 }

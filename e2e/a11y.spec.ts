@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+
+import { cellKey, cellLabel, MATRIX_CELLS, openCell, ROUTES, WCAG_TAGS } from "./fixtures/matrix";
 /**
  * Rendered accessibility and keyboard reachability, as a regression gate.
  *
@@ -18,6 +20,10 @@ import { expect, test, type Page } from "@playwright/test";
  * already failing may keep failing until its phase fixes it; a rule that starts
  * failing when it was not failing before fails the suite immediately.
  *
+ * The scan covers the full infrastructure matrix - every route in both themes and both
+ * densities - for the reason recorded in `fixtures/matrix.ts`: each axis was a blind spot
+ * in turn, and each was found by widening the sweep rather than by reading the code.
+ *
  * Record a new baseline with:  A11Y_RECORD=1 npm run test:e2e
  */
 
@@ -26,21 +32,6 @@ import { expect, test, type Page } from "@playwright/test";
 // Vitest transpiles to CJS; these cannot.
 const BASELINE_PATH = join(import.meta.dirname, "a11y-baseline.json");
 const RECORD = process.env["A11Y_RECORD"] === "1";
-
-/** Routes reachable without a staff session. Authenticated-only routes are added
- *  when phase 6 sweeps the status matrix against a seeded tournament. */
-const ROUTES = [
-  "/",
-  "/registration",
-  "/placement",
-  "/draws",
-  "/knockout",
-  "/placement-schedule",
-  "/matches",
-  "/setup",
-] as const;
-
-const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 type Baseline = Record<string, { rules: string[] }>;
 
@@ -61,58 +52,62 @@ async function scan(page: Page) {
 const recorded: Baseline = {};
 
 test.describe("rendered accessibility", () => {
-  for (const route of ROUTES) {
-    test(`${route} introduces no new a11y violation`, async ({ page }) => {
-      const response = await page.goto(route, { waitUntil: "load" });
-      // A redirect to sign-in is a legitimate response; a 5xx is not.
-      expect(response?.status() ?? 0).toBeLessThan(500);
-      await page.waitForLoadState("networkidle");
+  for (const cell of MATRIX_CELLS) {
+    for (const route of ROUTES) {
+      test(`${route} (${cellLabel(cell)}) introduces no new a11y violation`, async ({ page }) => {
+        await openCell(page, route, cell);
 
-      const surfaced = await scan(page);
-      const rules = surfaced.map((violation) => violation.id).sort();
-      recorded[route] = { rules };
+        const surfaced = await scan(page);
+        const rules = surfaced.map((violation) => violation.id).sort();
 
-      if (RECORD) return;
+        const key = cellKey(route, cell);
+        recorded[key] = { rules };
 
-      const baseline = readBaseline();
-      const known = new Set(baseline[route]?.rules ?? []);
-      const added = rules.filter((rule) => !known.has(rule));
+        if (RECORD) return;
 
-      if (added.length) {
-        console.log(
-          `\n${route} — new axe violations: ${added.join(", ")}\n` +
-            `present: ${rules.join(", ") || "none"}\n` +
-            `baseline: ${[...known].sort().join(", ") || "none"}\n`,
-        );
-      }
-      expect(added, `new accessibility violations on ${route}`).toEqual([]);
-    });
+        const baseline = readBaseline();
+        const known = new Set(baseline[key]?.rules ?? []);
+        const added = rules.filter((rule) => !known.has(rule));
+
+        if (added.length) {
+          console.log(
+            `\n${key} — new axe violations: ${added.join(", ")}\n` +
+              `present: ${rules.join(", ") || "none"}\n` +
+              `baseline: ${[...known].sort().join(", ") || "none"}\n`,
+          );
+        }
+        expect(added, `new accessibility violations on ${key}`).toEqual([]);
+      });
+    }
   }
 });
 
 test.describe("keyboard reachability", () => {
-  test("the desk is operable from the keyboard alone", async ({ page }) => {
-    await page.goto("/", { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
+  // The smoke test stays deliberately minimal: it proves the harness can drive the
+  // keyboard at all, and that Tab does not stall on `<body>`. The exhaustive sweep
+  // across the matrix lives in `focus.spec.ts`, which owns focus visibility. Keeping
+  // one cheap guard here means a broken harness fails fast rather than as dozens of
+  // confusing failures in the bigger spec.
+  for (const cell of MATRIX_CELLS) {
+    test(`the desk is operable from the keyboard alone (${cellLabel(cell)})`, async ({ page }) => {
+      await openCell(page, "/", cell);
 
-    // Tab must reach a real control, not stall on the body. This proves the
-    // harness can drive the keyboard; the full focus-order and focus-visibility
-    // sweep belongs to phase 6, once the status matrix is stable.
-    await page.keyboard.press("Tab");
-    const reached = await page.evaluate(() => {
-      const element = document.activeElement;
-      if (!element || element === document.body) return null;
-      const style = getComputedStyle(element);
-      return {
-        tag: element.tagName.toLowerCase(),
-        // A visible focus indicator is either a ring (box-shadow) or an outline.
-        visible: style.boxShadow !== "none" || style.outlineStyle !== "none",
-      };
+      await page.keyboard.press("Tab");
+      const reached = await page.evaluate(() => {
+        const element = document.activeElement;
+        if (!element || element === document.body) return null;
+        const style = getComputedStyle(element);
+        return {
+          tag: element.tagName.toLowerCase(),
+          // A visible focus indicator is either a ring (box-shadow) or an outline.
+          visible: style.boxShadow !== "none" || style.outlineStyle !== "none",
+        };
+      });
+
+      expect(reached, "Tab reached no focusable element").not.toBeNull();
+      expect(reached?.visible, `no visible focus indicator on <${reached?.tag}>`).toBe(true);
     });
-
-    expect(reached, "Tab reached no focusable element").not.toBeNull();
-    expect(reached?.visible, `no visible focus indicator on <${reached?.tag}>`).toBe(true);
-  });
+  }
 });
 
 test.afterAll(() => {
