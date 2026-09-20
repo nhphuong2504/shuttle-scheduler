@@ -173,5 +173,18 @@ export function tierRoundComplete(round: readonly DecidedTierMatch[]): boolean {
   return round.length > 1 && round.every((match) => match.winnerId != null);
 }
 
+/**
+ * How many rounds a bracket of this size plays, or 0 for a champion-only draw.
+ *
+ * The depth of a draw is a property of its size alone, so it belongs here beside the
+ * bracket builder that produced the size. Progress views need it to tell a final round
+ * from an intermediate one; they must not re-derive it, or "is there another round after
+ * this one?" would drift from what `nextTierRound` actually produces.
+ */
+export function bracketRoundCount(bracketSize: number): number {
+  if (bracketSize <= 1) return 0;
+  return Math.round(Math.log2(bracketSize));
+}
+
 /** Tiers in presentation order. */
 export const TIER_ORDER: readonly DrawTier[] = DRAW_TIERS;

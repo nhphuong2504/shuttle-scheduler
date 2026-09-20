@@ -49,7 +49,6 @@ import {
   useActiveTournament,
   useCategories,
   useCourts,
-  useDeskActivity,
   useDrawMatches,
   useDraws,
   usePlacementEntrants,
@@ -62,15 +61,15 @@ import {
   useTeams,
   useTierDrawMatches,
   useTierDraws,
-  useTournamentDayBreaks,
   useTournamentDayCourts,
   useTournamentDays,
   type Court,
   type PlacementMatch,
   type Player,
-  type TournamentDayBreak,
+  type TournamentDay,
 } from "@/lib/tournament/data";
 import {
+  dayDateLabel,
   gamesLabel,
   gamesWinnerFor,
   isLegalGameScoreFor,
@@ -98,7 +97,6 @@ import {
   deskKindPhase,
   deskKindScoringStage,
   deskKindTable,
-  finishStatusLabel,
   getMatchReadiness,
   getOperationalKpis,
   isPlacementKind,
@@ -107,10 +105,16 @@ import {
 } from "@/lib/tournament/desk";
 import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
-import { estimateFinish } from "@/lib/tournament/finish-estimate";
-import { FinishEstimate } from "@/components/finish-estimate";
-
-const MINUTE = 60_000;
+import { DayScheduleStatus } from "@/components/schedule-status";
+import {
+  attributeMatchesToDays,
+  awaitingResultMatches,
+  dayIdForTime,
+  dayOperationalCounts,
+  expectedEndMs,
+  resolveSelectedDay,
+} from "@/lib/tournament/day-scope";
+import { courtsForDay, dayWindowBounds } from "@/lib/tournament/scheduling/day-plan";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -119,13 +123,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Live control desk for a badminton tournament: court board, pool progress, draw readiness and alerts.",
+          "Live control desk for one tournament day: its court board, its matches, and the operational alerts that need someone chasing.",
       },
       { property: "og:title", content: "ShuttleNet Control Desk | Live Badminton Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Live control desk for a badminton tournament: court board, pool progress, draw readiness and alerts.",
+          "Live control desk for one tournament day: its court board, its matches, and the operational alerts that need someone chasing.",
       },
     ],
   }),
@@ -162,18 +166,17 @@ function Desk() {
   const { data: tournament } = useActiveTournament();
   const { data: tournamentDays } = useTournamentDays();
   const { data: poolEntries } = usePoolEntries();
-  const { data: activity } = useDeskActivity(signedIn);
   // The two-round placement format keeps its own tables, so the desk reads them
   // alongside the round-robin ones rather than instead of them.
   const { data: placementEntrants } = usePlacementEntrants();
   const { data: placementMatches } = usePlacementMatches();
   const { data: tierDraws } = useTierDraws();
   const { data: tierDrawMatches } = useTierDrawMatches();
-  // The finish forecast runs the same problem the schedule page does, so it needs the
-  // same per-day court sets and breaks. Omitting them would forecast a day playing on
-  // every court in the venue, which is optimistic about capacity, not conservative.
+  // Which day the desk is showing, so the whole board can be scoped to it. Held as null
+  // until a day is clicked, so the opening view is derived rather than stored — the
+  // derived value survives days loading late, and a click wins from then on.
   const { data: dayCourts } = useTournamentDayCourts(tournament?.id);
-  const { data: dayBreaks } = useTournamentDayBreaks(tournament?.id);
+  const [pickedDayId, setPickedDayId] = useState<string | null>(null);
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -290,26 +293,6 @@ function Desk() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, allMatches, teamMap, courtMap, tournament]);
 
-  const latePools = useMemo(() => {
-    return (pools ?? []).filter((pool) => {
-      if (!pool.scheduled_end) return false;
-      const matches = (poolMatches ?? []).filter((m) => m.pool_id === pool.id);
-      const teamIds = (poolEntries ?? [])
-        .filter((e) => e.pool_id === pool.id)
-        .map((e) => e.team_id);
-      if (poolIsComplete(teamIds, matches)) return false;
-      return now > new Date(pool.scheduled_end).getTime() + 15 * 60000;
-    });
-  }, [pools, poolMatches, poolEntries, now]);
-
-  const overCap = allMatches.filter((m) => {
-    const cap =
-      deskKindPhase(m.kind) === "group"
-        ? (tournament?.group_slot_minutes ?? 20)
-        : (tournament?.knockout_slot_minutes ?? 25);
-    return m.status === "in-progress" && (minutesSince(m.startedAt, now) ?? 0) > cap;
-  });
-
   const slotMinutesFor = (match: DeskMatch) =>
     deskKindPhase(match.kind) === "group"
       ? (tournament?.group_slot_minutes ?? 20)
@@ -318,105 +301,107 @@ function Desk() {
     deskKindPhase(match.kind) === "group"
       ? (tournament?.group_rest_gap_minutes ?? 10)
       : (tournament?.knockout_rest_gap_minutes ?? 30);
-  const courtStates = (courts ?? []).map((court) => ({
-    court,
-    state: deriveCourtState(court.id, allMatches, slotMinutesFor, restMinutesFor, now),
-  }));
+
+  const orderedDays = useMemo(
+    () => [...(tournamentDays ?? [])].sort((a, b) => a.day_number - b.day_number),
+    [tournamentDays],
+  );
 
   /**
-   * The tournament-wide finish forecast for the Desk.
+   * Which day every match belongs to, and which matches belong to no day at all.
    *
-   * `projectedFinishFromRemaining` only sees rows that already have a time, so an unplaced match
-   * could not move it: it was a floor wearing a forecast's label. The estimator folds in unplaced
-   * matches, unavoidable Placement Round 2 and not-yet-created knockout rounds, so the
-   * on-target/behind label compares like with like.
-   *
-   * Rounded to a five-minute bucket so a 30-second clock tick does not re-run the solved problem
-   * for a number that has not changed, and guarded so a malformed state degrades to the floor
-   * rather than taking the whole desk down.
+   * Attribution follows the planner's own rule — the last day that had already opened — so a
+   * match that overruns past midnight stays on its own day instead of appearing on the next
+   * calendar date. Court plays no part: a match with a time but no court still belongs to its
+   * day. A match with no usable time is reported separately and never assigned on a guess.
    */
-  const estimateNow = Math.floor(now / (5 * MINUTE)) * 5 * MINUTE;
-  const finishEstimate = useMemo(() => {
-    if (!tournament || tournament.format !== "two_round_placement") return null;
-    if (!(tournamentDays ?? []).length || !(courts ?? []).length) return null;
-    const dayCourtIds = new Map<string, Set<string>>();
-    for (const row of dayCourts ?? []) {
-      const set = dayCourtIds.get(row.day_id) ?? new Set<string>();
-      set.add(row.court_id);
-      dayCourtIds.set(row.day_id, set);
-    }
-    const breaksByDayId = new Map<string, TournamentDayBreak[]>();
-    for (const brk of dayBreaks ?? []) {
-      const list = breaksByDayId.get(brk.day_id) ?? [];
-      list.push(brk);
-      breaksByDayId.set(brk.day_id, list);
-    }
-    try {
-      return estimateFinish({
-        tournament,
-        days: tournamentDays ?? [],
-        allCourts: courts ?? [],
-        dayCourtIds,
-        breaksByDayId,
-        teams: teams ?? [],
-        entrants: placementEntrants ?? [],
-        draws: tierDraws ?? [],
-        placementMatches: placementMatches ?? [],
-        tierMatches: tierDrawMatches ?? [],
-        categoryOrder: new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
-        now: estimateNow,
-      });
-    } catch {
-      // A forecast is a nicety; the desk's job is results. Fall back to the floor.
-      return null;
-    }
-  }, [
-    tournament,
-    tournamentDays,
-    courts,
-    dayCourts,
-    dayBreaks,
-    teams,
-    placementEntrants,
-    tierDraws,
-    placementMatches,
-    tierDrawMatches,
-    categories,
-    estimateNow,
-  ]);
+  const attribution = useMemo(
+    () => attributeMatchesToDays(orderedDays, allMatches),
+    [orderedDays, allMatches],
+  );
 
+  /**
+   * The day the whole desk is showing.
+   *
+   * A moderator's pick always wins and is never reset by a realtime update; otherwise the
+   * active day is derived, which is what keeps the desk on the right day after midnight when
+   * no configured window contains `now`.
+   */
+  const selectedDayId = useMemo(
+    () => resolveSelectedDay({ days: orderedDays, attribution, now, pickedDayId }),
+    [orderedDays, attribution, now, pickedDayId],
+  );
+  const selectedDay = useMemo(
+    () => orderedDays.find((day) => day.id === selectedDayId) ?? null,
+    [orderedDays, selectedDayId],
+  );
+
+  /** Every metric, court, queue and alert below is derived from this day's rows alone. */
+  const dayMatches = useMemo(
+    () => (selectedDayId ? (attribution.byDayId.get(selectedDayId) ?? []) : []),
+    [attribution, selectedDayId],
+  );
+
+  /** The courts this day plays on. An empty set means every court, as the planner reads it. */
+  const dayCourtIdSet = useMemo(() => {
+    const ids = new Set<string>();
+    if (!selectedDayId) return ids;
+    for (const row of dayCourts ?? []) {
+      if (row.day_id === selectedDayId) ids.add(row.court_id);
+    }
+    return ids;
+  }, [dayCourts, selectedDayId]);
+
+  const courtsOnSelectedDay = useMemo(
+    () => courtsForDay(courts ?? [], dayCourtIdSet),
+    [courts, dayCourtIdSet],
+  );
+
+  const dayCounts = useMemo(
+    () => dayOperationalCounts(dayMatches, slotMinutesFor, now),
+    // slotMinutesFor reads only the tournament's timings.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dayMatches, tournament, now],
+  );
+
+  const dayCloseMs = selectedDay ? dayWindowBounds(selectedDay).end : null;
+
+  const courtStates = courtsOnSelectedDay.map((court) => ({
+    court,
+    state: deriveCourtState(court.id, dayMatches, slotMinutesFor, restMinutesFor, now),
+  }));
+
+  // No forecast is passed in: the desk reports the day, so the only finish it knows is the
+  // latest end among the day's own scheduled matches.
   const kpis = getOperationalKpis(
     courtStates.map(({ state }) => state),
-    allMatches,
+    dayMatches,
     slotMinutesFor,
     now,
-    finishEstimate === null
-      ? undefined
-      : finishEstimate.finish
-        ? Date.parse(finishEstimate.finish)
-        : null,
   );
-  const targetFinishMs = useMemo(() => {
-    const days = tournamentDays ?? [];
-    if (!days.length) return null;
-    const hasRemainingGroups = allMatches.some(
-      (match) =>
-        deskKindPhase(match.kind) === "group" &&
-        (match.status === "scheduled" || match.status === "in-progress"),
-    );
-    // Chase the day that still has group work, otherwise the final day's window.
-    const day = hasRemainingGroups ? days[0] : days[days.length - 1];
-    if (!day) return null;
-    const target = new Date(`${day.date}T${day.end_time}`);
-    return Number.isFinite(target.getTime()) ? target.getTime() : null;
-  }, [tournamentDays, allMatches]);
-  const finishStatus = finishStatusLabel(kpis.projectedFinish, targetFinishMs);
-  const finishStatusTone =
-    kpis.projectedFinish != null && targetFinishMs != null && kpis.projectedFinish > targetFinishMs
-      ? "warn"
-      : "normal";
+
+  const latePools = useMemo(() => {
+    return (pools ?? []).filter((pool) => {
+      if (!pool.scheduled_end) return false;
+      // A pool belongs to the day its scheduled end falls on, by the same rule as a match.
+      if (dayIdForTime(orderedDays, new Date(pool.scheduled_end).getTime()) !== selectedDayId) {
+        return false;
+      }
+      const matches = (poolMatches ?? []).filter((m) => m.pool_id === pool.id);
+      const teamIds = (poolEntries ?? [])
+        .filter((e) => e.pool_id === pool.id)
+        .map((e) => e.team_id);
+      if (poolIsComplete(teamIds, matches)) return false;
+      return now > new Date(pool.scheduled_end).getTime() + 15 * 60000;
+    });
+  }, [pools, poolMatches, poolEntries, orderedDays, selectedDayId, now]);
+
+  const overCap = dayMatches.filter(
+    (m) => m.status === "in-progress" && (minutesSince(m.startedAt, now) ?? 0) > slotMinutesFor(m),
+  );
+
   const courtProgress = courtStates.map(({ court, state }) => {
-    const courtMatches = allMatches.filter((match) => match.courtId === court.id);
+    const courtMatches = dayMatches.filter((match) => match.courtId === court.id);
     const total = courtMatches.length;
     const done = courtMatches.filter((match) =>
       ["reported", "walkover"].includes(match.status),
@@ -432,16 +417,19 @@ function Desk() {
   });
 
   /**
-   * Matches that are ready to play but hold no court: generated by a build that has
-   * not placed them yet. This is one shared pool, not a fixture reserved for any
-   * court — the same suggestion therefore appears on every idle court, and only the
-   * first is offered because the desk starts one match at a time. Rebuilding the
-   * schedule clears it.
+   * Matches on this day that are ready to play but hold no court: generated by a build that
+   * has not placed them yet. This is one shared pool, not a fixture reserved for any court —
+   * the same suggestion therefore appears on every idle court, and only the first is offered
+   * because the desk starts one match at a time. Rebuilding the schedule clears it.
+   *
+   * Readiness is evaluated over this day's matches, because the desk is only responsible for
+   * this day. "Scheduled for the selected day" and "ready to dispatch now" stay separate: the
+   * first is attribution, the second is the shared readiness rule.
    */
-  const readyUnassigned = allMatches
+  const readyUnassigned = dayMatches
     .filter((match) => match.status === "scheduled" && !match.courtId)
     .filter(
-      (match) => getMatchReadiness(match, allMatches, restMinutesFor(match), now).state === "ready",
+      (match) => getMatchReadiness(match, dayMatches, restMinutesFor(match), now).state === "ready",
     )
     .sort((a, b) => new Date(a.scheduled ?? 0).getTime() - new Date(b.scheduled ?? 0).getTime());
 
@@ -450,10 +438,27 @@ function Desk() {
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
     : null;
 
+  /** The day's undecided matches that are already past their expected end. */
+  const awaitingResults = useMemo(
+    () => awaitingResultMatches(dayMatches, slotMinutesFor, now),
+    // slotMinutesFor reads only the tournament's timings.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dayMatches, tournament, now],
+  );
+
+  /**
+   * Matches with no usable time at all.
+   *
+   * They cannot be attributed to a day without a guess, so the desk reports them as a neutral
+   * plan-level fact instead of filing them under one. This is the only tournament-wide number
+   * on the page, and it is deliberately not an operational metric.
+   */
+  const untimedCount = attribution.untimed.length;
+
   return (
     <AppShell
       title="Control desk"
-      subtitle="Live court board, pool progress and the alerts that need someone chasing."
+      subtitle="Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing."
       actions={
         <>
           <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} now={now} />
@@ -464,27 +469,64 @@ function Desk() {
       }
     >
       <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          <DeskKpi label="Courts active" value={`${kpis.activeCourts}/${(courts ?? []).length}`} />
+        {orderedDays.length ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline bg-surface px-3 py-2 text-xs">
+            <span className="font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Day
+            </span>
+            <div className="flex flex-wrap items-center gap-1">
+              {orderedDays.map((day) => (
+                <button
+                  key={day.id}
+                  type="button"
+                  onClick={() => setPickedDayId(day.id)}
+                  aria-pressed={day.id === selectedDayId}
+                  className={`rounded-md px-2 py-1 font-score text-[11px] transition-colors ${
+                    day.id === selectedDayId
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  }`}
+                >
+                  {dayDateLabel(day.date)}
+                </button>
+              ))}
+            </div>
+            <span className="ml-auto">
+              <DayScheduleStatus latestFinishMs={dayCounts.latestFinishMs} closeMs={dayCloseMs} />
+            </span>
+          </div>
+        ) : null}
+
+        {untimedCount ? (
+          <p className="text-xs text-muted-foreground">
+            {untimedCount} match{untimedCount === 1 ? " has" : "es have"} no scheduled time, so
+            {untimedCount === 1 ? " it is" : " they are"} not counted on any day.
+          </p>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
           <DeskKpi
-            label="Ready courts"
-            value={courtStates.filter(({ state }) => state.state === "free-ready").length}
+            label="Courts active"
+            value={`${kpis.activeCourts}/${courtsOnSelectedDay.length}`}
           />
           <DeskKpi
-            label="Waiting courts"
+            label="Courts waiting"
             value={kpis.waitingCourts}
             tone={kpis.waitingCourts ? "warn" : "normal"}
           />
-          <DeskKpi label="Matches left" value={kpis.remainingMatches} />
-          {finishEstimate ? (
-            <FinishEstimate estimate={finishEstimate} variant="tile" />
-          ) : (
-            <DeskKpi
-              label="Projected finish"
-              value={timeLabel(kpis.projectedFinish ? new Date(kpis.projectedFinish) : null)}
-            />
-          )}
-          <DeskKpi label="Finish status" value={finishStatus} tone={finishStatusTone} />
+          <DeskKpi label="In progress" value={dayCounts.inProgress} />
+          <DeskKpi label="Completed" value={dayCounts.completed} />
+          <DeskKpi label="Matches left" value={dayCounts.remaining} />
+          <DeskKpi
+            label="Ready, no court"
+            value={readyUnassigned.length}
+            tone={readyUnassigned.length ? "warn" : "normal"}
+          />
+          <DeskKpi
+            label="Awaiting results"
+            value={dayCounts.awaitingResults}
+            tone={dayCounts.awaitingResults ? "warn" : "normal"}
+          />
         </div>
 
         <Panel
@@ -572,7 +614,17 @@ function Desk() {
           </div>
         </Panel>
 
-        <Panel title="Court board">
+        <Panel
+          title="Court board"
+          right={
+            selectedDay ? (
+              <span className="text-[11px] text-muted-foreground">
+                {dayDateLabel(selectedDay.date)} · {courtsOnSelectedDay.length} court
+                {courtsOnSelectedDay.length === 1 ? "" : "s"}
+              </span>
+            ) : null
+          }
+        >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {courtStates.map(({ court, state }) => {
               const target = state.playing ?? state.next ?? readyUnassigned[0];
@@ -674,74 +726,45 @@ function Desk() {
         </Panel>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Panel title="Category progress">
-            <ul className="divide-y divide-hairline">
-              {(categories ?? []).map((c) => {
-                const catPools = (pools ?? []).filter((p) => p.category_id === c.id);
-                const catMatches = (poolMatches ?? []).filter((m) => m.category_id === c.id);
-                const done = catMatches.filter((m) =>
-                  ["reported", "walkover"].includes(m.status),
-                ).length;
-                const catDrawIds = (draws ?? [])
-                  .filter((draw) => draw.category_id === c.id)
-                  .map((draw) => draw.id);
-                const catDrawMatches = (drawMatches ?? []).filter((match) =>
-                  catDrawIds.includes(match.draw_id),
-                );
-                const knockoutDone = catDrawMatches.filter((match) =>
-                  ["reported", "walkover"].includes(match.status),
-                ).length;
-                const bottleneck = catPools
-                  .map((pool) => {
-                    const matches = catMatches.filter((match) => match.pool_id === pool.id);
-                    return {
-                      pool,
-                      missing: matches.filter(
-                        (match) => !["reported", "walkover", "void"].includes(match.status),
-                      ).length,
-                    };
-                  })
-                  .sort((a, b) => b.missing - a.missing)[0];
-                const ready =
-                  catPools.length > 0 &&
-                  catPools.every((p) =>
-                    poolIsComplete(
-                      (poolEntries ?? []).filter((e) => e.pool_id === p.id).map((e) => e.team_id),
-                      catMatches.filter((m) => m.pool_id === p.id),
-                    ),
-                  );
-                return (
-                  <li key={c.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <span>
-                      <span className="font-semibold">{c.code}</span>{" "}
-                      <span className="text-muted-foreground">
-                        {(teams ?? []).filter((t) => t.category_id === c.id).length} entries ·{" "}
-                        {catPools.length} pools
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-3">
-                      <span className="font-score text-xs">
-                        {done}/{catMatches.length} group results
-                        {catDrawMatches.length
-                          ? ` · ${knockoutDone}/${catDrawMatches.length} knockout`
-                          : bottleneck?.missing
-                            ? ` · ${bottleneck.pool.name} needs ${bottleneck.missing}${
-                                bottleneck.pool.scheduled_end
-                                  ? ` · due ${timeLabel(bottleneck.pool.scheduled_end)}`
-                                  : ""
-                              }`
-                            : ""}
-                      </span>
-                      {ready ? (
-                        <Link to="/draws" className="text-xs font-semibold text-primary">
-                          Draws ready
-                        </Link>
-                      ) : null}
-                    </span>
+          <Panel
+            title="Awaiting results"
+            right={
+              <span className="text-[11px] text-muted-foreground">
+                {dayCounts.remaining} still to play today
+              </span>
+            }
+          >
+            {awaitingResults.length ? (
+              <ul className="space-y-1.5 text-sm">
+                {awaitingResults.map((match) => (
+                  <li key={match.id}>
+                    <button
+                      type="button"
+                      className="w-full rounded-md bg-warn-surface px-2.5 py-2 text-left text-warn-foreground hover:brightness-95"
+                      onClick={() => {
+                        setOperationCourtId(match.courtId);
+                        setOpenMatch(match);
+                      }}
+                    >
+                      {label(match.teams[0])} vs {label(match.teams[1])} — expected to finish by{" "}
+                      {timeLabel(
+                        expectedEndMs(match, slotMinutesFor)
+                          ? new Date(expectedEndMs(match, slotMinutesFor)!)
+                          : null,
+                      )}
+                      {match.startedAt
+                        ? ` · ${minutesSince(match.startedAt, now) ?? 0}′ on court`
+                        : " · not started yet"}
+                    </button>
                   </li>
-                );
-              })}
-            </ul>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState
+                title="Nothing outstanding"
+                hint="Every match on this day is either played or still inside its slot."
+              />
+            )}
           </Panel>
 
           <Panel
@@ -776,39 +799,13 @@ function Desk() {
                 ))}
               </ul>
             ) : (
-              <EmptyState title="No courts" hint="Add courts to see progress here." />
+              <EmptyState
+                title="No courts on this day"
+                hint="Give this day courts in the schedule to see progress here."
+              />
             )}
           </Panel>
         </div>
-
-        {signedIn ? (
-          <Panel title="Recent desk activity">
-            {(activity ?? []).length ? (
-              <ul className="grid gap-x-5 gap-y-2 text-sm sm:grid-cols-2">
-                {(activity ?? []).slice(0, 8).map((entry) => {
-                  const changed = allMatches.find((match) => match.id === entry.match_id);
-                  return (
-                    <li key={entry.id} className="flex items-center gap-2">
-                      <span className="w-12 shrink-0 font-score text-xs text-muted-foreground">
-                        {timeLabel(entry.occurred_at)}
-                      </span>
-                      <span className="font-medium capitalize">
-                        {entry.action.replaceAll("-", " ")}
-                      </span>
-                      <span className="min-w-0 truncate text-muted-foreground">
-                        {changed
-                          ? `${label(changed.teams[0])} vs ${label(changed.teams[1])}`
-                          : entry.match_id.slice(0, 8)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No desk changes recorded yet.</p>
-            )}
-          </Panel>
-        ) : null}
       </div>
 
       <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>

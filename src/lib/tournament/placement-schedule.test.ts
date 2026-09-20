@@ -18,6 +18,7 @@ import {
   placementStageLabel,
   planPlacementSchedule,
   sliceRowsByDay,
+  uncoveredScheduledMatches,
   type PlanPlacementScheduleInput,
 } from "./placement-schedule";
 import { normalizeBreaks, startAfterBreaks } from "@/lib/scheduling";
@@ -1635,5 +1636,99 @@ describe("sliceRowsByDay", () => {
 
   it("returns nothing for a tournament with no days", () => {
     expect(sliceRowsByDay([row("a", "2026-09-17T09:00:00")], [], startOf)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Completeness: a plan that would strand an already-scheduled match
+// ---------------------------------------------------------------------------
+
+/**
+ * The writer clears every `scheduled` row of a stage and re-sets only what the
+ * payload names, so a row left out of the payload loses its court and time.
+ *
+ * These cases exist because that failure used to surface only as the database
+ * guard's "Placement rebuild left assigned matches without a court or time", which
+ * names neither the match nor the cause. The cause is a planner input that never
+ * loaded: with no teams or no entrants, every match resolves to "waiting for its
+ * players", so `blocked` stays empty and the payload comes out silent.
+ */
+describe("uncoveredScheduledMatches", () => {
+  const withMatches = (
+    placementMatches: PlacementMatch[],
+    overrides: Partial<PlanPlacementScheduleInput> = {},
+  ) => plan({ placementMatches, ...overrides });
+
+  it("reports a scheduled row the payload does not cover", () => {
+    const matches = [
+      placementMatch("m1", "round1", "e1", "e2"),
+      placementMatch("m2", "round1", "e3", "e4"),
+    ];
+    const result = withMatches(matches);
+
+    // Both rows are placable, so the plan covers them and the writer may proceed.
+    expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
+    expect(result.placementScheduledIds.sort()).toEqual(["m1", "m2"]);
+  });
+
+  it("flags every row when the team list has not loaded", () => {
+    const matches = [
+      placementMatch("m1", "round1", "e1", "e2"),
+      placementMatch("m2", "round1", "e3", "e4"),
+    ];
+    const result = withMatches(matches, { teams: [] });
+
+    // The whole point: nothing is `blocked`, so the old guard in
+    // `applyPlacementSchedulePlan` would have let this payload through.
+    expect(result.blocked).toEqual([]);
+    expect(result.awaitingTeams.sort()).toEqual(["m1", "m2"]);
+    expect(result.placementSlotPayload).toEqual([]);
+    expect(uncoveredScheduledMatches(result).placement.sort()).toEqual(["m1", "m2"]);
+  });
+
+  it("flags every row when the entrant list has not loaded", () => {
+    const matches = [placementMatch("m1", "round1", "e1", "e2")];
+    const result = withMatches(matches, { entrants: [] });
+
+    expect(result.blocked).toEqual([]);
+    expect(uncoveredScheduledMatches(result).placement).toEqual(["m1"]);
+  });
+
+  it("does not count rows the writer never clears", () => {
+    const matches = [
+      // Already decided and played: an anchor, cleared by nobody.
+      placementMatch("done", "round1", "e1", "e2", {
+        status: "reported",
+        scheduled_time: "2026-09-17T09:00:00Z",
+        winner_id: "e1",
+      }),
+      // Voided by the desk.
+      placementMatch("void", "round1", "e3", "e4", { status: "void" }),
+      placementMatch("live", "round1", "e1", "e3"),
+    ];
+    const result = withMatches(matches);
+
+    expect(result.placementScheduledIds).toEqual(["live"]);
+    expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
+  });
+
+  it("keeps the two stages separate", () => {
+    // A knockout bye is excluded by the RPC, so it is excluded here too: counting it
+    // would refuse a plan the writer would have accepted.
+    const knockout = tierMatch("k1", 1, 1, null, null, { is_bye: true });
+    const result = withMatches([], { tierMatches: [knockout] });
+
+    expect(result.knockoutScheduledIds).toEqual([]);
+    expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
+  });
+
+  it("reports a knockout fixture whose players are not known yet", () => {
+    // Undrawn bracket: no entrants, so no players. This is the legacy reason a row
+    // lands in `awaitingTeams`, and it must still be caught rather than written.
+    const knockout = tierMatch("k1", 1, 1, null, null, { status: "scheduled" });
+    const result = withMatches([], { tierMatches: [knockout] });
+
+    expect(result.knockoutScheduledIds).toEqual(["k1"]);
+    expect(uncoveredScheduledMatches(result).knockout).toEqual(["k1"]);
   });
 });

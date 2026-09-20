@@ -1,140 +1,105 @@
 /**
- * The one place that turns a `FinishEstimate` into words.
+ * The one place that turns a schedule's finish and a day's schedule status into words.
  *
- * All three surfaces that answer "when does this tournament finish?" — the
- * `/placement-schedule` summary bar, its rebuild preview and the Desk KPI — render
- * through here, so they cannot drift into three different phrasings of the same
- * number. The rules are deliberately conservative:
+ * Both are statements about the plan and never predictions. A finish is the latest end among
+ * matches that already have a time; a day's status compares that day's latest scheduled finish
+ * against that day's own configured close. Nothing here forecasts work that has not been
+ * created, because no such estimate exists in this app.
  *
- *   * a placed tournament reads `Finishes 01:30`;
- *   * forecast work that fits reads `Estimated finish ~01:45` plus how much is left;
- *   * work that only fits by overrunning names the extension, never the official
- *     close as if it were the finish;
- *   * work that cannot be placed at all names no clock time, only the match count;
- *   * rows that are already an impossible layout say so rather than inventing a time.
+ *   * `scheduledFinishWording` is the **organizer's** tournament-wide summary. It is the only
+ *     finish wording the Schedule tab renders, and the Desk renders none of it: a
+ *     tournament-wide figure is planning oversight, not a live operational metric.
+ *   * `dayScheduleWording` is the **moderator's** answer to "how is *this day* laid out?".
  *
- * The forecast is structural: it assumes every slot takes its configured duration and
- * that one person can play in every event they are entered in. It is labelled as an
- * estimate for exactly that reason, so the UI never implies a guarantee.
+ * Both live here so no surface can invent a second phrasing of the same number.
  */
 
-import type { FinishEstimate } from "./finish-estimate";
-import { timeLabel } from "./format";
-import { formatProjectedFinishDelta } from "./schedule-diff";
+import { dateTimeLabel } from "./format";
 
 const MINUTE = 60_000;
 
-export interface FinishWording {
-  /** The line the desk reads first. */
-  headline: string;
-  /** The supporting line, or null when there is nothing useful to add. */
-  detail: string | null;
-  /** Structural-estimate disclosure, shown as a caption or a tooltip. */
-  note: string;
-  /** How the comparison against the current state reads, or null when there is none. */
-  comparison: string | null;
-  /** A compact value for a tile: the estimated clock time, or "—" when none can be named. */
-  value: string;
-  /** A tile's supporting line: the one thing that adds meaning under the value. */
-  tileHint: string;
-  tone: "normal" | "good" | "warn" | "danger";
-}
-
-const NOTE =
-  "Structural estimate: assumes every slot takes its full duration and does not account for one player appearing in several events.";
-
-function matches(count: number): string {
-  return `${count} ${count === 1 ? "match" : "matches"}`;
-}
-
-function days(count: number): string {
-  return `${count} ${count === 1 ? "day" : "days"}`;
+export interface ScheduledFinishWording {
+  /** The latest scheduled end, e.g. "Latest scheduled finish Sat, Sep 19, 16:19". */
+  finish: string;
+  /** The official close of the tournament, e.g. "Official close Tue, Oct 6, 11:00". */
+  close: string | null;
+  /** The past-close warning, or null when the scheduled matches fit inside the window. */
+  warning: string | null;
+  tone: "normal" | "warn";
 }
 
 /**
- * `estimate` is the forecast being shown. `current` is the same estimator run against the live
- * rows, when there is a rebuilt-vs-current comparison to make.
+ * The organizer's schedule summary.
+ *
+ * `finishMs` is the latest end among matches that already have a court and a time, and it is
+ * reported as a fact about the schedule rather than as an estimate of when the event will end.
+ * `closeMs` is the official close — the end of the last configured day that has courts.
  */
-export function finishEstimateWording(
-  estimate: FinishEstimate,
-  current?: FinishEstimate | null,
-): FinishWording {
-  const time = estimate.finish ? timeLabel(estimate.finish) : null;
-  const comparison = comparisonWording(estimate, current ?? null);
+export function scheduledFinishWording(input: {
+  /** Latest scheduled end among matches still to play, or null when none have a time. */
+  finishMs: number | null;
+  /** The official close, or null when no configured day has a usable window. */
+  closeMs: number | null;
+}): ScheduledFinishWording {
+  const finish =
+    input.finishMs == null
+      ? "No matches left to play"
+      : `Latest scheduled finish ${dateTimeLabel(input.finishMs)}`;
+  const close = input.closeMs == null ? null : `Official close ${dateTimeLabel(input.closeMs)}`;
 
-  if (estimate.basis === "placed") {
-    return {
-      headline: time ? `Finishes ${time}` : "Finishes —",
-      detail: null,
-      note: NOTE,
-      comparison,
-      value: time ?? "—",
-      tileHint: comparison ?? "Nothing left to place",
-      tone: "good",
-    };
-  }
+  const overrunMinutes =
+    input.finishMs == null || input.closeMs == null
+      ? 0
+      : Math.round((input.finishMs - input.closeMs) / MINUTE);
 
-  if (estimate.basis === "projected") {
-    const detail = `${matches(estimate.remainingMatches)} still to place`;
-    return {
-      headline: time ? `Estimated finish ~${time}` : "Estimated finish —",
-      detail,
-      note: NOTE,
-      comparison,
-      value: time ? `~${time}` : "—",
-      tileHint: detail,
-      tone: "normal",
-    };
-  }
-
-  // The rows as they stand cannot be simulated at all. Naming no time is the honest answer; naming
-  // one would be inventing it.
-  if (estimate.basis === "invalid") {
-    const detail = `${matches(estimate.remainingMatches)} still to place`;
-    return {
-      headline: "Finish estimate unavailable",
-      detail: `The current court layout already conflicts · ${detail}`,
-      note: NOTE,
-      comparison,
-      value: "—",
-      tileHint: "Court layout conflicts — resolve them to get a forecast",
-      tone: "warn",
-    };
-  }
-
-  // Overflow. Two honest renderings, never a made-up official close.
-  if (estimate.finish != null && estimate.deficitMinutes != null) {
-    const headline = `Needs ~${estimate.deficitMinutes} min beyond the tournament window`;
-    return {
-      headline,
-      detail: `Estimated finish ~${time} if courts remain available`,
-      note: NOTE,
-      comparison,
-      value: `~${time}`,
-      tileHint: headline,
-      tone: "warn",
-    };
-  }
-
-  const dayCount = estimate.days > 0 ? days(estimate.days) : "the configured days";
-  const headline = `Cannot finish in ${dayCount}`;
-  return {
-    headline,
-    detail: `${matches(estimate.remainingMatches)} still need capacity`,
-    note: NOTE,
-    comparison,
-    value: "—",
-    tileHint: headline,
-    tone: "danger",
-  };
+  if (overrunMinutes <= 0) return { finish, close, warning: null, tone: "normal" };
+  return { finish, close, warning: `${overrunMinutes} min past the close`, tone: "warn" };
 }
 
-/** Forecast-against-forecast only; a floor is never compared with a forecast. */
-function comparisonWording(
-  estimate: FinishEstimate,
-  current: FinishEstimate | null,
-): string | null {
-  if (!estimate.finish || current?.finish == null) return null;
-  const delta = Math.round((Date.parse(estimate.finish) - Date.parse(current.finish)) / MINUTE);
-  return formatProjectedFinishDelta(delta);
+export interface DayScheduleWording {
+  /** The day's latest scheduled finish, e.g. "Last match scheduled to finish 18:20". */
+  latestFinish: string;
+  /** The day's configured close, e.g. "Day closes 17:30". */
+  closingTime: string;
+  /** The day-overrun warning, or null when the plan fits inside the day. */
+  warning: string | null;
+  tone: "normal" | "warn";
+}
+
+/**
+ * A single tournament day's schedule status.
+ *
+ * Both inputs are plan facts: the latest finish among matches that already have a time,
+ * and the day's own configured close. Nothing here predicts when the day will end.
+ */
+export function dayScheduleWording(input: {
+  /** Latest scheduled or in-progress finish on the day, or null when nothing is left. */
+  latestFinishMs: number | null;
+  /** The day's configured closing time, or null when the day has no usable window. */
+  closeMs: number | null;
+}): DayScheduleWording {
+  const latestFinish =
+    input.latestFinishMs == null
+      ? "No matches left on the schedule"
+      : `Last match scheduled to finish ${dateTimeLabel(input.latestFinishMs)}`;
+  const closingTime =
+    input.closeMs == null
+      ? "No closing time configured"
+      : `Day closes ${dateTimeLabel(input.closeMs)}`;
+
+  if (
+    input.latestFinishMs == null ||
+    input.closeMs == null ||
+    input.latestFinishMs <= input.closeMs
+  ) {
+    return { latestFinish, closingTime, warning: null, tone: "normal" };
+  }
+
+  const minutes = Math.round((input.latestFinishMs - input.closeMs) / MINUTE);
+  return {
+    latestFinish,
+    closingTime,
+    warning: `Scheduled ${minutes} min past the day's close`,
+    tone: "warn",
+  };
 }

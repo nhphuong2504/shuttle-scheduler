@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
-import { FinishEstimate } from "@/components/finish-estimate";
+import { ScheduledFinish } from "@/components/schedule-status";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +26,10 @@ import {
   type ScheduleSummary,
 } from "@/lib/tournament/actions";
 import {
+  fetchPlacementEntrants,
+  fetchPlacementMatches,
+  fetchTierDrawMatches,
+  fetchTierDraws,
   indexBy,
   keys,
   scopedKey,
@@ -48,7 +52,11 @@ import {
   type TournamentDay,
 } from "@/lib/tournament/data";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
+import { dayIdForTime } from "@/lib/tournament/day-scope";
+import { projectedFinishFromRemainingMatches } from "@/lib/tournament/schedule-diff";
 import { roundName } from "@/lib/tournament/draws";
+import { buildStageProgress } from "@/lib/tournament/stage-progress";
+import { StageProgressList } from "@/components/stage-progress";
 import {
   applyPlacementSchedulePlan,
   courtsForDay,
@@ -130,16 +138,16 @@ function PlacementSchedulePage() {
   const { canSchedule, isAdmin } = useSession();
   const { tournament, days, loading } = useTournamentScope();
   const tournamentId = tournament?.id ?? null;
-  const { data: courts } = useCourts();
-  const { data: teams } = useTeams();
+  const { data: courts, isPending: courtsPending } = useCourts();
+  const { data: teams, isPending: teamsPending } = useTeams();
   const { data: players } = usePlayers();
-  const { data: categories } = useCategories();
-  const { data: entrants } = usePlacementEntrants();
-  const { data: placementMatches } = usePlacementMatches();
-  const { data: draws } = useTierDraws();
-  const { data: tierMatches } = useTierDrawMatches();
-  const { data: dayCourts } = useTournamentDayCourts(tournamentId);
-  const { data: dayBreaks } = useTournamentDayBreaks(tournamentId);
+  const { data: categories, isPending: categoriesPending } = useCategories();
+  const { data: entrants, isPending: entrantsPending } = usePlacementEntrants();
+  const { data: placementMatches, isPending: placementMatchesPending } = usePlacementMatches();
+  const { data: draws, isPending: drawsPending } = useTierDraws();
+  const { data: tierMatches, isPending: tierMatchesPending } = useTierDrawMatches();
+  const { data: dayCourts, isPending: dayCourtsPending } = useTournamentDayCourts(tournamentId);
+  const { data: dayBreaks, isPending: dayBreaksPending } = useTournamentDayBreaks(tournamentId);
   /**
    * The desk reports results and moves matches while this page is open, and every
    * one of those shifts the times below. Without a subscription the running order
@@ -216,6 +224,47 @@ function PlacementSchedulePage() {
   );
   /** Any match already has a time, so the next build is a rebuild rather than a first build. */
   const hasSchedule = placementScheduled || knockoutScheduled;
+
+  /**
+   * Whether every list a plan is computed from has actually arrived.
+   *
+   * The planner reads "no players could be resolved" as "this match is still waiting
+   * for its teams". That is the right reading for a knockout whose bracket has not
+   * been drawn yet, and the wrong one for a list that has simply not loaded: every
+   * match becomes `awaitingTeams`, nothing is `blocked`, the payload comes out empty,
+   * and the writer wipes the day and then rejects it as half-built. So a build waits
+   * for the lists rather than inferring from their absence.
+   */
+  const planInputsPending = useMemo(() => {
+    const pending: string[] = [];
+    if (loading || !tournament) pending.push("the tournament");
+    if (courtsPending) pending.push("courts");
+    if (categoriesPending) pending.push("events");
+    if (entrantsPending) pending.push("entrants");
+    if (teamsPending) pending.push("teams");
+    if (placementMatchesPending) pending.push("matches");
+    if (drawsPending || tierMatchesPending) pending.push("knockout");
+    // Not needed to avoid a failed write, but a day's court list and its breaks are
+    // read by the planner, and an empty one is not "no restriction" by accident: it
+    // would place matches on courts the day was never configured to use.
+    if (dayCourtsPending) pending.push("court assignments");
+    if (dayBreaksPending) pending.push("breaks");
+    return pending;
+  }, [
+    loading,
+    tournament,
+    courtsPending,
+    categoriesPending,
+    entrantsPending,
+    teamsPending,
+    placementMatchesPending,
+    drawsPending,
+    tierMatchesPending,
+    dayCourtsPending,
+    dayBreaksPending,
+  ]);
+
+  const planInputsReady = planInputsPending.length === 0;
 
   /** Which courts each day plays on, as ids. Empty means "no restriction". */
   const dayCourtIds = useMemo(() => {
@@ -423,6 +472,102 @@ function PlacementSchedulePage() {
     return map;
   }, [tournamentDays, breaksForDay]);
 
+  /**
+   * The official close: the end of the last configured day that actually has courts.
+   *
+   * A day with no courts offers no capacity, so its window cannot be what the tournament is
+   * measured against — that is why this walks back from the end rather than reading the final
+   * day blindly. The forecast's "within window" and "overrun" statuses both refer to this.
+   */
+  const officialCloseMs = useMemo(() => {
+    for (let index = plannerDays.length - 1; index >= 0; index -= 1) {
+      const day = plannerDays[index];
+      if (!day || courtsFor(day).length === 0) continue;
+      return dayWindowBounds(day).end;
+    }
+    return null;
+  }, [plannerDays, courtsFor]);
+
+  /**
+   * When the already-scheduled matches end.
+   *
+   * The latest end among matches that have a court and a time, read straight off the rows. This
+   * is a fact about the schedule as it stands, not an estimate of when the tournament will
+   * finish: matches with no row yet, and matches with no time, contribute nothing. Placement and
+   * knockout hold a court for different durations, so each stage is measured with its own slot
+   * and the later of the two wins.
+   */
+  const scheduledFinishMs = useMemo(() => {
+    if (!tournament) return null;
+    const placementFinish = projectedFinishFromRemainingMatches(
+      placementMatches ?? [],
+      tournament.group_slot_minutes,
+    );
+    const knockoutFinish = projectedFinishFromRemainingMatches(
+      (tierMatches ?? []).filter((match) => !match.is_bye),
+      tournament.knockout_slot_minutes,
+    );
+    return Math.max(placementFinish ?? 0, knockoutFinish ?? 0) || null;
+  }, [tournament, placementMatches, tierMatches]);
+
+  /**
+   * Per-day changes for the rebuild preview.
+   *
+   * Built from the plan's own diff rather than from a second comparison, so the preview cannot
+   * disagree with the table below it. Capacity and utilization are deliberately absent: the
+   * preview answers "what moves, and does the result fit the window?", not "how full is each
+   * day?".
+   */
+  const previewDayChanges = useMemo(() => {
+    const plan = preview?.plan;
+    if (!plan) return [];
+    const idByNumber = new Map(plannerDays.map((day) => [day.day_number, day.id]));
+    return plan.days.map((fill) => {
+      // `fill.day` is the day number, so the plan's own numbering identifies the day without
+      // re-deriving it from a timestamp.
+      const dayId = idByNumber.get(fill.day) ?? String(fill.day);
+      const moved = plan.diff.changes.filter(
+        (change) =>
+          change.kind !== "unchanged" &&
+          dayIdForTime(plannerDays, Date.parse(change.toStart)) === dayId,
+      );
+      return {
+        dayId,
+        date: fill.date,
+        placed: fill.placed,
+        lastFinish: fill.lastFinish,
+        overrunMinutes: fill.overrunMinutes,
+        moving: moved.length,
+        largestShift: moved.reduce(
+          (max, change) => Math.max(max, Math.abs(change.shiftMinutes)),
+          0,
+        ),
+      };
+    });
+  }, [preview, plannerDays]);
+
+  /**
+   * Tournament progress by event, stage and round.
+   *
+   * Read-only oversight: what already exists in each stage, how much of it is done, and whether
+   * the next stage can be generated. Progress is reported against the rows that exist, so there
+   * is no invented total for work nobody has generated yet.
+   */
+  const stageProgress = useMemo(
+    () =>
+      buildStageProgress({
+        categories,
+        categoryOrder: new Map(
+          (categories ?? []).map((category) => [category.id, category.sort_order]),
+        ),
+        entrants,
+        placementMatches,
+        tierDraws: draws,
+        tierMatches,
+      }),
+    [categories, entrants, placementMatches, draws, tierMatches],
+  );
+
   const rows = useMemo(() => {
     const placementRows = (placementMatches ?? [])
       .filter((match) => match.scheduled_time && match.status !== "void")
@@ -543,18 +688,24 @@ function PlacementSchedulePage() {
    * three small queries.
    */
   const freshSchedulingData = async () => {
-    const placementKey = scopedKey(keys.placementMatches, tournamentId);
-    const tierKey = scopedKey(keys.tierDrawMatches, tournamentId);
-    const drawKey = scopedKey(keys.tierDraws, tournamentId);
-    for (const key of [placementKey, tierKey, drawKey]) {
-      await qc.invalidateQueries({ queryKey: key });
-      await qc.refetchQueries({ queryKey: key });
-    }
-    return {
-      placementMatches: qc.getQueryData<PlacementMatch[]>(placementKey) ?? [],
-      tierMatches: qc.getQueryData<TierDrawMatch[]>(tierKey) ?? [],
-      draws: qc.getQueryData<TierDraw[]>(drawKey) ?? [],
-    };
+    if (!tournamentId) throw new Error("No active tournament is configured.");
+    // Fetched rather than read from the cache, and awaited as data rather than as a
+    // cache write: see `fetchPlacementMatches`. The entrants come along because a
+    // build's generation step reads their seeds, and a seed lock that has not landed
+    // in the cache yet would make every event look unseeded and quietly build nothing.
+    const [placementMatches, tierMatches, draws, entrants] = await Promise.all([
+      fetchPlacementMatches(tournamentId),
+      fetchTierDrawMatches(tournamentId),
+      fetchTierDraws(tournamentId),
+      fetchPlacementEntrants(tournamentId),
+    ]);
+    // Keep the cache in step, so the running order cannot disagree with the plan that
+    // was just computed from these rows.
+    qc.setQueryData(scopedKey(keys.placementMatches, tournamentId), placementMatches);
+    qc.setQueryData(scopedKey(keys.tierDrawMatches, tournamentId), tierMatches);
+    qc.setQueryData(scopedKey(keys.tierDraws, tournamentId), draws);
+    qc.setQueryData(scopedKey(keys.placementEntrants, tournamentId), entrants);
+    return { placementMatches, tierMatches, draws, entrants };
   };
 
   const computePlan = async (fresh: Awaited<ReturnType<typeof freshSchedulingData>>) => {
@@ -566,7 +717,7 @@ function PlacementSchedulePage() {
       dayCourtIds: dayCourtIdSets,
       breaksByDayId: breaksByDay,
       teams: teams ?? [],
-      entrants: entrants ?? [],
+      entrants: fresh.entrants,
       draws: fresh.draws,
       placementMatches: fresh.placementMatches,
       tierMatches: fresh.tierMatches,
@@ -583,7 +734,7 @@ function PlacementSchedulePage() {
   const generateWhatIsMissing = async (before: Awaited<ReturnType<typeof freshSchedulingData>>) => {
     const outcome = await generateMissingStages({
       categories: categories ?? [],
-      entrants: entrants ?? [],
+      entrants: before.entrants,
       matches: before.placementMatches,
       draws: before.draws,
     });
@@ -633,6 +784,10 @@ function PlacementSchedulePage() {
 
   const build = async () => {
     if (!validateAllWindows()) return;
+    if (!planInputsReady) {
+      toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
+      return;
+    }
     setBusy(true);
     try {
       const { outcome, fresh } = await generateWhatIsMissing(await freshSchedulingData());
@@ -655,6 +810,10 @@ function PlacementSchedulePage() {
 
   const previewRebuild = async () => {
     if (!validateAllWindows()) return;
+    if (!planInputsReady) {
+      toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
+      return;
+    }
     setBusy(true);
     try {
       const { outcome, fresh } = await generateWhatIsMissing(await freshSchedulingData());
@@ -758,10 +917,18 @@ function PlacementSchedulePage() {
             {showSettings ? "Hide settings" : "Settings"}
           </Button>
           <Button
-            disabled={!canSchedule || busy || !tournament || !(courts ?? []).length}
+            disabled={
+              !canSchedule || busy || !planInputsReady || !tournament || !(courts ?? []).length
+            }
             onClick={() => void (hasSchedule ? previewRebuild() : build())}
           >
-            {busy ? "Planning…" : hasSchedule ? "Rebuild schedule" : "Build schedule"}
+            {!planInputsReady
+              ? "Loading…"
+              : busy
+                ? "Planning…"
+                : hasSchedule
+                  ? "Rebuild schedule"
+                  : "Build schedule"}
           </Button>
         </div>
       }
@@ -775,17 +942,7 @@ function PlacementSchedulePage() {
             {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"} ·{" "}
             {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
           </span>
-          {result?.summary.estimate ? (
-            <FinishEstimate
-              estimate={result.summary.estimate}
-              current={result.summary.currentEstimate}
-            />
-          ) : null}
-          {result && result.summary.overrunMinutes > 0 ? (
-            <span className="text-warn-foreground">
-              {result.summary.overrunMinutes} min past close
-            </span>
-          ) : null}
+          <ScheduledFinish finishMs={scheduledFinishMs} closeMs={officialCloseMs} />
           {result && result.summary.unscheduled > 0 ? (
             <span className="text-danger-foreground">
               {result.summary.unscheduled} could not be placed
@@ -1077,6 +1234,17 @@ function PlacementSchedulePage() {
         ) : null}
 
         <Panel
+          title="Stage progress"
+          right={
+            <span className="text-[11px] text-muted-foreground">
+              completed / created · advance readiness
+            </span>
+          }
+        >
+          <StageProgressList rows={stageProgress} />
+        </Panel>
+
+        <Panel
           title="Running order"
           right={
             <span className="font-score text-[11px] text-muted-foreground">
@@ -1196,21 +1364,48 @@ function PlacementSchedulePage() {
                     {preview.plan.summary.anchorCount} anchors kept · {preview.plan.summary.placed}{" "}
                     matches replanned · {preview.plan.diff.movedCount} moving
                   </p>
-                  {preview.plan.estimate ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      <FinishEstimate
-                        estimate={preview.plan.estimate}
-                        current={preview.plan.currentEstimate}
-                      />
-                      {preview.plan.summary.overrunMinutes > 0
-                        ? ` · ${preview.plan.summary.overrunMinutes} min past the final close`
-                        : ""}
-                      {preview.plan.summary.remainingUtilization != null
-                        ? ` · ${Math.round(preview.plan.summary.remainingUtilization * 100)}% of remaining window`
-                        : ""}
-                    </p>
-                  ) : null}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    The table below shows how each day's finish changes.
+                  </p>
                 </div>
+
+                {previewDayChanges.length ? (
+                  <div className="overflow-hidden rounded-md border border-hairline">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Day</th>
+                          <th className="w-20">Placed</th>
+                          <th className="w-24">Last finish</th>
+                          <th className="w-20">Moving</th>
+                          <th className="w-20">Largest</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewDayChanges.map((row) => (
+                          <tr key={row.dayId}>
+                            <td className="text-sm">
+                              {dayDateLabel(row.date)}
+                              {row.overrunMinutes > 0 ? (
+                                <span className="ml-2 text-xs text-warn-foreground">
+                                  {row.overrunMinutes} min past close
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="font-score text-xs">{row.placed}</td>
+                            <td className="font-score text-xs">
+                              {row.lastFinish ? timeLabel(row.lastFinish) : "—"}
+                            </td>
+                            <td className="font-score text-xs">{row.moving}</td>
+                            <td className="font-score text-xs">
+                              {row.largestShift ? `${row.largestShift} min` : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
 
                 {preview.plan.blocked.length > 0 ? (
                   <div className="rounded-md bg-danger-surface px-3 py-2 text-sm text-danger-foreground">

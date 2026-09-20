@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dayDateLabel, timeLabel } from "./format";
+import { dateTimeLabel, dayDateLabel, timeLabel } from "./format";
 
 describe("dayDateLabel", () => {
   /**
@@ -36,5 +36,29 @@ describe("timeLabel", () => {
 
   it("renders a time as a zero-padded 24 hour clock", () => {
     expect(timeLabel("2026-09-17T09:05:00")).toBe("09:05");
+  });
+});
+
+describe("dateTimeLabel", () => {
+  /**
+   * The finish forecast is an instant read across a day boundary — an overrun finishes after
+   * midnight — so a bare time would be ambiguous. Unlike `dayDateLabel` this takes a real
+   * instant, because a forecast is never a bare `YYYY-MM-DD`.
+   */
+  it("includes both the date and the time", () => {
+    const label = dateTimeLabel("2026-09-18T00:20:00");
+    expect(label).toContain("18");
+    expect(label).toContain("00:20");
+  });
+
+  it("accepts an instant as a Date, a string or milliseconds", () => {
+    const at = new Date("2026-09-17T18:20:00").getTime();
+    expect(dateTimeLabel(at)).toBe(dateTimeLabel(new Date(at)));
+    expect(dateTimeLabel(new Date(at).toISOString())).toBe(dateTimeLabel(new Date(at)));
+  });
+
+  it("degrades to a dash rather than Invalid Date", () => {
+    expect(dateTimeLabel(null)).toBe("—");
+    expect(dateTimeLabel("not-a-date")).toBe("—");
   });
 });

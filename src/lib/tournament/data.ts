@@ -5,7 +5,6 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Court = Database["public"]["Tables"]["courts"]["Row"];
-export type DeskActivity = Database["public"]["Tables"]["desk_activity"]["Row"];
 export type Player = {
   id: string;
   name: string;
@@ -66,7 +65,6 @@ export function scopedKey(base: readonly unknown[], tournamentId: string | null 
 export const keys = {
   categories: ["categories"] as const,
   courts: ["courts"] as const,
-  deskActivity: ["desk_activity"] as const,
   players: ["players"] as const,
   teams: ["teams"] as const,
   pools: ["pools"] as const,
@@ -383,21 +381,6 @@ export function useCourts() {
   });
 }
 
-export function useDeskActivity(enabled = true) {
-  return useQuery({
-    queryKey: keys.deskActivity,
-    enabled,
-    queryFn: () =>
-      must<DeskActivity[]>(
-        supabase
-          .from("desk_activity")
-          .select("*")
-          .order("occurred_at", { ascending: false })
-          .limit(12),
-      ),
-  });
-}
-
 export function usePlayers() {
   return useQuery({
     queryKey: keys.players,
@@ -587,22 +570,67 @@ export function indexBy<T extends { id: string }>(rows: readonly T[] | undefined
 // matches by round and slot so a bracket renders top to bottom.
 // ---------------------------------------------------------------------------
 
+/**
+ * Plain fetchers for the placement tables, shared by the hooks and the scheduler.
+ *
+ * The build path cannot read these through the query cache. `refetchQueries` resolves
+ * as soon as its fetch settles into the cache, and when a fetch is already in flight
+ * it resolves against *that* one — which may have been issued before the build's own
+ * writes committed. A build that then read `getQueryData` planned from an empty match
+ * list while the database held thirty-one rows, and the writer cleared the day and
+ * rejected it as half-built. Returning the rows straight from the network removes the
+ * cache from the critical path.
+ *
+ * These are the same queries the hooks run, so a change to one cannot disagree with
+ * the other.
+ */
+export function fetchPlacementEntrants(tournamentId: string): Promise<PlacementEntrant[]> {
+  return must<PlacementEntrant[]>(
+    supabase
+      .from("placement_entrants")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      // Nulls last: unseeded entrants are shown after the seeded order rather
+      // than jumbled into it, which is what makes the pre-lock list readable.
+      .order("seed", { ascending: true, nullsFirst: false }),
+  );
+}
+
+export function fetchPlacementMatches(tournamentId: string): Promise<PlacementMatch[]> {
+  return must<PlacementMatch[]>(
+    supabase
+      .from("placement_matches")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .order("stage")
+      .order("generation_key"),
+  );
+}
+
+export function fetchTierDraws(tournamentId: string): Promise<TierDraw[]> {
+  return must<TierDraw[]>(
+    supabase.from("tier_draws").select("*").eq("tournament_id", tournamentId).order("tier"),
+  );
+}
+
+export function fetchTierDrawMatches(tournamentId: string): Promise<TierDrawMatch[]> {
+  return must<TierDrawMatch[]>(
+    supabase
+      .from("tier_draw_matches")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .order("round")
+      .order("slot"),
+  );
+}
+
 export function usePlacementEntrants() {
   const tournamentId = useActiveTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.placementEntrants, tournamentId),
     enabled: !!tournamentId,
     refetchInterval: 20_000,
-    queryFn: () =>
-      must<PlacementEntrant[]>(
-        supabase
-          .from("placement_entrants")
-          .select("*")
-          .eq("tournament_id", tournamentId as string)
-          // Nulls last: unseeded entrants are shown after the seeded order rather
-          // than jumbled into it, which is what makes the pre-lock list readable.
-          .order("seed", { ascending: true, nullsFirst: false }),
-      ),
+    queryFn: () => fetchPlacementEntrants(tournamentId as string),
   });
 }
 
@@ -612,15 +640,7 @@ export function usePlacementMatches() {
     queryKey: scopedKey(keys.placementMatches, tournamentId),
     enabled: !!tournamentId,
     refetchInterval: 20_000,
-    queryFn: () =>
-      must<PlacementMatch[]>(
-        supabase
-          .from("placement_matches")
-          .select("*")
-          .eq("tournament_id", tournamentId as string)
-          .order("stage")
-          .order("generation_key"),
-      ),
+    queryFn: () => fetchPlacementMatches(tournamentId as string),
   });
 }
 
@@ -630,14 +650,7 @@ export function useTierDraws() {
     queryKey: scopedKey(keys.tierDraws, tournamentId),
     enabled: !!tournamentId,
     refetchInterval: 20_000,
-    queryFn: () =>
-      must<TierDraw[]>(
-        supabase
-          .from("tier_draws")
-          .select("*")
-          .eq("tournament_id", tournamentId as string)
-          .order("tier"),
-      ),
+    queryFn: () => fetchTierDraws(tournamentId as string),
   });
 }
 
@@ -647,14 +660,6 @@ export function useTierDrawMatches() {
     queryKey: scopedKey(keys.tierDrawMatches, tournamentId),
     enabled: !!tournamentId,
     refetchInterval: 20_000,
-    queryFn: () =>
-      must<TierDrawMatch[]>(
-        supabase
-          .from("tier_draw_matches")
-          .select("*")
-          .eq("tournament_id", tournamentId as string)
-          .order("round")
-          .order("slot"),
-      ),
+    queryFn: () => fetchTierDrawMatches(tournamentId as string),
   });
 }

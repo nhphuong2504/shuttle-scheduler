@@ -1,99 +1,90 @@
 import { describe, expect, it } from "vitest";
 
-import type { FinishEstimate } from "./finish-estimate";
-import { finishEstimateWording } from "./finish-wording";
+import { dayScheduleWording, scheduledFinishWording } from "./finish-wording";
 
-function estimate(overrides: Partial<FinishEstimate> = {}): FinishEstimate {
-  return {
-    finish: "2026-09-17T13:00:00.000Z",
-    placedFinish: "2026-09-17T12:00:00.000Z",
-    unplacedMatches: 0,
-    uncreatedMatches: 3,
-    deficitMinutes: null,
-    basis: "projected",
-    remainingMatches: 3,
-    days: 2,
-    ...overrides,
-  };
-}
+const CLOSE = Date.parse("2026-09-17T17:30:00.000Z");
 
-describe("finishEstimateWording", () => {
-  it("reads a placed tournament as a finish, not an estimate", () => {
-    const wording = finishEstimateWording(
-      estimate({ basis: "placed", remainingMatches: 0, uncreatedMatches: 0 }),
-    );
-    expect(wording.headline.startsWith("Finishes")).toBe(true);
-    expect(wording.headline).not.toContain("~");
-    expect(wording.detail).toBeNull();
-    expect(wording.tone).toBe("good");
-  });
-
-  it("labels forecast work as an estimate and says how much is left", () => {
-    const wording = finishEstimateWording(estimate({ remainingMatches: 7 }));
-    expect(wording.headline.startsWith("Estimated finish")).toBe(true);
-    expect(wording.detail).toBe("7 matches still to place");
+describe("scheduledFinishWording", () => {
+  it("names the latest scheduled finish and the official close it is measured against", () => {
+    const wording = scheduledFinishWording({
+      finishMs: Date.parse("2026-09-17T13:00:00.000Z"),
+      closeMs: CLOSE,
+    });
+    expect(wording.finish).toContain("Latest scheduled finish");
+    expect(wording.close).toContain("Official close");
+    expect(wording.warning).toBeNull();
     expect(wording.tone).toBe("normal");
   });
 
-  it("singularises a single remaining match", () => {
-    expect(finishEstimateWording(estimate({ remainingMatches: 1 })).detail).toBe(
-      "1 match still to place",
-    );
-  });
-
-  it("names the extension, never the official close, when the work overruns", () => {
-    const wording = finishEstimateWording(estimate({ basis: "overflow", deficitMinutes: 40 }));
-    expect(wording.headline).toBe("Needs ~40 min beyond the tournament window");
-    expect(wording.detail?.startsWith("Estimated finish")).toBe(true);
+  it("measures the scheduled matches against the close, and names the overrun", () => {
+    const wording = scheduledFinishWording({
+      finishMs: Date.parse("2026-09-17T18:10:00.000Z"),
+      closeMs: CLOSE,
+    });
+    expect(wording.warning).toBe("40 min past the close");
     expect(wording.tone).toBe("warn");
   });
 
-  it("names no clock time when something cannot be placed at all", () => {
-    const wording = finishEstimateWording(
-      estimate({
-        basis: "overflow",
-        finish: null,
-        deficitMinutes: null,
-        remainingMatches: 4,
-        days: 2,
-      }),
-    );
-    expect(wording.headline).toBe("Cannot finish in 2 days");
-    expect(wording.detail).toBe("4 matches still need capacity");
-    expect(wording.value).toBe("—");
-    expect(wording.tone).toBe("danger");
+  it("reports no finish when nothing is left with a time", () => {
+    const wording = scheduledFinishWording({ finishMs: null, closeMs: CLOSE });
+    expect(wording.finish).toBe("No matches left to play");
+    expect(wording.warning).toBeNull();
+    expect(wording.tone).toBe("normal");
   });
 
-  it("falls back to the configured days when no day has courts", () => {
-    const wording = finishEstimateWording(
-      estimate({ basis: "overflow", finish: null, remainingMatches: 4, days: 0 }),
-    );
-    expect(wording.headline).toBe("Cannot finish in the configured days");
-  });
-
-  it("discloses that the number is a structural estimate", () => {
-    const wording = finishEstimateWording(estimate());
-    expect(wording.note).toContain("Structural estimate");
-    expect(wording.note).toContain("does not account for one player appearing in several events");
-  });
-
-  it("never invents a time when the rows are already an impossible layout", () => {
-    const wording = finishEstimateWording(
-      estimate({ basis: "invalid", finish: null, remainingMatches: 6 }),
-    );
-    expect(wording.headline).toBe("Finish estimate unavailable");
-    expect(wording.detail).toContain("6 matches still to place");
-    expect(wording.value).toBe("—");
-    expect(wording.tone).toBe("warn");
-  });
-
-  it("compares forecast against forecast, and returns nothing when either side has no clock", () => {
-    const current = estimate({ finish: "2026-09-17T12:00:00.000Z" });
-    expect(finishEstimateWording(estimate(), current).comparison).not.toBeNull();
-    // A current state with no nameable finish cannot be compared against: never a floor.
+  it("omits the close when no day has a usable window", () => {
+    expect(scheduledFinishWording({ finishMs: null, closeMs: null }).close).toBeNull();
     expect(
-      finishEstimateWording(estimate(), estimate({ finish: null, basis: "overflow" })).comparison,
+      scheduledFinishWording({
+        finishMs: Date.parse("2026-09-17T13:00:00.000Z"),
+        closeMs: null,
+      }).warning,
     ).toBeNull();
-    expect(finishEstimateWording(estimate(), null).comparison).toBeNull();
+  });
+
+  it("is a statement about the schedule, never a forecast of when the event ends", () => {
+    const wording = scheduledFinishWording({
+      finishMs: Date.parse("2026-09-17T13:00:00.000Z"),
+      closeMs: CLOSE,
+    });
+    expect(JSON.stringify(wording)).not.toMatch(
+      /estimated|projected|forecast|expected to finish|still to place/i,
+    );
+  });
+});
+
+describe("dayScheduleWording", () => {
+  const dayClose = Date.parse("2026-09-17T17:30:00.000Z");
+
+  it("reports the day's latest scheduled finish against its close", () => {
+    const wording = dayScheduleWording({
+      latestFinishMs: Date.parse("2026-09-17T17:00:00.000Z"),
+      closeMs: dayClose,
+    });
+    expect(wording.latestFinish).toContain("Last match scheduled to finish");
+    expect(wording.closingTime).toContain("Day closes");
+    expect(wording.warning).toBeNull();
+    expect(wording.tone).toBe("normal");
+  });
+
+  it("warns when the day's schedule extends past its close", () => {
+    const wording = dayScheduleWording({
+      latestFinishMs: Date.parse("2026-09-17T18:10:00.000Z"),
+      closeMs: dayClose,
+    });
+    expect(wording.warning).toBe("Scheduled 40 min past the day's close");
+    expect(wording.tone).toBe("warn");
+  });
+
+  it("is a statement about the plan, never a forecast of when the day ends", () => {
+    const wording = dayScheduleWording({ latestFinishMs: null, closeMs: dayClose });
+    expect(wording.latestFinish).toBe("No matches left on the schedule");
+    expect(wording.warning).toBeNull();
+    expect(JSON.stringify(wording)).not.toMatch(/estimated|projected|expected to finish/i);
+  });
+
+  it("says so when the day has no closing time", () => {
+    const wording = dayScheduleWording({ latestFinishMs: null, closeMs: null });
+    expect(wording.closingTime).toBe("No closing time configured");
   });
 });

@@ -38,6 +38,40 @@ export function minutesSince(
 }
 
 /**
+ * A local date *and* time, e.g. "Thu 17 Sep, 18:20".
+ *
+ * The finish forecast is an instant and it is read across a day boundary — a
+ * tournament that overruns finishes after midnight — so a bare time would be
+ * ambiguous. Unlike `dayDateLabel`, this takes a real instant rather than a
+ * `YYYY-MM-DD`, because a forecast is always an absolute moment.
+ */
+export function dateTimeLabel(
+  value: string | Date | number | null | undefined,
+  timezone?: string | undefined,
+): string {
+  if (value == null) return "—";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  };
+  if (timezone) options.timeZone = timezone;
+  try {
+    return d.toLocaleString([], options);
+  } catch {
+    // An unrecognised timezone should never blank out a finish; fall back to the
+    // runtime zone rather than throwing inside render.
+    delete options.timeZone;
+    return d.toLocaleString([], options);
+  }
+}
+
+/**
  * A short local date for a day heading, e.g. "Thu, Sep 17" or "Thu 17 Sep"
  * depending on the locale.
  *

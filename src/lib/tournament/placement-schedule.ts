@@ -9,8 +9,8 @@
  *
  * What is shared is deliberate and narrow: the scheduling core and day runner, the
  * row-to-item conversion, the plan diff and the summary shape are all imported rather
- * than reimplemented. Only the estimate of when the tournament *finishes* is extra,
- * because it has to reason about work that does not exist yet — see `finish-estimate.ts`.
+ * than reimplemented. The plan carries no finish forecast: the only finish it reports is
+ * the last end among the matches it actually placed.
  *
  * Two conversions are worth calling out:
  *
@@ -39,7 +39,6 @@ import type {
   TournamentDay,
   TournamentDayBreak,
 } from "./data";
-import { estimateFinish, type FinishEstimate } from "./finish-estimate";
 import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
 import {
   breakWindowsFor,
@@ -93,10 +92,6 @@ export interface PlacementSchedulePlan {
   awaitingTeams: string[];
   diff: SchedulePlanDiff;
   summary: ScheduleSummary;
-  /** The forecast from the rebuilt plan, including work with no row yet. */
-  estimate: FinishEstimate;
-  /** The forecast from the current live state, for an apples-to-apples delta. */
-  currentEstimate: FinishEstimate | null;
   days: PlacementDayFill[];
   /**
    * Split by stage because the writer is stage-scoped: `apply_placement_day_schedule`
@@ -105,6 +100,18 @@ export interface PlacementSchedulePlan {
    */
   placementSlotPayload: PlacementSlotPayload[];
   knockoutSlotPayload: PlacementSlotPayload[];
+  /**
+   * The rows each stage's call will CLEAR, captured as the plan was computed.
+   *
+   * `apply_placement_day_schedule` wipes every `scheduled` row of its stage and then
+   * re-sets whatever the payload names, so a row that is cleared and not named is
+   * left with no court and no time — the RPC's own completeness guard then fails the
+   * whole transaction. Carrying these ids lets the client check that invariant
+   * before it sends anything, which turns "the rebuild left a match behind" into a
+   * message that says which match and why.
+   */
+  placementScheduledIds: string[];
+  knockoutScheduledIds: string[];
   /** Why the scheduler could not place something, for the desk-facing error. */
   blockedReason: string | null;
 }
@@ -258,33 +265,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   const diff = diffPlan(existing, run.allSlots, fixedSet, courtNumberById);
   diff.unplaceable = blocked;
 
-  const estimateInput = {
-    tournament,
-    days: orderedDays,
-    allCourts,
-    ...(dayCourtIds ? { dayCourtIds } : {}),
-    ...(breaksByDayId ? { breaksByDayId } : {}),
-    teams,
-    entrants,
-    draws,
-    placementMatches,
-    tierMatches,
-    categoryOrder,
-    ...(options ? { options } : {}),
-    now,
-    placementAll,
-    knockoutAll,
-  };
-  // The rebuilt plan's forecast pins every real slot the planner produced and places only the
-  // remainder; the current forecast pins the live rows instead. Same work, same estimator, so the
-  // delta between them is a forecast against a forecast rather than a floor against a forecast.
-  const estimate = estimateFinish({ ...estimateInput, placedSlots: run.allSlots });
-  const currentEstimate = isRebuild ? estimateFinish(estimateInput) : null;
-
-  const rebuiltFinishMs = estimate.finish != null ? Date.parse(estimate.finish) : null;
-  const currentFinishMs =
-    currentEstimate?.finish != null ? Date.parse(currentEstimate.finish) : null;
-
   const summary: ScheduleSummary = {
     placed: diff.placedCount,
     anchorCount: fixedSet.size,
@@ -298,18 +278,15 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     // together used to make an incomplete plan claim it ran past the day end.
     overrun: run.days.some((fill) => fill.overrunMinutes > 0),
     projectedFinish: run.lastFinishMs != null ? new Date(run.lastFinishMs).toISOString() : null,
-    currentProjectedFinish: currentEstimate?.finish ?? null,
-    projectedFinishDeltaMinutes:
-      rebuiltFinishMs != null && currentFinishMs != null
-        ? Math.round((rebuiltFinishMs - currentFinishMs) / MINUTE)
-        : null,
+    // The rebuild no longer compares two finishes: the plan's own last finish is the only
+    // finish there is, and the per-day change table is what shows how the rebuild differs.
+    currentProjectedFinish: null,
+    projectedFinishDeltaMinutes: null,
     overrunMinutes:
       run.lastFinishMs != null && run.lastPlanningEndMs > 0
         ? Math.max(0, Math.round((run.lastFinishMs - run.lastPlanningEndMs) / MINUTE))
         : 0,
     ...(run.lastDiagnostics ? { diagnostics: run.lastDiagnostics } : {}),
-    estimate,
-    ...(currentEstimate ? { currentEstimate } : {}),
   };
 
   const payloadFor = (stageIds: ReadonlySet<string>): PlacementSlotPayload[] =>
@@ -321,6 +298,15 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
         court_id: slot.courtId,
       }));
 
+  // The rows the writer is about to clear, which the payloads above must therefore
+  // cover. Byes and `void` rows are excluded because the RPC excludes them too.
+  const placementScheduledIds = placementMatches
+    .filter((match) => match.status === "scheduled")
+    .map((match) => match.id);
+  const knockoutScheduledIds = tierMatches
+    .filter((match) => match.status === "scheduled" && !match.is_bye)
+    .map((match) => match.id);
+
   return {
     tournamentId: tournament.id,
     slots: run.allSlots,
@@ -329,12 +315,39 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     awaitingTeams,
     diff,
     summary,
-    estimate,
-    currentEstimate,
     days: run.days,
     placementSlotPayload: payloadFor(new Set(placementAll.map((item) => item.id))),
     knockoutSlotPayload: payloadFor(new Set(knockoutAll.map((item) => item.id))),
+    placementScheduledIds,
+    knockoutScheduledIds,
     blockedReason,
+  };
+}
+
+/**
+ * The scheduled rows a plan would clear without re-setting.
+ *
+ * Non-empty means applying the plan would strip a match of its court and time, so
+ * the writer must refuse rather than let the database guard fail the transaction
+ * with no indication of which match was dropped. Rows `void` by the desk, and
+ * knockout byes, are not counted because the writer never clears them.
+ *
+ * Exported and pure so the invariant is testable without a database.
+ */
+export function uncoveredScheduledMatches(plan: PlacementSchedulePlan): {
+  placement: string[];
+  knockout: string[];
+} {
+  const missingFor = (
+    scheduledIds: readonly string[],
+    payload: readonly PlacementSlotPayload[],
+  ): string[] => {
+    const covered = new Set(payload.map((slot) => slot.match_id));
+    return scheduledIds.filter((id) => !covered.has(id));
+  };
+  return {
+    placement: missingFor(plan.placementScheduledIds, plan.placementSlotPayload),
+    knockout: missingFor(plan.knockoutScheduledIds, plan.knockoutSlotPayload),
   };
 }
 
@@ -458,6 +471,15 @@ function explainBlocked(
  * Two calls rather than one, because `apply_placement_day_schedule` is stage-scoped
  * and clears only its own stage's rows. Placement goes first so a failure part-way
  * leaves the earlier stage scheduled rather than the later one orphaned.
+ *
+ * The completeness check is repeated here against the plan's own `scheduled` rows
+ * because the RPC's equivalent guard can only say that *some* row was dropped. When
+ * the planner is handed an input it cannot read — an entrant list or team list that
+ * has not loaded, say — every match looks like it is still waiting for its players,
+ * `blocked` stays empty, and the payload comes out short. Catching it here names the
+ * cause and leaves the database untouched, instead of letting the RPC clear the day
+ * and then roll the whole thing back with "left assigned matches without a court or
+ * time".
  */
 export async function applyPlacementSchedulePlan(plan: PlacementSchedulePlan): Promise<void> {
   if (plan.blocked.length > 0) {
@@ -465,6 +487,15 @@ export async function applyPlacementSchedulePlan(plan: PlacementSchedulePlan): P
       plan.blockedReason
         ? `Cannot apply the schedule: ${plan.blocked.length} match(es) could not be placed. ${plan.blockedReason}`
         : `Cannot apply the schedule: ${plan.blocked.length} match(es) could not be placed.`,
+    );
+  }
+
+  const uncovered = uncoveredScheduledMatches(plan);
+  const dropped = [...uncovered.placement, ...uncovered.knockout];
+  if (dropped.length > 0) {
+    throw new Error(
+      `Cannot apply the schedule: ${dropped.length} already-scheduled match(es) have no court or time in this plan. ` +
+        `This means the planner could not read their players — reload the page and build again.`,
     );
   }
 
@@ -509,5 +540,3 @@ export function placementMatchLabel(
 export function placementStageLabel(stage: PlacementStageName): string {
   return stage === "placement" ? "placement" : "knockouts";
 }
-
-export type { FinishEstimate };

@@ -12,7 +12,6 @@ import type {
   TournamentDay,
 } from "./data";
 import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
-import type { FinishEstimate } from "./finish-estimate";
 import { gamesWinner, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
 import type { SolverDiagnostics } from "@/lib/scheduling";
@@ -369,18 +368,12 @@ export interface ScheduleSummary {
   utilization: number;
   remainingUtilization: number | null;
   overrun: boolean;
+  /** The plan's own last finish: the latest end among matches it placed. */
   projectedFinish: string | null;
   currentProjectedFinish: string | null;
   projectedFinishDeltaMinutes: number | null;
   overrunMinutes: number;
   diagnostics?: SolverDiagnostics | undefined;
-  /**
-   * Placement format only: the forecast from the rebuilt plan, including work with no row yet.
-   * Legacy `planDay` leaves it absent, so its semantics are unchanged.
-   */
-  estimate?: FinishEstimate | undefined;
-  /** Placement format only: the forecast from the current live state, for the delta. */
-  currentEstimate?: FinishEstimate | undefined;
 }
 
 export interface DayPlan {
