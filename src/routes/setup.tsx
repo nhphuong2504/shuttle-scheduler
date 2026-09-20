@@ -412,106 +412,116 @@ function SetupPage() {
     );
   }
 
-  const activeEvents = form.events.filter((event) => event.active !== false);
   const draftStillEditable = isNew || draftData.tournament?.status === "draft";
 
   return (
     <AppShell
       title={isNew ? "New tournament" : (draftData.tournament?.name ?? "Tournament setup")}
-      subtitle={`Step ${currentIndex + 1} of ${SETUP_STEPS.length} · ${SETUP_STEPS[currentIndex]?.label ?? ""}`}
+      subtitle={SETUP_STEPS[currentIndex]?.hint ?? ""}
       actions={
-        <Button size="sm" variant="ghost" onClick={() => goto("basics", null)}>
-          {isNew ? "Cancel" : "All drafts"}
+        <Button size="sm" variant="ghost" onClick={() => goto("details", null)}>
+          {isNew ? "Cancel" : "All tournaments"}
         </Button>
       }
     >
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <StatTile label="Days" value={form.days.length} hint={dateRangeLabel(form.days)} />
-        <StatTile label="Events" value={activeEvents.length} hint="Switched on" />
-        <StatTile
-          label="Status"
-          value={draftStillEditable ? "Draft" : "In progress"}
-          tone={draftStillEditable ? "normal" : "good"}
-          hint={problems.length ? `${problems.length} to fix` : "No open issues"}
-        />
-      </div>
+      <div className="mx-auto w-full max-w-3xl">
+        <ol className="mb-5 flex items-center gap-2">
+          {SETUP_STEPS.map((entry, index) => {
+            const isCurrent = entry.id === step;
+            const isDone = index < currentIndex && !!draftId;
+            return (
+              <li key={entry.id} className="flex flex-1 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => goto(entry.id)}
+                  aria-current={isCurrent ? "step" : undefined}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                    isCurrent
+                      ? "border-primary/40 bg-primary/10"
+                      : "border-hairline bg-surface hover:bg-muted/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid size-5 shrink-0 place-items-center rounded-full font-score text-[10px] font-bold",
+                      isCurrent
+                        ? "bg-primary text-primary-foreground"
+                        : isDone
+                          ? "bg-mint/50 text-foreground"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {isDone ? "✓" : index + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      "truncate text-sm font-semibold",
+                      isCurrent ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {entry.label}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_320px]">
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          <Panel title="Steps">
-            <StepNav current={step} draftId={draftId} onSelect={(next) => goto(next)} />
-          </Panel>
-        </div>
+        {step === "details" ? (
+          <DetailsStep form={form} onChange={patchForm} isNew={isNew} />
+        ) : null}
+        {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
+        {step === "review" ? (
+          <ReviewStep
+            form={form}
+            readiness={readinessQuery.data}
+            readinessError={
+              readinessQuery.error instanceof Error ? readinessQuery.error.message : null
+            }
+            busy={busy}
+            canActivate={!!draftId && draftStillEditable}
+            onActivate={activate}
+            onDiscard={discard}
+          />
+        ) : null}
 
-        <div className="min-w-0">
-          {step === "basics" ? (
-            <BasicsStep
-              value={form.basics}
-              onChange={(patch) => patchForm({ basics: { ...form.basics, ...patch } })}
-              isNew={isNew}
-            />
+        {step !== "review" && problems.length ? (
+          <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
+            <ul className="space-y-1">
+              {problems.map((problem) => (
+                <li key={problem} className="flex items-start gap-2 text-xs text-warn-foreground">
+                  <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
+                  {problem}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="sticky bottom-0 z-20 mt-4 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-surface/90 px-4 py-3 shadow-raise backdrop-blur-md">
+          {currentIndex > 0 ? (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                const previous = SETUP_STEPS[currentIndex - 1];
+                if (previous) goto(previous.id);
+              }}
+            >
+              ← Back
+            </Button>
           ) : null}
-          {step === "days" ? <DaysStep form={form} onChange={patchForm} /> : null}
-          {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
-          {step === "structure" ? <StructureStep /> : null}
-          {step === "review" ? (
-            <ReviewStep
-              form={form}
-              readiness={readinessQuery.data}
-              readinessError={
-                readinessQuery.error instanceof Error ? readinessQuery.error.message : null
-              }
-              busy={busy}
-              canActivate={!!draftId && draftStillEditable}
-              onActivate={activate}
-              onDiscard={discard}
-            />
-          ) : null}
-
-          {step !== "review" && problems.length ? (
-            <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-warn-foreground">
-                {problems.length} thing{problems.length === 1 ? "" : "s"} to fix on this step
-              </p>
-              <ul className="mt-1.5 space-y-1">
-                {problems.map((problem) => (
-                  <li key={problem} className="flex items-start gap-2 text-xs text-warn-foreground">
-                    <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
-                    {problem}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <div className="sticky bottom-0 z-20 mt-4 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-surface/90 px-4 py-3 shadow-raise backdrop-blur-md">
-            {currentIndex > 0 ? (
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  const previous = SETUP_STEPS[currentIndex - 1];
-                  if (previous) goto(previous.id);
-                }}
-              >
-                ← Back
+          <span className="font-score text-[11px] text-muted-foreground">
+            Step {currentIndex + 1} / {SETUP_STEPS.length}
+          </span>
+          <div className="ml-auto flex items-center gap-3">
+            {step !== "review" ? (
+              <Button disabled={busy} onClick={saveAndContinue}>
+                {busy ? "Saving…" : isNew ? "Create and continue" : "Save and continue →"}
               </Button>
             ) : null}
-            <span className="font-score text-[11px] text-muted-foreground">
-              Step {currentIndex + 1} / {SETUP_STEPS.length}
-            </span>
-            <div className="ml-auto flex items-center gap-3">
-              {step !== "review" ? (
-                <Button disabled={busy} onClick={saveAndContinue}>
-                  {busy ? "Saving…" : isNew ? "Create draft and continue" : "Save and continue →"}
-                </Button>
-              ) : null}
-            </div>
           </div>
-        </div>
-
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          <DraftHeader form={form} isDraft={draftStillEditable} />
         </div>
       </div>
     </AppShell>
