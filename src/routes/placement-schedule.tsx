@@ -1100,87 +1100,91 @@ function PlacementSchedulePage() {
         {showSettings ? (
           <Panel
             title="Settings"
+            bodyClassName="p-0"
             right={
               <span className="font-score text-[11px] text-muted-foreground">
                 applies to the next build
               </span>
             }
           >
-            <div className="space-y-5">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Venue
-                </p>
-                <div className="flex flex-wrap items-end gap-3">
-                  <div>
-                    <Label htmlFor="venue-courts" className="text-xs text-muted-foreground">
-                      Courts at the venue
-                    </Label>
-                    <div className="mt-1 flex items-center gap-2">
-                      <Input
-                        id="venue-courts"
-                        type="number"
-                        min={1}
-                        max={64}
-                        className="h-9 w-24"
-                        placeholder="—"
-                        disabled={!canSchedule || busy}
-                        value={courtCountDraft ?? ((courts ?? []).length || "")}
-                        onChange={(event) => setCourtCountDraft(event.target.value)}
-                        onBlur={(event) => void saveCourtCount(event.target.value)}
-                      />
-                      <span className="text-xs text-muted-foreground">courts</span>
-                    </div>
-                  </div>
-                  <p className="pb-2 text-[11px] text-muted-foreground">
-                    Adding courts makes them available on every day until a day is told otherwise
-                    below.
-                  </p>
+            <div className="divide-y divide-hairline">
+              <SettingsSection
+                title="Venue"
+                hint="How many courts the hall has. New courts are available on every day until a day below says otherwise."
+              >
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="venue-courts" className="sr-only">
+                    Courts at the venue
+                  </Label>
+                  <Input
+                    id="venue-courts"
+                    type="number"
+                    min={1}
+                    max={64}
+                    className="h-9 w-24"
+                    placeholder="—"
+                    disabled={!canSchedule || busy}
+                    value={courtCountDraft ?? ((courts ?? []).length || "")}
+                    onChange={(event) => setCourtCountDraft(event.target.value)}
+                    onBlur={(event) => void saveCourtCount(event.target.value)}
+                  />
+                  <span className="text-xs text-muted-foreground">courts</span>
                 </div>
-              </div>
+              </SettingsSection>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {timingFields.map((timing) => (
-                  <div key={timing.key}>
-                    <Label
-                      htmlFor={`timing-${timing.key}`}
-                      className="text-xs text-muted-foreground"
+              <SettingsSection
+                title="Match timings"
+                hint="Minutes used when the running order is planned. Every value applies to the next build."
+              >
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {timingFields.map((timing) => (
+                    <div
+                      key={timing.key}
+                      className="rounded-lg border border-hairline bg-surface px-3 py-2.5"
                     >
-                      {timing.label}
-                    </Label>
-                    <div className="mt-1 flex items-center gap-2">
-                      <Input
-                        id={`timing-${timing.key}`}
-                        type="number"
-                        min={timing.min}
-                        className="h-9 w-24"
-                        disabled={!canSchedule || busy}
-                        value={timingText(timing.key, timing.value)}
-                        onChange={(event) =>
-                          setTimingDrafts((prev) => ({ ...prev, [timing.key]: event.target.value }))
-                        }
-                        onBlur={(event) =>
-                          void saveTiming(
-                            timing.field,
-                            timing.key,
-                            timing.value,
-                            timing.min,
-                            event.target.value,
-                          )
-                        }
-                      />
-                      <span className="text-xs text-muted-foreground">min</span>
+                      <Label
+                        htmlFor={`timing-${timing.key}`}
+                        className="text-[11px] leading-snug text-muted-foreground"
+                      >
+                        {timing.label}
+                      </Label>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <Input
+                          id={`timing-${timing.key}`}
+                          type="number"
+                          min={timing.min}
+                          className="h-9 w-20"
+                          disabled={!canSchedule || busy}
+                          value={timingText(timing.key, timing.value)}
+                          onChange={(event) =>
+                            setTimingDrafts((prev) => ({
+                              ...prev,
+                              [timing.key]: event.target.value,
+                            }))
+                          }
+                          onBlur={(event) =>
+                            void saveTiming(
+                              timing.field,
+                              timing.key,
+                              timing.value,
+                              timing.min,
+                              event.target.value,
+                            )
+                          }
+                        />
+                        <span className="text-xs text-muted-foreground">min</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </SettingsSection>
 
-              <div className="space-y-4 border-t border-hairline pt-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Scoring
-                </p>
+              <SettingsSection
+                title="Scoring"
+                hint="The rule a reported score is checked against, per stage."
+              >
                 {tournament ? (
-                  <>
+                  <div className="space-y-4">
                     <StageScoring
                       title="Placement"
                       detail="The two rounds that sort entrants into draws. A reported score is validated against this rule."
@@ -1197,11 +1201,15 @@ function PlacementSchedulePage() {
                       onRule={(rule) => void saveScoringRule("knockout", rule)}
                       onPreset={(rule, minutes) => void saveScoringRule("knockout", rule, minutes)}
                     />
-                  </>
+                  </div>
                 ) : null}
-              </div>
+              </SettingsSection>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <SettingsSection
+                title="Days"
+                hint="Each day's date, playing window, the courts it uses and any breaks."
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
                 {tournamentDays.map((day) => {
                   const window = windowFor(day);
                   return (
@@ -1391,10 +1399,14 @@ function PlacementSchedulePage() {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              </SettingsSection>
 
               {isAdmin ? (
-                <div className="flex flex-wrap items-center gap-3 border-t border-hairline pt-3">
+                <SettingsSection
+                  title="Danger zone"
+                  hint="Clears every match, result, seed order and waiver. Cannot be undone."
+                >
                   <Button
                     variant="destructive"
                     size="sm"
@@ -1403,10 +1415,7 @@ function PlacementSchedulePage() {
                   >
                     Delete results &amp; schedule
                   </Button>
-                  <span className="text-[11px] text-muted-foreground">
-                    Clears every match, result, seed order and waiver. Cannot be undone.
-                  </span>
-                </div>
+                </SettingsSection>
               ) : null}
             </div>
           </Panel>
@@ -1682,5 +1691,29 @@ function PlacementSchedulePage() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+/**
+ * One labelled block inside the Settings panel: a sticky-feeling title column
+ * with its explanation, and the controls beside it on wide screens.
+ */
+function SettingsSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="grid gap-3 px-4 py-4 md:grid-cols-[13rem_1fr] md:gap-6">
+      <div>
+        <h3 className="font-display text-sm font-semibold">{title}</h3>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{hint}</p>
+      </div>
+      <div className="min-w-0">{children}</div>
+    </section>
   );
 }
