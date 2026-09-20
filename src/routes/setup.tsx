@@ -3,25 +3,21 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
-import { BasicsStep } from "@/components/tournament-setup/BasicsStep";
-import { DaysStep } from "@/components/tournament-setup/DaysStep";
-import { DraftHeader } from "@/components/tournament-setup/DraftHeader";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
+import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep } from "@/components/tournament-setup/ReviewStep";
-import { StepNav } from "@/components/tournament-setup/StepNav";
-import { StructureStep } from "@/components/tournament-setup/StructureStep";
 import { hydrateForm } from "@/components/tournament-setup/hydrate";
 import {
   MAX_TOURNAMENT_DAYS,
   SETUP_STEPS,
-  dateRangeLabel,
   defaultForm,
   isSetupStep,
   setupStepIndex,
   type DraftForm,
   type SetupStep,
 } from "@/components/tournament-setup/types";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
