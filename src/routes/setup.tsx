@@ -3,25 +3,21 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
-import { BasicsStep } from "@/components/tournament-setup/BasicsStep";
-import { DaysStep } from "@/components/tournament-setup/DaysStep";
-import { DraftHeader } from "@/components/tournament-setup/DraftHeader";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
+import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep } from "@/components/tournament-setup/ReviewStep";
-import { StepNav } from "@/components/tournament-setup/StepNav";
-import { StructureStep } from "@/components/tournament-setup/StructureStep";
 import { hydrateForm } from "@/components/tournament-setup/hydrate";
 import {
   MAX_TOURNAMENT_DAYS,
   SETUP_STEPS,
-  dateRangeLabel,
   defaultForm,
   isSetupStep,
   setupStepIndex,
   type DraftForm,
   type SetupStep,
 } from "@/components/tournament-setup/types";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
@@ -121,7 +117,7 @@ function SetupPage() {
   const [busy, setBusy] = useState(false);
   const hydratedFor = useRef<string | null>(null);
 
-  const step: SetupStep = stepParam ?? "basics";
+  const step: SetupStep = stepParam ?? "details";
   const currentIndex = setupStepIndex(step);
 
   // Load a persisted draft into the form exactly once per draft, so a background
@@ -179,6 +175,8 @@ function SetupPage() {
       if (isNew) {
         id = await createTournamentDraft(toDraftInput(form));
         hydratedFor.current = id;
+        // The first step now owns the dates too, so they are saved with the draft.
+        await saveTournamentDays(id, form.days);
       } else if (id) {
         await saveStep(step, id, form);
       }
@@ -302,7 +300,7 @@ function SetupPage() {
         title="Tournament setup"
         subtitle="A tournament owns its days, courts and events. Everything else in the desk is scoped to it."
         actions={
-          <Button size="sm" onClick={() => goto("basics", "new")}>
+          <Button size="sm" onClick={() => goto("details", "new")}>
             New tournament
           </Button>
         }
@@ -347,7 +345,7 @@ function SetupPage() {
                       size="sm"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => goto("basics", tournament.id)}
+                      onClick={() => goto("details", tournament.id)}
                     >
                       Resume
                     </Button>
@@ -414,106 +412,116 @@ function SetupPage() {
     );
   }
 
-  const activeEvents = form.events.filter((event) => event.active !== false);
   const draftStillEditable = isNew || draftData.tournament?.status === "draft";
 
   return (
     <AppShell
       title={isNew ? "New tournament" : (draftData.tournament?.name ?? "Tournament setup")}
-      subtitle={`Step ${currentIndex + 1} of ${SETUP_STEPS.length} · ${SETUP_STEPS[currentIndex]?.label ?? ""}`}
+      subtitle={SETUP_STEPS[currentIndex]?.hint ?? ""}
       actions={
-        <Button size="sm" variant="ghost" onClick={() => goto("basics", null)}>
-          {isNew ? "Cancel" : "All drafts"}
+        <Button size="sm" variant="ghost" onClick={() => goto("details", null)}>
+          {isNew ? "Cancel" : "All tournaments"}
         </Button>
       }
     >
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <StatTile label="Days" value={form.days.length} hint={dateRangeLabel(form.days)} />
-        <StatTile label="Events" value={activeEvents.length} hint="Switched on" />
-        <StatTile
-          label="Status"
-          value={draftStillEditable ? "Draft" : "In progress"}
-          tone={draftStillEditable ? "normal" : "good"}
-          hint={problems.length ? `${problems.length} to fix` : "No open issues"}
-        />
-      </div>
+      <div className="mx-auto w-full max-w-3xl">
+        <ol className="mb-5 flex items-center gap-2">
+          {SETUP_STEPS.map((entry, index) => {
+            const isCurrent = entry.id === step;
+            const isDone = index < currentIndex && !!draftId;
+            return (
+              <li key={entry.id} className="flex flex-1 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => goto(entry.id)}
+                  aria-current={isCurrent ? "step" : undefined}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                    isCurrent
+                      ? "border-primary/40 bg-primary/10"
+                      : "border-hairline bg-surface hover:bg-muted/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid size-5 shrink-0 place-items-center rounded-full font-score text-[10px] font-bold",
+                      isCurrent
+                        ? "bg-primary text-primary-foreground"
+                        : isDone
+                          ? "bg-mint/50 text-foreground"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {isDone ? "✓" : index + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      "truncate text-sm font-semibold",
+                      isCurrent ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {entry.label}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_320px]">
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          <Panel title="Steps">
-            <StepNav current={step} draftId={draftId} onSelect={(next) => goto(next)} />
-          </Panel>
-        </div>
+        {step === "details" ? (
+          <DetailsStep form={form} onChange={patchForm} isNew={isNew} />
+        ) : null}
+        {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
+        {step === "review" ? (
+          <ReviewStep
+            form={form}
+            readiness={readinessQuery.data}
+            readinessError={
+              readinessQuery.error instanceof Error ? readinessQuery.error.message : null
+            }
+            busy={busy}
+            canActivate={!!draftId && draftStillEditable}
+            onActivate={activate}
+            onDiscard={discard}
+          />
+        ) : null}
 
-        <div className="min-w-0">
-          {step === "basics" ? (
-            <BasicsStep
-              value={form.basics}
-              onChange={(patch) => patchForm({ basics: { ...form.basics, ...patch } })}
-              isNew={isNew}
-            />
+        {step !== "review" && problems.length ? (
+          <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
+            <ul className="space-y-1">
+              {problems.map((problem) => (
+                <li key={problem} className="flex items-start gap-2 text-xs text-warn-foreground">
+                  <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
+                  {problem}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="sticky bottom-0 z-20 mt-4 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-surface/90 px-4 py-3 shadow-raise backdrop-blur-md">
+          {currentIndex > 0 ? (
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                const previous = SETUP_STEPS[currentIndex - 1];
+                if (previous) goto(previous.id);
+              }}
+            >
+              ← Back
+            </Button>
           ) : null}
-          {step === "days" ? <DaysStep form={form} onChange={patchForm} /> : null}
-          {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
-          {step === "structure" ? <StructureStep /> : null}
-          {step === "review" ? (
-            <ReviewStep
-              form={form}
-              readiness={readinessQuery.data}
-              readinessError={
-                readinessQuery.error instanceof Error ? readinessQuery.error.message : null
-              }
-              busy={busy}
-              canActivate={!!draftId && draftStillEditable}
-              onActivate={activate}
-              onDiscard={discard}
-            />
-          ) : null}
-
-          {step !== "review" && problems.length ? (
-            <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-warn-foreground">
-                {problems.length} thing{problems.length === 1 ? "" : "s"} to fix on this step
-              </p>
-              <ul className="mt-1.5 space-y-1">
-                {problems.map((problem) => (
-                  <li key={problem} className="flex items-start gap-2 text-xs text-warn-foreground">
-                    <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
-                    {problem}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <div className="sticky bottom-0 z-20 mt-4 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-surface/90 px-4 py-3 shadow-raise backdrop-blur-md">
-            {currentIndex > 0 ? (
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  const previous = SETUP_STEPS[currentIndex - 1];
-                  if (previous) goto(previous.id);
-                }}
-              >
-                ← Back
+          <span className="font-score text-[11px] text-muted-foreground">
+            Step {currentIndex + 1} / {SETUP_STEPS.length}
+          </span>
+          <div className="ml-auto flex items-center gap-3">
+            {step !== "review" ? (
+              <Button disabled={busy} onClick={saveAndContinue}>
+                {busy ? "Saving…" : isNew ? "Create and continue" : "Save and continue →"}
               </Button>
             ) : null}
-            <span className="font-score text-[11px] text-muted-foreground">
-              Step {currentIndex + 1} / {SETUP_STEPS.length}
-            </span>
-            <div className="ml-auto flex items-center gap-3">
-              {step !== "review" ? (
-                <Button disabled={busy} onClick={saveAndContinue}>
-                  {busy ? "Saving…" : isNew ? "Create draft and continue" : "Save and continue →"}
-                </Button>
-              ) : null}
-            </div>
           </div>
-        </div>
-
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          <DraftHeader form={form} isDraft={draftStillEditable} />
         </div>
       </div>
     </AppShell>
@@ -522,17 +530,16 @@ function SetupPage() {
 
 async function saveStep(step: SetupStep, id: string, form: DraftForm): Promise<void> {
   switch (step) {
-    case "days":
+    case "details":
+      // The first step owns the name, venue, timezone and the dates.
+      await saveTournamentDraft(id, toDraftInput(form));
       await saveTournamentDays(id, form.days);
       return;
     case "events":
       await saveTournamentDraft(id, toDraftInput(form));
       await saveTournamentEvents(id, form.events);
       return;
-    case "structure":
-      return;
     default:
-      // Basics and review both persist through the same draft payload.
       await saveTournamentDraft(id, toDraftInput(form));
       return;
   }
@@ -554,14 +561,10 @@ function tournamentStatusLabel(tournament: Tournament): string {
 function problemsForStep(step: SetupStep, form: DraftForm): string[] {
   const issues: string[] = [];
 
-  if (step === "basics") {
+  if (step === "details") {
     if (!form.basics.name.trim()) issues.push("Give the tournament a name.");
     if (!form.basics.venueTimezone.trim()) issues.push("Choose a timezone.");
-    return issues;
-  }
-
-  if (step === "days") {
-    if (form.days.length === 0) issues.push("Pick a start date.");
+    if (form.days.length === 0) issues.push("Pick the first day.");
     if (form.days.length > MAX_TOURNAMENT_DAYS) {
       issues.push(`A tournament can span at most ${MAX_TOURNAMENT_DAYS} days.`);
     }
