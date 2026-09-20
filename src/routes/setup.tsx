@@ -117,7 +117,7 @@ function SetupPage() {
   const [busy, setBusy] = useState(false);
   const hydratedFor = useRef<string | null>(null);
 
-  const step: SetupStep = stepParam ?? "basics";
+  const step: SetupStep = stepParam ?? "details";
   const currentIndex = setupStepIndex(step);
 
   // Load a persisted draft into the form exactly once per draft, so a background
