@@ -1693,3 +1693,27 @@ function PlacementSchedulePage() {
     </AppShell>
   );
 }
+
+/**
+ * One labelled block inside the Settings panel: a sticky-feeling title column
+ * with its explanation, and the controls beside it on wide screens.
+ */
+function SettingsSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="grid gap-3 px-4 py-4 md:grid-cols-[13rem_1fr] md:gap-6">
+      <div>
+        <h3 className="font-display text-sm font-semibold">{title}</h3>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{hint}</p>
+      </div>
+      <div className="min-w-0">{children}</div>
+    </section>
+  );
+}
