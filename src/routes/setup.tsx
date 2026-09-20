@@ -530,17 +530,16 @@ function SetupPage() {
 
 async function saveStep(step: SetupStep, id: string, form: DraftForm): Promise<void> {
   switch (step) {
-    case "days":
+    case "details":
+      // The first step owns the name, venue, timezone and the dates.
+      await saveTournamentDraft(id, toDraftInput(form));
       await saveTournamentDays(id, form.days);
       return;
     case "events":
       await saveTournamentDraft(id, toDraftInput(form));
       await saveTournamentEvents(id, form.events);
       return;
-    case "structure":
-      return;
     default:
-      // Basics and review both persist through the same draft payload.
       await saveTournamentDraft(id, toDraftInput(form));
       return;
   }
