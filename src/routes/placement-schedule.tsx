@@ -1184,7 +1184,7 @@ function PlacementSchedulePage() {
                 hint="The rule a reported score is checked against, per stage."
               >
                 {tournament ? (
-                  <>
+                  <div className="space-y-4">
                     <StageScoring
                       title="Placement"
                       detail="The two rounds that sort entrants into draws. A reported score is validated against this rule."
