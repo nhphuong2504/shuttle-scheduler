@@ -149,19 +149,7 @@ export function DetailsStep({
         </div>
       </Panel>
 
-      <div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setShowMore((open) => !open)}
-        >
-          {showMore ? "Hide venue and contact" : "Add venue and contact (optional)"}
-        </Button>
-      </div>
-
-      {showMore ? (
-        <Panel title="Venue and contact">
+      <Panel title="Venue and contact">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="t-venue">Venue</Label>
