@@ -1201,11 +1201,15 @@ function PlacementSchedulePage() {
                       onRule={(rule) => void saveScoringRule("knockout", rule)}
                       onPreset={(rule, minutes) => void saveScoringRule("knockout", rule, minutes)}
                     />
-                  </>
+                  </div>
                 ) : null}
-              </div>
+              </SettingsSection>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <SettingsSection
+                title="Days"
+                hint="Each day's date, playing window, the courts it uses and any breaks."
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
                 {tournamentDays.map((day) => {
                   const window = windowFor(day);
                   return (
