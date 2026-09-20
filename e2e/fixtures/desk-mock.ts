@@ -306,7 +306,11 @@ const match = (
   extra: { ended?: number; games?: { a: number; b: number }[]; isBye?: boolean } = {},
 ): MatchSpec => ({ n, draw, round, slot, a, b, status, court, scheduled, started, ...extra });
 
-const MATCH_SPECS: MatchSpec[] = [
+/**
+ * The layout preset: eight courts all busy at once, with the widest strings the app
+ * can be asked to draw. This is the fit question, not the state question.
+ */
+const LAYOUT_MATCH_SPECS: MatchSpec[] = [
   // Six matches live across six courts, with staggered starts so the timers differ and
   // the first is far enough past its slot to read as an overrun.
   match(1, drawA, 1, 1, 1, 2, "in-progress", 1, -240, -235),
@@ -329,35 +333,150 @@ const MATCH_SPECS: MatchSpec[] = [
   match(13, drawA, 1, 9, 12, 0, "scheduled", null, null, null, { isBye: true }),
 ];
 
-const tierDrawMatches = MATCH_SPECS.map((s) => ({
-  id: matchId(s.n),
-  tournament_id: TID,
-  draw_id: s.draw,
-  round: s.round,
-  slot: s.slot,
-  court_id: s.court ? courtId(s.court) : null,
-  status: s.status,
-  scheduled_time: s.scheduled === null ? null : at(s.scheduled),
-  started_at: s.started === null ? null : at(s.started),
-  ended_at: s.ended == null ? null : at(s.ended),
-  reported_time: s.status === "reported" && s.ended != null ? at(s.ended) : null,
-  games: s.games ?? [],
-  is_bye: s.isBye ?? false,
-  // A bye has no second side, which is why it is dropped downstream.
-  entrant_a_id: s.a === 0 ? null : entrantId(s.a),
-  entrant_b_id: s.b === 0 ? null : entrantId(s.b),
-  winner_id: s.status === "reported" || s.status === "walkover" ? entrantId(s.a) : null,
-  parent_a_id: null,
-  parent_b_id: null,
-  note: null,
+/**
+ * The states preset: one court per state, and every urgency treatment lit at once.
+ *
+ * The layout preset cannot do this. Six courts are live there, so four fifths of the
+ * vocabulary is unreachable by construction - a court is in exactly one state, and
+ * driving an app can only ever sample a vocabulary whose members are mutually
+ * exclusive. So the rows here are chosen backwards from the states: each entry
+ * below names the state it exists to produce and the reason that input produces it.
+ *
+ * Knockout pacing applies, because these are tier matches: a 15-minute slot and a
+ * 30-minute rest gap. The boundaries are stated rather than round, so an assertion
+ * against "overrun" is really asserting the configured slot was used.
+ *
+ * `is_bye` and `void` rows are deliberately absent. Both are filtered out of every
+ * surface that renders without a session - a void match is excluded from the running
+ * order because it never played, and a bye has no court or time by construction - so
+ * including them here would only add rows that nothing draws. They are covered by
+ * the component-level vocabulary tests, and the limitation is recorded in the canvas.
+ */
+const STATE_MATCH_SPECS: MatchSpec[] = [
+  // Court 1 -> overrun. Live for 48 against a 15-minute slot.
+  match(1, drawA, 1, 1, 1, 2, "in-progress", 1, -50, -48),
+  // Court 2 -> playing. Live for 7, inside the slot.
+  match(2, drawA, 1, 2, 3, 4, "in-progress", 2, -8, -7),
+  // Court 3 -> free-ready. Nothing live; the next pairing has no history at all, so
+  // nothing is resting and nobody is busy.
+  match(3, drawA, 1, 3, 9, 10, "scheduled", 3, 20, null),
+  // Court 4 -> free-blocked, resting. Entrant 6 finished 10 minutes ago on this court
+  // and plays again here, and the knockout rest gap is 30, so ready in 20.
+  match(4, drawA, 1, 4, 6, 7, "reported", 4, -40, -38, {
+    ended: -10,
+    games: [
+      { a: 21, b: 15 },
+      { a: 21, b: 18 },
+    ],
+  }),
+  match(5, drawA, 1, 5, 6, 8, "scheduled", 4, 20, null),
+  // Court 5 -> free-blocked, player busy. Entrant 3 is on court 2 right now, and busy
+  // is checked before rest, so this stays busy rather than becoming resting.
+  match(6, drawA, 1, 6, 3, 5, "scheduled", 5, 20, null),
+  // A ready pairing with no court: the amber "ready but unplaced" alert. Its two
+  // entrants appear nowhere else in this set on purpose - sharing a player with a
+  // finished match made this read as resting, which is the other blocked state, and
+  // that is a silent failure rather than a loud one.
+  match(7, drawC, 1, 7, 11, 12, "scheduled", null, 25, null),
+  // Courts 6, 7 and 8 have no rows at all, which is the idle state - and the only way
+  // to reach it, since a court with anything live or scheduled is one of the others.
+  // The archived statuses (reported, walkover) are deliberately not here: the running
+  // order that draws them is covered by the `layout` preset, and adding them to this
+  // one would only give their players a rest time that turns a ready court into a
+  // blocked one.
+];
+
+/**
+ * The late pool behind the one destructive alert.
+ *
+ * `poolIsComplete` returns false below four teams, so a four-team pool with nothing
+ * played is incomplete by the same rule the real desk uses, and a scheduled end an
+ * hour ago is more than the 15 minutes of grace the alert allows.
+ */
+const STATE_POOLS = [
+  {
+    id: uid(900),
+    tournament_id: TID,
+    category_id: uid(800),
+    name: "Men's Doubles · Pool A",
+    scheduled_end: at(-60),
+    created_at: CREATED,
+  },
+];
+
+const STATE_POOL_ENTRIES = [1, 2, 3, 4].map((n) => ({
+  id: uid(910 + n),
+  pool_id: uid(900),
+  team_id: teamId(n),
   created_at: CREATED,
 }));
+
+const STATE_POOL_MATCHES: unknown[] = [];
+
+/** Turns a spec list into the table rows the app reads. */
+const toRows = (specs: MatchSpec[]) =>
+  specs.map((s) => ({
+    id: matchId(s.n),
+    tournament_id: TID,
+    draw_id: s.draw,
+    round: s.round,
+    slot: s.slot,
+    court_id: s.court ? courtId(s.court) : null,
+    status: s.status,
+    scheduled_time: s.scheduled === null ? null : at(s.scheduled),
+    started_at: s.started === null ? null : at(s.started),
+    ended_at: s.ended == null ? null : at(s.ended),
+    reported_time: s.status === "reported" && s.ended != null ? at(s.ended) : null,
+    games: s.games ?? [],
+    is_bye: s.isBye ?? false,
+    // A bye has no second side, which is why it is dropped downstream.
+    entrant_a_id: s.a === 0 ? null : entrantId(s.a),
+    entrant_b_id: s.b === 0 ? null : entrantId(s.b),
+    winner_id: s.status === "reported" || s.status === "walkover" ? entrantId(s.a) : null,
+    parent_a_id: null,
+    parent_b_id: null,
+    note: null,
+    created_at: CREATED,
+  }));
+
+/**
+ * The two datasets this fixture can serve.
+ *
+ * One mock with two presets rather than two fixtures, because nine tenths of the rows
+ * - players, teams, entrants, categories, courts, the tournament, the day - are
+ * identical and only the match schedule differs. Duplicating the file would put two
+ * copies of the tournament rule (best of three to 21) in the repository, and a fixture
+ * whose own rules disagree with its own scores is how the widest-score case was wrong
+ * once already.
+ *
+ * `layout` asks "does it fit"; `states` asks "does every state draw". They are
+ * different questions about the same event, so they are two presets, not two events.
+ */
+export type DeskMockPreset = "layout" | "states";
+
+const PRESETS: Record<
+  DeskMockPreset,
+  { specs: MatchSpec[]; pools: unknown[]; entries: unknown[]; poolMatches: unknown[] }
+> = {
+  layout: { specs: LAYOUT_MATCH_SPECS, pools: [], entries: [], poolMatches: [] },
+  states: {
+    specs: STATE_MATCH_SPECS,
+    pools: STATE_POOLS,
+    entries: STATE_POOL_ENTRIES,
+    poolMatches: STATE_POOL_MATCHES,
+  },
+};
 
 /**
  * Table name to rows. Anything absent resolves to an empty array, which is the correct
  * answer for tables this surface does not read and keeps the mock from failing closed.
  */
-const TABLES: Record<string, unknown[]> = {
+const tables = (
+  specs: MatchSpec[],
+  pools: unknown[],
+  entries: unknown[],
+  poolMatches: unknown[],
+): Record<string, unknown[]> => ({
   tournaments: [tournament],
   tournament_days: days,
   tournament_day_courts: [],
@@ -371,13 +490,13 @@ const TABLES: Record<string, unknown[]> = {
   placement_matches: [],
   draws: [],
   draw_matches: [],
-  pools: [],
-  pool_entries: [],
-  pool_matches: [],
+  pools,
+  pool_entries: entries,
+  pool_matches: poolMatches,
   tier_draws: tierDraws,
-  tier_draw_matches: tierDrawMatches,
+  tier_draw_matches: toRows(specs),
   staff_roles: [],
-};
+});
 
 /**
  * Serves the fixture to every Supabase REST call the app makes.
@@ -386,10 +505,14 @@ const TABLES: Record<string, unknown[]> = {
  * is called and then frozen, the same page load always sees the same content, so a
  * failure is reproducible even though the timestamps are relative.
  */
-export async function installDeskMock(page: Page): Promise<void> {
+export async function installDeskMock(
+  page: Page,
+  preset: DeskMockPreset = "layout",
+): Promise<void> {
   // Built once here rather than at module scope, so a long test run cannot drift the
   // "minutes ago" values apart from the rows actually being served.
-  const rows = { ...TABLES, tier_draw_matches: tierDrawMatches.map((r) => ({ ...r })) };
+  const chosen = PRESETS[preset];
+  const rows = tables(chosen.specs, chosen.pools, chosen.entries, chosen.poolMatches);
 
   await page.route("**/rest/v1/**", async (route) => {
     const url = new URL(route.request().url());

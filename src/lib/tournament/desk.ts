@@ -1,3 +1,5 @@
+import type { CourtState } from "@/lib/tournament/court-state";
+
 const MINUTE = 60_000;
 
 /**
@@ -81,7 +83,16 @@ export interface MatchReadiness {
 
 export interface DeskCourtState<TMatch extends DeskMatchModel = DeskMatchModel> {
   courtId: string;
-  state: "playing" | "overrun" | "free-ready" | "free-blocked" | "idle";
+  /**
+   * Imported from `court-state.ts` rather than restated.
+   *
+   * The union used to be written out here and again in the pill that drew it and
+   * again in the tile's ternary chain - three copies of a five-value set, none of
+   * which could notice the others changing. The vocabulary now has one definition
+   * and this is a consumer of it, so a sixth state cannot be derived without
+   * gaining a label and a token treatment.
+   */
+  state: CourtState;
   playing: TMatch | null;
   next: TMatch | null;
   readiness: MatchReadiness | null;

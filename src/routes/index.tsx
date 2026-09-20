@@ -103,6 +103,12 @@ import {
   type DeskMatchModel,
   type MatchReadiness,
 } from "@/lib/tournament/desk";
+import {
+  COURT_STATE_CHIP,
+  COURT_STATE_LABEL,
+  COURT_STATE_TILE,
+  type CourtState,
+} from "@/lib/tournament/court-state";
 import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
 import { DayScheduleStatus } from "@/components/schedule-status";
@@ -670,15 +676,7 @@ function Desk() {
                     setOperationCourtId(court.id);
                     setOpenMatch(target);
                   }}
-                  className={`rounded-xl border p-3.5 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default disabled:opacity-80 ${
-                    state.state === "overrun"
-                      ? "border-danger-border bg-danger-surface/40"
-                      : state.state === "free-ready"
-                        ? "border-primary/40 bg-primary/5"
-                        : state.state === "playing"
-                          ? "border-state-live-ink/35 bg-state-live-chip"
-                          : "border-hairline bg-surface"
-                  }`}
+                  className={`rounded-xl border p-3.5 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default disabled:opacity-80 ${COURT_STATE_TILE[state.state]}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 font-display text-sm font-bold">
@@ -1469,30 +1467,14 @@ function DeskKpi({
   return <StatTile label={label} value={value} tone={tone} />;
 }
 
-function CourtStatePill({
-  state,
-}: {
-  state: "playing" | "overrun" | "free-ready" | "free-blocked" | "idle";
-}) {
-  const labels = {
-    playing: "Playing",
-    overrun: "Overrun",
-    "free-ready": "Ready",
-    "free-blocked": "Waiting",
-    idle: "Idle",
-  };
-  const classes = {
-    playing: "bg-state-live-chip text-state-live-ink",
-    overrun: "bg-danger-surface text-danger-foreground",
-    "free-ready": "bg-primary/12 text-primary-ink",
-    "free-blocked": "bg-warn-surface text-warn-foreground",
-    idle: "bg-muted text-muted-foreground",
-  };
+function CourtStatePill({ state }: { state: CourtState }) {
+  // The label, the fill and the ink all come from `court-state.ts`, so the sweep in
+  // `e2e/states.spec.ts` and this component read one vocabulary rather than two.
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ${classes[state]}`}
+      className={`inline-flex rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ${COURT_STATE_CHIP[state]}`}
     >
-      {labels[state]}
+      {COURT_STATE_LABEL[state]}
     </span>
   );
 }

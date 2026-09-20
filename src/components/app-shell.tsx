@@ -361,13 +361,32 @@ export function StatTile({
         : tone === "good"
           ? "border-hairline bg-success/10"
           : "border-hairline bg-surface";
+  /**
+   * The label takes the surface's own ink, not the neutral muted ink.
+   *
+   * Phase 6 found this by scanning the desk with data in it for the first time, which
+   * is the only way it could be found: on an empty tournament no tile is ever toned,
+   * so the pair was never rendered and never measured. In dark mode the label measured
+   * 3.95:1 on the warning surface against the 4.5:1 that 12px needs - a real AA failure
+   * on three tiles at once, on the row a moderator reads to decide what to do next.
+   *
+   * The neutral ink is solved against the neutral surfaces, so it cannot be expected to
+   * clear a tinted one. Each tone already has an ink solved against its own surface -
+   * that is what `warn-foreground` and `danger-foreground` are - and using it is also
+   * the better answer visually: a label that shares its tile's tone reads as part of the
+   * alert instead of as chrome sitting on top of it.
+   */
+  const labelClass =
+    tone === "danger"
+      ? "text-danger-foreground"
+      : tone === "warn"
+        ? "text-warn-foreground"
+        : "text-muted-foreground";
   return (
     <div className={cn("rounded-xl border p-3 shadow-panel", toneClass)}>
-      <p className="text-t4 font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        {label}
-      </p>
+      <p className={cn("text-t4 font-semibold uppercase tracking-[0.12em]", labelClass)}>{label}</p>
       <p className="mt-1 font-score text-t1 font-semibold leading-none tracking-tight">{value}</p>
-      {hint ? <p className="mt-1 text-t4 text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className={cn("mt-1 text-t4", labelClass)}>{hint}</p> : null}
     </div>
   );
 }
