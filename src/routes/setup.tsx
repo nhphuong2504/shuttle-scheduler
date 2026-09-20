@@ -561,14 +561,10 @@ function tournamentStatusLabel(tournament: Tournament): string {
 function problemsForStep(step: SetupStep, form: DraftForm): string[] {
   const issues: string[] = [];
 
-  if (step === "basics") {
+  if (step === "details") {
     if (!form.basics.name.trim()) issues.push("Give the tournament a name.");
     if (!form.basics.venueTimezone.trim()) issues.push("Choose a timezone.");
-    return issues;
-  }
-
-  if (step === "days") {
-    if (form.days.length === 0) issues.push("Pick a start date.");
+    if (form.days.length === 0) issues.push("Pick the first day.");
     if (form.days.length > MAX_TOURNAMENT_DAYS) {
       issues.push(`A tournament can span at most ${MAX_TOURNAMENT_DAYS} days.`);
     }
