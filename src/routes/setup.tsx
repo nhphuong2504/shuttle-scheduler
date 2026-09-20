@@ -340,7 +340,6 @@ function SetupPage() {
                     <p className="text-xs text-muted-foreground">
                       Started {new Date(tournament.created_at).toLocaleString()} ·{" "}
                       {tournament.day_count} day(s)
-                      {tournament.status === "draft" ? "" : ` · ${tournament.court_count} court(s)`}
                     </p>
                   </div>
                   {tournament.status === "draft" ? (
