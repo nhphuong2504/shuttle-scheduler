@@ -11,10 +11,10 @@ import { dateRangeLabel, type DraftForm } from "./types";
  * same function the activation RPC re-runs, so what is shown here is what the
  * database will enforce.
  *
- * A check can be advisory (`blocking: false`), which is how the per-day court
- * assignment behaves: it is genuinely needed to build a schedule, but not to
- * activate a tournament whose courts are configured at the first build. Those
- * failures are listed, but they do not hold activation back.
+ * The checklist covers only what this wizard collects, so every check below is
+ * blocking. A check can still declare itself advisory (`blocking: false`) and the
+ * rendering honours that, but nothing uses it today: the settings that used to be
+ * advisory — the venue's courts — are configured on the Schedule page instead.
  */
 export function ReviewStep({
   form,

@@ -37,7 +37,7 @@ describe("updateTournamentMatchSettings", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
-  it("refuses a game target or a winning margin outside the readiness bounds", async () => {
+  it("refuses a game target or a winning margin outside the supported bounds", async () => {
     await expect(updateTournamentMatchSettings("t1", { placementGamesTo: 0 })).rejects.toThrow();
     await expect(updateTournamentMatchSettings("t1", { placementGamesTo: 100 })).rejects.toThrow();
     await expect(updateTournamentMatchSettings("t1", { knockoutWinBy: 21 })).rejects.toThrow();

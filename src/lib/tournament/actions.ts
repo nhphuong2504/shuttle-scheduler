@@ -750,8 +750,10 @@ export interface TournamentTimingsInput {
  * the desk finds out on the day that matches are running long, or that players
  * need longer between them, and must be able to replan without a new tournament.
  *
- * The guard rails mirror the readiness check (`slot > 0`, `rest >= 0`) so an
- * override cannot quietly make a tournament fail its own readiness gate.
+ * The bounds are enforced here rather than at the readiness gate. Readiness runs when
+ * a draft is activated, before any of this is editable, so it can never see a live
+ * override — these guards are the only thing standing between one and a schedule
+ * built from a zero-minute match.
  */
 export async function updateTournamentTimings(
   tournamentId: string,
@@ -797,8 +799,9 @@ export async function updateTournamentTimings(
  * are the same kind of setting — how a match is won and how long it is given —
  * and both are adjusted once the tournament is live and real scores come in.
  *
- * The bounds mirror the readiness `rules` check exactly, so an override cannot
- * make a tournament fail a gate it has already passed.
+ * The bounds live here because readiness no longer checks them: it runs at
+ * activation, long before scoring is editable, so a live override has nothing else
+ * standing behind it.
  */
 export interface TournamentMatchSettingsInput {
   placementGamesTo?: number;

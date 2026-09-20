@@ -1117,6 +1117,10 @@ ever exposed a function the client does not call.
 Stops the per-day court check from blocking activation, and redefines
 `tournament_readiness()` so `ready` is computed from the blocking checks alone.
 
+> **Superseded by `20260919030000_trim_readiness_to_setup_scope.sql`.** The court check is no longer
+> advisory but gone, along with the other checks the wizard cannot act on. The `blocking` mechanism
+> described below did survive, so read on for how it works — nothing uses it today.
+
 ### Why
 
 Setup used to ask for the days, each day's hours **and** the courts in one step, because
@@ -1227,6 +1231,72 @@ DROP FUNCTION IF EXISTS public.set_tournament_courts(uuid, int);
 
 The Settings field then fails with a "function not found" toast. The `courts` rows it created are
 ordinary rows and are unaffected.
+
+---
+
+## Applying `20260919030000_trim_readiness_to_setup_scope.sql`
+
+Redefines `tournament_readiness()` to check only what the setup wizard collects. The per-day court
+check is removed rather than made advisory, along with three others: `day_windows`, `day_breaks` and
+`rules`. Every check that remains is blocking, so the checklist is all-or-nothing again.
+
+### Why the four checks could not do their job
+
+The wizard was reduced to four inputs — the basics, a date range, the events and the fixed format.
+Courts, each day's hours and breaks, match lengths and scoring rules all moved to the Schedule page.
+Readiness was still checking those moved fields, which produced two kinds of noise on a screen whose
+only job is to say what still has to be fixed:
+
+| Check | Why it could not mean anything |
+| --- | --- |
+| `day_courts` | Cannot pass before activation by design, so it was a permanent advisory |
+| `day_windows` | `buildDayRange` emits the 09:00–18:30 default for every day, so always green |
+| `day_breaks` | The wizard creates no breaks at all, so always green |
+| `rules` | Only ever read the column defaults; rules are edited after activation |
+
+The deciding point is **when** the function runs. It is consulted as a draft is activated, and at
+that moment every Schedule-owned field still holds its default — so none of these checks could catch
+anything real. The `day_breaks` case is the clearest: it is the only guard against a break that falls
+outside its day or overlaps another, but it runs before any break can exist, and nothing re-runs it
+afterwards. Removing it costs no protection that was ever delivered.
+
+The rule applied here: **a check has to validate something this wizard collects, or something derived
+from what it collects.** A check over a field the organizer sets later is either always green or always
+red at this point, and neither is a verdict on the draft. Six checks satisfy the rule and remain.
+
+What actually protects the removed fields is the write path, which is where it belongs:
+
+- `save_tournament_draft` rejects an unknown timezone and an even best-of.
+- `save_tournament_days` rejects a day whose end is not after its start, in the same transaction.
+- `updateTournamentMatchSettings` re-validates every scoring bound.
+- `updateTournamentTimings` keeps slots positive and rest gaps non-negative.
+
+`20260919010000` is superseded: it kept `day_courts` as an advisory, which this migration removes.
+The `blocking` field and the `ready` expression are carried forward unchanged, so a check added later
+can still be advisory without re-touching the gate.
+
+### Verify after applying
+
+```sql
+-- a draft with no courts is ready, and the court check is gone from the list
+SELECT jsonb_path_query_array(
+  public.tournament_readiness('<draft-id>'::uuid) -> 'checks',
+  '$[*].id'
+);
+-- expect exactly: basics, timezone, days, day_dates, categories, category_caps
+
+-- anon must still be locked out after the function was replaced
+SELECT has_function_privilege('anon', 'public.tournament_readiness(uuid)', 'EXECUTE'); -- false
+```
+
+On `/setup`, the Review step for a fresh draft lists six checks and reads *"All checks passed. This
+tournament is ready to activate."* — no row about courts, day hours, breaks or match rules.
+
+### Rolling back
+
+Re-apply the `tournament_readiness` definition from `20260919010000_defer_day_courts_readiness.sql`.
+The court and day-window rows come back; the court row returns as an advisory, so activation still
+succeeds without courts.
 
 ---
 

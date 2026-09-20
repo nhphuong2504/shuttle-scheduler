@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -82,6 +82,10 @@ describe("set_active_tournament migration", () => {
  * Because setup stopped asking for courts, the per-day court check can no longer
  * block activation: a tournament is activated before its venue's courts exist, and
  * they are configured at the first build. The check is kept, but as an advisory.
+ *
+ * Superseded by the trim-readiness migration below, which removed the court check
+ * along with the other Schedule-owned ones. This block still documents what *that*
+ * migration did, so keep reading it as history rather than as the current contract.
  */
 describe("deferred day-courts readiness migration", () => {
   const sql = readFileSync(
@@ -125,6 +129,72 @@ describe("deferred day-courts readiness migration", () => {
       /REVOKE ALL ON FUNCTION public\.tournament_readiness\(uuid\) FROM anon, PUBLIC/,
     );
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.tournament_readiness\(uuid\)/);
+  });
+});
+
+/**
+ * The wizard collects only the basics, a date range, the events and the fixed format,
+ * and it runs `tournament_readiness` at activation — when every Schedule-owned field
+ * is still at its default. A check over courts, day hours, breaks or match rules could
+ * therefore only ever report green, or report red for something the organizer cannot
+ * fix on this screen. The checklist is trimmed to what setup actually gathers.
+ */
+describe("trimmed readiness migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const file = "20260919030000_trim_readiness_to_setup_scope.sql";
+  const sql = readFileSync(join(dir, file), "utf8");
+
+  it("keeps exactly the checks the setup wizard can act on", () => {
+    expect(sql).toMatch(/FUNCTION public\.tournament_readiness\(p_tournament_id uuid\)/);
+    for (const id of ["basics", "timezone", "days", "day_dates", "categories", "category_caps"]) {
+      expect(sql).toMatch(new RegExp(`'id', '${id}'`));
+    }
+  });
+
+  it("drops the checks whose data setup never collects", () => {
+    for (const id of ["day_courts", "day_windows", "day_breaks", "rules"]) {
+      expect(sql).not.toMatch(new RegExp(`'id', '${id}'`));
+    }
+  });
+
+  it("leaves no check advisory, so the checklist is all-or-nothing again", () => {
+    expect(sql).not.toMatch(/'blocking', false/);
+    // The advisory mechanism survives for checks added later, and a check with no
+    // flag still blocks, so nothing became optional by accident.
+    expect(sql).toMatch(/COALESCE\(\(c->>'blocking'\)::boolean, true\)/);
+  });
+
+  it("does not leave the dropped checks' aggregates behind", () => {
+    // An unused aggregate is dead code the next reader has to re-derive.
+    for (const name of [
+      "days_without_courts",
+      "bad_windows",
+      "breaks_outside",
+      "overlapping_breaks",
+    ]) {
+      expect(sql).not.toMatch(new RegExp(name));
+    }
+  });
+
+  it("closes the implicit PUBLIC grant it restores by re-creating the function", () => {
+    expect(sql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.tournament_readiness\(uuid\) FROM anon, PUBLIC/,
+    );
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.tournament_readiness\(uuid\)/);
+  });
+
+  it("is the last word on tournament_readiness", () => {
+    // The gate is only as strict as its newest definition, so a later migration that
+    // redefines the function has to come through this test rather than around it.
+    const definers = readdirSync(dir)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .filter((name) =>
+        /FUNCTION public\.tournament_readiness\(p_tournament_id uuid\)/.test(
+          readFileSync(join(dir, name), "utf8"),
+        ),
+      );
+    expect(definers.at(-1)).toBe(file);
   });
 });
 
