@@ -7,6 +7,7 @@ import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep } from "@/components/tournament-setup/ReviewStep";
+import { StructureStep } from "@/components/tournament-setup/StructureStep";
 import { hydrateForm } from "@/components/tournament-setup/hydrate";
 import {
   MAX_TOURNAMENT_DAYS,
@@ -472,6 +473,7 @@ function SetupPage() {
           <DetailsStep form={form} onChange={patchForm} isNew={isNew} />
         ) : null}
         {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
+        {step === "structure" ? <StructureStep /> : null}
         {step === "review" ? (
           <ReviewStep
             form={form}

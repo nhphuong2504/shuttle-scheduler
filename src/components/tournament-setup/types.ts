@@ -1,10 +1,11 @@
 import type { TournamentDayInput, TournamentEventInput } from "@/lib/tournament/actions";
 
-export type SetupStep = "details" | "events" | "review";
+export type SetupStep = "details" | "events" | "structure" | "review";
 
 export const SETUP_STEPS: { id: SetupStep; label: string; hint: string }[] = [
   { id: "details", label: "Details", hint: "Name, dates and timezone" },
   { id: "events", label: "Events", hint: "Which categories run" },
+  { id: "structure", label: "Structure", hint: "How the competition runs" },
   { id: "review", label: "Review", hint: "Checks and activation" },
 ];
 
