@@ -116,6 +116,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
+    // The pre-paint script is rendered as a real inline element in RootShell rather than
+    // declared here, and that placement is deliberate: the theme spec proves the `dark`
+    // class arrives with the application bundle blocked, which only holds for a script
+    // that is in the document before React hydrates. A second, theme-only boot script was
+    // merged in from the Lovable branch and is deliberately not reinstated - it would
+    // duplicate a decision APPEARANCE_BOOTSTRAP already makes, and the two would disagree
+    // about what a stored value means.
   }),
   shellComponent: RootShell,
   component: RootComponent,
