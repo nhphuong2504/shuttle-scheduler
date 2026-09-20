@@ -104,6 +104,53 @@ describe("schedule tab owns tournament-wide planning", () => {
   });
 });
 
+describe("the setup wizard asks only for what activation needs", () => {
+  const types = readFileSync(join(__dirname, "../components/tournament-setup/types.ts"), "utf8");
+  const setup = read("setup.tsx");
+  const review = readFileSync(
+    join(__dirname, "../components/tournament-setup/ReviewStep.tsx"),
+    "utf8",
+  );
+
+  it("has five steps and no match-rules step", () => {
+    const ids = [...types.matchAll(/\{ id: "([a-z]+)"/g)].map((match) => match[1]);
+    expect(ids).toEqual(["basics", "days", "events", "structure", "review"]);
+    expect(types).not.toMatch(/"rules"/);
+    expect(setup).not.toMatch(/RulesStep/);
+    expect(review).not.toMatch(/form\.rules/);
+  });
+
+  it("describes the days step as a date range", () => {
+    // Setup decides which dates run, not the hours or the courts each one plays on.
+    expect(types).toMatch(/export function buildDayRange\(/);
+    expect(review).toMatch(/dateRangeLabel/);
+    expect(review).not.toMatch(/courtPoolSize|day\.courts|day\.breaks/);
+  });
+
+  it("leaves scoring, durations and rest gaps to the schedule page", () => {
+    // The draft is created with usable defaults; omitting these keys is what stops
+    // the wizard from overwriting timings that the desk has since changed.
+    for (const field of [
+      "placementGamesTo",
+      "knockoutGamesTo",
+      "groupSlotMinutes",
+      "knockoutSlotMinutes",
+      "groupRestGapMinutes",
+      "knockoutRestGapMinutes",
+    ]) {
+      expect(setup).not.toMatch(new RegExp(`${field}:`));
+    }
+    const schedule = read("placement-schedule.tsx");
+    expect(schedule).toMatch(/<StageScoring/);
+    expect(schedule).toMatch(/setTournamentCourts/);
+  });
+
+  it("still persists the basics it does own", () => {
+    expect(setup).toMatch(/maxCategoriesPerPlayer: form\.maxCategoriesPerPlayer/);
+    expect(setup).toMatch(/saveTournamentDays\(id, form\.days\)/);
+  });
+});
+
 describe("the schedule writer refuses a plan that would strand a match", () => {
   const writer = readFileSync(join(__dirname, "../lib/tournament/placement-schedule.ts"), "utf8");
 

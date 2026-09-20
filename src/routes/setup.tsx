@@ -9,13 +9,12 @@ import { DaysStep } from "@/components/tournament-setup/DaysStep";
 import { DraftHeader } from "@/components/tournament-setup/DraftHeader";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep } from "@/components/tournament-setup/ReviewStep";
-import { RulesStep } from "@/components/tournament-setup/RulesStep";
 import { StepNav } from "@/components/tournament-setup/StepNav";
 import { StructureStep } from "@/components/tournament-setup/StructureStep";
 import { hydrateForm } from "@/components/tournament-setup/hydrate";
 import {
+  MAX_TOURNAMENT_DAYS,
   SETUP_STEPS,
-  courtPoolSize,
   dateRangeLabel,
   defaultForm,
   isSetupStep,
@@ -43,7 +42,6 @@ import {
   useTournamentReadiness,
   type Tournament,
 } from "@/lib/tournament/data";
-import { isScoringRuleValid } from "@/lib/tournament/scoring";
 
 interface SetupSearch {
   /** A draft id, or "new" while the first step has not been saved yet. */
@@ -68,13 +66,13 @@ export const Route = createFileRoute("/setup")({
       {
         name: "description",
         content:
-          "Create a badminton tournament: basics, days and courts, events, competition structure and match rules, then activate it.",
+          "Create a badminton tournament: basics, dates, events and competition structure, then activate it.",
       },
       { property: "og:title", content: "Tournament setup | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Create a badminton tournament: basics, days and courts, events, competition structure and match rules, then activate it.",
+          "Create a badminton tournament: basics, dates, events and competition structure, then activate it.",
       },
       { property: "og:type", content: "website" },
       { property: "twitter:card", content: "summary" },
@@ -83,7 +81,14 @@ export const Route = createFileRoute("/setup")({
   component: SetupPage,
 });
 
-/** Maps the wizard form onto the payload the draft RPCs accept. */
+/**
+ * Maps the wizard form onto the payload the draft RPCs accept.
+ *
+ * Match lengths, rest gaps and scoring rules are deliberately absent: the row is
+ * created with usable defaults, and the Schedule page owns them from the first
+ * build onward. Leaving them out here also means the wizard cannot overwrite a
+ * tournament's timings with stale form state.
+ */
 function toDraftInput(form: DraftForm): TournamentDraftInput {
   return {
     name: form.basics.name,
@@ -96,16 +101,6 @@ function toDraftInput(form: DraftForm): TournamentDraftInput {
     organizerEmail: form.basics.organizerEmail,
     organizerPhone: form.basics.organizerPhone,
     maxCategoriesPerPlayer: form.maxCategoriesPerPlayer,
-    placementGamesTo: form.rules.placementRule.gamesTo,
-    placementWinBy: form.rules.placementRule.winBy,
-    placementBestOf: form.rules.placementRule.bestOf,
-    knockoutGamesTo: form.rules.knockoutRule.gamesTo,
-    knockoutWinBy: form.rules.knockoutRule.winBy,
-    knockoutBestOf: form.rules.knockoutRule.bestOf,
-    groupSlotMinutes: form.rules.placementSlotMinutes,
-    knockoutSlotMinutes: form.rules.knockoutSlotMinutes,
-    groupRestGapMinutes: form.rules.placementRestGapMinutes,
-    knockoutRestGapMinutes: form.rules.knockoutRestGapMinutes,
   };
 }
 
@@ -344,7 +339,8 @@ function SetupPage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Started {new Date(tournament.created_at).toLocaleString()} ·{" "}
-                      {tournament.day_count} day(s) · {tournament.court_count} court(s)
+                      {tournament.day_count} day(s)
+                      {tournament.status === "draft" ? "" : ` · ${tournament.court_count} court(s)`}
                     </p>
                   </div>
                   {tournament.status === "draft" ? (
@@ -385,6 +381,10 @@ function SetupPage() {
           <Panel title="How this works">
             <ul className="space-y-2 text-xs text-muted-foreground">
               <li>Each step saves into the same draft, so you can stop and come back.</li>
+              <li>
+                Setup covers the name, the dates and the events. Courts, day hours and match
+                settings are configured on the Schedule page, at the first build.
+              </li>
               <li>Nothing reaches the desk until the review step activates the tournament.</li>
               <li>The active tournament stays in charge until a draft takes over.</li>
               <li>
@@ -416,7 +416,6 @@ function SetupPage() {
   }
 
   const activeEvents = form.events.filter((event) => event.active !== false);
-  const courts = courtPoolSize(form.days);
   const draftStillEditable = isNew || draftData.tournament?.status === "draft";
 
   return (
@@ -429,9 +428,8 @@ function SetupPage() {
         </Button>
       }
     >
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <StatTile label="Days" value={form.days.length} hint={dateRangeLabel(form.days)} />
-        <StatTile label="Courts" value={courts} hint="Union of the days' courts" />
         <StatTile label="Events" value={activeEvents.length} hint="Switched on" />
         <StatTile
           label="Status"
@@ -459,7 +457,6 @@ function SetupPage() {
           {step === "days" ? <DaysStep form={form} onChange={patchForm} /> : null}
           {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
           {step === "structure" ? <StructureStep /> : null}
-          {step === "rules" ? <RulesStep form={form} onChange={patchForm} /> : null}
           {step === "review" ? (
             <ReviewStep
               form={form}
@@ -536,7 +533,7 @@ async function saveStep(step: SetupStep, id: string, form: DraftForm): Promise<v
     case "structure":
       return;
     default:
-      // Basics, rules and review all persist through the same draft payload.
+      // Basics and review both persist through the same draft payload.
       await saveTournamentDraft(id, toDraftInput(form));
       return;
   }
@@ -565,18 +562,19 @@ function problemsForStep(step: SetupStep, form: DraftForm): string[] {
   }
 
   if (step === "days") {
-    if (form.days.length === 0) issues.push("Add at least one day.");
-    form.days.forEach((day, index) => {
-      if (!day.date) issues.push(`Day ${index + 1} needs a date.`);
-      if (day.startTime >= day.endTime) {
-        issues.push(`Day ${index + 1} must close after it opens.`);
+    if (form.days.length === 0) issues.push("Pick a start date.");
+    if (form.days.length > MAX_TOURNAMENT_DAYS) {
+      issues.push(`A tournament can span at most ${MAX_TOURNAMENT_DAYS} days.`);
+    }
+    const dates = new Set<string>();
+    for (const day of form.days) {
+      if (!day.date) {
+        issues.push("Every tournament day needs a date.");
+        continue;
       }
-      day.breaks.forEach((br) => {
-        if (br.endTime <= br.startTime) {
-          issues.push(`A break on day ${index + 1} must end after it starts.`);
-        }
-      });
-    });
+      if (dates.has(day.date)) issues.push(`Two days use ${day.date}.`);
+      dates.add(day.date);
+    }
     return issues;
   }
 
@@ -594,22 +592,6 @@ function problemsForStep(step: SetupStep, form: DraftForm): string[] {
     }
     if (form.maxCategoriesPerPlayer < 1 || form.maxCategoriesPerPlayer > 5) {
       issues.push("The per-player event limit must be between 1 and 5.");
-    }
-    return issues;
-  }
-
-  if (step === "rules") {
-    if (!isScoringRuleValid(form.rules.placementRule)) {
-      issues.push("Check the placement scoring rule.");
-    }
-    if (!isScoringRuleValid(form.rules.knockoutRule)) {
-      issues.push("Check the knockout scoring rule.");
-    }
-    if (form.rules.placementSlotMinutes < 5) {
-      issues.push("Placement matches need at least 5 minutes.");
-    }
-    if (form.rules.knockoutSlotMinutes < 5) {
-      issues.push("Knockout matches need at least 5 minutes.");
     }
     return issues;
   }

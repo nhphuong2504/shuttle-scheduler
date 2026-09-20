@@ -3,14 +3,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { TournamentReadiness } from "@/lib/tournament/data";
 import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
-import { scoringRuleLabel } from "@/lib/tournament/scoring";
 import { cn } from "@/lib/utils";
-import { courtPoolSize, dateRangeLabel, type DraftForm } from "./types";
+import { dateRangeLabel, type DraftForm } from "./types";
 
 /**
  * The final summary. The checks come from `tournament_readiness`, which is the
  * same function the activation RPC re-runs, so what is shown here is what the
  * database will enforce.
+ *
+ * A check can be advisory (`blocking: false`), which is how the per-day court
+ * assignment behaves: it is genuinely needed to build a schedule, but not to
+ * activate a tournament whose courts are configured at the first build. Those
+ * failures are listed, but they do not hold activation back.
  */
 export function ReviewStep({
   form,
@@ -30,9 +34,9 @@ export function ReviewStep({
   onDiscard: () => void;
 }) {
   const activeEvents = form.events.filter((event) => event.active !== false);
-  const courts = courtPoolSize(form.days);
   const checks = readiness?.checks ?? [];
-  const blockers = checks.filter((check) => !check.ok);
+  const blockers = checks.filter((check) => !check.ok && check.blocking !== false);
+  const advisories = checks.filter((check) => !check.ok && check.blocking === false);
   const ready = readiness?.ready === true;
 
   return (
@@ -42,7 +46,7 @@ export function ReviewStep({
         right={
           checks.length ? (
             <span className="font-score text-[11px] text-muted-foreground">
-              {checks.length - blockers.length}/{checks.length} passed
+              {checks.length - blockers.length - advisories.length}/{checks.length} passed
             </span>
           ) : null
         }
@@ -71,39 +75,60 @@ export function ReviewStep({
               </span>
               <p className={cn("text-sm font-semibold", ready ? "" : "text-warn-foreground")}>
                 {ready
-                  ? "All checks passed. This tournament is ready to activate."
+                  ? advisories.length
+                    ? `Ready to activate. ${advisories.length} setting${
+                        advisories.length === 1 ? "" : "s"
+                      } below ${advisories.length === 1 ? "is" : "are"} finished at the first build.`
+                    : "All checks passed. This tournament is ready to activate."
                   : `${blockers.length} check${blockers.length === 1 ? "" : "s"} to resolve before activation.`}
               </p>
             </div>
             <ul className="divide-y divide-hairline">
-              {checks.map((check) => (
-                <li key={check.id} className="flex items-start gap-2.5 px-4 py-2.5">
-                  <span
-                    className={cn(
-                      "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-[10px] font-bold",
-                      check.ok
-                        ? "bg-mint/40 text-foreground"
-                        : "bg-danger/20 text-danger-foreground",
-                    )}
-                    aria-hidden
-                  >
-                    {check.ok ? "✓" : "!"}
-                  </span>
-                  <span className="min-w-0">
+              {checks.map((check) => {
+                const advisory = !check.ok && check.blocking === false;
+                return (
+                  <li key={check.id} className="flex items-start gap-2.5 px-4 py-2.5">
                     <span
                       className={cn(
-                        "block text-sm",
-                        check.ok ? "text-muted-foreground" : "font-semibold",
+                        "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-[10px] font-bold",
+                        check.ok
+                          ? "bg-mint/40 text-foreground"
+                          : advisory
+                            ? "bg-warn-border/40 text-warn-foreground"
+                            : "bg-danger-surface text-danger-foreground",
                       )}
+                      aria-hidden
                     >
-                      {check.label}
+                      {check.ok ? "✓" : "!"}
                     </span>
-                    {!check.ok && check.detail ? (
-                      <span className="block text-xs text-danger-foreground">{check.detail}</span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
+                    <span className="min-w-0">
+                      <span
+                        className={cn(
+                          "block text-sm",
+                          check.ok ? "text-muted-foreground" : "font-semibold",
+                        )}
+                      >
+                        {check.label}
+                      </span>
+                      {!check.ok && check.detail ? (
+                        <span
+                          className={cn(
+                            "block text-xs",
+                            advisory ? "text-warn-foreground" : "text-danger-foreground",
+                          )}
+                        >
+                          {check.detail}
+                        </span>
+                      ) : null}
+                      {advisory ? (
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          Set on the Schedule page at the first build.
+                        </span>
+                      ) : null}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}
@@ -135,38 +160,23 @@ export function ReviewStep({
         </dl>
       </Panel>
 
-      <Panel title="Days and courts">
+      <Panel title="Dates">
         <dl className="mb-3 grid gap-x-4 gap-y-3 sm:grid-cols-3">
           <Row label="Date range" value={dateRangeLabel(form.days)} />
           <Row label="Days" value={String(form.days.length)} />
-          <Row label="Courts in the pool" value={courts ? String(courts) : "None"} />
         </dl>
-        <ul className="divide-y divide-hairline">
+        <ol className="divide-y divide-hairline">
           {form.days.map((day, index) => (
-            <li key={index} className="py-2 text-xs">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold">Day {index + 1}</span>
-                <span className="font-score">{day.date || "No date"}</span>
-                <span className="font-score text-muted-foreground">
-                  {day.startTime}–{day.endTime}
-                </span>
-                <span className="text-muted-foreground">
-                  {day.courts.length
-                    ? `Court${day.courts.length === 1 ? "" : "s"} ${day.courts.join(", ")}`
-                    : "No courts"}
-                </span>
-              </div>
-              {day.breaks.length ? (
-                <p className="mt-0.5 text-muted-foreground">
-                  Breaks:{" "}
-                  {day.breaks
-                    .map((br) => `${br.label || "Break"} ${br.startTime}–${br.endTime}`)
-                    .join(", ")}
-                </p>
-              ) : null}
+            <li key={day.date || index} className="flex items-center gap-3 py-2 text-xs">
+              <span className="font-semibold">Day {index + 1}</span>
+              <span className="font-score">{day.date || "No date"}</span>
             </li>
           ))}
-        </ul>
+        </ol>
+        <p className="mt-3 text-xs text-muted-foreground">
+          The venue&apos;s courts, each day&apos;s hours and breaks, match lengths and scoring rules
+          are set on the Schedule page at the first build, where the courts exist.
+        </p>
       </Panel>
 
       <Panel title="Events">
@@ -217,23 +227,6 @@ export function ReviewStep({
         </ul>
       </Panel>
 
-      <Panel title="Match rules">
-        <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-          <Row label="Placement scoring" value={scoringRuleLabel(form.rules.placementRule)} />
-          <Row label="Knockout scoring" value={scoringRuleLabel(form.rules.knockoutRule)} />
-          <Row
-            label="Placement duration"
-            value={`${form.rules.placementSlotMinutes} min per match`}
-          />
-          <Row
-            label="Knockout duration"
-            value={`${form.rules.knockoutSlotMinutes} min per match`}
-          />
-          <Row label="Placement rest" value={`${form.rules.placementRestGapMinutes} min`} />
-          <Row label="Knockout rest" value={`${form.rules.knockoutRestGapMinutes} min`} />
-        </dl>
-      </Panel>
-
       <Panel title="Finish">
         <p className="mb-3 text-xs text-muted-foreground">
           Activating moves this tournament from <span className="font-semibold">Draft</span> to{" "}
@@ -251,7 +244,8 @@ export function ReviewStep({
         </div>
         {!ready && readiness ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Activation is blocked until every check passes. The database enforces the same checks.
+            Activation is blocked until every blocking check passes. The database enforces the same
+            checks.
           </p>
         ) : null}
       </Panel>

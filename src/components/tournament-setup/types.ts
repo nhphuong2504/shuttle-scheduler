@@ -1,18 +1,12 @@
 import type { TournamentDayInput, TournamentEventInput } from "@/lib/tournament/actions";
-import {
-  DEFAULT_KNOCKOUT_RULE,
-  DEFAULT_PLACEMENT_RULE,
-  type ScoringRule,
-} from "@/lib/tournament/scoring";
 
-export type SetupStep = "basics" | "days" | "events" | "structure" | "rules" | "review";
+export type SetupStep = "basics" | "days" | "events" | "structure" | "review";
 
 export const SETUP_STEPS: { id: SetupStep; label: string; hint: string }[] = [
   { id: "basics", label: "Basics", hint: "Identity, venue and contact" },
-  { id: "days", label: "Days & courts", hint: "Dates, hours, courts and breaks" },
+  { id: "days", label: "Dates", hint: "How many days the tournament runs" },
   { id: "events", label: "Events", hint: "Categories and limits" },
   { id: "structure", label: "Structure", hint: "How the competition runs" },
-  { id: "rules", label: "Match rules", hint: "Scoring, duration and rest" },
   { id: "review", label: "Review", hint: "Checks and activation" },
 ];
 
@@ -36,62 +30,72 @@ export interface BasicsForm {
   organizerPhone: string;
 }
 
-export interface RulesForm {
-  /** Placement (the two-round stage) scoring and scheduling. */
-  placementRule: ScoringRule;
-  placementSlotMinutes: number;
-  placementRestGapMinutes: number;
-  /** Knockout (the A/B/C/D draws) scoring and scheduling. */
-  knockoutRule: ScoringRule;
-  knockoutSlotMinutes: number;
-  knockoutRestGapMinutes: number;
-}
-
 export interface DraftForm {
   basics: BasicsForm;
+  /**
+   * One row per tournament date. Setup only decides *which* dates the tournament
+   * runs on; the hours, courts and breaks each day plays on are configured at the
+   * first build, where the courts actually exist.
+   */
   days: TournamentDayInput[];
   events: TournamentEventInput[];
   maxCategoriesPerPlayer: number;
-  rules: RulesForm;
 }
 
-export function emptyDay(index: number): TournamentDayInput {
-  const date = new Date();
-  date.setDate(date.getDate() + index);
-  const offset = date.getTimezoneOffset();
-  return {
-    date: new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10),
-    startTime: "09:00",
-    endTime: "18:30",
+/** What a day looks like before the first build gives it hours and courts. */
+export const DEFAULT_DAY_START = "09:00";
+export const DEFAULT_DAY_END = "18:30";
+
+/**
+ * The database refuses more than this many days (`save_tournament_days`), so the
+ * picker stops the host at the same limit rather than letting a save fail.
+ */
+export const MAX_TOURNAMENT_DAYS = 7;
+
+/** The date part of "now" in the host's own timezone, as `YYYY-MM-DD`. */
+export function todayIso(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
+}
+
+/** Adds whole days to a `YYYY-MM-DD` string, staying clear of local-time drift. */
+export function shiftIsoDate(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Inclusive day count between two `YYYY-MM-DD` strings; at least 1. */
+export function countIsoDays(start: string, end: string): number {
+  const from = Date.parse(`${start}T00:00:00Z`);
+  const to = Date.parse(`${end}T00:00:00Z`);
+  return Math.round((to - from) / 86_400_000) + 1;
+}
+
+/**
+ * Expands a start/end date range into one row per day, in date order.
+ *
+ * A single date is a one-day tournament. Zero-padded `YYYY-MM-DD` strings compare
+ * chronologically as text, so the range checks are plain string comparisons.
+ */
+export function buildDayRange(start: string, end: string): TournamentDayInput[] {
+  if (!start) return [];
+  const last = end || start;
+  if (last < start) {
+    throw new Error("The end date cannot be before the start date.");
+  }
+  const span = countIsoDays(start, last);
+  if (span > MAX_TOURNAMENT_DAYS) {
+    throw new Error(`A tournament can span at most ${MAX_TOURNAMENT_DAYS} days.`);
+  }
+  return Array.from({ length: span }, (_, index) => ({
+    date: shiftIsoDate(start, index),
+    startTime: DEFAULT_DAY_START,
+    endTime: DEFAULT_DAY_END,
     courts: [],
     breaks: [],
-  };
-}
-
-export function defaultForm(): DraftForm {
-  return {
-    basics: {
-      name: "",
-      notes: "",
-      venueName: "",
-      venueAddress: "",
-      venueTimezone: "America/Chicago",
-      organizerName: "",
-      organizerEmail: "",
-      organizerPhone: "",
-    },
-    days: [emptyDay(0)],
-    events: [],
-    maxCategoriesPerPlayer: 2,
-    rules: {
-      placementRule: { ...DEFAULT_PLACEMENT_RULE },
-      placementSlotMinutes: 20,
-      placementRestGapMinutes: 10,
-      knockoutRule: { ...DEFAULT_KNOCKOUT_RULE },
-      knockoutSlotMinutes: 25,
-      knockoutRestGapMinutes: 30,
-    },
-  };
+  }));
 }
 
 /**
@@ -109,17 +113,21 @@ export function dateRangeLabel(days: TournamentDayInput[]): string {
   return first === last ? first : `${first} to ${last}`;
 }
 
-export function courtPoolSize(days: TournamentDayInput[]): number {
-  let max = 0;
-  for (const day of days) {
-    for (const court of day.courts) {
-      if (court > max) max = court;
-    }
-  }
-  return max;
-}
-
-/** The courts a host can pick from, derived from the days' own selections. */
-export function courtOptionsFor(days: TournamentDayInput[], upTo: number): number[] {
-  return Array.from({ length: Math.max(upTo, 0) }, (_, index) => index + 1);
+export function defaultForm(): DraftForm {
+  const today = todayIso();
+  return {
+    basics: {
+      name: "",
+      notes: "",
+      venueName: "",
+      venueAddress: "",
+      venueTimezone: "America/Chicago",
+      organizerName: "",
+      organizerEmail: "",
+      organizerPhone: "",
+    },
+    days: buildDayRange(today, today),
+    events: [],
+    maxCategoriesPerPlayer: 2,
+  };
 }

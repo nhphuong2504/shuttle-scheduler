@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import { ScheduledFinish } from "@/components/schedule-status";
+import { StageScoring } from "@/components/stage-scoring";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,9 +20,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/useSession";
 import {
+  setTournamentCourts,
   setTournamentDayBreaks,
   setTournamentDayCourts,
   updateTournamentDay,
+  updateTournamentMatchSettings,
   updateTournamentTimings,
   type ScheduleSummary,
 } from "@/lib/tournament/actions";
@@ -55,6 +58,7 @@ import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import { dayIdForTime } from "@/lib/tournament/day-scope";
 import { projectedFinishFromRemainingMatches } from "@/lib/tournament/schedule-diff";
 import { roundName } from "@/lib/tournament/draws";
+import { ruleForStage, type ScoringRule } from "@/lib/tournament/scoring";
 import { buildStageProgress } from "@/lib/tournament/stage-progress";
 import { StageProgressList } from "@/components/stage-progress";
 import {
@@ -170,11 +174,13 @@ function PlacementSchedulePage() {
     outcome: StageGenerationOutcome | null;
   } | null>(null);
   const [showAllChanges, setShowAllChanges] = useState(false);
-  /** Day windows, courts, breaks and timings are setup, not day-to-day desk work. */
+  /** Day windows, courts, breaks, timings and scoring are setup, not day-to-day desk work. */
   const [showSettings, setShowSettings] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Tournament-wide timing overrides, held as text so a half-typed number is not clobbered. */
   const [timingDrafts, setTimingDrafts] = useState<Record<string, string>>({});
+  /** The venue's court count, held as text while it is being typed. */
+  const [courtCountDraft, setCourtCountDraft] = useState<string | null>(null);
   /** Per-day break edits, held locally until saved so a bad row cannot wipe the day. */
   const [breakDrafts, setBreakDrafts] = useState<Record<string, DayBreakRow[]>>({});
 
@@ -265,6 +271,22 @@ function PlacementSchedulePage() {
   ]);
 
   const planInputsReady = planInputsPending.length === 0;
+
+  /**
+   * Opens the Settings panel on a tournament that has never been built.
+   *
+   * The venue's courts, the day hours and the match settings all live in there, and
+   * on a first pass they are the whole job — a collapsed panel would hide the only
+   * controls that matter. It only fires once, so a host who closes it is not fought
+   * by an effect that keeps reopening it.
+   */
+  const settingsOpenedForFirstBuild = useRef(false);
+  useEffect(() => {
+    if (settingsOpenedForFirstBuild.current) return;
+    if (!planInputsReady) return;
+    settingsOpenedForFirstBuild.current = true;
+    if (!hasSchedule) setShowSettings(true);
+  }, [planInputsReady, hasSchedule]);
 
   /** Which courts each day plays on, as ids. Empty means "no restriction". */
   const dayCourtIds = useMemo(() => {
@@ -373,6 +395,100 @@ function PlacementSchedulePage() {
       toast.success("Timing updated. Rebuild a day to apply it.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the timing");
+    }
+  };
+
+  /**
+   * Sets how many courts the venue has.
+   *
+   * Held as text so a half-typed number is not read as "make it one court", and
+   * saved on blur. The pool is the venue's, so this is deliberately separate from
+   * the per-day toggles below: a court exists before any day is told about it.
+   */
+  const saveCourtCount = async (raw: string) => {
+    if (!tournamentId) return;
+    if (!raw.trim()) {
+      setCourtCountDraft(null);
+      return;
+    }
+    const current = (courts ?? []).length;
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 64) {
+      toast.error("Enter a whole number of courts between 1 and 64.");
+      setCourtCountDraft(null);
+      return;
+    }
+    if (parsed === current) {
+      setCourtCountDraft(null);
+      return;
+    }
+    setBusy(true);
+    try {
+      await setTournamentCourts(tournamentId, parsed);
+      setCourtCountDraft(null);
+      await qc.invalidateQueries();
+      toast.success(
+        `${parsed} court${parsed === 1 ? "" : "s"} at the venue. Rebuild a day to apply it.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not set the court count");
+      setCourtCountDraft(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Persists a stage's scoring rule, and the slot duration a preset suggests.
+   *
+   * Both live on the same row but in different columns, so a preset is two updates
+   * in one action: choosing "Best of 3 to 21" should also give the match the 45
+   * minutes that shape needs, which is what the wizard used to do.
+   */
+  const saveScoringRule = async (
+    stage: "placement" | "knockout",
+    rule: ScoringRule,
+    slotMinutes?: number,
+  ) => {
+    if (!tournamentId) return;
+    setBusy(true);
+    try {
+      await updateTournamentMatchSettings(
+        tournamentId,
+        stage === "placement"
+          ? {
+              placementGamesTo: rule.gamesTo,
+              placementWinBy: rule.winBy,
+              placementBestOf: rule.bestOf,
+            }
+          : {
+              knockoutGamesTo: rule.gamesTo,
+              knockoutWinBy: rule.winBy,
+              knockoutBestOf: rule.bestOf,
+            },
+      );
+      if (slotMinutes !== undefined) {
+        await updateTournamentTimings(
+          tournamentId,
+          stage === "placement"
+            ? { groupSlotMinutes: slotMinutes }
+            : { knockoutSlotMinutes: slotMinutes },
+        );
+        // A preset sets the length itself, so any half-typed override box for that
+        // stage is dropped rather than left showing the value it replaced.
+        const timingKey = stage === "placement" ? "placement-slot" : "knockout-slot";
+        setTimingDrafts((prev) => {
+          const next = { ...prev };
+          delete next[timingKey];
+          return next;
+        });
+      }
+      await qc.invalidateQueries();
+      toast.success("Match settings updated. Rebuild a day to apply it.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the match settings");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -958,9 +1074,14 @@ function PlacementSchedulePage() {
         </div>
 
         {!(courts ?? []).length ? (
-          <p className="rounded-lg bg-danger-surface px-3 py-2 text-xs text-danger-foreground">
-            No courts are configured, so there is nothing to schedule onto.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-surface px-3 py-2 text-xs text-danger-foreground">
+            <span>
+              No courts yet — set how many courts the venue has before building the schedule.
+            </span>
+            <Button size="sm" variant="outline" onClick={() => setShowSettings(true)}>
+              Set courts
+            </Button>
+          </div>
         ) : null}
 
         {result && result.skipped.length > 0 ? (
@@ -986,6 +1107,38 @@ function PlacementSchedulePage() {
             }
           >
             <div className="space-y-5">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Venue
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <Label htmlFor="venue-courts" className="text-xs text-muted-foreground">
+                      Courts at the venue
+                    </Label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Input
+                        id="venue-courts"
+                        type="number"
+                        min={1}
+                        max={64}
+                        className="h-9 w-24"
+                        placeholder="—"
+                        disabled={!canSchedule || busy}
+                        value={courtCountDraft ?? ((courts ?? []).length || "")}
+                        onChange={(event) => setCourtCountDraft(event.target.value)}
+                        onBlur={(event) => void saveCourtCount(event.target.value)}
+                      />
+                      <span className="text-xs text-muted-foreground">courts</span>
+                    </div>
+                  </div>
+                  <p className="pb-2 text-[11px] text-muted-foreground">
+                    Adding courts makes them available on every day until a day is told otherwise
+                    below.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {timingFields.map((timing) => (
                   <div key={timing.key}>
@@ -1020,6 +1173,32 @@ function PlacementSchedulePage() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="space-y-4 border-t border-hairline pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Scoring
+                </p>
+                {tournament ? (
+                  <>
+                    <StageScoring
+                      title="Placement"
+                      detail="The two rounds that sort entrants into draws. A reported score is validated against this rule."
+                      rule={ruleForStage(tournament, "placement")}
+                      disabled={!canSchedule || busy}
+                      onRule={(rule) => void saveScoringRule("placement", rule)}
+                      onPreset={(rule, minutes) => void saveScoringRule("placement", rule, minutes)}
+                    />
+                    <StageScoring
+                      title="Knockout"
+                      detail="A/B/C/D single elimination. A reported score is validated against this rule."
+                      rule={ruleForStage(tournament, "knockout")}
+                      disabled={!canSchedule || busy}
+                      onRule={(rule) => void saveScoringRule("knockout", rule)}
+                      onPreset={(rule, minutes) => void saveScoringRule("knockout", rule, minutes)}
+                    />
+                  </>
+                ) : null}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">

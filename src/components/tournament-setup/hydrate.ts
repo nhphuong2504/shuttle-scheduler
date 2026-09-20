@@ -7,26 +7,7 @@ import type {
   TournamentDayBreak,
   TournamentDayCourt,
 } from "@/lib/tournament/data";
-import type { DraftForm, RulesForm } from "./types";
-
-function rulesFrom(tournament: Tournament): RulesForm {
-  return {
-    placementRule: {
-      gamesTo: tournament.placement_games_to,
-      winBy: tournament.placement_win_by,
-      bestOf: tournament.placement_best_of,
-    },
-    placementSlotMinutes: tournament.group_slot_minutes,
-    placementRestGapMinutes: tournament.group_rest_gap_minutes,
-    knockoutRule: {
-      gamesTo: tournament.knockout_games_to,
-      winBy: tournament.knockout_win_by,
-      bestOf: tournament.knockout_best_of,
-    },
-    knockoutSlotMinutes: tournament.knockout_slot_minutes,
-    knockoutRestGapMinutes: tournament.knockout_rest_gap_minutes,
-  };
-}
+import type { DraftForm } from "./types";
 
 function eventsFrom(categories: Category[]): TournamentEventInput[] {
   return categories.map((category) => ({
@@ -93,6 +74,5 @@ export function hydrateForm(
     })),
     events: eventsFrom(categories),
     maxCategoriesPerPlayer: tournament.max_categories_per_player,
-    rules: rulesFrom(tournament),
   };
 }

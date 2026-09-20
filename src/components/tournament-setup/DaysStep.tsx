@@ -1,16 +1,20 @@
 import { Panel } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { courtOptionsFor, courtPoolSize, dateRangeLabel, emptyDay, type DraftForm } from "./types";
-
-const MAX_DAYS = 7;
-const MAX_COURTS = 64;
+import {
+  MAX_TOURNAMENT_DAYS,
+  buildDayRange,
+  countIsoDays,
+  shiftIsoDate,
+  type DraftForm,
+} from "./types";
 
 /**
- * Days, with each day owning its own hours, court set and breaks. The court pool
- * is the union of every day's selection, so adding a court to one day grows the
- * pool for the tournament.
+ * How long the tournament runs, as a start and end date.
+ *
+ * Nothing else is asked for here. Each day's hours, courts and breaks are set at
+ * the first build, once the venue's courts exist — asking for them before the
+ * tournament is even active is what made setup feel like it was asking twice.
  */
 export function DaysStep({
   form,
@@ -20,250 +24,94 @@ export function DaysStep({
   onChange: (patch: Partial<DraftForm>) => void;
 }) {
   const days = form.days;
-  const poolSize = courtPoolSize(days);
-  // Always offer one more court than the pool, so the host can grow it.
-  const options = courtOptionsFor(days, Math.min(poolSize + 1, MAX_COURTS));
+  const start = days[0]?.date ?? "";
+  const end = days.length ? (days[days.length - 1]?.date ?? "") : "";
+  // The picker mirrors the database's own limit, so a range that could never be
+  // saved is not selectable in the first place.
+  const lastAllowed = start ? shiftIsoDate(start, MAX_TOURNAMENT_DAYS - 1) : undefined;
 
-  const setDay = (index: number, patch: Partial<DraftForm["days"][number]>) =>
-    onChange({ days: days.map((day, i) => (i === index ? { ...day, ...patch } : day)) });
-
-  const addDay = () => {
-    if (days.length >= MAX_DAYS) return;
-    const previous = days[days.length - 1];
-    const next = emptyDay(days.length);
-    onChange({
-      days: [
-        ...days,
-        {
-          ...next,
-          startTime: previous?.startTime ?? next.startTime,
-          endTime: previous?.endTime ?? next.endTime,
-          courts: previous ? [...previous.courts] : [],
-        },
-      ],
-    });
+  /**
+   * Rebuilds the day rows from a start/end pair.
+   *
+   * The end is clamped into range rather than rejected, so dragging the range
+   * around never produces an error the host has to undo: moving the start past
+   * the end collapses to a single day instead of failing.
+   */
+  const applyRange = (nextStart: string, nextEnd: string) => {
+    if (!nextStart) {
+      onChange({ days: [] });
+      return;
+    }
+    let nextLast = nextEnd || nextStart;
+    if (nextLast < nextStart) nextLast = nextStart;
+    const ceiling = shiftIsoDate(nextStart, MAX_TOURNAMENT_DAYS - 1);
+    if (nextLast > ceiling) nextLast = ceiling;
+    onChange({ days: buildDayRange(nextStart, nextLast) });
   };
 
-  const removeDay = (index: number) => onChange({ days: days.filter((_, i) => i !== index) });
-
-  const toggleCourt = (index: number, court: number, checked: boolean) => {
-    const current = days[index];
-    if (!current) return;
-    const next = checked
-      ? [...new Set([...current.courts, court])].sort((a, b) => a - b)
-      : current.courts.filter((c) => c !== court);
-    setDay(index, { courts: next });
-  };
-
-  const addBreak = (index: number) =>
-    setDay(index, {
-      breaks: [
-        ...(days[index]?.breaks ?? []),
-        { label: "Break", startTime: "12:00", endTime: "13:00" },
-      ],
-    });
-
-  const setBreak = (
-    index: number,
-    breakIndex: number,
-    patch: Partial<{ label: string; startTime: string; endTime: string }>,
-  ) => {
-    const current = days[index];
-    if (!current) return;
-    setDay(index, {
-      breaks: current.breaks.map((br, i) => (i === breakIndex ? { ...br, ...patch } : br)),
-    });
-  };
-
-  const removeBreak = (index: number, breakIndex: number) => {
-    const current = days[index];
-    if (!current) return;
-    setDay(index, { breaks: current.breaks.filter((_, i) => i !== breakIndex) });
-  };
+  const span = start ? countIsoDays(start, end || start) : 0;
 
   return (
     <div className="space-y-4">
-      <Panel
-        title="Tournament days"
-        right={
-          <Button size="sm" variant="outline" disabled={days.length >= MAX_DAYS} onClick={addDay}>
-            Add day
-          </Button>
-        }
-      >
-        <p className="mb-3 text-xs text-muted-foreground">
-          Date range: <span className="font-score text-foreground">{dateRangeLabel(days)}</span>.
-          The range is derived from the days, not stored separately.
-        </p>
-        {days.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Add at least one day. A tournament cannot be activated without a day that has courts.
-          </p>
-        ) : null}
+      <Panel title="Tournament dates">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="t-range-start">Start date</Label>
+            <Input
+              id="t-range-start"
+              type="date"
+              value={start}
+              onChange={(e) => applyRange(e.target.value, end)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="t-range-end">End date</Label>
+            <Input
+              id="t-range-end"
+              type="date"
+              value={end}
+              min={start || undefined}
+              max={lastAllowed}
+              disabled={!start}
+              onChange={(e) => applyRange(start, e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              One date is a one-day tournament. The range can be at most {MAX_TOURNAMENT_DAYS} days.
+            </p>
+          </div>
+        </div>
       </Panel>
 
-      {days.map((day, index) => (
-        <Panel
-          key={index}
-          title={`Day ${index + 1}`}
-          right={
-            <Button size="sm" variant="ghost" onClick={() => removeDay(index)}>
-              Remove
-            </Button>
-          }
-        >
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label htmlFor={`d${index}-date`}>Date</Label>
-                <Input
-                  id={`d${index}-date`}
-                  type="date"
-                  value={day.date}
-                  onChange={(e) => setDay(index, { date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`d${index}-start`}>Opens</Label>
-                <Input
-                  id={`d${index}-start`}
-                  type="time"
-                  value={day.startTime}
-                  onChange={(e) => setDay(index, { startTime: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`d${index}-end`}>Closes</Label>
-                <Input
-                  id={`d${index}-end`}
-                  type="time"
-                  value={day.endTime}
-                  onChange={(e) => setDay(index, { endTime: e.target.value })}
-                />
-              </div>
-            </div>
+      <Panel
+        title="Days"
+        right={
+          <span className="font-score text-[11px] text-muted-foreground">
+            {span ? `${span} day${span === 1 ? "" : "s"}` : "No dates"}
+          </span>
+        }
+      >
+        {days.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Pick a start date to set the range.</p>
+        ) : (
+          <ol className="divide-y divide-hairline">
+            {days.map((day, index) => (
+              <li key={day.date} className="flex items-center gap-3 py-2 text-sm">
+                <span className="font-display w-14 shrink-0 text-xs font-semibold text-muted-foreground">
+                  Day {index + 1}
+                </span>
+                <span className="font-score">{day.date}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Panel>
 
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Courts available
-                </p>
-                <div className="flex items-center gap-1">
-                  <span className="font-score text-[11px] text-muted-foreground">
-                    {day.courts.length} selected
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setDay(index, { courts: [...options] })}
-                  >
-                    All
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setDay(index, { courts: [] })}>
-                    None
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {options.map((court) => {
-                  const checked = day.courts.includes(court);
-                  return (
-                    <label
-                      key={court}
-                      title={`Court ${court}`}
-                      className={`grid size-10 cursor-pointer place-items-center rounded-lg border font-score text-sm transition-all ${
-                        checked
-                          ? "border-primary bg-primary text-primary-foreground shadow-panel"
-                          : "border-hairline bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={checked}
-                        onChange={(e) => toggleCourt(index, court, e.target.checked)}
-                      />
-                      {court}
-                    </label>
-                  );
-                })}
-                {options.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No courts to choose yet.</p>
-                ) : null}
-              </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Tap a number to open or close that court for this day. The last tile adds a new
-                court to the pool.
-              </p>
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Breaks
-                </p>
-                <Button size="sm" variant="ghost" onClick={() => addBreak(index)}>
-                  Add break
-                </Button>
-              </div>
-              {day.breaks.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No breaks. Play runs continuously between opening and closing.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {day.breaks.map((br, breakIndex) => (
-                    <li key={breakIndex} className="flex flex-wrap items-end gap-2">
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`d${index}-b${breakIndex}-label`}>Label</Label>
-                        <Input
-                          id={`d${index}-b${breakIndex}-label`}
-                          className="w-36"
-                          value={br.label}
-                          onChange={(e) => setBreak(index, breakIndex, { label: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`d${index}-b${breakIndex}-start`}>From</Label>
-                        <Input
-                          id={`d${index}-b${breakIndex}-start`}
-                          type="time"
-                          value={br.startTime}
-                          onChange={(e) =>
-                            setBreak(index, breakIndex, { startTime: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`d${index}-b${breakIndex}-end`}>To</Label>
-                        <Input
-                          id={`d${index}-b${breakIndex}-end`}
-                          type="time"
-                          value={br.endTime}
-                          onChange={(e) => setBreak(index, breakIndex, { endTime: e.target.value })}
-                        />
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeBreak(index, breakIndex)}
-                      >
-                        Remove
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </Panel>
-      ))}
-
-      <Panel title="Note">
+      <Panel title="Set up at the first build">
         <p className="text-xs text-muted-foreground">
-          Per-day courts and breaks are stored with the tournament and shown in the review summary.
-          The schedulers still treat every court as free all day, so honouring these windows when
-          matches are placed is a later pass.
+          Each day&apos;s opening and closing times, the courts it plays on and its breaks are
+          configured on the Schedule page, where the courts actually exist. Match lengths and
+          scoring rules are set there too. Nothing is lost by leaving them until then — they are not
+          needed until the schedule is built.
         </p>
       </Panel>
     </div>

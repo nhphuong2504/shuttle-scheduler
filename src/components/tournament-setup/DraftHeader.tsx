@@ -1,6 +1,6 @@
 import { Panel } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
-import { courtPoolSize, dateRangeLabel, type DraftForm } from "./types";
+import { dateRangeLabel, type DraftForm } from "./types";
 
 /**
  * A one-glance summary of the draft that stays visible while the host moves
@@ -8,7 +8,6 @@ import { courtPoolSize, dateRangeLabel, type DraftForm } from "./types";
  */
 export function DraftHeader({ form, isDraft }: { form: DraftForm; isDraft: boolean }) {
   const activeEvents = form.events.filter((event) => event.active !== false);
-  const courts = courtPoolSize(form.days);
 
   return (
     <Panel title="Draft summary" bodyClassName="p-0">
@@ -26,9 +25,8 @@ export function DraftHeader({ form, isDraft }: { form: DraftForm; isDraft: boole
         </div>
       </div>
 
-      <div className="grid grid-cols-3 divide-x divide-hairline border-b border-hairline">
+      <div className="grid grid-cols-2 divide-x divide-hairline border-b border-hairline">
         <MiniStat label="Days" value={form.days.length} />
-        <MiniStat label="Courts" value={courts || "—"} />
         <MiniStat label="Events" value={activeEvents.length} />
       </div>
 
