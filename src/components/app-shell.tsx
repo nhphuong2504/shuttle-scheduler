@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -77,6 +78,15 @@ export function AppShell({
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 text-xs">
+            <ThemeToggle className="hidden sm:inline-flex" />
+            <Link
+              to="/display"
+              target="_blank"
+              className="hidden rounded-lg border border-hairline px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:inline-flex"
+              title="Open the venue board on a second screen"
+            >
+              Venue board
+            </Link>
             {signedIn ? (
               <>
                 <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">

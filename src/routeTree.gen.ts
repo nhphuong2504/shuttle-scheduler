@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DisplayRouteImport } from './routes/display'
 import { Route as DrawsRouteImport } from './routes/draws'
 import { Route as KnockoutRouteImport } from './routes/knockout'
 import { Route as MatchesRouteImport } from './routes/matches'
@@ -30,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DisplayRoute = DisplayRouteImport.update({
+  id: '/display',
+  path: '/display',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DrawsRoute = DrawsRouteImport.update({
@@ -86,6 +92,7 @@ const StaffRoute = StaffRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/display': typeof DisplayRoute
   '/draws': typeof DrawsRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/display': typeof DisplayRoute
   '/draws': typeof DrawsRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/display': typeof DisplayRoute
   '/draws': typeof DrawsRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/display'
     | '/draws'
     | '/knockout'
     | '/matches'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/display'
     | '/draws'
     | '/knockout'
     | '/matches'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/display'
     | '/draws'
     | '/knockout'
     | '/matches'
@@ -174,6 +186,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  DisplayRoute: typeof DisplayRoute
   DrawsRoute: typeof DrawsRoute
   KnockoutRoute: typeof KnockoutRoute
   MatchesRoute: typeof MatchesRoute
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/display': {
+      id: '/display'
+      path: '/display'
+      fullPath: '/display'
+      preLoaderRoute: typeof DisplayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/draws': {
@@ -278,6 +298,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  DisplayRoute: DisplayRoute,
   DrawsRoute: DrawsRoute,
   KnockoutRoute: KnockoutRoute,
   MatchesRoute: MatchesRoute,
