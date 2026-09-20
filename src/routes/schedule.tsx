@@ -599,7 +599,7 @@ function SchedulePage() {
                     <tr key={r.id}>
                       <td className="font-score text-xs font-semibold">{timeLabel(r.start)}</td>
                       <td>
-                        <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-t4 font-semibold text-primary">
+                        <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-t4 font-semibold text-primary-ink">
                           C{r.courtNumber || "—"}
                         </span>
                       </td>

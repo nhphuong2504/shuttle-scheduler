@@ -205,7 +205,7 @@ function DrawsPage() {
                       className={cn(
                         "rounded-full border px-3 py-1 text-t4 font-semibold uppercase tracking-wide transition-colors",
                         isFit
-                          ? "border-primary bg-primary/10 text-primary"
+                          ? "border-primary bg-primary/10 text-primary-ink"
                           : "border-hairline bg-surface text-muted-foreground hover:bg-muted/60",
                       )}
                     >

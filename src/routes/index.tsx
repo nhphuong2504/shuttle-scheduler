@@ -651,7 +651,7 @@ function Desk() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 font-display text-sm font-bold">
-                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 font-score text-t2 text-primary">
+                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 font-score text-t2 text-primary-ink">
                         {court.number}
                       </span>
                       Court {court.number}
@@ -794,7 +794,7 @@ function Desk() {
                     key={row.court.id}
                     className="flex min-h-[var(--row-height)] items-center gap-3 py-1 text-t3"
                   >
-                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 font-score text-t2 text-primary">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 font-score text-t2 text-primary-ink">
                       {row.court.number}
                     </span>
                     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -1453,7 +1453,7 @@ function CourtStatePill({
   const classes = {
     playing: "bg-state-live-chip text-state-live-ink",
     overrun: "bg-danger-surface text-danger-foreground",
-    "free-ready": "bg-primary/12 text-primary",
+    "free-ready": "bg-primary/12 text-primary-ink",
     "free-blocked": "bg-warn-surface text-warn-foreground",
     idle: "bg-muted text-muted-foreground",
   };

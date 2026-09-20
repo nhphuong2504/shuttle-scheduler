@@ -33,6 +33,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-ink: var(--primary-ink);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -111,6 +112,15 @@
 :root {
   --radius: 0.875rem;
 
+  /* Tells the browser which scheme its own chrome should use - scrollbars, form
+     control interiors, the canvas behind the page, and the default text colour
+     before any token resolves. Pinned here rather than only declared in the `meta`
+     tag, because the meta tag can only say "both are supported"; this says which
+     one is actually in effect, and it follows the same class the tokens do. A dark
+     page with light scrollbars is the most common way a dark theme looks
+     unfinished. */
+  color-scheme: light;
+
   --elev-1: 0 1px 2px -1px color-mix(in oklab, var(--ink) 12%, transparent),
     0 4px 14px -8px color-mix(in oklab, var(--ink) 18%, transparent);
   --elev-2: 0 2px 6px -2px color-mix(in oklab, var(--ink) 14%, transparent),
@@ -134,10 +144,11 @@
   /* PRINCIPLE, kept for future hues: a fill colour and its text twin are
      separate tokens. Muted gold measured 2.25:1 as text, so it could only ever
      be a fill and needed an ink twin for legibility.
-     THE TOKENS ARE GONE, NOT THE RULE: gold went with the warm chassis and no
-     surviving token needs the split, so `--amber` / `--amber-ink` were deleted
-     rather than left unowned. Re-introduce a fill/ink pair the moment a new hue
-     is used for both a chip and text. */
+     THE TOKENS ARE GONE, NOT THE RULE: gold went with the warm chassis
+     and `--amber` / `--amber-ink` were deleted rather than left unowned.
+     THE RULE HAS SINCE BEEN APPLIED AGAIN: `--primary-ink` exists because
+     `--primary` is used for both a chip fill and chip text, and the dark
+     variant failed the second role. See the pair at `--primary` below. */
 
   /* Chassis: cool neutral slate. Hue 250-258, chroma <= 0.008. Hierarchy is
      carried by lightness and weight; hue is reserved for state, brand action
@@ -154,6 +165,19 @@
 
   --primary: oklch(0.52 0.16 255);
   --primary-foreground: oklch(1 0 0);
+
+  /* PRIMARY'S INK TWIN, and the file said this day would come.
+     `--primary` is used two ways: as a solid fill with `--primary-foreground` on it,
+     and as ink on a translucent primary tint (`bg-primary/10` chips, the free-ready
+     court state). Those are different requirements, and dark mode is where they part:
+     the dark `--primary` is lightened to 0.635 so it reads as a bright blue fill, and
+     at that lightness it measures 4.37:1 as ink on a primary-tinted striped row -
+     under the 4.5:1 that 14px semibold text needs. It is a marginal miss, which makes
+     it the dangerous kind: invisible in review, caught only by measuring.
+     Light mode does not have the problem (0.52 on a tint over white is comfortable),
+     so here the twin is deliberately the same value as `--primary`. Having the token
+     exist as a pair from the start is what lets dark diverge without a second audit. */
+  --primary-ink: oklch(0.52 0.16 255);
   --secondary: oklch(0.945 0.006 250);
   --secondary-foreground: oklch(0.255 0.010 255);
   --muted: oklch(0.955 0.005 250);
@@ -304,8 +328,13 @@
  * Low-light venue theme. Same token names, re-solved rather than filtered or
  * opacity-flipped — either of those would break the measured ratios. Applied
  * by putting `.dark` on <html>; the `dark:` variant is already declared above.
+ *
+ * `color-scheme` is part of the theme, not decoration: it is what makes the
+ * scrollbars and native control interiors dark, and without it a correctly dark
+ * layout still reads as half-finished.
  */
 .dark {
+  color-scheme: dark;
   --ink: oklch(0.10 0.006 260);
 
   /* Blue stays blue in both themes: same hue family 255, lightened - never a
@@ -324,6 +353,13 @@
 
   --primary: oklch(0.635 0.16 255);
   --primary-foreground: oklch(0.17 0.02 255);
+
+  /* Solved for the ink role, not the fill role. Lifted to 0.66 with chroma eased to
+     0.14, which measures 4.84:1 on the lightest primary tint in this theme (the
+     striped row) - clearing 4.5:1 with headroom rather than landing on it. The hue is
+     unchanged at 255, so it still reads as the same blue, only brighter; a hue shift
+     would have been the wrong fix, because the problem is lightness, not identity. */
+  --primary-ink: oklch(0.66 0.14 255);
   --secondary: oklch(0.245 0.008 262);
   --secondary-foreground: oklch(0.95 0.005 255);
   --muted: oklch(0.235 0.008 260);

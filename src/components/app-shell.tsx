@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useDensity } from "@/hooks/useDensity";
 import { useSession } from "@/hooks/useSession";
+import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
 import type { Density } from "@/lib/design/density";
+import type { Theme } from "@/lib/design/theme";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,6 +34,11 @@ const NAV = [
 const DENSITY_OPTIONS: { value: Density; label: string }[] = [
   { value: "comfortable", label: "Comfortable" },
   { value: "compact", label: "Compact" },
+];
+
+const THEME_OPTIONS: { value: Theme; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
 ];
 
 /**
@@ -99,6 +106,77 @@ function DensityToggle({
   );
 }
 
+/**
+ * Theme switch.
+ *
+ * A separate control from the density switch rather than one merged "appearance"
+ * control, because the two answer different questions: density is about how much fits
+ * on the screen, theme is about what can be seen in the room. A dense list in a
+ * brightly lit hall is a completely ordinary combination, and folding the two together
+ * would make choosing one imply something about the other.
+ *
+ * Same pressed-button group as the density switch, deliberately - the interaction is
+ * already learned from the control beside it - and the same honesty rule: the pressed
+ * button reflects what is actually rendering, including when that came from the
+ * operating system rather than from a choice made here. "System" appears only once a
+ * choice exists, because returning to the system has no meaning before then, and its
+ * tooltip says which way the system currently points.
+ */
+function ThemeToggle({
+  theme,
+  systemPrefersDark,
+  isExplicit,
+  onChange,
+  onReset,
+}: {
+  theme: Theme;
+  systemPrefersDark: boolean;
+  isExplicit: boolean;
+  onChange: (next: Theme) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="hidden items-center gap-1.5 sm:flex">
+      <div
+        role="group"
+        aria-label="Colour theme"
+        className="flex items-center rounded-full border border-hairline bg-muted/60 p-0.5"
+      >
+        {THEME_OPTIONS.map((option) => {
+          const active = theme === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "rounded-full px-2.5 py-1 font-semibold transition-colors",
+                "text-t4",
+                active
+                  ? "bg-surface text-foreground shadow-panel"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      {isExplicit ? (
+        <button
+          type="button"
+          onClick={onReset}
+          title={`Follow the system, which is currently ${systemPrefersDark ? "dark" : "light"}`}
+          className="text-t4 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          System
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AppShell({
   title,
   subtitle,
@@ -116,6 +194,16 @@ export function AppShell({
   // choice is resolved ahead of it inside useDensity.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { density, isExplicit, setDensity, clearDensity } = useDensity(pathname);
+  // The theme takes no pathname, and that is the design rather than an omission: its
+  // fallback is the operating system, not the route, so there is nothing for a route
+  // to contribute. See `resolveTheme`.
+  const {
+    theme,
+    systemPrefersDark,
+    isExplicit: themeIsExplicit,
+    setTheme,
+    clearTheme,
+  } = useTheme();
 
   const nav = [
     ...NAV,
@@ -158,6 +246,13 @@ export function AppShell({
               isExplicit={isExplicit}
               onChange={setDensity}
               onReset={clearDensity}
+            />
+            <ThemeToggle
+              theme={theme}
+              systemPrefersDark={systemPrefersDark}
+              isExplicit={themeIsExplicit}
+              onChange={setTheme}
+              onReset={clearTheme}
             />
             {signedIn ? (
               <>

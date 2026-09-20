@@ -62,13 +62,16 @@ function StaffPage() {
         <Panel title="Invite staff">
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Label htmlFor="staff-email">Email</Label>
+              <Input id="staff-email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Role</Label>
+              <Label htmlFor="staff-role">Role</Label>
               <Select value={role} onValueChange={(v) => setRole(v as StaffRoleName)}>
-                <SelectTrigger>
+                {/* The id is what gives the combobox its accessible name. A SelectTrigger
+                    renders a button with role="combobox" and no text of its own, so
+                    without this it is announced as an unnamed control. */}
+                <SelectTrigger id="staff-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -123,7 +126,7 @@ function StaffPage() {
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate">{row.email}</span>
-                    <span className="inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-score text-t4 uppercase tracking-wider text-primary">
+                    <span className="inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-score text-t4 uppercase tracking-wider text-primary-ink">
                       {row.role}
                     </span>
                   </span>
