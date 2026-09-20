@@ -42,10 +42,8 @@ const TIMEZONE_OPTIONS = [
 ];
 
 /**
- * Everything the tournament needs to exist: a name, the dates and a timezone.
- *
- * Venue, organizer and the note are real but rarely decisive, so they sit behind
- * one toggle instead of filling the first screen with fields nobody has to answer.
+ * Everything the tournament needs to exist: a name, the dates and a timezone,
+ * followed by the venue and organizer contact details shown on the same screen.
  */
 export function DetailsStep({
   form,
