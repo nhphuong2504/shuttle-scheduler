@@ -1637,6 +1637,45 @@ describe("sliceRowsByDay", () => {
   it("returns nothing for a tournament with no days", () => {
     expect(sliceRowsByDay([row("a", "2026-09-17T09:00:00")], [], startOf)).toEqual([]);
   });
+
+  /** A day with a chosen date, so the two orders can be pulled apart on purpose. */
+  const dayAt = (dayNumber: number, date: string): TournamentDay => ({
+    ...queueDay(dayNumber, "09:00:00", "18:00:00"),
+    date,
+  });
+
+  it("files a row by the day it falls in even when the dates are out of order", () => {
+    // The scan takes the *last* window start at or before the row, which is only
+    // correct while the windows ascend. Day 2 is dated before day 1 here, so walking
+    // by `day_number` would make the scan read descending starts and file both rows
+    // under day 2 — the whole of day 1 would vanish. Sorting by window start first
+    // keeps each row on the day it actually falls in, and `day_number` only breaks
+    // ties, so the slices still come back in the order the app labels them.
+    const slices = sliceRowsByDay(
+      [row("onDayTwo", "2026-09-20T10:00:00"), row("onDayOne", "2026-09-21T10:00:00")],
+      [dayAt(1, "2026-09-21"), dayAt(2, "2026-09-20")],
+      startOf,
+    );
+
+    // Chronological, so the earlier-dated day comes back first despite its number.
+    expect(slices.map((slice) => slice.day.day_number)).toEqual([2, 1]);
+    expect(slices[0]!.rows.map((r) => r.id)).toEqual(["onDayTwo"]);
+    expect(slices[1]!.rows.map((r) => r.id)).toEqual(["onDayOne"]);
+  });
+
+  it("leaves a gap between days alone", () => {
+    // Days need not be consecutive: the tournament simply has no capacity in between,
+    // and a row on the far side of the gap still belongs to the day that opened.
+    const slices = sliceRowsByDay(
+      [row("first", "2026-09-20T10:00:00"), row("later", "2026-09-25T10:00:00")],
+      [dayAt(1, "2026-09-20"), dayAt(2, "2026-09-25")],
+      startOf,
+    );
+
+    expect(slices.map((slice) => slice.day.day_number)).toEqual([1, 2]);
+    expect(slices[0]!.rows.map((r) => r.id)).toEqual(["first"]);
+    expect(slices[1]!.rows.map((r) => r.id)).toEqual(["later"]);
+  });
 });
 
 // ---------------------------------------------------------------------------

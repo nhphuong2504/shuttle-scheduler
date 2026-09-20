@@ -122,6 +122,8 @@ All are gated on `public.has_staff_role(ARRAY['admin'])`:
 | `activate_tournament(p_tournament_id)`                      | Draft -> In Progress. Delegates to `set_active_tournament`.                                                                                                 |
 | `set_active_tournament(p_tournament_id)`                    | Points the active scope at a tournament that already exists. Re-runs readiness for a draft, skips it for one that has already run, then clears `is_active` on every row and sets the target `in_progress, is_active=true` under the same advisory lock `create_tournament` uses. |
 | `delete_tournament_draft(p_tournament_id)`                  | Discards a draft; children cascade.                                                                                                                         |
+| `add_tournament_day(p_tournament_id, p_date, p_start_time, p_end_time)` | Adds a playing day to a tournament that is already running. The date decides its position, and the days after it are renumbered to keep `day_number` in date order. |
+| `remove_tournament_day(p_tournament_id, p_day_id)`          | Removes a playing day, refusing the last one and any day that still has matches attributed to it.                                                             |
 
 ### Verify after applying
 
@@ -1297,6 +1299,97 @@ tournament is ready to activate."* — no row about courts, day hours, breaks or
 Re-apply the `tournament_readiness` definition from `20260919010000_defer_day_courts_readiness.sql`.
 The court and day-window rows come back; the court row returns as an advisory, so activation still
 succeeds without courts.
+
+---
+
+## Applying `20260919040000_tournament_day_management.sql`
+
+Lets a tournament that is already running gain or lose a playing day, and enforces that the days'
+dates stay in order with their `day_number`.
+
+### Why it was needed
+
+`save_tournament_days` raises unless the row is still a draft, and the Schedule page only ever
+updated a day that already existed. So the day count was frozen the moment a draft was activated,
+and the case that actually comes up — the event overruns and needs one more day on the end — meant
+rebuilding the tournament.
+
+Two things had to be fixed first.
+
+**The dates were not ordered.** `sliceRowsByDay` attributes a match to "the last day that had already
+opened". It finds that by scanning the day windows in `day_number` order and taking the last start at
+or before the match, which is only correct while the starts ascend. That held while setup was the
+only writer, because `buildDayRange` emits one row per date in order. It stopped holding as soon as
+the date could be typed by hand on the Schedule page, and nothing checked it. Dating day 2 before
+day 1 made the scan read descending starts and file *every* match under a later day — the whole of
+day 1 disappeared from the running order.
+
+**A day could be deleted out from under its matches.** Matches carry an absolute `scheduled_time`
+and no day foreign key, so deleting a day does not fail; it silently re-attributes the matches, and
+the tournament's official close moves with them.
+
+### What it does
+
+- **`tournament_days_guard_order`** — a `BEFORE INSERT OR UPDATE` trigger that rejects two days
+  sharing a date, and rejects a day whose number and date disagree with a neighbour. A trigger
+  rather than validation inside the RPCs because the date is also editable by a plain table update
+  from the Schedule page, so one guard covers every writer.
+- **`add_tournament_day`** — inserts a day whose position is decided by its date. Rows at or after
+  the target are stepped up **one at a time in descending order**, so each moves into a slot the
+  previous move freed. A single multi-row `UPDATE` would give no ordering guarantee and trip the
+  unique index on `(tournament_id, day_number)`. Refuses past the seven-day cap. A new day has no
+  `tournament_day_courts` rows, which is stored state for "every court", so it can use the whole
+  venue until it is narrowed.
+- **`remove_tournament_day`** — refuses the last remaining day, and refuses any day that still has a
+  match. A day's territory is the half-open span from its own opening to the next day's opening,
+  which is the same rule `sliceRowsByDay` attributes by; the final day runs to infinity, because it
+  is the one allowed to overrun. Checking the closing time instead would miss a match legitimately
+  placed after its own day's end.
+
+### The timezone detail
+
+`date + start_time` is a wall clock. Compared against a `timestamptz` directly it would be cast using
+the *session* timezone — UTC on Supabase — which is five or six hours off for a US venue and would
+put every match on the wrong side of a boundary. The guard reads the window with
+`AT TIME ZONE venue_timezone`. This is the first place in the repo a day window is compared against
+`scheduled_time` at all; every other comparison is against `statement_timestamp()` or another
+match's own time.
+
+### Verify after applying
+
+```sql
+-- the trigger rejects a date that disagrees with the day number
+UPDATE public.tournament_days SET date = date - 1 WHERE day_number = 2;
+-- expect: ERROR: Day 2 has to fall in date order...
+
+-- adding a day keeps the numbers in date order
+SELECT public.add_tournament_day('<id>'::uuid, '<a date after the last day>'::date);
+SELECT day_number, date FROM public.tournament_days ORDER BY day_number;  -- dates ascend
+
+-- removing a day that has matches is refused
+SELECT public.remove_tournament_day('<id>'::uuid, '<day-with-matches>'::uuid);
+-- expect: ERROR: Day N still has M match(es) on it...
+
+-- anon must still be locked out
+SELECT has_function_privilege('anon', 'public.add_tournament_day(uuid, date, time, time)', 'EXECUTE'); -- false
+SELECT has_function_privilege('anon', 'public.remove_tournament_day(uuid, uuid)', 'EXECUTE'); -- false
+```
+
+On `/placement-schedule`, **Settings → Playing days** shows an *Add day* date field and a *Remove*
+button on each day card. *Remove* is disabled on the only remaining day and on any day with matches,
+with the reason in its tooltip.
+
+### Rolling back
+
+```sql
+DROP TRIGGER IF EXISTS tournament_days_guard_order ON public.tournament_days;
+DROP FUNCTION IF EXISTS public.tournament_days_guard_order();
+DROP FUNCTION IF EXISTS public.add_tournament_day(uuid, date, time, time);
+DROP FUNCTION IF EXISTS public.remove_tournament_day(uuid, uuid);
+```
+
+The day rows are left as they are: the RPCs only ever renumbered them into date order, which is the
+state the removed `sliceRowsByDay` behaviour also preferred.
 
 ---
 

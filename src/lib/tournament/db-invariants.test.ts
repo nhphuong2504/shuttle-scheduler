@@ -243,3 +243,92 @@ describe("set_tournament_courts migration", () => {
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.set_tournament_courts\(uuid, int\)/);
   });
 });
+
+/**
+ * Days used to be frozen at activation: `save_tournament_days` refuses anything that
+ * is not a draft, so going from two days to three meant rebuilding the tournament.
+ * These RPCs add and remove days on a live one, and the guard trigger is what keeps
+ * the two orders — date and `day_number` — from drifting apart, which is what
+ * `sliceRowsByDay` relies on to attribute a match to a day.
+ */
+describe("tournament day management migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const file = "20260919040000_tournament_day_management.sql";
+  const sql = readFileSync(join(dir, file), "utf8");
+
+  it("guards the date order for every writer, not just the RPCs", () => {
+    // A trigger rather than validation inside the RPCs, because the date is also
+    // editable by a plain table update from the Schedule page.
+    expect(sql).toMatch(/FUNCTION public\.tournament_days_guard_order\(\)/);
+    expect(sql).toMatch(/CREATE TRIGGER tournament_days_guard_order/);
+    expect(sql).toMatch(/BEFORE INSERT OR UPDATE OF tournament_id, day_number, date/);
+    // The row being written must be excluded, or an update would compare against its
+    // own old values and fail every time.
+    expect(sql).toMatch(/d\.id <> NEW\.id/);
+    // Ordering needs both directions checked: a lower number with a later date, or a
+    // higher number with an earlier date.
+    expect(sql).toMatch(/d\.day_number < NEW\.day_number AND d\.date > NEW\.date/);
+    expect(sql).toMatch(/d\.day_number > NEW\.day_number AND d\.date < NEW\.date/);
+    expect(sql).toMatch(/d\.date = NEW\.date/);
+  });
+
+  it("lets a day be added to a tournament that is already running", () => {
+    expect(sql).toMatch(/FUNCTION public\.add_tournament_day\(/);
+    // The date decides the position, so the caller never sends a day number.
+    expect(sql).toMatch(/p_date date/);
+    expect(sql).not.toMatch(/add_tournament_day\(\s*p_tournament_id uuid,\s*p_day_number/);
+    expect(sql).toMatch(/count\(\*\) \+ 1 INTO v_target/);
+    // Descending, so each row moves into a slot the previous move vacated. A single
+    // multi-row UPDATE would give no ordering guarantee and trip the unique index.
+    expect(sql).toMatch(/ORDER BY d\.day_number DESC/);
+  });
+
+  it("keeps the seven-day cap and the day_count summary honest", () => {
+    expect(sql).toMatch(/v_total >= 7/);
+    expect(sql).toMatch(/at most 7 days/);
+    expect(sql).toMatch(/SET day_count = \(SELECT count\(\*\) FROM public\.tournament_days/);
+  });
+
+  it("refuses to strand a match or empty the tournament", () => {
+    expect(sql).toMatch(/FUNCTION public\.remove_tournament_day\(/);
+    expect(sql).toMatch(/A tournament needs at least one day/);
+    expect(sql).toMatch(/still has % match\(es\) on it/);
+    // Every table a match can live in has to be checked, or removing a day that only
+    // holds a knockout match would silently re-attribute it.
+    for (const table of [
+      "placement_matches",
+      "tier_draw_matches",
+      "pool_matches",
+      "draw_matches",
+    ]) {
+      expect(sql).toMatch(new RegExp(`FROM public\\.${table} m`));
+    }
+  });
+
+  it("reads the day window in the venue's timezone", () => {
+    // `date + start_time` is a wall clock. Compared against a timestamptz directly it
+    // would be cast using the session timezone — UTC on Supabase — which is hours off
+    // for a US venue and would put matches on the wrong side of a boundary.
+    expect(sql).toMatch(/AT TIME ZONE v_tz/);
+    expect(sql).toMatch(/SELECT venue_timezone INTO v_tz/);
+    // The last day overruns to infinity, so its territory has no upper bound.
+    expect(sql).toMatch(/v_next_start IS NULL OR scheduled\.at < v_next_start/);
+  });
+
+  it("steps the rows down in ascending order after a delete", () => {
+    expect(sql).toMatch(/ORDER BY d\.day_number\b(?! DESC)/);
+    expect(sql).toMatch(/SET day_number = v_row\.day_number - 1/);
+    expect(sql).toMatch(/DELETE FROM public\.tournament_days WHERE id = p_day_id/);
+  });
+
+  it("closes the implicit PUBLIC grants it restores by re-creating the functions", () => {
+    expect(sql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.add_tournament_day\(uuid, date, time, time\) FROM anon, PUBLIC/,
+    );
+    expect(sql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.remove_tournament_day\(uuid, uuid\) FROM anon, PUBLIC/,
+    );
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.add_tournament_day/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.remove_tournament_day/);
+  });
+});

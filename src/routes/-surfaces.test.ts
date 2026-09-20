@@ -141,13 +141,105 @@ describe("the setup wizard asks only for what activation needs", () => {
       expect(setup).not.toMatch(new RegExp(`${field}:`));
     }
     const schedule = read("placement-schedule.tsx");
-    expect(schedule).toMatch(/<StageScoring/);
+    expect(schedule).toMatch(/<MatchFormatCard/);
     expect(schedule).toMatch(/setTournamentCourts/);
   });
 
   it("still persists the basics it does own", () => {
     expect(setup).toMatch(/maxCategoriesPerPlayer: form\.maxCategoriesPerPlayer/);
     expect(setup).toMatch(/saveTournamentDays\(id, form\.days\)/);
+  });
+});
+
+/**
+ * The Schedule page's settings were a flat list ordered Venue, Match timings, Scoring,
+ * Days, Danger zone. Timings and scoring described the same match from two sections
+ * that could contradict each other without saying so — a rule suggesting 45 minutes
+ * while the duration box a section above held 25 — and the irreversible reset sat in
+ * the same list, one stray click from the day fields.
+ *
+ * The panel is now grouped by what a match is, the courts live where they are chosen,
+ * and the reset stands on its own.
+ */
+describe("the schedule settings are grouped by what a match is", () => {
+  const schedule = read("placement-schedule.tsx");
+  const format = readFileSync(join(__dirname, "../components/match-format.tsx"), "utf8");
+
+  it("edits scoring, match length and rest in one card per stage", () => {
+    expect(format).toMatch(/Match length/);
+    expect(format).toMatch(/Rest before the next match/);
+    // Editing them together is the point: it is what lets the card reconcile a rule
+    // against the duration it finds instead of leaving the two to disagree quietly.
+    expect(format).toMatch(/suggestedSlotMinutes/);
+    expect(format).toMatch(/usually needs about/);
+  });
+
+  it("folds the raw scoring numbers behind a toggle", () => {
+    expect(format).toMatch(/showCustom/);
+    expect(format).toMatch(/SCORING_PRESETS/);
+  });
+
+  it("keeps the venue's courts inside each day instead of a section of its own", () => {
+    expect(schedule).not.toMatch(/title="Venue"/);
+    expect(schedule).not.toMatch(/venue-courts/);
+    expect(schedule).toMatch(/Courts this day/);
+    expect(schedule).toMatch(/Add a court/);
+  });
+
+  it("will not let a day be left with no courts", () => {
+    // The last selected court is disabled rather than rejected after the click, and
+    // shrinking the venue refuses to orphan a day that plays only on the removed ones.
+    expect(schedule).toMatch(/lastOn/);
+    expect(schedule).toMatch(/only plays on the courts you are removing/);
+  });
+
+  it("saves a day's window when the field is left, not only at a build", () => {
+    expect(schedule).toMatch(/commitDayWindow/);
+    expect(schedule).toMatch(/onBlur=\{\(\) => void commitDayWindow\(day\)\}/);
+  });
+
+  it("stands the irreversible reset outside the settings list", () => {
+    expect(schedule).not.toMatch(/title="Danger zone"/);
+    expect(schedule).toMatch(/title="Reset"/);
+    // Folded away on first paint, so it cannot be hit on the way past.
+    expect(schedule).toMatch(/showDanger/);
+  });
+});
+
+/**
+ * The day count used to be decided in setup and frozen at activation, so an event
+ * that overran could not be given another day without rebuilding the tournament. The
+ * Schedule page now adds and removes days, guarded so that neither can strand a match.
+ */
+describe("playing days can be managed after activation", () => {
+  const schedule = read("placement-schedule.tsx");
+
+  it("offers an add-day control that stops at the seven-day cap", () => {
+    expect(schedule).toMatch(/addTournamentDay/);
+    expect(schedule).toMatch(/Add day/);
+    expect(schedule).toMatch(/tournamentDays\.length < 7/);
+  });
+
+  it("suggests the day after the last, since overrunning is the common case", () => {
+    expect(schedule).toMatch(/suggestedNewDayDate/);
+    // Built from the day's own YYYY-MM-DD: a bare `new Date(dateString)` is read as
+    // UTC midnight and lands a day early west of Greenwich.
+    expect(schedule).toMatch(/T00:00:00/);
+    expect(schedule).not.toMatch(/new Date\(last\.date\)/);
+  });
+
+  it("disables remove rather than letting it fail, at both refusals", () => {
+    expect(schedule).toMatch(/removeTournamentDay/);
+    // The last day cannot go, and a day with matches on it cannot go.
+    expect(schedule).toMatch(/tournamentDays\.length <= 1/);
+    expect(schedule).toMatch(/daysWithMatches\.has\(day\.id\)/);
+  });
+
+  it("disables remove using the same attribution the running order is built from", () => {
+    // Not a second rule: whatever the host sees filed under a day is what decides
+    // whether that day can be removed.
+    expect(schedule).toMatch(/sliceRowsByDay\(rows, tournamentDays/);
+    expect(schedule).toMatch(/daySlices\.filter\(\(slice\) => slice\.rows\.length > 0\)/);
   });
 });
 

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
+import { MatchFormatCard } from "@/components/match-format";
 import { ScheduledFinish } from "@/components/schedule-status";
-import { StageScoring } from "@/components/stage-scoring";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/useSession";
 import {
+  addTournamentDay,
+  removeTournamentDay,
   setTournamentCourts,
   setTournamentDayBreaks,
   setTournamentDayCourts,
@@ -176,13 +178,23 @@ function PlacementSchedulePage() {
   const [showAllChanges, setShowAllChanges] = useState(false);
   /** Day windows, courts, breaks, timings and scoring are setup, not day-to-day desk work. */
   const [showSettings, setShowSettings] = useState(false);
+  /**
+   * The reset action collapsed on first paint.
+   *
+   * It used to sit inside the settings list directly under the day cards, one stray
+   * click from the fields above it. It is the only irreversible action on the page, so
+   * it gets its own panel at the bottom and stays folded until it is asked for.
+   */
+  const [showDanger, setShowDanger] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Tournament-wide timing overrides, held as text so a half-typed number is not clobbered. */
   const [timingDrafts, setTimingDrafts] = useState<Record<string, string>>({});
-  /** The venue's court count, held as text while it is being typed. */
-  const [courtCountDraft, setCourtCountDraft] = useState<string | null>(null);
   /** Per-day break edits, held locally until saved so a bad row cannot wipe the day. */
   const [breakDrafts, setBreakDrafts] = useState<Record<string, DayBreakRow[]>>({});
+  /** Day windows whose edits are still in flight, so their card can say "saving". */
+  const [savingDayId, setSavingDayId] = useState<string | null>(null);
+  /** The date typed into "Add a day", or null while it still shows the suggested one. */
+  const [newDayDate, setNewDayDate] = useState<string | null>(null);
 
   const tournamentDays = useMemo(() => days ?? [], [days]);
   const dayCount = tournament?.day_count ?? tournamentDays.length;
@@ -361,6 +373,18 @@ function PlacementSchedulePage() {
   /** Text shown in a timing box: the in-progress edit if there is one, else the saved value. */
   const timingText = (key: string, value: number) => timingDrafts[key] ?? String(value);
 
+  /** Looks a timing field up by its draft key, so a match-format card can commit it. */
+  const timingByKey = useMemo(
+    () => new Map(timingFields.map((timing) => [timing.key, timing])),
+    [timingFields],
+  );
+
+  const commitTiming = (key: string, raw: string) => {
+    const timing = timingByKey.get(key);
+    if (!timing) return;
+    void saveTiming(timing.field, timing.key, timing.value, timing.min, raw);
+  };
+
   /** Persists one timing override, keeping the box as typed until it is valid. */
   const saveTiming = async (
     field: (typeof timingFields)[number]["field"],
@@ -399,40 +423,47 @@ function PlacementSchedulePage() {
   };
 
   /**
-   * Sets how many courts the venue has.
+   * Grows or shrinks the venue's court pool from a day card.
    *
-   * Held as text so a half-typed number is not read as "make it one court", and
-   * saved on blur. The pool is the venue's, so this is deliberately separate from
-   * the per-day toggles below: a court exists before any day is told about it.
+   * Courts are shared by every day, so these are venue-level actions that happen to
+   * be reachable from where the courts are chosen. A day that plays on every court
+   * picks a new court up straight away, because "every court" is stored as no rows at
+   * all; a day with an explicit subset keeps its subset and its card shows "n of m".
+   *
+   * `set_tournament_courts` refuses to shrink below a court that still holds a match
+   * and says how many are affected, so a removal can never unassign a live match.
    */
-  const saveCourtCount = async (raw: string) => {
-    if (!tournamentId) return;
-    if (!raw.trim()) {
-      setCourtCountDraft(null);
+  const setCourtCount = async (next: number) => {
+    if (!tournamentId || busy) return;
+    if (next < 1 || next > 64) {
+      toast.error("A venue needs between 1 and 64 courts.");
       return;
     }
-    const current = (courts ?? []).length;
-    const parsed = Number(raw);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 64) {
-      toast.error("Enter a whole number of courts between 1 and 64.");
-      setCourtCountDraft(null);
-      return;
-    }
-    if (parsed === current) {
-      setCourtCountDraft(null);
-      return;
+    // A day with no `tournament_day_courts` rows means "every court", so removing a
+    // day's last remaining court would silently widen that day to the whole venue
+    // rather than leave it with none. Refuse instead, and name the day.
+    if (next < (courts ?? []).length) {
+      const removing = new Set(
+        (courts ?? []).filter((court) => court.number > next).map((court) => court.id),
+      );
+      const orphaned = tournamentDays.find((day) => {
+        const set = dayCourtIds.get(day.id);
+        if (!set || !set.size) return false;
+        return [...set].every((id) => removing.has(id));
+      });
+      if (orphaned) {
+        toast.error(
+          `Day ${orphaned.day_number} only plays on the courts you are removing — give it another court first.`,
+        );
+        return;
+      }
     }
     setBusy(true);
     try {
-      await setTournamentCourts(tournamentId, parsed);
-      setCourtCountDraft(null);
+      await setTournamentCourts(tournamentId, next);
       await qc.invalidateQueries();
-      toast.success(
-        `${parsed} court${parsed === 1 ? "" : "s"} at the venue. Rebuild a day to apply it.`,
-      );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not set the court count");
-      setCourtCountDraft(null);
+      toast.error(error instanceof Error ? error.message : "Could not change the courts");
     } finally {
       setBusy(false);
     }
@@ -731,6 +762,35 @@ function PlacementSchedulePage() {
   );
 
   /**
+   * The days that already have something scheduled on them.
+   *
+   * Used to disable "Remove day" before the click rather than after it. It is the
+   * same attribution the running order is built from, so what the host sees on the
+   * day is what decides. The database re-checks this in the venue's timezone and
+   * remains the authority; this only keeps the button honest.
+   */
+  const daysWithMatches = useMemo(
+    () => new Set(daySlices.filter((slice) => slice.rows.length > 0).map((slice) => slice.day.id)),
+    [daySlices],
+  );
+
+  /**
+   * The date offered for a new day: the one after the last, which is the overrun case.
+   *
+   * Built from the day's own `YYYY-MM-DD` rather than a UTC parse, so it cannot land
+   * a day early west of Greenwich the way `new Date(dateString)` would.
+   */
+  const suggestedNewDayDate = useMemo(() => {
+    const last = tournamentDays[tournamentDays.length - 1];
+    if (!last) return "";
+    const date = new Date(`${last.date}T00:00:00`);
+    date.setDate(date.getDate() + 1);
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${date.getFullYear()}-${month}-${day}`;
+  }, [tournamentDays]);
+
+  /**
    * Which day's running order is on screen.
    *
    * Held as `null` until a tab is clicked so the opening view can be derived rather
@@ -792,6 +852,117 @@ function PlacementSchedulePage() {
    */
   const validateAllWindows = () =>
     tournamentDays.every((day) => validateWindow(day.day_number, windowFor(day)));
+
+  /**
+   * Persists one day's date and window as soon as a field is left.
+   *
+   * This used to be written only during a build, which meant an edit made and then
+   * navigated away from was silently lost — the box showed the new time, the row held
+   * the old one, and nothing said so. Validate before writing, because
+   * `updateTournamentDay` writes straight to the row and `tournament_readiness` no
+   * longer covers day windows: it runs at activation, long before this is editable.
+   *
+   * A date that would put this day out of order with its neighbours is rejected by a
+   * trigger (`tournament_days_guard_order`), so the message below surfaces from the
+   * database and the edit reverts.
+   */
+  const commitDayWindow = async (day: TournamentDay) => {
+    if (!tournamentId || busy) return;
+    const window = windowFor(day);
+    const normalized = {
+      date: window.date,
+      start_time: normalizeTime(window.start),
+      end_time: normalizeTime(window.end),
+    };
+    if (
+      normalized.date === day.date &&
+      normalized.start_time === day.start_time &&
+      normalized.end_time === day.end_time
+    ) {
+      return;
+    }
+    const revert = () =>
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[day.id];
+        return next;
+      });
+    if (!validateWindow(day.day_number, window)) {
+      // Put the rejected edit back to what the row actually holds.
+      revert();
+      return;
+    }
+    setSavingDayId(day.id);
+    try {
+      await updateTournamentDay(day.id, normalized);
+      // Await the refetch before dropping the draft, or the box would snap back to
+      // the old value for the moment the update is in flight.
+      await qc.invalidateQueries();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the day");
+    } finally {
+      revert();
+      setSavingDayId(null);
+    }
+  };
+
+  /**
+   * Adds a day to a tournament that is already under way.
+   *
+   * The date defaults to the day after the last one, which is the case that actually
+   * comes up: a tournament overruns and needs one more day on the end. Picking a date
+   * between two existing days is allowed and the database renumbers to keep
+   * `day_number` in date order, so the running order stays chronological either way.
+   *
+   * A new day plays on every court, because having no `tournament_day_courts` rows is
+   * what "every court" is stored as upstream.
+   */
+  const addDay = async (date: string) => {
+    if (!tournamentId || busy) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      toast.error("Choose a date for the new day.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await addTournamentDay(tournamentId, date);
+      setNewDayDate("");
+      await qc.invalidateQueries();
+      toast.success(`Day added for ${date}. Rebuild to place matches on it.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add the day");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Removes a playing day.
+   *
+   * The button is already disabled for the cases below, so reaching one of these is a
+   * race rather than a mistake; the database refuses them too, and wording the toast
+   * from its message keeps the two in agreement instead of drifting.
+   */
+  const removeDay = async (day: TournamentDay) => {
+    if (!tournamentId || busy) return;
+    setBusy(true);
+    try {
+      await removeTournamentDay(tournamentId, day.id);
+      // Drop any draft for the row that no longer exists, or `windowFor` keeps
+      // returning an edit for a day that is gone.
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[day.id];
+        return next;
+      });
+      await qc.invalidateQueries();
+      toast.success(`Day ${day.day_number} removed.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove the day");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   /**
    * Planning always re-reads the match tables and the draws first.
@@ -1102,321 +1273,362 @@ function PlacementSchedulePage() {
             title="Settings"
             bodyClassName="p-0"
             right={
-              <span className="font-score text-[11px] text-muted-foreground">
-                applies to the next build
-              </span>
+              <span className="font-score text-[11px] text-muted-foreground">saved as you go</span>
             }
           >
             <div className="divide-y divide-hairline">
               <SettingsSection
-                title="Venue"
-                hint="How many courts the hall has. New courts are available on every day until a day below says otherwise."
+                title="Playing days"
+                hint="When the tournament runs and which of the venue's courts each day uses. Days can be added or removed after activation; dates save as you leave the field."
               >
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="venue-courts" className="sr-only">
-                    Courts at the venue
-                  </Label>
-                  <Input
-                    id="venue-courts"
-                    type="number"
-                    min={1}
-                    max={64}
-                    className="h-9 w-24"
-                    placeholder="—"
-                    disabled={!canSchedule || busy}
-                    value={courtCountDraft ?? ((courts ?? []).length || "")}
-                    onChange={(event) => setCourtCountDraft(event.target.value)}
-                    onBlur={(event) => void saveCourtCount(event.target.value)}
-                  />
-                  <span className="text-xs text-muted-foreground">courts</span>
-                </div>
-              </SettingsSection>
-
-              <SettingsSection
-                title="Match timings"
-                hint="Minutes used when the running order is planned. Every value applies to the next build."
-              >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {timingFields.map((timing) => (
-                    <div
-                      key={timing.key}
-                      className="rounded-lg border border-hairline bg-surface px-3 py-2.5"
-                    >
-                      <Label
-                        htmlFor={`timing-${timing.key}`}
-                        className="text-[11px] leading-snug text-muted-foreground"
-                      >
-                        {timing.label}
-                      </Label>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <Input
-                          id={`timing-${timing.key}`}
-                          type="number"
-                          min={timing.min}
-                          className="h-9 w-20"
-                          disabled={!canSchedule || busy}
-                          value={timingText(timing.key, timing.value)}
-                          onChange={(event) =>
-                            setTimingDrafts((prev) => ({
-                              ...prev,
-                              [timing.key]: event.target.value,
-                            }))
-                          }
-                          onBlur={(event) =>
-                            void saveTiming(
-                              timing.field,
-                              timing.key,
-                              timing.value,
-                              timing.min,
-                              event.target.value,
-                            )
-                          }
-                        />
-                        <span className="text-xs text-muted-foreground">min</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </SettingsSection>
-
-              <SettingsSection
-                title="Scoring"
-                hint="The rule a reported score is checked against, per stage."
-              >
-                {tournament ? (
-                  <div className="space-y-4">
-                    <StageScoring
-                      title="Placement"
-                      detail="The two rounds that sort entrants into draws. A reported score is validated against this rule."
-                      rule={ruleForStage(tournament, "placement")}
-                      disabled={!canSchedule || busy}
-                      onRule={(rule) => void saveScoringRule("placement", rule)}
-                      onPreset={(rule, minutes) => void saveScoringRule("placement", rule, minutes)}
-                    />
-                    <StageScoring
-                      title="Knockout"
-                      detail="A/B/C/D single elimination. A reported score is validated against this rule."
-                      rule={ruleForStage(tournament, "knockout")}
-                      disabled={!canSchedule || busy}
-                      onRule={(rule) => void saveScoringRule("knockout", rule)}
-                      onPreset={(rule, minutes) => void saveScoringRule("knockout", rule, minutes)}
-                    />
-                  </div>
-                ) : null}
-              </SettingsSection>
-
-              <SettingsSection
-                title="Days"
-                hint="Each day's date, playing window, the courts it uses and any breaks."
-              >
-                <div className="grid gap-3 sm:grid-cols-2">
-                {tournamentDays.map((day) => {
-                  const window = windowFor(day);
-                  return (
-                    <div
-                      key={day.id}
-                      className="space-y-3 rounded-lg border border-hairline bg-surface p-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="font-display text-sm font-semibold">Day {day.day_number}</p>
-                        <span className="font-score text-[11px] text-muted-foreground">
-                          {courtsFor(day).length} of {(courts ?? []).length} courts
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"}
+                      {tournamentDays.length >= 7
+                        ? " · 7 is the maximum"
+                        : " · add one if the tournament overruns"}
+                    </p>
+                    {tournamentDays.length < 7 ? (
+                      <div className="flex items-end gap-2">
                         <div>
-                          <Label
-                            htmlFor={`day-${day.id}-date`}
-                            className="text-xs text-muted-foreground"
-                          >
-                            Date
+                          <Label htmlFor="new-day-date" className="text-xs text-muted-foreground">
+                            New day
                           </Label>
                           <Input
-                            id={`day-${day.id}-date`}
+                            id="new-day-date"
                             type="date"
                             className="mt-1 h-9 w-36"
-                            value={window.date}
                             disabled={!canSchedule || busy}
-                            onChange={(event) => setWindow(day, { date: event.target.value })}
+                            value={newDayDate ?? suggestedNewDayDate}
+                            onChange={(event) => setNewDayDate(event.target.value)}
                           />
                         </div>
-                        <div>
-                          <Label
-                            htmlFor={`day-${day.id}-start`}
-                            className="text-xs text-muted-foreground"
-                          >
-                            Start
-                          </Label>
-                          <Input
-                            id={`day-${day.id}-start`}
-                            type="time"
-                            className="mt-1 h-9 w-28"
-                            value={window.start}
-                            disabled={!canSchedule || busy}
-                            onChange={(event) => setWindow(day, { start: event.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label
-                            htmlFor={`day-${day.id}-end`}
-                            className="text-xs text-muted-foreground"
-                          >
-                            End
-                          </Label>
-                          <Input
-                            id={`day-${day.id}-end`}
-                            type="time"
-                            className="mt-1 h-9 w-28"
-                            value={window.end}
-                            disabled={!canSchedule || busy}
-                            onChange={(event) => setWindow(day, { end: event.target.value })}
-                          />
-                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!canSchedule || busy}
+                          onClick={() => void addDay(newDayDate ?? suggestedNewDayDate)}
+                        >
+                          Add day
+                        </Button>
                       </div>
-
-                      <div className="flex flex-wrap gap-1.5">
-                        {(courts ?? []).map((court) => {
-                          const on = courtsFor(day).some((entry) => entry.id === court.id);
-                          return (
-                            <Button
-                              key={court.id}
-                              size="sm"
-                              variant={on ? "default" : "outline"}
-                              className="font-score h-7 w-11 px-0"
-                              disabled={!canSchedule || busy}
-                              aria-pressed={on}
-                              onClick={() => void toggleDayCourt(day, court.id)}
-                            >
-                              C{court.number}
-                            </Button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs text-muted-foreground">Breaks</p>
-                          <div className="flex gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={!canSchedule || busy}
-                              onClick={() =>
-                                updateBreakRows(day.id, [
-                                  ...breakRows(day),
-                                  { label: "", start: "12:00", end: "13:00" },
-                                ])
-                              }
-                            >
-                              Add break
-                            </Button>
-                            {breaksDirty(day) ? (
+                    ) : null}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {tournamentDays.map((day) => {
+                      const window = windowFor(day);
+                      return (
+                        <div
+                          key={day.id}
+                          className="space-y-3 rounded-lg border border-hairline bg-surface p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-display text-sm font-semibold">
+                              Day {day.day_number}
+                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-score text-[11px] text-muted-foreground">
+                                {savingDayId === day.id
+                                  ? "Saving…"
+                                  : `${courtsFor(day).length} of ${(courts ?? []).length} courts`}
+                              </span>
                               <Button
                                 size="sm"
-                                variant="outline"
-                                disabled={!canSchedule || busy}
-                                onClick={() => void saveBreaks(day)}
+                                variant="ghost"
+                                className="h-7 px-2 text-[11px]"
+                                disabled={
+                                  !canSchedule ||
+                                  busy ||
+                                  tournamentDays.length <= 1 ||
+                                  daysWithMatches.has(day.id)
+                                }
+                                title={
+                                  tournamentDays.length <= 1
+                                    ? "A tournament needs at least one day."
+                                    : daysWithMatches.has(day.id)
+                                      ? "This day has matches on it. Clear or move them first."
+                                      : undefined
+                                }
+                                onClick={() => void removeDay(day)}
                               >
-                                Save
+                                Remove
                               </Button>
-                            ) : null}
+                            </div>
                           </div>
-                        </div>
-                        {breakRows(day).length === 0 ? (
-                          <p className="text-[11px] text-muted-foreground">
-                            No breaks — play runs straight through.
-                          </p>
-                        ) : (
+
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div>
+                              <Label
+                                htmlFor={`day-${day.id}-date`}
+                                className="text-xs text-muted-foreground"
+                              >
+                                Date
+                              </Label>
+                              <Input
+                                id={`day-${day.id}-date`}
+                                type="date"
+                                className="mt-1 h-9 w-36"
+                                value={window.date}
+                                disabled={!canSchedule || busy}
+                                onChange={(event) => setWindow(day, { date: event.target.value })}
+                                onBlur={() => void commitDayWindow(day)}
+                              />
+                            </div>
+                            <div>
+                              <Label
+                                htmlFor={`day-${day.id}-start`}
+                                className="text-xs text-muted-foreground"
+                              >
+                                Start
+                              </Label>
+                              <Input
+                                id={`day-${day.id}-start`}
+                                type="time"
+                                className="mt-1 h-9 w-28"
+                                value={window.start}
+                                disabled={!canSchedule || busy}
+                                onChange={(event) => setWindow(day, { start: event.target.value })}
+                                onBlur={() => void commitDayWindow(day)}
+                              />
+                            </div>
+                            <div>
+                              <Label
+                                htmlFor={`day-${day.id}-end`}
+                                className="text-xs text-muted-foreground"
+                              >
+                                End
+                              </Label>
+                              <Input
+                                id={`day-${day.id}-end`}
+                                type="time"
+                                className="mt-1 h-9 w-28"
+                                value={window.end}
+                                disabled={!canSchedule || busy}
+                                onChange={(event) => setWindow(day, { end: event.target.value })}
+                                onBlur={() => void commitDayWindow(day)}
+                              />
+                            </div>
+                          </div>
+
                           <div className="space-y-1.5">
-                            {breakRows(day).map((row, index) => (
-                              <div key={index} className="flex flex-wrap items-center gap-1.5">
-                                <Input
-                                  className="h-8 w-28"
-                                  placeholder="Lunch"
-                                  value={row.label}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs text-muted-foreground">Courts this day</p>
+                              <div className="flex gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
                                   disabled={!canSchedule || busy}
-                                  onChange={(event) =>
-                                    updateBreakRows(
-                                      day.id,
-                                      breakRows(day).map((entry, i) =>
-                                        i === index
-                                          ? { ...entry, label: event.target.value }
-                                          : entry,
-                                      ),
-                                    )
-                                  }
-                                />
-                                <Input
-                                  type="time"
-                                  className="h-8 w-24"
-                                  value={row.start}
-                                  disabled={!canSchedule || busy}
-                                  onChange={(event) =>
-                                    updateBreakRows(
-                                      day.id,
-                                      breakRows(day).map((entry, i) =>
-                                        i === index
-                                          ? { ...entry, start: event.target.value }
-                                          : entry,
-                                      ),
-                                    )
-                                  }
-                                />
-                                <span className="text-xs text-muted-foreground">to</span>
-                                <Input
-                                  type="time"
-                                  className="h-8 w-24"
-                                  value={row.end}
-                                  disabled={!canSchedule || busy}
-                                  onChange={(event) =>
-                                    updateBreakRows(
-                                      day.id,
-                                      breakRows(day).map((entry, i) =>
-                                        i === index ? { ...entry, end: event.target.value } : entry,
-                                      ),
-                                    )
-                                  }
-                                />
+                                  onClick={() => void setCourtCount((courts ?? []).length + 1)}
+                                >
+                                  Add a court
+                                </Button>
+                                {(courts ?? []).length > 1 ? (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={!canSchedule || busy}
+                                    onClick={() => void setCourtCount((courts ?? []).length - 1)}
+                                  >
+                                    Remove court {(courts ?? []).length}
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(courts ?? []).map((court) => {
+                                const on = courtsFor(day).some((entry) => entry.id === court.id);
+                                const lastOn = on && courtsFor(day).length === 1;
+                                return (
+                                  <Button
+                                    key={court.id}
+                                    size="sm"
+                                    variant={on ? "default" : "outline"}
+                                    className="font-score h-7 w-11 px-0"
+                                    disabled={!canSchedule || busy || lastOn}
+                                    title={
+                                      lastOn
+                                        ? "A day has to play on at least one court."
+                                        : undefined
+                                    }
+                                    aria-pressed={on}
+                                    onClick={() => void toggleDayCourt(day, court.id)}
+                                  >
+                                    C{court.number}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              A court added here joins the venue, so any day playing on every court
+                              gets it too.
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs text-muted-foreground">Breaks</p>
+                              <div className="flex gap-1.5">
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   disabled={!canSchedule || busy}
                                   onClick={() =>
-                                    updateBreakRows(
-                                      day.id,
-                                      breakRows(day).filter((_, i) => i !== index),
-                                    )
+                                    updateBreakRows(day.id, [
+                                      ...breakRows(day),
+                                      { label: "", start: "12:00", end: "13:00" },
+                                    ])
                                   }
                                 >
-                                  Remove
+                                  Add break
                                 </Button>
+                                {breaksDirty(day) ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!canSchedule || busy}
+                                    onClick={() => void saveBreaks(day)}
+                                  >
+                                    Save
+                                  </Button>
+                                ) : null}
                               </div>
-                            ))}
+                            </div>
+                            {breakRows(day).length === 0 ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                No breaks — play runs straight through.
+                              </p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                {breakRows(day).map((row, index) => (
+                                  <div key={index} className="flex flex-wrap items-center gap-1.5">
+                                    <Input
+                                      className="h-8 w-28"
+                                      placeholder="Lunch"
+                                      value={row.label}
+                                      disabled={!canSchedule || busy}
+                                      onChange={(event) =>
+                                        updateBreakRows(
+                                          day.id,
+                                          breakRows(day).map((entry, i) =>
+                                            i === index
+                                              ? { ...entry, label: event.target.value }
+                                              : entry,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                    <Input
+                                      type="time"
+                                      className="h-8 w-24"
+                                      value={row.start}
+                                      disabled={!canSchedule || busy}
+                                      onChange={(event) =>
+                                        updateBreakRows(
+                                          day.id,
+                                          breakRows(day).map((entry, i) =>
+                                            i === index
+                                              ? { ...entry, start: event.target.value }
+                                              : entry,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                    <span className="text-xs text-muted-foreground">to</span>
+                                    <Input
+                                      type="time"
+                                      className="h-8 w-24"
+                                      value={row.end}
+                                      disabled={!canSchedule || busy}
+                                      onChange={(event) =>
+                                        updateBreakRows(
+                                          day.id,
+                                          breakRows(day).map((entry, i) =>
+                                            i === index
+                                              ? { ...entry, end: event.target.value }
+                                              : entry,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={!canSchedule || busy}
+                                      onClick={() =>
+                                        updateBreakRows(
+                                          day.id,
+                                          breakRows(day).filter((_, i) => i !== index),
+                                        )
+                                      }
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </SettingsSection>
 
-              {isAdmin ? (
-                <SettingsSection
-                  title="Danger zone"
-                  hint="Clears every match, result, seed order and waiver. Cannot be undone."
-                >
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={busy || !tournament}
-                    onClick={() => void resetStage()}
-                  >
-                    Delete results &amp; schedule
-                  </Button>
-                </SettingsSection>
-              ) : null}
+              <SettingsSection
+                title="Match format"
+                hint="One card per stage. A scoring rule is checked the moment a result is reported; the length and rest gap are read at the next build."
+              >
+                {tournament ? (
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <MatchFormatCard
+                      title="Placement"
+                      detail="The two rounds that sort entrants into draws."
+                      rule={ruleForStage(tournament, "placement")}
+                      slotMinutes={tournament.group_slot_minutes}
+                      restMinutes={tournament.group_rest_gap_minutes}
+                      slotMin={1}
+                      restMin={0}
+                      slotText={timingText("placement-slot", tournament.group_slot_minutes)}
+                      restText={timingText("placement-rest", tournament.group_rest_gap_minutes)}
+                      disabled={!canSchedule || busy}
+                      onRule={(rule) => void saveScoringRule("placement", rule)}
+                      onPreset={(rule, minutes) => void saveScoringRule("placement", rule, minutes)}
+                      onSlotChange={(raw) =>
+                        setTimingDrafts((prev) => ({ ...prev, "placement-slot": raw }))
+                      }
+                      onRestChange={(raw) =>
+                        setTimingDrafts((prev) => ({ ...prev, "placement-rest": raw }))
+                      }
+                      onSlotCommit={(raw) => commitTiming("placement-slot", raw)}
+                      onRestCommit={(raw) => commitTiming("placement-rest", raw)}
+                    />
+                    <MatchFormatCard
+                      title="Knockout"
+                      detail="The A/B/C/D single-elimination draws."
+                      rule={ruleForStage(tournament, "knockout")}
+                      slotMinutes={tournament.knockout_slot_minutes}
+                      restMinutes={tournament.knockout_rest_gap_minutes}
+                      slotMin={1}
+                      restMin={0}
+                      slotText={timingText("knockout-slot", tournament.knockout_slot_minutes)}
+                      restText={timingText("knockout-rest", tournament.knockout_rest_gap_minutes)}
+                      disabled={!canSchedule || busy}
+                      onRule={(rule) => void saveScoringRule("knockout", rule)}
+                      onPreset={(rule, minutes) => void saveScoringRule("knockout", rule, minutes)}
+                      onSlotChange={(raw) =>
+                        setTimingDrafts((prev) => ({ ...prev, "knockout-slot": raw }))
+                      }
+                      onRestChange={(raw) =>
+                        setTimingDrafts((prev) => ({ ...prev, "knockout-rest": raw }))
+                      }
+                      onSlotCommit={(raw) => commitTiming("knockout-slot", raw)}
+                      onRestCommit={(raw) => commitTiming("knockout-rest", raw)}
+                    />
+                  </div>
+                ) : null}
+              </SettingsSection>
             </div>
           </Panel>
         ) : null}
@@ -1532,6 +1744,45 @@ function PlacementSchedulePage() {
             </Tabs>
           )}
         </Panel>
+
+        {isAdmin ? (
+          <Panel
+            title="Reset"
+            bodyClassName="p-0"
+            right={
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={showDanger}
+                onClick={() => setShowDanger((value) => !value)}
+              >
+                {showDanger ? "Hide" : "Show"}
+              </Button>
+            }
+          >
+            {showDanger ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <p className="max-w-lg text-xs text-muted-foreground">
+                  Clears every placement and knockout match, every reported result, the seed order
+                  and any waivers, so the placement stage starts over. The days, courts and match
+                  settings above are kept. This cannot be undone.
+                </p>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={busy || !tournament}
+                  onClick={() => void resetStage()}
+                >
+                  Delete results &amp; schedule
+                </Button>
+              </div>
+            ) : (
+              <p className="p-4 text-xs text-muted-foreground">
+                Clear results and schedule, and start the placement stage over.
+              </p>
+            )}
+          </Panel>
+        ) : null}
       </div>
 
       <Dialog open={!!preview} onOpenChange={(open) => !open && setPreview(null)}>

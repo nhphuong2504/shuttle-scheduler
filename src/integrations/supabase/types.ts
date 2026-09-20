@@ -1231,6 +1231,15 @@ export type Database = {
         Returns: undefined
       }
       active_tournament_id: { Args: never; Returns: string }
+      add_tournament_day: {
+        Args: {
+          p_date: string
+          p_end_time?: string
+          p_start_time?: string
+          p_tournament_id: string
+        }
+        Returns: string
+      }
       advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
       advance_tier_draw_locked: {
         Args: { p_draw_id: string }
@@ -1341,6 +1350,10 @@ export type Database = {
       placement_required_matches: {
         Args: { p_category_id: string }
         Returns: number
+      }
+      remove_tournament_day: {
+        Args: { p_day_id: string; p_tournament_id: string }
+        Returns: undefined
       }
       report_draw_result: {
         Args: { p_games: Json; p_match_id: string }

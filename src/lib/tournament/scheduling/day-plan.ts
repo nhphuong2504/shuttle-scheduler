@@ -124,13 +124,26 @@ export interface DaySlice<T> {
  * A row that starts before the first day opened is attributed to the first day. In
  * practice that is a match reported early, and showing it on the day it belongs to
  * beats hiding it.
+ *
+ * Days are walked in chronological order, not by `day_number`. The scan below relies
+ * on the start times ascending — it takes the *last* one at or before the row — and
+ * that only holds if the two orders agree. `tournament_days_guard_order` makes them
+ * agree for every writer, and reading the order off the windows rather than trusting
+ * the numbers means a row is still filed under the day it actually falls in if a
+ * legacy tournament has them out of step. `day_number` is only the tie-break, so the
+ * slices stay in the order the rest of the app labels them.
  */
 export function sliceRowsByDay<T>(
   rows: readonly T[],
   days: readonly TournamentDay[],
   startOf: (row: T) => Date,
 ): DaySlice<T>[] {
-  const ordered = [...days].sort((a, b) => a.day_number - b.day_number);
+  const ordered = [...days].sort((a, b) => {
+    const startA = dayWindowBounds(a).start;
+    const startB = dayWindowBounds(b).start;
+    if (startA !== startB) return startA - startB;
+    return a.day_number - b.day_number;
+  });
   const slices: DaySlice<T>[] = ordered.map((day) => ({ day, rows: [] }));
   if (!slices.length) return slices;
 

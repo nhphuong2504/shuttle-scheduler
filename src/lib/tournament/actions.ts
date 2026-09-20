@@ -864,6 +864,47 @@ export async function setTournamentCourts(tournamentId: string, count: number): 
 }
 
 /**
+ * Adds a playing day to a tournament that is already under way.
+ *
+ * The date decides where the day lands: the database numbers it between its
+ * neighbours, so `day_number` stays the order the rest of the app reads. The new day
+ * starts on the 09:00–18:30 default and, having no per-day court rows, plays on
+ * every court in the venue until it is narrowed on the Schedule page.
+ *
+ * Returns the new day's id, so the caller can highlight or scroll to it.
+ */
+export async function addTournamentDay(
+  tournamentId: string,
+  date: string,
+  window?: { startTime?: string; endTime?: string },
+): Promise<string> {
+  const { data, error } = await supabase.rpc("add_tournament_day", {
+    p_tournament_id: tournamentId,
+    p_date: date,
+    ...(window?.startTime ? { p_start_time: window.startTime } : {}),
+    ...(window?.endTime ? { p_end_time: window.endTime } : {}),
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/**
+ * Removes a playing day.
+ *
+ * The database refuses when it is the last day, or when anything is still scheduled
+ * on it — a match's start time puts it on a day, so deleting the day underneath it
+ * would silently move the match rather than fail. Those refusals arrive as the
+ * thrown message, which is written to be shown to the host as-is.
+ */
+export async function removeTournamentDay(tournamentId: string, dayId: string): Promise<void> {
+  const { error } = await supabase.rpc("remove_tournament_day", {
+    p_tournament_id: tournamentId,
+    p_day_id: dayId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
  * Replaces which courts a day plays on.
  *
  * Deletes by day rather than diffing: the set is small, it has no dependants, and
