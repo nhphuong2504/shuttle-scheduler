@@ -645,7 +645,7 @@ function Desk() {
                       : state.state === "free-ready"
                         ? "border-primary/40 bg-primary/5"
                         : state.state === "playing"
-                          ? "border-amber/40 bg-amber/5"
+                          ? "border-state-live-ink/35 bg-state-live-chip"
                           : "border-hairline bg-surface"
                   }`}
                 >
@@ -1101,10 +1101,10 @@ export function MatchOperationsDialog({
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
               isReported
-                ? "bg-mint/20 text-foreground"
+                ? "text-state-completed-ink"
                 : notStarted
-                  ? "bg-muted text-muted-foreground"
-                  : "bg-info-surface text-info-foreground"
+                  ? "bg-state-scheduled-chip text-state-scheduled-ink"
+                  : "bg-state-live-chip text-state-live-ink"
             }`}
           >
             {isReported ? "Reported" : notStarted ? "Not started" : "Live"}
@@ -1437,9 +1437,9 @@ function CourtStatePill({
     idle: "Idle",
   };
   const classes = {
-    playing: "bg-amber/25 text-foreground",
+    playing: "bg-state-live-chip text-state-live-ink",
     overrun: "bg-danger-surface text-danger-foreground",
-    "free-ready": "bg-mint/20 text-foreground",
+    "free-ready": "bg-primary/12 text-primary",
     "free-blocked": "bg-warn-surface text-warn-foreground",
     idle: "bg-muted text-muted-foreground",
   };
@@ -1523,7 +1523,7 @@ function ConnectionBadge({
       role="status"
       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
         status === "live"
-          ? "bg-mint/20 text-foreground"
+          ? "bg-state-live-chip text-state-live-ink"
           : status === "offline" || status === "error"
             ? "bg-danger-surface text-danger-foreground"
             : "bg-warn-surface text-warn-foreground"

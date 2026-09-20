@@ -80,7 +80,7 @@ export function AppShell({
             {signedIn ? (
               <>
                 <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
-                  <span className="size-1.5 rounded-full bg-mint" />
+                  <span className="size-1.5 rounded-full bg-primary" />
                   {session?.userEmail}
                   {role ? ` · ${role}` : ""}
                 </span>
@@ -207,22 +207,173 @@ export function EmptyState({
   );
 }
 
+/**
+ * The nine operating states, in four tiers.
+ *
+ * Tier is the structural idea. Tiers 1-3 render as a chip; tier 4 renders as
+ * bare inline text. That is the whole reason archive states recede.
+ *
+ *   tier 1  saturated chip   live, disputed          may animate
+ *   tier 2  shared amber     paused, called
+ *   tier 3  gray chip        warm-up, scheduled
+ *   tier 4  NO chip          walkover, retired, completed
+ *
+ * Colour is never the only channel: every state also carries a distinct glyph
+ * and a text label, so the pill survives grayscale, colour blindness, and a
+ * wall display read from ten metres away.
+ */
+const STATE_ALIAS: Record<string, string> = {
+  "in-progress": "live",
+  reported: "completed",
+};
+
+const STATE_LABEL: Record<string, string> = {
+  scheduled: "Scheduled",
+  called: "Called",
+  warmup: "Warm-up",
+  live: "Live",
+  paused: "Paused",
+  walkover: "Walkover",
+  retired: "Retired",
+  completed: "Completed",
+  disputed: "Disputed",
+};
+
+const STATE_TIER: Record<string, 1 | 2 | 3 | 4> = {
+  live: 1,
+  disputed: 1,
+  paused: 2,
+  called: 2,
+  warmup: 3,
+  scheduled: 3,
+  walkover: 4,
+  retired: 4,
+  completed: 4,
+};
+
+/** Chip classes for tiers 1-3 only. Tier 4 has no chip token to reference. */
+const STATE_CLASS: Record<string, string> = {
+  disputed: "bg-state-disputed-chip text-state-disputed-ink ring-state-disputed-ink/25",
+  live: "bg-state-live-chip text-state-live-ink ring-state-live-ink/25",
+  called: "bg-state-called-chip text-state-called-ink ring-state-called-ink/25",
+  warmup: "bg-state-warmup-chip text-state-warmup-ink ring-state-warmup-ink/25",
+  paused: "bg-state-paused-chip text-state-paused-ink ring-state-paused-ink/25",
+  scheduled: "bg-state-scheduled-chip text-state-scheduled-ink ring-state-scheduled-ink/25",
+};
+
+/**
+ * Tier 4 is ink-only: no fill, no border, no radius.
+ *
+ * Archive states recede by LOSING their container, not by lightening their ink.
+ * Lightening was the original plan and it fails measurement - the lightest grey
+ * that still clears 4.5:1 on a surface is about L 0.55, so an archive ink at
+ * L 0.64 would be illegal. Dropping the chip removes far more visual weight than
+ * a lightness step could, while raising legibility instead of lowering it.
+ */
+const STATE_TIER4_CLASS = "text-state-completed-ink";
+
+/** Strokes use `currentColor`, so the glyph inherits the state ink. */
+function glyph(children: ReactNode) {
+  return (
+    <svg
+      viewBox="0 0 18 18"
+      className="size-3 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {children}
+    </svg>
+  );
+}
+
+const STATE_GLYPH: Record<string, ReactNode> = {
+  // Clock — nothing has started yet.
+  scheduled: glyph(
+    <>
+      <circle cx="9" cy="9" r="6.25" />
+      <path d="M9 5.75V9l2.25 1.5" />
+    </>,
+  ),
+  // Broadcast — the call went out to the players.
+  called: glyph(
+    <>
+      <path d="M11 5.4a5.4 5.4 0 0 1 0 7.2M13.9 3.6a8.6 8.6 0 0 1 0 10.8" />
+      <circle cx="5.4" cy="9" r="1.7" fill="currentColor" stroke="none" />
+    </>,
+  ),
+  // Flame — on court, not competing yet.
+  warmup: glyph(<path d="M9 3.2s3.9 3.1 3.9 6.1a3.9 3.9 0 0 1-7.8 0c0-1.4.8-2.6 1.6-3.5" />),
+  // Filled target — the match is running now.
+  live: glyph(
+    <>
+      <circle cx="9" cy="9" r="6.25" />
+      <circle cx="9" cy="9" r="2.6" fill="currentColor" stroke="none" />
+    </>,
+  ),
+  // Transport pause bars.
+  paused: glyph(<path d="M7.4 5.6v6.8M10.6 5.6v6.8" strokeWidth={2.4} />),
+  // Skip — the tie was passed over, not played.
+  walkover: glyph(
+    <>
+      <path d="M5.6 6.1 9.4 9l-3.8 2.9z" fill="currentColor" stroke="none" />
+      <path d="M11.9 6.1v5.8" />
+    </>,
+  ),
+  // Slashed circle — a side withdrew.
+  retired: glyph(
+    <>
+      <circle cx="9" cy="9" r="6.25" />
+      <path d="M5.6 12.4 12.4 5.6" />
+    </>,
+  ),
+  // Check.
+  completed: glyph(<path d="M5 9.4l2.7 2.7L13 6.4" />),
+  // Warning triangle.
+  disputed: glyph(
+    <>
+      <path d="M9 2.9 16 14.4H2z" />
+      <path d="M9 7.2v3.4M9 12.8v.2" />
+    </>,
+  ),
+};
+
+const STATE_FALLBACK_GLYPH = glyph(
+  <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />,
+);
+
 export function StatusPill({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    reported: "bg-mint/20 text-foreground ring-mint/40",
-    walkover: "bg-mint/15 text-foreground ring-mint/30",
-    "in-progress": "bg-amber/25 text-foreground ring-amber/50",
-    scheduled: "bg-muted text-muted-foreground ring-hairline",
-    void: "bg-danger-surface text-danger-foreground ring-danger-border",
-  };
+  const key = STATE_ALIAS[status] ?? status;
+  const known = key in STATE_LABEL;
+  const tier = known ? STATE_TIER[key] : null;
+  const glyphNode = known ? STATE_GLYPH[key] : STATE_FALLBACK_GLYPH;
+  const label = known ? STATE_LABEL[key] : status.replace(/_/g, " ");
+
+  if (tier === 4) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 font-score text-[10px] uppercase tracking-wider",
+          STATE_TIER4_CLASS,
+        )}
+      >
+        {glyphNode}
+        {label}
+      </span>
+    );
+  }
+
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 font-score text-[10px] uppercase tracking-wider ring-1 ring-inset",
-        map[status] ?? "bg-muted text-muted-foreground ring-hairline",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-[10px] uppercase tracking-wider ring-1 ring-inset",
+        known ? STATE_CLASS[key] : "bg-muted text-muted-foreground ring-hairline",
       )}
     >
-      {status.replace("_", " ")}
+      {glyphNode}
+      {label}
     </span>
   );
 }
