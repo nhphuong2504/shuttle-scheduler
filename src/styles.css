@@ -17,9 +17,9 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
 
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
-  --font-body: "Karla", ui-sans-serif, system-ui, sans-serif;
-  --font-score: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-score: "Inter", ui-sans-serif, system-ui, sans-serif;
 
   --shadow-panel: var(--elev-1);
   --shadow-raise: var(--elev-2);
