@@ -2,7 +2,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
-import { AppShell, EmptyState, Panel, StatTile, StatusPill } from "@/components/app-shell";
+import {
+  AppShell,
+  ByeMarker,
+  EmptyState,
+  Panel,
+  StatTile,
+  StatusPill,
+} from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -36,6 +43,7 @@ import {
   scoringRuleLabel,
 } from "@/lib/tournament/scoring";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
+import { BYE_NOTE, isByeMatch } from "@/lib/tournament/match-status";
 import { MatchOperationsDialog } from "./index";
 
 export const Route = createFileRoute("/matches")({
@@ -561,15 +569,15 @@ function MatchesPage() {
                           {timeLabel(m.scheduled_time)}
                           {m.court_id ? ` · C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
                         </span>
-                        <StatusPill status={m.note === "Bye" ? "walkover" : m.status} />
+                        {isByeMatch(m) ? <ByeMarker /> : <StatusPill status={m.status} />}
                         <span className="w-24 text-right font-score text-sm">
                           {m.status === "reported"
-                            ? m.note === "Bye"
-                              ? "Bye"
+                            ? isByeMatch(m)
+                              ? BYE_NOTE
                               : gamesLabel(parseGames(m.games))
                             : "—"}
                         </span>
-                        {m.note !== "Bye" ? (
+                        {!isByeMatch(m) ? (
                           <Button
                             size="sm"
                             variant="outline"

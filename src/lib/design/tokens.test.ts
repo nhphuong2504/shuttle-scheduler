@@ -3,6 +3,12 @@ import { extname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  displayStateFor,
+  PERSISTED_MATCH_STATUSES,
+  TIER4_DISPLAY_STATES,
+} from "@/lib/tournament/match-status";
+
 /**
  * Token-reference integrity.
  *
@@ -243,27 +249,30 @@ describe("token references all resolve", () => {
     expect(orphans).toEqual([]);
   });
 
-  it("covers every status the domain can persist, with the known gap pinned", () => {
+  it("covers every status the domain can persist, with no gap left open", () => {
     // StatusPill aliases two persisted values onto their display state, and two
     // more share the tier-4 ink by design rather than owning a token each. So the
     // question is not "does every status have its own token" - it is "is every
     // status representable at all".
-    const aliased: Record<string, string> = { "in-progress": "live", reported: "completed" };
-    /** Tier 4 is deliberately one shared ink; see the state block in styles.css. */
-    const SHARED_TIER4 = new Set(["walkover", "reported"]);
-
-    const persisted = ["scheduled", "in-progress", "reported", "walkover", "void"];
+    //
+    // The vocabulary is read from the shared module rather than restated here. That
+    // is the change phase 5 made: this test used to re-declare the alias map and the
+    // tier-4 sharing by hand, so it could only ever confirm what it already said -
+    // which is how `void` stayed in the list of known gaps without the list ever
+    // noticing it was a defect rather than a fact.
+    const persisted: readonly string[] = PERSISTED_MATCH_STATUSES;
     const unrepresentable = persisted.filter((status) => {
-      if (SHARED_TIER4.has(status)) return false;
-      const key = aliased[status] ?? status;
-      return ![...colorMap.keys()].some((token) => token.startsWith(`state-${key}-`));
+      const display = displayStateFor(status);
+      if (!display) return true;
+      if (TIER4_DISPLAY_STATES.includes(display)) return false;
+      return ![...colorMap.keys()].some((token) => token.startsWith(`state-${display}-`));
     });
 
-    // `void` is the only persisted status with no token, no label and no tier, so
-    // it renders indistinguishably from a typo. Pinned rather than fixed here:
-    // phase 5 owns the vocabulary. This assertion is the proof the gap is real
-    // and the signal that phase 5 has closed it.
-    expect(unrepresentable).toEqual(["void"]);
+    // `void` closed this list in phase 5: it gained a label, a tier 3 chip and its
+    // own -chip/-ink pair, so every persisted status is now representable and the
+    // assertion is empty. It stays as an assertion rather than being deleted, so a
+    // status added to the schema without a token fails here.
+    expect(unrepresentable).toEqual([]);
   });
 
   it("keeps tier 4 on a single shared ink", () => {

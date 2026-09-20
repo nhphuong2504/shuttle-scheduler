@@ -8,6 +8,12 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
 import type { Density } from "@/lib/design/density";
 import type { Theme } from "@/lib/design/theme";
+import {
+  BYE_NOTE,
+  displayStateFor,
+  MATCH_DISPLAY_LABEL,
+  MATCH_DISPLAY_TIER,
+} from "@/lib/tournament/match-status";
 import { cn } from "@/lib/utils";
 
 /**
@@ -385,49 +391,39 @@ export function EmptyState({
 }
 
 /**
- * The nine operating states, in four tiers.
+ * How each display state is drawn.
+ *
+ * The vocabulary itself - which statuses exist, what they are called, which tier
+ * each sits in - lives in `@/lib/tournament/match-status`, so the tests and the
+ * token integrity check read the same source this component renders from. What
+ * stays here is only what needs JSX: the glyphs, and the class strings Tailwind
+ * has to see literally in order to emit a rule.
  *
  * Tier is the structural idea. Tiers 1-3 render as a chip; tier 4 renders as
  * bare inline text. That is the whole reason archive states recede.
  *
- *   tier 1  saturated chip   live, disputed          may animate
- *   tier 2  shared amber     paused, called
- *   tier 3  gray chip        warm-up, scheduled
- *   tier 4  NO chip          walkover, retired, completed
+ *   tier 1  saturated chip   live
+ *   tier 2  shared amber     (unoccupied - its states were phantom)
+ *   tier 3  neutral chip     scheduled, void
+ *   tier 4  NO chip          walkover, completed
  *
  * Colour is never the only channel: every state also carries a distinct glyph
- * and a text label, so the pill survives grayscale, colour blindness, and a
- * wall display read from ten metres away.
- */
-const STATE_ALIAS: Record<string, string> = {
-  "in-progress": "live",
-  reported: "completed",
-};
-
-const STATE_LABEL: Record<string, string> = {
-  scheduled: "Scheduled",
-  live: "Live",
-  walkover: "Walkover",
-  completed: "Completed",
-};
-
-const STATE_TIER: Record<string, 1 | 2 | 3 | 4> = {
-  live: 1,
-  scheduled: 3,
-  walkover: 4,
-  completed: 4,
-};
-
-/**
- * Chip classes for tiers 1 to 3 only. Tier 4 has no chip token to reference.
- *
- * The four phantom states - called, warm-up, paused, disputed - are absent
- * because their tokens are absent. A state is added here only alongside the
- * migration that makes it producible.
+ * and a text label, so the pill survives grayscale and colour blindness.
  */
 const STATE_CLASS: Record<string, string> = {
   live: "bg-state-live-chip text-state-live-ink ring-state-live-ink/25",
   scheduled: "bg-state-scheduled-chip text-state-scheduled-ink ring-state-scheduled-ink/25",
+  /**
+   * Void is the exceptional neutral, and the ring is the exception.
+   *
+   * A heavier, more opaque inset ring is what makes it read as marked rather
+   * than merely empty, and it is the channel that survives dark mode - where the
+   * neutral ramp is too compressed for a lightness step to separate void from
+   * scheduled at all (7.2% of luminance, against 14.2% in light). Expressing it
+   * as an edge rather than a hue keeps it inside the three-hue rule and away from
+   * the destructive red, which means disputed or destructive and nothing else.
+   */
+  void: "bg-state-void-chip text-state-void-ink ring-2 ring-state-void-ink/50",
 };
 
 /**
@@ -482,18 +478,59 @@ const STATE_GLYPH: Record<string, ReactNode> = {
   ),
   // Check.
   completed: glyph(<path d="M5 9.4l2.7 2.7L13 6.4" />),
+  /**
+   * Struck circle — the match was nullified.
+   *
+   * A slash through a ring is the one shape in this set that reads as "this did
+   * not count" without borrowing the meaning of any other state. It is distinct
+   * from the walkover glyph in both parts: walkover is a solid triangle beside a
+   * vertical bar (a skip), void is a hollow ring with a diagonal through it. The
+   * two are the most easily confused pair in the vocabulary, which is why the
+   * label is load-bearing rather than decorative.
+   */
+  void: glyph(
+    <>
+      <circle cx="9" cy="9" r="6.25" />
+      <path d="M5.6 12.4 12.4 5.6" />
+    </>,
+  ),
 };
 
 const STATE_FALLBACK_GLYPH = glyph(
   <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />,
 );
 
+/** Rightwards arrow — the entrant advances without playing. */
+const BYE_GLYPH = glyph(
+  <>
+    <path d="M4.5 9h9" />
+    <path d="M10.5 5.75 13.75 9l-3.25 3.25" />
+  </>,
+);
+
 export function StatusPill({ status }: { status: string }) {
-  const key = STATE_ALIAS[status] ?? status;
-  const known = key in STATE_LABEL;
-  const tier = known ? STATE_TIER[key] : null;
-  const glyphNode = known ? STATE_GLYPH[key] : STATE_FALLBACK_GLYPH;
-  const label = known ? STATE_LABEL[key] : status.replace(/_/g, " ");
+  const display = displayStateFor(status);
+
+  /**
+   * An unrecognised value is printed rather than swallowed.
+   *
+   * This is the branch a typo takes, and it is deliberately neutral: a muted chip
+   * carrying the raw string. It is no longer the branch `void` takes - that was
+   * the defect this phase fixes - so an unrecognised value now looks like exactly
+   * what it is, which is a value nobody planned for.
+   */
+  if (!display) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-score text-t2 uppercase tracking-wider text-muted-foreground ring-1 ring-inset ring-hairline">
+        {STATE_FALLBACK_GLYPH}
+        {status.replace(/_/g, " ")}
+      </span>
+    );
+  }
+
+  const label = MATCH_DISPLAY_LABEL[display];
+  const glyphNode = STATE_GLYPH[display];
+  const tier = MATCH_DISPLAY_TIER[display];
 
   if (tier === 4) {
     return (
@@ -513,11 +550,40 @@ export function StatusPill({ status }: { status: string }) {
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ring-1 ring-inset",
-        known ? STATE_CLASS[key] : "bg-muted text-muted-foreground ring-hairline",
+        STATE_CLASS[display],
       )}
     >
       {glyphNode}
       {label}
+    </span>
+  );
+}
+
+/**
+ * A bye, drawn as a draw condition rather than as a match status.
+ *
+ * A bye is not a match that happened - it is an entrant who advanced because their
+ * opponent slot was empty. It nonetheless has to be stored as a match row, and the
+ * generator stores it as `status: "reported"` with `is_bye` and a `note` of "Bye",
+ * which means every surface that rendered a plain status pill was calling a bye
+ * "Completed". One surface worked around that by passing `"walkover"` instead,
+ * which is a different wrong answer: a walkover is a tie that was awarded, and a
+ * bye is a tie that was never drawn.
+ *
+ * The distinguishing channel here is the EDGE, not the hue. A dashed outline is
+ * already this app's vocabulary for "not a real thing" - it draws empty states and
+ * placeholders - so it reads as provisional without colour, without a new token,
+ * and without inventing a status the schema does not have. That matters because
+ * the vocabulary is a closed set of five and a bye is not one of them.
+ */
+export function ByeMarker() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border border-dashed border-hairline px-2 py-0.5 font-score text-t2 uppercase tracking-wider text-muted-foreground"
+      title={BYE_NOTE}
+    >
+      {BYE_GLYPH}
+      {BYE_NOTE}
     </span>
   );
 }

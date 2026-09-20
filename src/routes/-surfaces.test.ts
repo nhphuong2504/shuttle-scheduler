@@ -299,3 +299,46 @@ describe("a build reads its rows from the network, not the query cache", () => {
     }
   });
 });
+
+/**
+ * A bye is a draw condition, and must never be presented as a match status.
+ *
+ * The generator stores an automatic advance as `status: "reported"` with `is_bye`
+ * and a `note` of "Bye", so any surface that renders a plain status pill calls a bye
+ * "Completed". One surface had worked around that by passing "walkover" instead,
+ * which is a different wrong answer. Both are asserted closed here, because the
+ * defect was in the call sites rather than in the vocabulary - and the component
+ * tests cannot see a call site.
+ */
+describe("byes are drawn as draw conditions, not as statuses", () => {
+  const scores = read("matches.tsx");
+  const bracket = read("knockout.tsx");
+  const draws = read("draws.tsx");
+
+  it("never coerces a bye onto a status the schema does have", () => {
+    // The original workaround, in the exact form it shipped.
+    expect(scores).not.toMatch(/note === "Bye" \? "walkover"/);
+    // And the shape it would be rewritten into by a mechanical refactor.
+    expect(scores).not.toMatch(/isByeMatch\([^)]*\)\s*\?\s*"walkover"/);
+  });
+
+  it("routes every bye through the marker instead of the pill", () => {
+    // Both surfaces that can hold a bye: the draw list on the scores page, and the
+    // bracket rows on the knockout page. `visibleTier` excludes byes because
+    // buildDeskMatches filters them, which is why the scores page needs the guard in
+    // its draw list only.
+    expect(scores).toMatch(/isByeMatch\(m\)[\s\S]{0,80}<ByeMarker \/>/);
+    expect(bracket).toMatch(/bye \? <ByeMarker \/> : <StatusPill/);
+  });
+
+  it("tests for a bye through one shared predicate", () => {
+    // Three different detections used to coexist - `is_bye` in one place, `note` in
+    // another, `status === "bye"` in the schema - so a row carrying only one signal
+    // was drawn differently on two pages.
+    for (const source of [scores, bracket, draws]) {
+      expect(source).toMatch(/isByeMatch/);
+      expect(source).not.toMatch(/note === "Bye"/);
+      expect(source).not.toMatch(/status === "bye"/);
+    }
+  });
+});

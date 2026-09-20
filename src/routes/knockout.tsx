@@ -1,7 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { AppShell, EmptyState, Panel, StatusPill } from "@/components/app-shell";
+import { AppShell, ByeMarker, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS } from "@/lib/tournament/competition-format";
 import { roundName } from "@/lib/tournament/draws";
@@ -26,6 +26,7 @@ import {
   type TierDrawMatch,
 } from "@/lib/tournament/data";
 import { gamesLabel, parseGames } from "@/lib/tournament/format";
+import { isByeMatch } from "@/lib/tournament/match-status";
 
 export const Route = createFileRoute("/knockout")({
   head: () => ({
@@ -279,19 +280,24 @@ function TierMatchRow({
   label: (entrantId: string | null | undefined) => string;
 }) {
   const decided = match.status === "reported" || match.status === "walkover";
+  const bye = isByeMatch(match);
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-hairline px-2 py-1.5">
       <div className="min-w-0 text-xs">
         <span className="font-medium">{label(match.entrant_a_id)}</span>
         <span className="mx-1.5 text-muted-foreground">vs</span>
         <span className="font-medium">{label(match.entrant_b_id)}</span>
-        {decided ? (
+        {decided && !bye ? (
           <span className="ml-2 font-score text-t4 text-muted-foreground">
-            {match.is_bye ? "bye" : gamesLabel(parseGames(match.games))}
+            {gamesLabel(parseGames(match.games))}
           </span>
         ) : null}
       </div>
-      <StatusPill status={match.status} />
+      {/* A bye carries status "reported" because that is how the generator stores an
+          automatic advance, so rendering the raw status would label it "Completed".
+          The marker replaces the pill rather than sitting beside it, and takes over
+          the games label too: a bye has no games to show. */}
+      {bye ? <ByeMarker /> : <StatusPill status={match.status} />}
     </div>
   );
 }

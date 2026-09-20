@@ -23,6 +23,7 @@ import {
 } from "@/lib/tournament/data";
 import { roundName } from "@/lib/tournament/draws";
 import { parseGames } from "@/lib/tournament/format";
+import { isByeMatch } from "@/lib/tournament/match-status";
 
 export const Route = createFileRoute("/draws")({
   head: () => ({
@@ -253,7 +254,7 @@ function DrawsPage() {
                             <div className="flex flex-1 flex-col">
                               {roundSlots.map((slot) => {
                                 const m = bySlot.get(slot);
-                                const isBye = m?.note === "Bye";
+                                const isBye = m ? isByeMatch(m) : false;
                                 const games = m ? parseGames(m.games) : [];
                                 const scoreFor = (side: Side) =>
                                   !m || isBye || !games.length
