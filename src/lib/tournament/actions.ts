@@ -14,6 +14,7 @@ import type {
 import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
 import { gamesWinner, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
+import { isOddBestOf } from "./scoring";
 import type { SolverDiagnostics } from "@/lib/scheduling";
 import { composeDayPlan, type ComposedAnchor, type ComposedMatch } from "./scheduling/composition";
 import type { DayOneSchedulerOptions } from "./scheduling/policy";
@@ -785,6 +786,77 @@ export async function updateTournamentTimings(
   }
 
   const { error } = await supabase.from("tournaments").update(payload).eq("id", tournamentId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Overrides the scoring rules a reported result is validated against.
+ *
+ * Scoring used to be part of the setup wizard, which is the only reason it was
+ * ever captured before the event. It sits beside the timings here because the two
+ * are the same kind of setting — how a match is won and how long it is given —
+ * and both are adjusted once the tournament is live and real scores come in.
+ *
+ * The bounds mirror the readiness `rules` check exactly, so an override cannot
+ * make a tournament fail a gate it has already passed.
+ */
+export interface TournamentMatchSettingsInput {
+  placementGamesTo?: number;
+  placementWinBy?: number;
+  placementBestOf?: number;
+  knockoutGamesTo?: number;
+  knockoutWinBy?: number;
+  knockoutBestOf?: number;
+}
+
+export async function updateTournamentMatchSettings(
+  tournamentId: string,
+  patch: TournamentMatchSettingsInput,
+): Promise<void> {
+  const payload: {
+    placement_games_to?: number;
+    placement_win_by?: number;
+    placement_best_of?: number;
+    knockout_games_to?: number;
+    knockout_win_by?: number;
+    knockout_best_of?: number;
+  } = {};
+  if (patch.placementGamesTo !== undefined) payload.placement_games_to = patch.placementGamesTo;
+  if (patch.placementWinBy !== undefined) payload.placement_win_by = patch.placementWinBy;
+  if (patch.placementBestOf !== undefined) payload.placement_best_of = patch.placementBestOf;
+  if (patch.knockoutGamesTo !== undefined) payload.knockout_games_to = patch.knockoutGamesTo;
+  if (patch.knockoutWinBy !== undefined) payload.knockout_win_by = patch.knockoutWinBy;
+  if (patch.knockoutBestOf !== undefined) payload.knockout_best_of = patch.knockoutBestOf;
+  if (!Object.keys(payload).length) return;
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (key.endsWith("_best_of") && !isOddBestOf(value)) {
+      throw new Error("A match is a single game or an odd best of 3, 5, 7 or 9.");
+    }
+    if (key.endsWith("_games_to") && (value < 1 || value > 99)) {
+      throw new Error("A game is won at a score between 1 and 99.");
+    }
+    if (key.endsWith("_win_by") && (value < 1 || value > 20)) {
+      throw new Error("The winning margin must be between 1 and 20.");
+    }
+  }
+
+  const { error } = await supabase.from("tournaments").update(payload).eq("id", tournamentId);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Sets how many courts the venue has, adding and removing `courts` rows to match.
+ *
+ * The pool is the venue's, not a day's: per-day assignments are made separately
+ * and are left untouched here. Creating a court deliberately does not assign it to
+ * a day, because a day with no assignment already means "every court".
+ */
+export async function setTournamentCourts(tournamentId: string, count: number): Promise<void> {
+  const { error } = await supabase.rpc("set_tournament_courts", {
+    p_tournament_id: tournamentId,
+    p_count: count,
+  });
   if (error) throw new Error(error.message);
 }
 

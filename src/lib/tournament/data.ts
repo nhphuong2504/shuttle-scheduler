@@ -180,6 +180,12 @@ export interface ReadinessCheck {
   label: string;
   ok: boolean;
   detail: string | null;
+  /**
+   * False for a check that is worth showing but must not hold activation back.
+   * Absent means blocking, so an older database that has not been migrated still
+   * reads as strict.
+   */
+  blocking?: boolean;
 }
 
 export interface TournamentReadiness {

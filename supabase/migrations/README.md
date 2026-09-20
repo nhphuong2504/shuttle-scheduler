@@ -1110,6 +1110,126 @@ actions are unaffected.
 `GRANT EXECUTE ON FUNCTION ... TO anon, PUBLIC;` for both. There is no reason to: the grant only
 ever exposed a function the client does not call.
 
+---
+
+## Applying `20260919010000_defer_day_courts_readiness.sql`
+
+Stops the per-day court check from blocking activation, and redefines
+`tournament_readiness()` so `ready` is computed from the blocking checks alone.
+
+### Why
+
+Setup used to ask for the days, each day's hours **and** the courts in one step, because
+`save_tournament_days` is what materialises the venue's `courts` rows. That is the only reason
+the readiness gate contains "every day has at least one court": the gate and the court-creation
+step were the same step, so the check could never fail for a wizard-created draft.
+
+Courts moved to the first build on the Schedule page, where `set_tournament_courts` creates them.
+Activation now happens **before** the venue's courts exist, so a blocking court check would make
+the whole flow unreachable. It becomes advisory instead: still reported, because a schedule
+genuinely cannot be built without it, but no longer holding Draft -> In Progress back.
+
+Every other check stays blocking. All of them hold with the defaults a new draft is created with,
+so a fresh tournament activates with an empty court list and a warning, which is the intended flow.
+
+### How `blocking` works
+
+Each check object gains an optional `blocking` field, and `ready` skips only checks that
+explicitly carry `'blocking', false`:
+
+```sql
+'ready', NOT EXISTS (
+  SELECT 1 FROM jsonb_array_elements(checks) c
+  WHERE (c->>'ok')::boolean = false
+    AND COALESCE((c->>'blocking')::boolean, true)
+)
+```
+
+`blocking` **defaults to true**, so a check that predates this field — or one added later without
+thinking about it — cannot silently become optional. `day_courts` is the only advisory.
+
+The client mirrors this: `ReadinessCheck.blocking` is optional, `ReviewStep` counts a failing
+advisory separately from a blocker, and only blockers disable the Activate button. `activate_tournament`
+and `set_active_tournament` both keep reading `ready`, so the gate relaxes without touching either.
+
+### Security
+
+`CREATE OR REPLACE FUNCTION` restores the implicit `EXECUTE` grant to `PUBLIC`, and
+`tournament_readiness` had been revoked by the auth-hardening migration. The revoke and grant are
+therefore re-issued here — this is the failure mode `db-invariants.test.ts` exists to catch.
+
+### Verify after applying
+
+```sql
+-- a draft with no courts must now be ready, with the court check failing but advisory
+SELECT public.tournament_readiness('<draft-id>'::uuid);
+
+-- anon must still be locked out after the function was replaced
+SELECT has_function_privilege('anon', 'public.tournament_readiness(uuid)', 'EXECUTE'); -- false
+```
+
+### Rolling back
+
+Re-apply the `tournament_readiness` definition from `20260916000000_tournament_creation_flow.sql`
+(the version without `blocking`). Activation then demands per-day courts again, which the simplified
+wizard cannot supply.
+
+---
+
+## Applying `20260919020000_set_tournament_courts.sql`
+
+Adds `set_tournament_courts(p_tournament_id, p_count)` — sets how many courts the venue has,
+backing the **Courts at the venue** field in the Schedule page's Settings panel.
+
+### Why it is its own RPC
+
+`save_tournament_days` cannot serve this: it refuses anything that is not a draft, and it rewrites
+every day row as a side effect. This touches only the `courts` rows and the `court_count` summary,
+so it can be called at any point in a tournament's life.
+
+Per-day court assignments are deliberately left alone. With no `tournament_day_courts` rows for a
+day, `courtsForDay` reads that day as "every court", which is exactly the state a fresh venue
+should be in: a newly added court is available everywhere until a host says otherwise.
+
+### The guard that matters
+
+A court is `ON DELETE SET NULL` from every match, so removing one that is still in use would
+**unassign a live match rather than fail**: the desk would lose the court a match is on, and the
+schedule would quietly grow a hole. The function therefore refuses the shrink and names how many
+courts are affected. All four match tables are checked — `placement_matches`, `tier_draw_matches`,
+`pool_matches` and `draw_matches` — because a tournament has one format but the function is not
+scoped to one.
+
+The pool is then deleted above `p_count` and refilled from `generate_series(1, p_count)`, so it is
+always numbered contiguously without ever colliding on the per-tournament unique number.
+
+### Verify after applying
+
+```sql
+-- anon must be locked out
+SELECT has_function_privilege('anon', 'public.set_tournament_courts(uuid, int)', 'EXECUTE'); -- false
+
+SELECT public.set_tournament_courts('<id>'::uuid, 4);
+-- expect 4 contiguous rows and a matching summary
+SELECT number FROM public.courts WHERE tournament_id = '<id>'::uuid ORDER BY number;
+SELECT court_count FROM public.tournaments WHERE id = '<id>'::uuid;
+```
+
+On `/placement-schedule`, open Settings, set the count and the header's court total updates. With a
+match already on a court above the new count, the save is refused with a message naming the courts
+still in use.
+
+### Rolling back
+
+```sql
+DROP FUNCTION IF EXISTS public.set_tournament_courts(uuid, int);
+```
+
+The Settings field then fails with a "function not found" toast. The `courts` rows it created are
+ordinary rows and are unaffected.
+
+---
+
 ## The test field: `../seed/50-test-players.sql`
 
 Not a migration, and the directory is the point. **Nothing in `supabase/seed/` is applied by
