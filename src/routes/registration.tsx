@@ -274,9 +274,9 @@ function RegistrationPage() {
                 <Input id="pphone" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label>Gender</Label>
+                <Label htmlFor="pgender">Gender</Label>
                 <Select value={gender} onValueChange={setGender}>
-                  <SelectTrigger>
+                  <SelectTrigger id="pgender">
                     <SelectValue placeholder="Required for category checks" />
                   </SelectTrigger>
                   <SelectContent>
@@ -298,9 +298,9 @@ function RegistrationPage() {
           <Panel title="Add entry">
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Category</Label>
+                <Label htmlFor="pcategory">Category</Label>
                 <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="pcategory">
                     <SelectValue placeholder="Choose category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -326,13 +326,14 @@ function RegistrationPage() {
                 ) : null}
               </div>
               <div className="space-y-1.5">
-                <Label>{isPair ? "Player 1" : "Player"}</Label>
-                <PlayerSelect value={p1} onChange={setP1} options={eligible} />
+                <Label htmlFor="p1">{isPair ? "Player 1" : "Player"}</Label>
+                <PlayerSelect id="p1" value={p1} onChange={setP1} options={eligible} />
               </div>
               {isPair ? (
                 <div className="space-y-1.5">
-                  <Label>Player 2</Label>
+                  <Label htmlFor="p2">Player 2</Label>
                   <PlayerSelect
+                    id="p2"
                     value={p2}
                     onChange={setP2}
                     options={eligible.filter((p) => p.id !== p1)}
@@ -440,14 +441,18 @@ function PlayerSelect({
   value,
   onChange,
   options,
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { id: string; name: string }[];
+  // Required, not optional: a combobox with no accessible name is the defect this
+  // prop exists to prevent, so making it optional would let the next caller omit it.
+  id: string;
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger>
+      <SelectTrigger id={id}>
         <SelectValue placeholder="Choose player" />
       </SelectTrigger>
       <SelectContent className="max-h-72">
