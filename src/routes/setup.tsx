@@ -300,7 +300,7 @@ function SetupPage() {
         title="Tournament setup"
         subtitle="A tournament owns its days, courts and events. Everything else in the desk is scoped to it."
         actions={
-          <Button size="sm" onClick={() => goto("basics", "new")}>
+          <Button size="sm" onClick={() => goto("details", "new")}>
             New tournament
           </Button>
         }
@@ -345,7 +345,7 @@ function SetupPage() {
                       size="sm"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => goto("basics", tournament.id)}
+                      onClick={() => goto("details", tournament.id)}
                     >
                       Resume
                     </Button>
