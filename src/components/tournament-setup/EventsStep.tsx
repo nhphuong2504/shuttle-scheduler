@@ -156,24 +156,38 @@ export function EventsStep({
       </Panel>
 
       <Panel title="Entries per player">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="max-cats">Maximum events one player may enter</Label>
-            <Input
-              id="max-cats"
-              type="number"
-              min={1}
-              max={MAX_CATEGORIES_PER_PLAYER}
-              value={form.maxCategoriesPerPlayer}
-              onChange={(e) =>
-                onChange({ maxCategoriesPerPlayer: Number.parseInt(e.target.value, 10) || 1 })
-              }
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Enforced when entries are added. Between 1 and {MAX_CATEGORIES_PER_PLAYER}.
-            </p>
-          </div>
+        <p className="text-sm text-muted-foreground">
+          How many events may one player enter?
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {Array.from({ length: MAX_CATEGORIES_PER_PLAYER }, (_, i) => i + 1).map((count) => {
+            const selected = form.maxCategoriesPerPlayer === count;
+            const tooMany = events.length > 0 && count > events.length;
+            return (
+              <button
+                key={count}
+                type="button"
+                disabled={tooMany}
+                onClick={() => onChange({ maxCategoriesPerPlayer: count })}
+                className={`flex min-w-[104px] flex-1 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+                  selected
+                    ? "border-primary bg-primary/10 shadow-panel"
+                    : "border-hairline bg-surface hover:border-primary/50 hover:shadow-raise"
+                }`}
+              >
+                <span className="font-score text-xl font-bold leading-none">{count}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {count === 1 ? "event" : "events"}
+                </span>
+              </button>
+            );
+          })}
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          {events.length === 0
+            ? "Add events above to see which limits make sense."
+            : `A player can play at most ${form.maxCategoriesPerPlayer} of your ${events.length} event${events.length === 1 ? "" : "s"}. Checked every time an entry is added.`}
+        </p>
       </Panel>
     </div>
   );
