@@ -1466,44 +1466,36 @@ function PlacementSchedulePage() {
                           </div>
 
                           <div className="space-y-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-xs text-muted-foreground">Breaks</p>
-                              <div className="flex gap-1.5">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={!canSchedule || busy}
-                                  onClick={() =>
-                                    updateBreakRows(day.id, [
-                                      ...breakRows(day),
-                                      { label: "", start: "12:00", end: "13:00" },
-                                    ])
-                                  }
-                                >
-                                  Add break
-                                </Button>
-                                {breaksDirty(day) ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={!canSchedule || busy}
-                                    onClick={() => void saveBreaks(day)}
-                                  >
-                                    Save
-                                  </Button>
-                                ) : null}
-                              </div>
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                              <p className="min-w-0 text-xs text-muted-foreground">Breaks</p>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="shrink-0"
+                                disabled={!canSchedule || busy}
+                                onClick={() =>
+                                  updateBreakRows(day.id, [
+                                    ...breakRows(day),
+                                    { label: "", start: "12:00", end: "13:00" },
+                                  ])
+                                }
+                              >
+                                Add break
+                              </Button>
                             </div>
                             {breakRows(day).length === 0 ? (
                               <p className="text-[11px] text-muted-foreground">
                                 No breaks — play runs straight through.
                               </p>
                             ) : (
-                              <div className="space-y-1.5">
+                              <div className="divide-y divide-border rounded-lg border border-border">
                                 {breakRows(day).map((row, index) => (
-                                  <div key={index} className="flex flex-wrap items-center gap-1.5">
+                                  <div
+                                    key={index}
+                                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-2 sm:flex sm:flex-wrap"
+                                  >
                                     <Input
-                                      className="h-8 w-28"
+                                      className="h-8 min-w-0 sm:w-32"
                                       placeholder="Lunch"
                                       value={row.label}
                                       disabled={!canSchedule || busy}
@@ -1518,57 +1510,77 @@ function PlacementSchedulePage() {
                                         )
                                       }
                                     />
-                                    <Input
-                                      type="time"
-                                      className="h-8 w-24"
-                                      value={row.start}
-                                      disabled={!canSchedule || busy}
-                                      onChange={(event) =>
-                                        updateBreakRows(
-                                          day.id,
-                                          breakRows(day).map((entry, i) =>
-                                            i === index
-                                              ? { ...entry, start: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                    />
-                                    <span className="text-xs text-muted-foreground">to</span>
-                                    <Input
-                                      type="time"
-                                      className="h-8 w-24"
-                                      value={row.end}
-                                      disabled={!canSchedule || busy}
-                                      onChange={(event) =>
-                                        updateBreakRows(
-                                          day.id,
-                                          breakRows(day).map((entry, i) =>
-                                            i === index
-                                              ? { ...entry, end: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                    />
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      disabled={!canSchedule || busy}
-                                      onClick={() =>
-                                        updateBreakRows(
-                                          day.id,
-                                          breakRows(day).filter((_, i) => i !== index),
-                                        )
-                                      }
-                                    >
-                                      Remove
-                                    </Button>
+                                    <div className="col-span-2 flex items-center gap-1.5">
+                                      <Input
+                                        type="time"
+                                        className="h-8 w-[7.5rem] shrink-0"
+                                        value={row.start}
+                                        disabled={!canSchedule || busy}
+                                        onChange={(event) =>
+                                          updateBreakRows(
+                                            day.id,
+                                            breakRows(day).map((entry, i) =>
+                                              i === index
+                                                ? { ...entry, start: event.target.value }
+                                                : entry,
+                                            ),
+                                          )
+                                        }
+                                      />
+                                      <span className="shrink-0 text-xs text-muted-foreground">
+                                        to
+                                      </span>
+                                      <Input
+                                        type="time"
+                                        className="h-8 w-[7.5rem] shrink-0"
+                                        value={row.end}
+                                        disabled={!canSchedule || busy}
+                                        onChange={(event) =>
+                                          updateBreakRows(
+                                            day.id,
+                                            breakRows(day).map((entry, i) =>
+                                              i === index
+                                                ? { ...entry, end: event.target.value }
+                                                : entry,
+                                            ),
+                                          )
+                                        }
+                                      />
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="ml-auto shrink-0 text-muted-foreground"
+                                        disabled={!canSchedule || busy}
+                                        onClick={() =>
+                                          updateBreakRows(
+                                            day.id,
+                                            breakRows(day).filter((_, i) => i !== index),
+                                          )
+                                        }
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             )}
+                            {breaksDirty(day) ? (
+                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-2.5 py-2">
+                                <p className="text-[11px] text-muted-foreground">
+                                  Unsaved break changes for this day.
+                                </p>
+                                <Button
+                                  size="sm"
+                                  disabled={!canSchedule || busy}
+                                  onClick={() => void saveBreaks(day)}
+                                >
+                                  Save breaks
+                                </Button>
+                              </div>
+                            ) : null}
                           </div>
+
                         </div>
                       );
                     })}
