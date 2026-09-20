@@ -112,9 +112,9 @@ describe("the setup wizard asks only for what activation needs", () => {
     "utf8",
   );
 
-  it("has five steps and no match-rules step", () => {
+  it("has three steps and no match-rules step", () => {
     const ids = [...types.matchAll(/\{ id: "([a-z]+)"/g)].map((match) => match[1]);
-    expect(ids).toEqual(["basics", "days", "events", "structure", "review"]);
+    expect(ids).toEqual(["details", "events", "review"]);
     expect(types).not.toMatch(/"rules"/);
     expect(setup).not.toMatch(/RulesStep/);
     expect(review).not.toMatch(/form\.rules/);
