@@ -212,8 +212,7 @@ export function DetailsStep({
               </p>
             </div>
           </div>
-        </Panel>
-      ) : null}
+      </Panel>
     </div>
   );
 }
