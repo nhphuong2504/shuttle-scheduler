@@ -1,0 +1,26 @@
+{
+  "/": {
+    "rules": []
+  },
+  "/registration": {
+    "rules": []
+  },
+  "/placement": {
+    "rules": []
+  },
+  "/draws": {
+    "rules": []
+  },
+  "/knockout": {
+    "rules": []
+  },
+  "/placement-schedule": {
+    "rules": []
+  },
+  "/matches": {
+    "rules": []
+  },
+  "/setup": {
+    "rules": []
+  }
+}

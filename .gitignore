@@ -41,3 +41,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright (npm run test:e2e)
+# `a11y-baseline.json` is deliberately NOT ignored: it is the gate's pinned state
+# and has to travel with the branch.
+test-results/
+playwright-report/
+blob-report/
+
+# Recorded Playwright staff session (`npm run test:e2e:record-auth`).
+# Contains a live auth token - never commit.
+e2e/.auth/

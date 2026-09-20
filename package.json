@@ -12,7 +12,11 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "bench:scheduling": "vitest run --config vitest.benchmark.config.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:final": "E2E_REQUIRE_STAFF=1 playwright test",
+    "test:all": "npm run test && npm run test:e2e",
+    "test:e2e:record-auth": "node scripts/record-staff-session.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -73,8 +77,12 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^2.20.0",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -85,6 +93,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "jsdom": "^29.1.1",
     "nitro": "3.0.260603-beta",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
