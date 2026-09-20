@@ -181,7 +181,7 @@ function DisplayPage() {
           className="font-score font-bold tabular-nums"
           style={{ fontSize: viewClass === "b" ? "var(--fv-b-label)" : "var(--fv-a-label)" }}
         >
-          {timeLabel(new Date(now), tournament?.timezone ?? undefined)}
+          {timeLabel(new Date(now), tournament?.venue_timezone ?? undefined)}
         </p>
       </header>
 
@@ -212,7 +212,7 @@ function DisplayPage() {
                 overrun={state.state === "overrun"}
                 elapsedMinutes={state.elapsedMinutes}
                 label={label}
-                timezone={tournament?.timezone ?? undefined}
+                timezone={tournament?.venue_timezone ?? undefined}
               />
             ))}
           </div>
