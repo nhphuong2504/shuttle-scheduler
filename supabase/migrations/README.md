@@ -119,7 +119,8 @@ All are gated on `public.has_staff_role(ARRAY['admin'])`:
 | `save_tournament_days(p_tournament_id, p_days)`             | Replaces the days, their courts and their breaks, keeping `day_count` / `court_count` in sync.                                                              |
 | `save_tournament_categories(p_tournament_id, p_categories)` | Replaces the categories.                                                                                                                                    |
 | `tournament_readiness(p_tournament_id)`                     | The authoritative review checklist, so the wizard's checks match the activation gate.                                                                       |
-| `activate_tournament(p_tournament_id)`                      | Re-runs readiness, clears `is_active` on every row, then sets `status='in_progress', is_active=true` under the same advisory lock `create_tournament` uses. |
+| `activate_tournament(p_tournament_id)`                      | Draft -> In Progress. Delegates to `set_active_tournament`.                                                                                                 |
+| `set_active_tournament(p_tournament_id)`                    | Points the active scope at a tournament that already exists. Re-runs readiness for a draft, skips it for one that has already run, then clears `is_active` on every row and sets the target `in_progress, is_active=true` under the same advisory lock `create_tournament` uses. |
 | `delete_tournament_draft(p_tournament_id)`                  | Discards a draft; children cascade.                                                                                                                         |
 
 ### Verify after applying

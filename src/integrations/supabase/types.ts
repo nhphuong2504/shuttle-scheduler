@@ -1418,6 +1418,10 @@ export type Database = {
         Args: { p_payload: Json; p_tournament_id: string }
         Returns: undefined
       }
+      set_active_tournament: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
       set_placement_skill: {
         Args: {
           p_category_id: string

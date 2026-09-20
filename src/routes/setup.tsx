@@ -34,6 +34,7 @@ import {
   saveTournamentDays,
   saveTournamentDraft,
   saveTournamentEvents,
+  setActiveTournament,
   type TournamentDraftInput,
 } from "@/lib/tournament/actions";
 import {
@@ -260,6 +261,32 @@ function SetupPage() {
     }
   };
 
+  /**
+   * Makes an already-existing tournament the active scope again.
+   *
+   * Switching moves every page — the desk, registration, placement, knockout and the
+   * schedule all read the active tournament from a cached query — so the confirmation
+   * says what changes and everything is invalidated afterwards.
+   */
+  const makeActive = async (tournament: Tournament) => {
+    const confirmed = window.confirm(
+      `Make "${tournament.name}" the active tournament?\n\n` +
+        "Every page switches to this tournament. The tournament that is active now " +
+        "stays exactly as it is, but is no longer the one being shown.",
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      await setActiveTournament(tournament.id);
+      await refresh();
+      toast.success(`${tournament.name} is now the active tournament`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not activate the tournament");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <AppShell title="Tournament setup" subtitle="Only admins can create a tournament.">
@@ -328,6 +355,16 @@ function SetupPage() {
                       onClick={() => goto("basics", tournament.id)}
                     >
                       Resume
+                    </Button>
+                  ) : null}
+                  {tournament.status !== "draft" && !tournament.is_active ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void makeActive(tournament)}
+                    >
+                      Make active
                     </Button>
                   ) : null}
                   <Button
@@ -444,10 +481,7 @@ function SetupPage() {
               </p>
               <ul className="mt-1.5 space-y-1">
                 {problems.map((problem) => (
-                  <li
-                    key={problem}
-                    className="flex items-start gap-2 text-xs text-warn-foreground"
-                  >
+                  <li key={problem} className="flex items-start gap-2 text-xs text-warn-foreground">
                     <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
                     {problem}
                   </li>
@@ -514,6 +548,9 @@ async function saveStep(step: SetupStep, id: string, form: DraftForm): Promise<v
  */
 function tournamentStatusLabel(tournament: Tournament): string {
   if (tournament.status === "draft") return "Draft";
+  if (tournament.status === "completed") {
+    return tournament.is_active ? "Completed · active" : "Completed";
+  }
   return tournament.is_active ? "In progress · active" : "In progress";
 }
 

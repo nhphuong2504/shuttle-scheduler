@@ -1074,6 +1074,23 @@ export async function activateTournament(tournamentId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Points the active scope at a tournament that already exists.
+ *
+ * `activateTournament` is the wizard's Draft -> In Progress step, and a draft is the
+ * only thing it accepts. That left activation one-way: activating one tournament
+ * deactivates the previous one, and nothing could set it back, so a tournament
+ * deactivated that way was stuck `in_progress` with an empty desk and no way out.
+ * This is that missing verb. The readiness gate still applies to a draft; a
+ * tournament that has already run is made active as it stands.
+ */
+export async function setActiveTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("set_active_tournament", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** Discards a draft and everything it owns. */
 export async function deleteTournamentDraft(tournamentId: string): Promise<void> {
   const { error } = await supabase.rpc("delete_tournament_draft", {
