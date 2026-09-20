@@ -88,8 +88,12 @@ function DensityToggle({
               className={cn(
                 "rounded-full px-2.5 py-1 font-semibold transition-colors",
                 "text-t4",
+                // The ring is the selected-state boundary. Without it the active segment
+                // is `bg-surface` on a `bg-muted` container, which measures 1.09:1 in
+                // light and 1.02:1 in dark - a selected state a low-vision user cannot
+                // see. `ring` draws a box-shadow, so this costs no layout.
                 active
-                  ? "bg-surface text-foreground shadow-panel"
+                  ? "bg-surface text-foreground shadow-panel ring-1 ring-border-selected"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -159,8 +163,12 @@ function ThemeToggle({
               className={cn(
                 "rounded-full px-2.5 py-1 font-semibold transition-colors",
                 "text-t4",
+                // The ring is the selected-state boundary. Without it the active segment
+                // is `bg-surface` on a `bg-muted` container, which measures 1.09:1 in
+                // light and 1.02:1 in dark - a selected state a low-vision user cannot
+                // see. `ring` draws a box-shadow, so this costs no layout.
                 active
-                  ? "bg-surface text-foreground shadow-panel"
+                  ? "bg-surface text-foreground shadow-panel ring-1 ring-border-selected"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >

@@ -51,8 +51,12 @@
   --color-success: var(--success);
   --color-surface: var(--surface);
   --color-hairline: var(--hairline);
-  /* Two edge weights: `hairline` separates, `border-control` locates a control. */
+  /* Three edge weights now: `hairline` separates, `border-control` locates a control,
+     `border-selected` marks one as chosen. The third exists because a selected state is
+     state information, and WCAG 1.4.11 requires state information to reach 3:1 - which
+     is a different requirement from the decorative hairline it used to be drawn with. */
   --color-border-control: var(--border-control);
+  --color-border-selected: var(--border-selected);
 
   --color-warn-surface: var(--warn-surface);
   --color-warn-border: var(--warn-border);
@@ -205,6 +209,30 @@
   --border-control: oklch(0.643 0.008 250);
   --input: var(--border-control);
   --ring: oklch(0.52 0.16 255);
+
+  /* The edge that marks a control as *selected*. A third weight, and it earns its
+     own token for two reasons.
+
+     It is solved against a different neighbour than `border-control` is. That one is
+     solved against the page, because inputs sit on the page. This one is solved
+     against the muted container a segmented control or a tab list is painted in, and
+     against the selected segment's own fill - a ring sits on a boundary, so it has to
+     clear both. Those are not the same colour and the numbers are not the same either.
+
+     And the defect it closes was invisible to every gate. Phase 7 measured that no axe
+     rule maps to WCAG 1.4.11 at all, so the rule this system states in prose - 3:1 for
+     anything the user must locate - had never been checked against the one case it most
+     applies to. Marking "selected" with a fill that is the surface colour sitting on a
+     muted container measures 1.09:1 in light and 1.02:1 in dark. In dark the segment and
+     its container are two points of OKLCH lightness apart, so the selected segment is
+     not a shape at all; the only remaining cues were the label's text colour and a soft
+     shadow, neither of which is a 3:1 boundary.
+
+     0.60 in both themes, which is the number the solver landed on rather than a shared
+     convenience: the two containers are inverted around it, so one perceptual lightness
+     clears both. Measured, this token reads 3.6:1 against the light container and 4.3:1
+     against the dark one, and only marginally less against each segment's own fill. */
+  --border-selected: oklch(0.60 0.008 250);
 
   /* Feedback callouts. `warn` stays amber by convention; the amber hue is
      shared with the tier-2 paused/called states, which is deliberate and
@@ -391,6 +419,12 @@
 
   --border: oklch(0.30 0.008 258);
   --border-control: oklch(0.513 0.008 250);
+  /* Same lightness as the light theme, and that is the solved answer rather than a
+     shortcut. This container is rgb(26,28,31) and the light one is rgb(246,249,252) -
+     they are inverted around 0.60, so one value clears both, reading 4.3:1 here and
+     3.6:1 there. Choosing a lighter edge "because the theme is dark" would be reasoning
+     about the background's name rather than about the contrast. */
+  --border-selected: oklch(0.60 0.008 250);
   --input: var(--border-control);
   --ring: oklch(0.516 0.16 255);
 
@@ -450,6 +484,32 @@
     scrollbar-gutter: stable;
   }
 
+  /**
+   * Honour a reduced-motion preference.
+   *
+   * Phase 7 found nothing in the stylesheet responded to this at all, which meant a
+   * reader who has asked their system not to animate still got every transition and
+   * every entrance. WCAG 2.3.3 is Level AAA, so this is not what AA requires - it is
+   * here because the cost is one rule and the audience is people who get motion sick,
+   * and because a court board that pulses is exactly the kind of screen this app is.
+   *
+   * Reduced rather than removed: durations collapse to something imperceptible, which
+   * keeps every transitionend listener and every `animate-in` element working while
+   * removing the movement. Setting `animation: none` outright would strand a component
+   * whose state machine waits for an animation to finish, which is a real pattern in
+   * the radix primitives this app uses.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
 
   body {
     color: var(--color-foreground);
@@ -479,8 +539,32 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /**
+   * The focus ring, declared in two parts on purpose.
+   *
+   * Colour first, on every focusable element rather than only on `:focus-visible`. Tailwind
+   * v4's `transition-colors` lists `outline-color` in its transition-property, so a colour
+   * declared only inside the focus rule animates in *from the element's own text colour*.
+   * On the active nav pill - `bg-primary text-primary-foreground` - that is white on a
+   * near-white header, and Phase 7 measured it at 1.01:1 for the first frames after focus.
+   * Declaring the colour on the unfocused state too leaves nothing to interpolate, so the
+   * ring is at full contrast on the first painted frame.
+   *
+   * Opaque `--ring` rather than the `color-mix(... 70%, transparent)` this used to be: a
+   * translucent ring is composited against whatever it sits on, and 70% of the primary blue
+   * over the light background measures about 3.1:1 - passing, but with no room for the ring
+   * to land on a darker surface. The opaque token measures 5.5:1 there.
+   *
+   * `:where()` keeps specificity at zero, so any component that sets its own outline colour
+   * still wins.
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])) {
+    outline-color: var(--color-ring);
+  }
+
   :focus-visible {
-    outline: 2px solid color-mix(in oklab, var(--primary) 70%, transparent);
+    outline-style: solid;
+    outline-width: 2px;
     outline-offset: 2px;
   }
 }
