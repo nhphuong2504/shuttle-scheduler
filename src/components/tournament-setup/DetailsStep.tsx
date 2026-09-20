@@ -54,7 +54,6 @@ export function DetailsStep({
   onChange: (patch: Partial<DraftForm>) => void;
   isNew: boolean;
 }) {
-  const [showMore, setShowMore] = useState(false);
   const basics = form.basics;
   const setBasics = (patch: Partial<BasicsForm>) => onChange({ basics: { ...basics, ...patch } });
 
