@@ -445,11 +445,11 @@ function SetupPage() {
                 >
                   <span
                     className={cn(
-                      "grid size-5 shrink-0 place-items-center rounded-full font-score text-[10px] font-bold",
+                      "grid size-5 shrink-0 place-items-center rounded-full font-score text-t4 font-bold",
                       isCurrent
                         ? "bg-primary text-primary-foreground"
                         : isDone
-                          ? "bg-mint/50 text-foreground"
+                          ? "bg-primary/50 text-foreground"
                           : "bg-muted text-muted-foreground",
                     )}
                   >
@@ -469,9 +469,7 @@ function SetupPage() {
           })}
         </ol>
 
-        {step === "details" ? (
-          <DetailsStep form={form} onChange={patchForm} isNew={isNew} />
-        ) : null}
+        {step === "details" ? <DetailsStep form={form} onChange={patchForm} isNew={isNew} /> : null}
         {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
         {step === "structure" ? <StructureStep /> : null}
         {step === "review" ? (
@@ -514,7 +512,7 @@ function SetupPage() {
               ← Back
             </Button>
           ) : null}
-          <span className="font-score text-[11px] text-muted-foreground">
+          <span className="font-score text-t4 text-muted-foreground">
             Step {currentIndex + 1} / {SETUP_STEPS.length}
           </span>
           <div className="ml-auto flex items-center gap-3">

@@ -7,7 +7,13 @@ import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSession } from "@/hooks/useSession";
 import { inviteStaff, removeStaff } from "@/lib/tournament/actions";
 import { useStaffRoles, type StaffRoleName } from "@/lib/tournament/data";
@@ -95,7 +101,7 @@ function StaffPage() {
         <Panel
           title="Current staff"
           right={
-            <span className="font-score text-[11px] text-muted-foreground">
+            <span className="font-score text-t2 text-muted-foreground">
               {rows.length} account{rows.length === 1 ? "" : "s"}
             </span>
           }
@@ -117,7 +123,7 @@ function StaffPage() {
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate">{row.email}</span>
-                    <span className="inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-score text-[10px] uppercase tracking-wider text-primary">
+                    <span className="inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-score text-t4 uppercase tracking-wider text-primary">
                       {row.role}
                     </span>
                   </span>

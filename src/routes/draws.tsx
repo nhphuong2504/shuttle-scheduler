@@ -30,12 +30,14 @@ export const Route = createFileRoute("/draws")({
       { title: "Knockout Draws A–D | ShuttleNet Tournament Ops" },
       {
         name: "description",
-        content: "Build seeded A/B/C/D knockout brackets once every pool in a category has reported its results.",
+        content:
+          "Build seeded A/B/C/D knockout brackets once every pool in a category has reported its results.",
       },
       { property: "og:title", content: "Knockout Draws A–D | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
-        content: "Build seeded A/B/C/D knockout brackets once every pool in a category has reported its results.",
+        content:
+          "Build seeded A/B/C/D knockout brackets once every pool in a category has reported its results.",
       },
     ],
   }),
@@ -67,14 +69,18 @@ function SideRow({
     <div
       onMouseEnter={onHover}
       className={cn(
-        "flex items-center justify-between gap-2 px-2.5 py-1 text-[13px] leading-tight transition-colors",
+        "flex items-center justify-between gap-2 px-2.5 py-1 text-t2 leading-tight transition-colors",
         highlighted && "bg-primary/15",
         isWinner && !highlighted && "bg-muted/50",
         (dimmed || isLoser) && "text-muted-foreground",
       )}
     >
-      <span className={cn("truncate", isWinner && "font-semibold text-foreground")}>{isBye ? "Bye" : name}</span>
-      <span className="font-score shrink-0 text-[11px] tabular-nums text-muted-foreground">{scores}</span>
+      <span className={cn("truncate", isWinner && "font-semibold text-foreground")}>
+        {isBye ? "Bye" : name}
+      </span>
+      <span className="font-score shrink-0 text-t2 tabular-nums text-muted-foreground">
+        {scores}
+      </span>
     </div>
   );
 }
@@ -127,11 +133,11 @@ function DrawsPage() {
                 </h2>
                 <div className="flex items-center gap-3">
                   {gate.ready ? (
-                    <span className="rounded-full bg-mint/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide">
+                    <span className="rounded-full bg-success/20 px-2.5 py-1 text-t4 font-semibold uppercase tracking-wide">
                       All pools complete
                     </span>
                   ) : (
-                    <span className="rounded-full bg-warn-surface px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-warn-foreground">
+                    <span className="rounded-full bg-warn-surface px-2.5 py-1 text-t4 font-semibold uppercase tracking-wide text-warn-foreground">
                       {catPools.length ? `Waiting on ${gate.waitingOn.join(", ")}` : "No pools yet"}
                     </span>
                   )}
@@ -141,13 +147,23 @@ function DrawsPage() {
                     onClick={async () => {
                       try {
                         const force = catDraws.length
-                          ? window.confirm("Regenerate draws and discard existing knockout results?")
+                          ? window.confirm(
+                              "Regenerate draws and discard existing knockout results?",
+                            )
                           : false;
-                        await generateDrawsForCategory(c.id, catPools, entries ?? [], catPoolMatches, force);
+                        await generateDrawsForCategory(
+                          c.id,
+                          catPools,
+                          entries ?? [],
+                          catPoolMatches,
+                          force,
+                        );
                         toast.success(`${c.code} draws generated`);
                         qc.invalidateQueries();
                       } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Could not generate draws");
+                        toast.error(
+                          error instanceof Error ? error.message : "Could not generate draws",
+                        );
                       }
                     }}
                   >
@@ -187,7 +203,7 @@ function DrawsPage() {
                       type="button"
                       onClick={() => setFit((prev) => ({ ...prev, [c.id]: !isFit }))}
                       className={cn(
-                        "rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+                        "rounded-full border px-3 py-1 text-t4 font-semibold uppercase tracking-wide transition-colors",
                         isFit
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-hairline bg-surface text-muted-foreground hover:bg-muted/60",
@@ -202,7 +218,11 @@ function DrawsPage() {
                       className="flex min-w-max items-stretch"
                       style={
                         isFit
-                          ? { transform: "scale(0.72)", transformOrigin: "top left", width: "138.9%" }
+                          ? {
+                              transform: "scale(0.72)",
+                              transformOrigin: "top left",
+                              width: "138.9%",
+                            }
                           : undefined
                       }
                       onMouseLeave={() => setHoverTeam(null)}
@@ -223,10 +243,10 @@ function DrawsPage() {
                         return (
                           <div key={round} className="flex w-56 shrink-0 flex-col">
                             <div className="sticky top-0 z-10 mb-1 flex items-baseline justify-between gap-2 bg-surface/95 px-3 py-1.5 backdrop-blur">
-                              <h3 className="font-display text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                              <h3 className="font-display text-t4 font-bold uppercase tracking-widest text-muted-foreground">
                                 {roundName(bracketSize, round)}
                               </h3>
-                              <span className="font-score text-[10px] tabular-nums text-muted-foreground">
+                              <span className="font-score text-t4 tabular-nums text-muted-foreground">
                                 {roundDone}/{roundPlayable.length}
                               </span>
                             </div>
@@ -267,18 +287,21 @@ function DrawsPage() {
                                     <div
                                       className={cn(
                                         "w-full overflow-hidden rounded-lg border bg-surface transition-colors",
-                                        settled ? "border-hairline" : "border-dashed border-hairline",
+                                        settled
+                                          ? "border-hairline"
+                                          : "border-dashed border-hairline",
                                         !m && "opacity-70",
-                                        live && "animate-pulse border-primary shadow-[0_0_0_1px_var(--color-primary)]",
+                                        live &&
+                                          "animate-pulse border-primary shadow-[0_0_0_1px_var(--color-primary)]",
                                       )}
                                     >
                                       <div className="flex items-center justify-between border-b border-hairline/70 bg-muted/30 px-2.5 py-0.5">
-                                        <span className="font-score text-[10px] uppercase tracking-widest text-muted-foreground">
+                                        <span className="font-score text-t4 uppercase tracking-widest text-muted-foreground">
                                           M{slot}
                                         </span>
                                         <span
                                           className={cn(
-                                            "font-score text-[10px] uppercase tracking-widest",
+                                            "font-score text-t4 uppercase tracking-widest",
                                             live ? "text-primary" : "text-muted-foreground",
                                           )}
                                         >
@@ -325,7 +348,7 @@ function DrawsPage() {
 
                       <div className="flex w-48 shrink-0 flex-col">
                         <div className="sticky top-0 z-10 mb-1 bg-surface/95 px-3 py-1.5 backdrop-blur">
-                          <h3 className="font-display text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                          <h3 className="font-display text-t4 font-bold uppercase tracking-widest text-muted-foreground">
                             Champion
                           </h3>
                         </div>
@@ -333,11 +356,16 @@ function DrawsPage() {
                           <div
                             className={cn(
                               "flex w-full flex-col items-center gap-1.5 rounded-lg border px-3 py-4 text-center",
-                              champion ? "border-primary bg-primary/10" : "border-dashed border-hairline",
+                              champion
+                                ? "border-primary bg-primary/10"
+                                : "border-dashed border-hairline",
                             )}
                           >
                             <Trophy
-                              className={cn("h-5 w-5", champion ? "text-primary" : "text-muted-foreground/60")}
+                              className={cn(
+                                "h-5 w-5",
+                                champion ? "text-primary" : "text-muted-foreground/60",
+                              )}
                             />
                             <p
                               className={cn(

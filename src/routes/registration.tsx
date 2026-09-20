@@ -363,11 +363,11 @@ function RegistrationPage() {
                 right={
                   <span className="flex items-center gap-2">
                     {!c.active ? (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-muted-foreground">
                         Closed
                       </span>
                     ) : full ? (
-                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-danger-foreground">
+                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-danger-foreground">
                         Full
                       </span>
                     ) : null}

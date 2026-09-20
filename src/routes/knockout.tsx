@@ -230,7 +230,7 @@ function BracketSection({
                 key={tierMapping.tier}
                 title={`${tierMapping.label} · ${tierMapping.title}`}
                 right={
-                  <span className="font-score text-[10px] text-muted-foreground">
+                  <span className="font-score text-t2 text-muted-foreground">
                     {tierMapping.record}
                   </span>
                 }
@@ -239,19 +239,19 @@ function BracketSection({
                   <p className="text-xs text-muted-foreground">No entrants in this tier.</p>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-[11px] text-muted-foreground">{bracketNote(draw)}</p>
+                    <p className="text-t4 text-muted-foreground">{bracketNote(draw)}</p>
 
                     {draw.champion_id ? (
-                      <p className="rounded-md border border-hairline bg-mint/10 px-3 py-2 text-xs font-semibold">
+                      <p className="rounded-md border border-hairline bg-success/10 px-3 py-2 text-xs font-semibold">
                         Champion: {label(draw.champion_id)}
                       </p>
                     ) : (
-                      <p className="text-[11px] text-muted-foreground">No champion yet.</p>
+                      <p className="text-t4 text-muted-foreground">No champion yet.</p>
                     )}
 
                     {[...rounds.entries()].map(([round, roundMatches]) => (
                       <div key={round} className="space-y-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <p className="text-t4 font-semibold uppercase tracking-wider text-muted-foreground">
                           {roundName(draw.bracket_size, round)}
                         </p>
                         {roundMatches.map((match) => (
@@ -286,7 +286,7 @@ function TierMatchRow({
         <span className="mx-1.5 text-muted-foreground">vs</span>
         <span className="font-medium">{label(match.entrant_b_id)}</span>
         {decided ? (
-          <span className="ml-2 font-score text-[11px] text-muted-foreground">
+          <span className="ml-2 font-score text-t4 text-muted-foreground">
             {match.is_bye ? "bye" : gamesLabel(parseGames(match.games))}
           </span>
         ) : null}

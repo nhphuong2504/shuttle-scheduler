@@ -266,7 +266,7 @@ export function MatchFormatCard({
       </div>
 
       {mismatch ? (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-warn-surface px-2.5 py-2 text-[11px] text-warn-foreground">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-warn-surface px-2.5 py-2 text-t4 text-warn-foreground">
           <span>
             {scoringRuleLabel(rule)} usually needs about {suggested} min, but this stage is set to{" "}
             {slotMinutes}.
@@ -274,7 +274,7 @@ export function MatchFormatCard({
           <Button
             size="sm"
             variant="outline"
-            className="h-6 px-2 text-[11px]"
+            className="h-6 px-2 text-t4"
             disabled={disabled}
             onClick={() => onSlotCommit(String(suggested))}
           >
@@ -282,7 +282,7 @@ export function MatchFormatCard({
           </Button>
         </div>
       ) : (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-t4 text-muted-foreground">
           {scoringRuleLabel(rule)}. {needed} game{needed === 1 ? "" : "s"} wins the match, about{" "}
           {suggested} minutes each. Rest gap {restMinutes} min.
         </p>

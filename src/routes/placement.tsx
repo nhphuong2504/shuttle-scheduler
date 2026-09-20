@@ -362,7 +362,7 @@ function SeedingPanel({
     <Panel
       title="Seeding"
       right={
-        <span className="font-score text-[11px] text-muted-foreground">
+        <span className="font-score text-t4 text-muted-foreground">
           {saving ? "saving…" : view.seedsLocked ? "locked" : "not locked"}
         </span>
       }
@@ -375,7 +375,7 @@ function SeedingPanel({
         </p>
 
         {canReorder ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-t4 text-muted-foreground">
             Drag a row to set the order by hand, or use the arrows. Each change is saved straight
             away, and the order stops being editable once placement matches exist.
           </p>
@@ -532,14 +532,14 @@ function SeedingPanel({
           </table>
         </div>
 
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-t4 text-muted-foreground">
           Blocks: {counts.advanced} advanced · {counts.intermediate} intermediate ·{" "}
           {counts.beginner} beginner
           {view.excluded.length > 0 ? ` · ${view.excluded.length} waived` : ""}
         </p>
 
         {canReorder && !orderFollowsBlocks ? (
-          <p className="rounded-md border border-warn-border bg-warn-surface px-3 py-2 text-[11px] font-medium text-warn-foreground">
+          <p className="rounded-md border border-warn-border bg-warn-surface px-3 py-2 text-t4 font-medium text-warn-foreground">
             This order no longer follows the skill blocks: a weaker block is seeded above a stronger
             one. It is still a valid order — every pairing rule reads the seed and nothing else —
             and "Re-shuffle seeds" puts the blocks back.
@@ -572,7 +572,7 @@ function SeedingPanel({
           </Button>
         ) : null}
         {hasMatches && canEdit ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-t4 text-muted-foreground">
             Seeding is frozen because placement matches already exist. The seed order is only
             editable while the stage is still empty.
           </p>

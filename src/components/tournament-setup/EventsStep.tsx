@@ -73,9 +73,7 @@ export function EventsStep({
       <Panel
         title="Add an event"
         right={
-          <span className="font-score text-[11px] text-muted-foreground">
-            {events.length} added
-          </span>
+          <span className="font-score text-t4 text-muted-foreground">{events.length} added</span>
         }
       >
         <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
@@ -89,19 +87,17 @@ export function EventsStep({
                 onClick={() => addEvent(template)}
                 className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
                   added
-                    ? "border-mint bg-mint/10"
+                    ? "border-primary bg-primary/10"
                     : "border-hairline bg-surface hover:border-primary/50 hover:shadow-raise"
                 }`}
               >
                 <span className="flex w-full items-center justify-between">
                   <span className="font-score text-base font-bold">{template.code}</span>
-                  <span className="font-score text-[11px] text-muted-foreground">
+                  <span className="font-score text-t4 text-muted-foreground">
                     {added ? "✓" : "+"}
                   </span>
                 </span>
-                <span className="text-[11px] leading-snug text-muted-foreground">
-                  {template.name}
-                </span>
+                <span className="text-t4 leading-snug text-muted-foreground">{template.name}</span>
               </button>
             );
           })}
@@ -156,9 +152,7 @@ export function EventsStep({
       </Panel>
 
       <Panel title="Entries per player">
-        <p className="text-sm text-muted-foreground">
-          How many events may one player enter?
-        </p>
+        <p className="text-sm text-muted-foreground">How many events may one player enter?</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {Array.from({ length: MAX_CATEGORIES_PER_PLAYER }, (_, i) => i + 1).map((count) => {
             const selected = form.maxCategoriesPerPlayer === count;
@@ -176,7 +170,7 @@ export function EventsStep({
                 }`}
               >
                 <span className="font-score text-xl font-bold leading-none">{count}</span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-t4 text-muted-foreground">
                   {count === 1 ? "event" : "events"}
                 </span>
               </button>

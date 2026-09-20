@@ -47,10 +47,7 @@
   --color-ring-offset-background: var(--background);
 
   --color-ink: var(--ink);
-  --color-brand: var(--brand);
-  --color-mint: var(--mint);
-  --color-coral: var(--coral);
-  --color-cyan: var(--cyan);
+  --color-success: var(--success);
   --color-surface: var(--surface);
   --color-hairline: var(--hairline);
   /* Two edge weights: `hairline` separates, `border-control` locates a control. */
@@ -67,32 +64,21 @@
   --color-danger-foreground: var(--danger-foreground);
 
   /* Match states: bg-state-live-chip / text-state-live-ink.
-     Tier 4 (walkover, retired, completed) has NO chip token by design - it is
-     ink only, so there is no mapping to declare here. */
+
+     Only the states the schema can actually produce have tokens. The four
+     phantom states this system used to describe - called, warm-up, paused,
+     disputed - and the retired status were deleted along with their tokens,
+     labels, tiers and glyphs. They are re-added by the migration that makes
+     them real, so documentation cannot drift ahead of the schema again.
+
+     Tier 4 (walkover, completed) has NO chip token by design - it is ink only,
+     and one shared ink serves both, so there is a single -ink entry here and no
+     -chip. The two states stay distinct through their label and glyph. */
   --color-state-scheduled-chip: var(--state-scheduled-chip);
   --color-state-scheduled-ink: var(--state-scheduled-ink);
-  --color-state-called-chip: var(--state-called-chip);
-  --color-state-called-ink: var(--state-called-ink);
-  --color-state-warmup-chip: var(--state-warmup-chip);
-  --color-state-warmup-ink: var(--state-warmup-ink);
   --color-state-live-chip: var(--state-live-chip);
   --color-state-live-ink: var(--state-live-ink);
-  --color-state-paused-chip: var(--state-paused-chip);
-  --color-state-paused-ink: var(--state-paused-ink);
-  --color-state-walkover-ink: var(--state-walkover-ink);
-  --color-state-retired-ink: var(--state-retired-ink);
   --color-state-completed-ink: var(--state-completed-ink);
-  --color-state-disputed-chip: var(--state-disputed-chip);
-  --color-state-disputed-ink: var(--state-disputed-ink);
-
-  /* Far-view type scale for wall displays. */
-  --text-fv-a-body: var(--fv-a-body);
-  --text-fv-a-label: var(--fv-a-label);
-  --text-fv-a-score: var(--fv-a-score);
-  --text-fv-b-min: var(--fv-b-min);
-  --text-fv-b-label: var(--fv-b-label);
-  --text-fv-b-court: var(--fv-b-court);
-  --text-fv-b-score: var(--fv-b-score);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -107,6 +93,19 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Importance tiers. `text-tN` emits font-size + line-height together, so a
+     component names the job and the density decides the size. The values are
+     `inline` references to the density-scoped tokens, which is what makes the
+     utilities follow `data-density` without any component re-rendering. */
+  --text-t1: var(--type-t1-size);
+  --text-t1--line-height: var(--type-t1-lh);
+  --text-t2: var(--type-t2-size);
+  --text-t2--line-height: var(--type-t2-lh);
+  --text-t3: var(--type-t3-size);
+  --text-t3--line-height: var(--type-t3-lh);
+  --text-t4: var(--type-t4-size);
+  --text-t4--line-height: var(--type-t4-lh);
 }
 
 :root {
@@ -119,13 +118,18 @@
 
   /* Elevation tint source. Cool neutral, not warm. */
   --ink: oklch(0.255 0.010 255);
-  --brand: oklch(0.52 0.16 255);
-  /* Neutralised. Green is reserved for the live state, so decorative
-     "positive" and "selected" tints must not borrow it - otherwise green
-     means live, done and selected at the same time. */
-  --mint: oklch(0.60 0.008 250);
-  --coral: oklch(0.60 0.008 250);
-  --cyan: oklch(0.66 0.008 250);
+
+  /* Success teal. The fourth hue, admitted deliberately rather than by accident.
+     Green is reserved for the live state, so a "positive" tint cannot borrow it
+     without green meaning live, done and selected at once. Teal (hue 190) sits
+     40 degrees from live green and 65 from brand blue, so it reads as its own
+     thing. Solved at L 0.44 / C 0.072, the deepest value that stays in sRGB.
+
+     FILL TOKEN. It is used only as bg-success/10 through /50, which is what the
+     eleven former --mint sites did. It is NOT text-safe in dark mode (2.95:1 on
+     a card), so a text use must add a separate ink twin - the same rule this
+     file already states for every fill colour. */
+  --success: oklch(0.44 0.072 190);
 
   /* PRINCIPLE, kept for future hues: a fill colour and its text twin are
      separate tokens. Muted gold measured 2.25:1 as text, so it could only ever
@@ -209,67 +213,91 @@
   --sidebar-ring: oklch(0.52 0.16 255);
 
   /* --- Match states -------------------------------------------------------
-     Nine states, THREE hues, organised in four tiers.
+     Three hues, four tiers, and only the states the schema can produce.
 
-        tier 1  saturated chip   live (green), disputed (red)   may animate
-        tier 2  shared amber     paused, called                separated by L
-        tier 3  gray chip        warm-up, scheduled            no hue
-        tier 4  NO chip          walkover, retired, completed  ink only
+        tier 1  saturated chip   live (green)              may animate
+        tier 2  amber            VACANT                    see below
+        tier 3  gray chip        scheduled                 no hue
+        tier 4  NO chip          walkover, completed       ink only, one shared
 
-     Hue is reserved for state, and red is reserved for `disputed` (plus the
-     destructive action). No state uses blue at all: blue is the brand accent,
-     and a blue chip reads as a button.
+     Tier 2 is vacant. Its only two members were `paused` and `called`, both of
+     which the database cannot produce, so both the states and their amber tokens
+     were deleted rather than left implying a capability that does not exist. The
+     amber hue survives where it is real: the warn callouts. Tier 2 returns with
+     the migration that introduces a genuinely pausable match.
 
-     Tier 4 deliberately has no --state-*-chip token. The token does not exist,
-     so a completed match cannot later acquire a fill by accident.
+     Red is now reserved for the destructive action and the danger callout. The
+     `disputed` state that used to hold it was phantom, so red-as-state went with
+     it - and `--destructive` keeps red meaning one thing.
 
-     Tier separation is carried by the CHIP treatment, not by ink lightness -
-     the ink is tuned per chip for AA legibility. See the tier report in the
-     design canvas: within-tier ink separation does not reach 0.04 for light
-     tiers 1-3, and tier 4 is one shared ink by construction, which is exactly
-     why every state also carries a glyph and a text label. */
+     Hue is reserved for state. No state uses blue: blue is the brand accent, and
+     a blue chip reads as a button.
+
+     Tier 4 deliberately has no --state-*-chip token, and both its members share
+     one ink. The token does not exist, so a completed match cannot later acquire
+     a fill by accident; and walkover and completed stay distinguishable through
+     their label and glyph rather than through ink, which is the same redundant
+     channel every other state already relies on.
+
+     Tier separation is carried by the CHIP treatment, not by ink lightness - the
+     ink is tuned per chip for AA legibility. Within-tier ink separation does not
+     reach 0.04 for the light tiers, which is exactly why every state also carries
+     a glyph and a text label. */
   --state-live-chip: oklch(0.935 0.045 150);
   --state-live-ink: oklch(0.44 0.10 150);
-  --state-disputed-chip: oklch(0.935 0.035 27);
-  --state-disputed-ink: oklch(0.44 0.15 27);
-  --state-paused-chip: oklch(0.945 0.05 78);
-  --state-paused-ink: oklch(0.44 0.10 70);
-  --state-called-chip: oklch(0.965 0.03 78);
-  --state-called-ink: oklch(0.50 0.10 70);
-  --state-warmup-chip: oklch(0.925 0.006 252);
-  --state-warmup-ink: oklch(0.42 0.009 252);
   --state-scheduled-chip: oklch(0.955 0.005 250);
   --state-scheduled-ink: oklch(0.48 0.009 252);
-  --state-walkover-ink: oklch(0.505 0.009 252);
-  --state-retired-ink: oklch(0.505 0.009 252);
   --state-completed-ink: oklch(0.505 0.009 252);
 
-  /* --- Density ----------------------------------------------------------- */
-  --row-desk: 2.5rem;
-  --row-schedule: 2.75rem;
-  --row-registration: 3rem;
+  /* --- Type scale, by importance rather than by size ---------------------
+     Tiers are named for the JOB the text does, not for how large it is, so a
+     density change can resize them without any component changing its markup.
 
-  /* --- Far-view scale for wall displays ----------------------------------
-     Sizing rule: cap height in mm >= 2 x viewing distance in metres. On a
-     1920px panel 1.2m wide, 1px is about 0.625mm, so 15m needs a ~68px floor.
-     Class A is court-side (3-6m). Class B is a wall board (8-15m), where
-     secondary text is dropped entirely and 7:1 contrast is required, because
-     distance eats contrast budget.
+        T1 Glance     values read without scanning   match score, timer
+        T2 Identify   things named while moving      court id, player names, status
+        T3 Read       content read in sequence       body copy, form values
+        T4 Reference  detail found on demand         timestamps, captions, hints
 
-     Measured at Class B: foreground on page 14.67 (light) / 16.53 (dark), both
-     clear 7:1. The muted/archive ink measures 5.46 (light) / 5.54 (dark) and
-     CANNOT reach 7:1 at a legible lightness - which is exactly why secondary
-     text is dropped at this scale rather than lightened. Light-mode live ink
-     measures 6.90 and also misses 7:1 as *text*; on a wall board live is carried
-     by the chip fill plus the foreground-ink label and glyph, not by live-
-     coloured type. Keep it that way. */
-  --fv-a-body: 28px;
-  --fv-a-label: 36px;
-  --fv-a-score: 96px;
-  --fv-b-min: 68px;
-  --fv-b-label: 72px;
-  --fv-b-court: 96px;
-  --fv-b-score: 200px;
+     12px is the floor. Nothing in the app may render below it - the entire
+     legacy scale (64 uses of 11px, 18 of 10px) sat under it, which is the defect
+     this scale exists to remove rather than a preference being expressed.
+
+     Comfortable is the base, declared here so a missing or unrecognised
+     `data-density` resolves to it rather than to nothing. */
+  --type-t1-size: 1.5rem;    /* 24 */
+  --type-t1-lh: 1.75rem;     /* 28 */
+  --type-t2-size: 0.875rem;  /* 14 */
+  --type-t2-lh: 1.25rem;     /* 20 */
+  --type-t3-size: 0.875rem;  /* 14 */
+  --type-t3-lh: 1.25rem;     /* 20 */
+  --type-t4-size: 0.75rem;   /* 12 */
+  --type-t4-lh: 1rem;        /* 16 */
+  --row-height: 2.75rem;     /* 44 */
+}
+
+/* --- Density -------------------------------------------------------------
+   The only difference between the two modes is these six values. Both are real
+   and neither is a degraded version of the other: Compact is not "small text",
+   it is the same three lower tiers with a shorter first tier and tighter rows,
+   so a dense desk list gains rows rather than losing legibility.
+
+   No tier is ever scaled below 12px, so switching to Compact cannot push text
+   under the floor. T4 is deliberately identical in both modes - reference text
+   is already at the floor and shrinking it is not an option.
+
+   Scoped as `:root[data-density=...]` rather than `[data-density=...]` so it
+   cannot be out-specified by the base `:root` block, which has equal specificity
+   as a bare attribute selector and would then depend on source order. */
+:root[data-density="compact"] {
+  --type-t1-size: 1.25rem;   /* 20 */
+  --type-t1-lh: 1.5rem;      /* 24 */
+  --type-t2-size: 0.8125rem; /* 13 */
+  --type-t2-lh: 1.125rem;    /* 18 */
+  --type-t3-size: 0.875rem;  /* 14 */
+  --type-t3-lh: 1.25rem;     /* 20 */
+  --type-t4-size: 0.75rem;   /* 12 */
+  --type-t4-lh: 1rem;        /* 16 */
+  --row-height: 2rem;        /* 32 */
 }
 
 /*
@@ -282,10 +310,7 @@
 
   /* Blue stays blue in both themes: same hue family 255, lightened - never a
      hue swap. The old brown-to-gold flip between themes is gone. */
-  --brand: oklch(0.635 0.16 255);
-  --mint: oklch(0.60 0.008 250);
-  --coral: oklch(0.60 0.008 250);
-  --cyan: oklch(0.66 0.008 250);
+  --success: oklch(0.72 0.09 190);
 
   --background: oklch(0.17 0.008 260);
   --foreground: oklch(0.95 0.005 255);
@@ -340,22 +365,12 @@
   --sidebar-border: oklch(0.30 0.008 258);
   --sidebar-ring: oklch(0.516 0.16 255);
 
-  /* Same three hues, same four tiers, re-solved for the low-light hall. Tier 4
-     still has no chip token. */
+  /* Same three hues, four tiers, re-solved for the low-light hall. Tier 4 still
+     has no chip token and both its members still share one ink. */
   --state-live-chip: oklch(0.245 0.045 150);
   --state-live-ink: oklch(0.83 0.12 150);
-  --state-disputed-chip: oklch(0.245 0.035 27);
-  --state-disputed-ink: oklch(0.78 0.15 27);
-  --state-paused-chip: oklch(0.265 0.05 78);
-  --state-paused-ink: oklch(0.85 0.10 70);
-  --state-called-chip: oklch(0.295 0.03 78);
-  --state-called-ink: oklch(0.89 0.10 70);
-  --state-warmup-chip: oklch(0.235 0.006 252);
-  --state-warmup-ink: oklch(0.82 0.009 252);
   --state-scheduled-chip: oklch(0.275 0.005 250);
   --state-scheduled-ink: oklch(0.745 0.009 252);
-  --state-walkover-ink: oklch(0.633 0.009 252);
-  --state-retired-ink: oklch(0.633 0.009 252);
   --state-completed-ink: oklch(0.633 0.009 252);
 }
 
@@ -422,7 +437,12 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.875rem;
+  /* Body cells are T3 (read in sequence), headers T4 (found on demand). Both are
+     tokens rather than literals because the previous header value was a bare
+     0.625rem - 10px, i.e. under the floor, and invisible to any search for a
+     hardcoded Tailwind size class. */
+  font-size: var(--type-t3-size);
+  line-height: var(--type-t3-lh);
 
   & thead th {
     position: sticky;
@@ -433,7 +453,8 @@
     padding: 0.5rem 0.625rem;
     text-align: left;
     font-family: var(--font-display);
-    font-size: 0.625rem;
+    font-size: var(--type-t4-size);
+    line-height: var(--type-t4-lh);
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
@@ -442,6 +463,9 @@
   }
 
   & tbody td {
+    /* Cells take the density row height, so the dense schedule table gains rows
+       in Compact without any cell deciding a padding for itself. */
+    height: var(--row-height);
     padding: 0.5rem 0.625rem;
     border-bottom: 1px solid color-mix(in oklab, var(--hairline) 70%, transparent);
     vertical-align: middle;

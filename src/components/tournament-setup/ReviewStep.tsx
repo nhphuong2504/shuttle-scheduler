@@ -45,7 +45,7 @@ export function ReviewStep({
         title="Checks"
         right={
           checks.length ? (
-            <span className="font-score text-[11px] text-muted-foreground">
+            <span className="font-score text-t4 text-muted-foreground">
               {checks.length - blockers.length - advisories.length}/{checks.length} passed
             </span>
           ) : null
@@ -61,14 +61,16 @@ export function ReviewStep({
             <div
               className={cn(
                 "flex items-center gap-3 border-b border-hairline px-4 py-3",
-                ready ? "bg-mint/10" : "bg-warn-surface",
+                ready ? "bg-success/10" : "bg-warn-surface",
               )}
             >
               <span
                 aria-hidden
                 className={cn(
                   "grid size-8 shrink-0 place-items-center rounded-full font-score text-sm font-bold",
-                  ready ? "bg-mint/50 text-foreground" : "bg-warn-border/50 text-warn-foreground",
+                  ready
+                    ? "bg-success/50 text-foreground"
+                    : "bg-warn-border/50 text-warn-foreground",
                 )}
               >
                 {ready ? "✓" : "!"}
@@ -90,9 +92,9 @@ export function ReviewStep({
                   <li key={check.id} className="flex items-start gap-2.5 px-4 py-2.5">
                     <span
                       className={cn(
-                        "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-[10px] font-bold",
+                        "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-t4 font-bold",
                         check.ok
-                          ? "bg-mint/40 text-foreground"
+                          ? "bg-success/40 text-foreground"
                           : advisory
                             ? "bg-warn-border/40 text-warn-foreground"
                             : "bg-danger-surface text-danger-foreground",
@@ -121,7 +123,7 @@ export function ReviewStep({
                         </span>
                       ) : null}
                       {advisory ? (
-                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                        <span className="mt-0.5 block text-t4 text-muted-foreground">
                           Set on the Schedule page at the first build.
                         </span>
                       ) : null}
@@ -150,7 +152,7 @@ export function ReviewStep({
             }
           />
           <div className="sm:col-span-2">
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <dt className="text-t4 font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Note
             </dt>
             <dd className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
@@ -256,7 +258,7 @@ export function ReviewStep({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <dt className="text-t4 font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </dt>
       <dd className="break-words text-sm">{value}</dd>

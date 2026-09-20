@@ -26,12 +26,14 @@ export const Route = createFileRoute("/pools")({
       { title: "Pools & Standings | ShuttleNet Tournament Ops" },
       {
         name: "description",
-        content: "Generate round-robin pools of four or five and track live standings with head-to-head tie-breaks.",
+        content:
+          "Generate round-robin pools of four or five and track live standings with head-to-head tie-breaks.",
       },
       { property: "og:title", content: "Pools & Standings | ShuttleNet Tournament Ops" },
       {
         property: "og:description",
-        content: "Generate round-robin pools of four or five and track live standings with head-to-head tie-breaks.",
+        content:
+          "Generate round-robin pools of four or five and track live standings with head-to-head tie-breaks.",
       },
     ],
   }),
@@ -75,13 +77,17 @@ function PoolsPage() {
                   onClick={async () => {
                     try {
                       const force = catPools.length
-                        ? window.confirm("Regenerate pools and invalidate existing draws for this category?")
+                        ? window.confirm(
+                            "Regenerate pools and invalidate existing draws for this category?",
+                          )
                         : false;
                       await generatePoolsForCategory(c.id, catTeams, force);
                       toast.success(`${c.code} pools generated`);
                       qc.invalidateQueries();
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Could not generate pools");
+                      toast.error(
+                        error instanceof Error ? error.message : "Could not generate pools",
+                      );
                     }
                   }}
                 >
@@ -101,7 +107,6 @@ function PoolsPage() {
                   />
                 </Panel>
               ) : (
-
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {catPools.map((pool) => {
                     const poolEntries = (entries ?? []).filter((e) => e.pool_id === pool.id);
@@ -123,7 +128,7 @@ function PoolsPage() {
                         key={pool.id}
                         title={pool.name}
                         right={
-                          <span className="font-score text-[11px] text-muted-foreground">
+                          <span className="font-score text-t4 text-muted-foreground">
                             {played}/{poolMatches.length} {complete ? "· complete" : ""}
                           </span>
                         }
@@ -143,17 +148,22 @@ function PoolsPage() {
                               const entry = poolEntries.find((e) => e.team_id === s.teamId);
                               return (
                                 <tr key={s.teamId}>
-                                  <td className="font-score text-xs font-semibold text-primary">{s.rank}</td>
-                                  <td className="pr-2 font-medium">{teamLabel(teamMap.get(s.teamId), playerMap)}</td>
+                                  <td className="font-score text-xs font-semibold text-primary">
+                                    {s.rank}
+                                  </td>
+                                  <td className="pr-2 font-medium">
+                                    {teamLabel(teamMap.get(s.teamId), playerMap)}
+                                  </td>
                                   <td className="text-right font-score text-xs">
                                     {s.wins}-{s.losses}
                                   </td>
-                                  <td className="text-right font-score text-xs">{signed(s.diff)}</td>
+                                  <td className="text-right font-score text-xs">
+                                    {signed(s.diff)}
+                                  </td>
                                   <td className="pl-2 text-right">
-
                                     {canScore && entry ? (
                                       <button
-                                        className="text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+                                        className="text-t4 uppercase tracking-wide text-muted-foreground hover:text-primary"
                                         onClick={async () => {
                                           const input = window.prompt(
                                             "Manual rank (coin toss). Leave blank to clear.",
@@ -165,7 +175,9 @@ function PoolsPage() {
                                           qc.invalidateQueries();
                                         }}
                                       >
-                                        {entry.manual_rank_override ? `set ${entry.manual_rank_override}` : "override"}
+                                        {entry.manual_rank_override
+                                          ? `set ${entry.manual_rank_override}`
+                                          : "override"}
                                       </button>
                                     ) : null}
                                   </td>

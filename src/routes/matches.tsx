@@ -106,18 +106,29 @@ function MatchRow({
   onOpen: () => void;
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50">
-      <span className="w-24 font-score text-[11px] font-semibold text-primary">{left}</span>
+    <li className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50">
+      <span className="w-28 font-score text-t2 font-semibold text-primary">{left}</span>
       <span className="min-w-[220px] flex-1">
         {label(match.teams[0])} <span className="text-muted-foreground">vs</span>{" "}
         {label(match.teams[1])}
       </span>
-      <span className="font-score text-[11px] text-muted-foreground">
+      <span className="font-score text-t2 text-muted-foreground">
         {timeLabel(match.scheduled)}
         {match.courtId ? ` · C${courtMap.get(match.courtId)?.number ?? "?"}` : ""}
       </span>
       <StatusPill status={match.status} />
-      <span className="w-20 text-right font-score text-sm">{match.score ?? "—"}</span>
+      {/* A game score is a number, so it must never be broken across lines. The fixed
+          `w-24` this replaces was narrower than three games at the 30-point cap
+          ("30-29, 29-30, 30-28"), and because the cell could not grow the value wrapped:
+          in Compact it split as "30-29, 29-30, 30-" / "28", which reads as a different
+          score. `whitespace-nowrap` forbids the break and the min-width lets the column
+          take the space it needs; the row is already `flex-wrap`, so under real pressure
+          the whole cell moves to the next line instead of the number giving way.
+          A minimum rather than a fixed width keeps the right edges aligned for the
+          ordinary case, where every score is short and the minimum wins. */}
+      <span className="min-w-24 shrink-0 whitespace-nowrap text-right font-score text-t2">
+        {match.score ?? "—"}
+      </span>
       <Button size="sm" variant="outline" onClick={onOpen}>
         Open
       </Button>
@@ -399,7 +410,7 @@ function MatchesPage() {
                 key={`placement-${catId}`}
                 title={`${catMap.get(catId)?.code ?? "Placement"} · two placement rounds`}
                 right={
-                  <span className="font-score text-[11px] text-muted-foreground">
+                  <span className="font-score text-t4 text-muted-foreground">
                     {list.filter((m) => m.status === "reported").length}/{list.length} reported
                   </span>
                 }
@@ -430,7 +441,7 @@ function MatchesPage() {
                   key={pool.id}
                   title={`${catMap.get(pool.category_id)?.code ?? ""} · ${pool.name}`}
                   right={
-                    <span className="font-score text-[11px] text-muted-foreground">
+                    <span className="font-score text-t4 text-muted-foreground">
                       {reported}/{list.length} reported
                     </span>
                   }
@@ -440,21 +451,21 @@ function MatchesPage() {
                     {list.map((m) => (
                       <li
                         key={m.id}
-                        className="flex flex-wrap items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
+                        className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50"
                       >
-                        <span className="w-10 font-score text-[11px] font-semibold text-primary">
+                        <span className="w-14 font-score text-t2 font-semibold text-primary">
                           R{m.round}
                         </span>
                         <span className="min-w-[220px] flex-1">
                           {label(m.team_a_id)} <span className="text-muted-foreground">vs</span>{" "}
                           {label(m.team_b_id)}
                         </span>
-                        <span className="font-score text-[11px] text-muted-foreground">
+                        <span className="font-score text-t2 text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
                           {m.court_id ? ` · C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
                         </span>
                         <StatusPill status={m.status} />
-                        <span className="w-16 text-right font-score text-sm">
+                        <span className="w-20 text-right font-score text-t2">
                           {m.status === "reported" ? `${m.score_a}-${m.score_b}` : "—"}
                         </span>
                         <Button
@@ -496,7 +507,7 @@ function MatchesPage() {
                   key={`tier-${drawId}`}
                   title={`${catMap.get(draw?.category_id ?? "")?.code ?? ""} · Draw ${draw?.tier ?? "?"}`}
                   right={
-                    <span className="font-score text-[11px] text-muted-foreground">
+                    <span className="font-score text-t4 text-muted-foreground">
                       {list.filter((m) => m.status === "reported").length}/{list.length} reported
                     </span>
                   }
@@ -527,7 +538,7 @@ function MatchesPage() {
                   key={draw.id}
                   title={`${catMap.get(draw.category_id)?.code ?? ""} · Draw ${draw.tier}`}
                   right={
-                    <span className="font-score text-[11px] text-muted-foreground">
+                    <span className="font-score text-t4 text-muted-foreground">
                       {draw.entrant_count} entrants · bracket {draw.bracket_size}
                     </span>
                   }
@@ -537,16 +548,16 @@ function MatchesPage() {
                     {list.map((m) => (
                       <li
                         key={m.id}
-                        className="flex flex-wrap items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
+                        className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50"
                       >
-                        <span className="w-12 font-score text-[11px] font-semibold text-primary">
+                        <span className="w-16 font-score text-t2 font-semibold text-primary">
                           R{m.round}.{m.slot}
                         </span>
                         <span className="min-w-[220px] flex-1">
                           {label(m.team_a_id)} <span className="text-muted-foreground">vs</span>{" "}
                           {label(m.team_b_id)}
                         </span>
-                        <span className="font-score text-[11px] text-muted-foreground">
+                        <span className="font-score text-t2 text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
                           {m.court_id ? ` · C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
                         </span>

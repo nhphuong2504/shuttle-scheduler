@@ -10,6 +10,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
+import { DESK_PATHS, DENSITY_STORAGE_KEY } from "@/lib/design/density";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -82,12 +83,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "ShuttleNet | Badminton Tournament Operations" },
       {
         name: "description",
-        content: "Run a two-day, four-category badminton tournament: pools, draws, scores and court scheduling.",
+        content:
+          "Run a two-day, four-category badminton tournament: pools, draws, scores and court scheduling.",
       },
       { property: "og:title", content: "ShuttleNet | Badminton Tournament Operations" },
       {
         property: "og:description",
-        content: "Run a two-day, four-category badminton tournament: pools, draws, scores and court scheduling.",
+        content:
+          "Run a two-day, four-category badminton tournament: pools, draws, scores and court scheduling.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -101,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
@@ -112,11 +115,49 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+/**
+ * Applies the density before first paint.
+ *
+ * Without this the attribute is set in an effect, which runs after the browser has
+ * already laid out the page. On the Desk - whose default is Compact - that means a
+ * visible reflow on every load for anyone who has not chosen a density: rows first
+ * render at 44px and then collapse to 32px. The stored preference and the route
+ * default are both resolved here so the first paint is already correct.
+ *
+ * `DESK_PATHS` is injected rather than restated, so the desk-route list still has
+ * one definition. This runs before the bundle, so it reads `localStorage` directly
+ * instead of importing the module.
+ */
+const DENSITY_BOOTSTRAP = `
+(function () {
+  try {
+    var stored = localStorage.getItem(${JSON.stringify(DENSITY_STORAGE_KEY)});
+    var density =
+      stored === "compact" || stored === "comfortable"
+        ? stored
+        : ${JSON.stringify(DESK_PATHS)}.indexOf(
+              location.pathname.replace(/\\/+$/, "") || "/",
+            ) !== -1
+          ? "compact"
+          : "comfortable";
+    document.documentElement.dataset.density = density;
+  } catch (error) {
+    document.documentElement.dataset.density = "comfortable";
+  }
+})();
+`;
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // `suppressHydrationWarning` is required, not cosmetic. DENSITY_BOOTSTRAP adds
+    // `data-density` to this element before React runs, so the server HTML and the
+    // client's expected props genuinely differ. React would otherwise log a
+    // hydration mismatch and refuse to patch the attribute - and an unavoidable
+    // warning here would hide a real one added later.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: DENSITY_BOOTSTRAP }} />
       </head>
       <body>
         {children}
@@ -128,6 +169,18 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Marks the point at which React has attached its event handlers.
+  //
+  // The density attribute appears before hydration - deliberately, so there is no
+  // reflow - which means "the attribute is already correct" says nothing about
+  // whether the page is interactive yet. An interaction test that clicks as soon as
+  // the attribute looks right can click a button React has not wired up, and then
+  // fail for a reason that has nothing to do with the behaviour it is testing.
+  // Published as an attribute rather than a global so it needs no test-only types.
+  useEffect(() => {
+    document.documentElement.dataset["hydrated"] = "true";
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

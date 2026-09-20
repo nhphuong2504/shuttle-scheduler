@@ -1,9 +1,11 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useDensity } from "@/hooks/useDensity";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
+import type { Density } from "@/lib/design/density";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,6 +29,76 @@ const NAV = [
   { to: "/matches", label: "Scores" },
 ] as const;
 
+const DENSITY_OPTIONS: { value: Density; label: string }[] = [
+  { value: "comfortable", label: "Comfortable" },
+  { value: "compact", label: "Compact" },
+];
+
+/**
+ * Density switch.
+ *
+ * A `role="group"` of pressed buttons rather than a radiogroup: these apply
+ * immediately and are not a form field awaiting submission, so `aria-pressed`
+ * describes them accurately while a radio role would imply a pending value.
+ *
+ * The pressed button always reflects what is actually rendering, including when
+ * that came from a route default - the control never misrepresents the state to
+ * make the choice look deliberate. "Default" appears only once a choice exists,
+ * because resetting has no meaning before then.
+ */
+function DensityToggle({
+  density,
+  isExplicit,
+  onChange,
+  onReset,
+}: {
+  density: Density;
+  isExplicit: boolean;
+  onChange: (next: Density) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="hidden items-center gap-1.5 sm:flex">
+      <div
+        role="group"
+        aria-label="Text and row density"
+        className="flex items-center rounded-full border border-hairline bg-muted/60 p-0.5"
+      >
+        {DENSITY_OPTIONS.map((option) => {
+          const active = density === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "rounded-full px-2.5 py-1 font-semibold transition-colors",
+                "text-t4",
+                active
+                  ? "bg-surface text-foreground shadow-panel"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+      {isExplicit ? (
+        <button
+          type="button"
+          onClick={onReset}
+          title="Go back to this page's default density"
+          className="text-t4 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Default
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AppShell({
   title,
   subtitle,
@@ -40,6 +112,10 @@ export function AppShell({
 }) {
   const { session, signedIn, role, isAdmin } = useSession();
   const navigate = useNavigate();
+  // The route decides the *default* density, and only the default - an explicit
+  // choice is resolved ahead of it inside useDensity.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { density, isExplicit, setDensity, clearDensity } = useDensity(pathname);
 
   const nav = [
     ...NAV,
@@ -53,10 +129,10 @@ export function AppShell({
       <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
           <Link to="/" className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-[13px] font-bold text-primary-foreground shadow-panel">
+            <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-t2 font-bold text-primary-foreground shadow-panel">
               S
             </span>
-            <span className="font-display text-sm font-bold tracking-tight text-brand">
+            <span className="font-display text-sm font-bold tracking-tight text-primary">
               SHUTTLENET<span className="text-muted-foreground"> / ops</span>
             </span>
           </Link>
@@ -77,6 +153,12 @@ export function AppShell({
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 text-xs">
+            <DensityToggle
+              density={density}
+              isExplicit={isExplicit}
+              onChange={setDensity}
+              onReset={clearDensity}
+            />
             {signedIn ? (
               <>
                 <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
@@ -176,15 +258,15 @@ export function StatTile({
       : tone === "warn"
         ? "border-warn-border bg-warn-surface"
         : tone === "good"
-          ? "border-hairline bg-mint/10"
+          ? "border-hairline bg-success/10"
           : "border-hairline bg-surface";
   return (
     <div className={cn("rounded-xl border p-3 shadow-panel", toneClass)}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      <p className="text-t4 font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 font-score text-2xl font-semibold leading-none tracking-tight">{value}</p>
-      {hint ? <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p> : null}
+      <p className="mt-1 font-score text-t1 font-semibold leading-none tracking-tight">{value}</p>
+      {hint ? <p className="mt-1 text-t4 text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
@@ -229,35 +311,27 @@ const STATE_ALIAS: Record<string, string> = {
 
 const STATE_LABEL: Record<string, string> = {
   scheduled: "Scheduled",
-  called: "Called",
-  warmup: "Warm-up",
   live: "Live",
-  paused: "Paused",
   walkover: "Walkover",
-  retired: "Retired",
   completed: "Completed",
-  disputed: "Disputed",
 };
 
 const STATE_TIER: Record<string, 1 | 2 | 3 | 4> = {
   live: 1,
-  disputed: 1,
-  paused: 2,
-  called: 2,
-  warmup: 3,
   scheduled: 3,
   walkover: 4,
-  retired: 4,
   completed: 4,
 };
 
-/** Chip classes for tiers 1-3 only. Tier 4 has no chip token to reference. */
+/**
+ * Chip classes for tiers 1 to 3 only. Tier 4 has no chip token to reference.
+ *
+ * The four phantom states - called, warm-up, paused, disputed - are absent
+ * because their tokens are absent. A state is added here only alongside the
+ * migration that makes it producible.
+ */
 const STATE_CLASS: Record<string, string> = {
-  disputed: "bg-state-disputed-chip text-state-disputed-ink ring-state-disputed-ink/25",
   live: "bg-state-live-chip text-state-live-ink ring-state-live-ink/25",
-  called: "bg-state-called-chip text-state-called-ink ring-state-called-ink/25",
-  warmup: "bg-state-warmup-chip text-state-warmup-ink ring-state-warmup-ink/25",
-  paused: "bg-state-paused-chip text-state-paused-ink ring-state-paused-ink/25",
   scheduled: "bg-state-scheduled-chip text-state-scheduled-ink ring-state-scheduled-ink/25",
 };
 
@@ -297,15 +371,6 @@ const STATE_GLYPH: Record<string, ReactNode> = {
       <path d="M9 5.75V9l2.25 1.5" />
     </>,
   ),
-  // Broadcast — the call went out to the players.
-  called: glyph(
-    <>
-      <path d="M11 5.4a5.4 5.4 0 0 1 0 7.2M13.9 3.6a8.6 8.6 0 0 1 0 10.8" />
-      <circle cx="5.4" cy="9" r="1.7" fill="currentColor" stroke="none" />
-    </>,
-  ),
-  // Flame — on court, not competing yet.
-  warmup: glyph(<path d="M9 3.2s3.9 3.1 3.9 6.1a3.9 3.9 0 0 1-7.8 0c0-1.4.8-2.6 1.6-3.5" />),
   // Filled target — the match is running now.
   live: glyph(
     <>
@@ -313,8 +378,6 @@ const STATE_GLYPH: Record<string, ReactNode> = {
       <circle cx="9" cy="9" r="2.6" fill="currentColor" stroke="none" />
     </>,
   ),
-  // Transport pause bars.
-  paused: glyph(<path d="M7.4 5.6v6.8M10.6 5.6v6.8" strokeWidth={2.4} />),
   // Skip — the tie was passed over, not played.
   walkover: glyph(
     <>
@@ -322,22 +385,8 @@ const STATE_GLYPH: Record<string, ReactNode> = {
       <path d="M11.9 6.1v5.8" />
     </>,
   ),
-  // Slashed circle — a side withdrew.
-  retired: glyph(
-    <>
-      <circle cx="9" cy="9" r="6.25" />
-      <path d="M5.6 12.4 12.4 5.6" />
-    </>,
-  ),
   // Check.
   completed: glyph(<path d="M5 9.4l2.7 2.7L13 6.4" />),
-  // Warning triangle.
-  disputed: glyph(
-    <>
-      <path d="M9 2.9 16 14.4H2z" />
-      <path d="M9 7.2v3.4M9 12.8v.2" />
-    </>,
-  ),
 };
 
 const STATE_FALLBACK_GLYPH = glyph(
@@ -355,7 +404,7 @@ export function StatusPill({ status }: { status: string }) {
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 font-score text-[10px] uppercase tracking-wider",
+          "inline-flex items-center gap-1 font-score text-t2 uppercase tracking-wider",
           STATE_TIER4_CLASS,
         )}
       >
@@ -368,7 +417,7 @@ export function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-[10px] uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ring-1 ring-inset",
         known ? STATE_CLASS[key] : "bg-muted text-muted-foreground ring-hairline",
       )}
     >

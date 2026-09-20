@@ -1,4 +1,20 @@
-# Modern Earth recolour
+# Modern Earth recolour — SUPERSEDED
+
+> **Do not implement.** This plan was replaced by the cool neutral slate chassis, which
+> is now shipped in `src/styles.css`.
+>
+> Why it was abandoned: the chassis direction changed from warm earth to cool slate, and
+> this plan's state palette described nine match states when the database enforces five.
+> Re-applying it would revert both decisions.
+>
+> Current sources of truth:
+> - Tokens and component behaviour: `src/styles.css`
+> - The design system and its phased plan: `design-system-review.canvas.tsx`
+>
+> The rest of this file is kept as a historical record and is not a specification.
+> `state` and `sage` references below are historical and do not reflect the shipped system.
+
+---
 
 A colour and typography refresh only. No changes to tournament rules, scheduling, scoring, or any data.
 

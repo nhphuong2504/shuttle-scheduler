@@ -1273,7 +1273,7 @@ function PlacementSchedulePage() {
             title="Settings"
             bodyClassName="p-0"
             right={
-              <span className="font-score text-[11px] text-muted-foreground">saved as you go</span>
+              <span className="font-score text-t4 text-muted-foreground">saved as you go</span>
             }
           >
             <div className="divide-y divide-hairline">
@@ -1328,7 +1328,7 @@ function PlacementSchedulePage() {
                               Day {day.day_number}
                             </p>
                             <div className="flex items-center gap-1.5">
-                              <span className="font-score text-[11px] text-muted-foreground">
+                              <span className="font-score text-t4 text-muted-foreground">
                                 {savingDayId === day.id
                                   ? "Saving…"
                                   : `${courtsFor(day).length} of ${(courts ?? []).length} courts`}
@@ -1336,7 +1336,7 @@ function PlacementSchedulePage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 px-2 text-[11px]"
+                                className="h-7 px-2 text-t4"
                                 disabled={
                                   !canSchedule ||
                                   busy ||
@@ -1459,7 +1459,7 @@ function PlacementSchedulePage() {
                                 );
                               })}
                             </div>
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-t4 text-muted-foreground">
                               A court added here joins the venue, so any day playing on every court
                               gets it too.
                             </p>
@@ -1484,7 +1484,7 @@ function PlacementSchedulePage() {
                               </Button>
                             </div>
                             {breakRows(day).length === 0 ? (
-                              <p className="text-[11px] text-muted-foreground">
+                              <p className="text-t4 text-muted-foreground">
                                 No breaks — play runs straight through.
                               </p>
                             ) : (
@@ -1567,7 +1567,7 @@ function PlacementSchedulePage() {
                             )}
                             {breaksDirty(day) ? (
                               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-2.5 py-2">
-                                <p className="text-[11px] text-muted-foreground">
+                                <p className="text-t4 text-muted-foreground">
                                   Unsaved break changes for this day.
                                 </p>
                                 <Button
@@ -1580,7 +1580,6 @@ function PlacementSchedulePage() {
                               </div>
                             ) : null}
                           </div>
-
                         </div>
                       );
                     })}
@@ -1648,7 +1647,7 @@ function PlacementSchedulePage() {
         <Panel
           title="Stage progress"
           right={
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-t4 text-muted-foreground">
               completed / created · advance readiness
             </span>
           }
@@ -1659,7 +1658,7 @@ function PlacementSchedulePage() {
         <Panel
           title="Running order"
           right={
-            <span className="font-score text-[11px] text-muted-foreground">
+            <span className="font-score text-t4 text-muted-foreground">
               {result
                 ? `${result.summary.placed} placed this session`
                 : `${rows.length} scheduled · ${daySlices.length} day${daySlices.length === 1 ? "" : "s"}`}
@@ -1683,7 +1682,7 @@ function PlacementSchedulePage() {
                   {daySlices.map((slice) => (
                     <TabsTrigger key={slice.day.id} value={slice.day.id}>
                       Day {slice.day.day_number}
-                      <span className="ml-1.5 font-score text-[11px] text-muted-foreground">
+                      <span className="ml-1.5 font-score text-t4 text-muted-foreground">
                         {slice.rows.length}
                       </span>
                     </TabsTrigger>
@@ -1693,7 +1692,7 @@ function PlacementSchedulePage() {
 
               {daySlices.map((slice) => (
                 <TabsContent key={slice.day.id} value={slice.day.id} className="mt-0">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-t4 text-muted-foreground">
                     <span className="font-semibold text-foreground">
                       {dayDateLabel(slice.day.date)}
                     </span>
@@ -1735,7 +1734,7 @@ function PlacementSchedulePage() {
                                 {timeLabel(row.start)}
                               </td>
                               <td>
-                                <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-[11px] font-semibold text-primary">
+                                <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-t2 font-semibold text-primary">
                                   C{row.courtNumber || "—"}
                                 </span>
                               </td>
@@ -1974,7 +1973,7 @@ function SettingsSection({
     <section className="grid gap-3 px-4 py-4 md:grid-cols-[13rem_1fr] md:gap-6">
       <div>
         <h3 className="font-display text-sm font-semibold">{title}</h3>
-        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{hint}</p>
+        <p className="mt-1 text-t4 leading-snug text-muted-foreground">{hint}</p>
       </div>
       <div className="min-w-0">{children}</div>
     </section>

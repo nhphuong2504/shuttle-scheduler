@@ -481,7 +481,7 @@ function Desk() {
                   type="button"
                   onClick={() => setPickedDayId(day.id)}
                   aria-pressed={day.id === selectedDayId}
-                  className={`rounded-md px-2 py-1 font-score text-[11px] transition-colors ${
+                  className={`rounded-md px-2 py-1 font-score text-t2 transition-colors ${
                     day.id === selectedDayId
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground hover:bg-muted/70"
@@ -532,7 +532,7 @@ function Desk() {
         <Panel
           title="Act now"
           right={
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-t4 text-muted-foreground">
               {timeLabel(new Date(now))} · updates every 30s
             </span>
           }
@@ -549,7 +549,7 @@ function Desk() {
                     <li key={`ready-${court.id}`}>
                       <button
                         type="button"
-                        className="w-full rounded-md bg-mint/15 px-2.5 py-2 text-left font-medium hover:bg-mint/25"
+                        className="w-full rounded-md bg-primary/15 px-2.5 py-2 text-left font-medium hover:bg-primary/25"
                         onClick={() => {
                           setOperationCourtId(court.id);
                           setOpenMatch(state.next);
@@ -618,7 +618,7 @@ function Desk() {
           title="Court board"
           right={
             selectedDay ? (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-t4 text-muted-foreground">
                 {dayDateLabel(selectedDay.date)} · {courtsOnSelectedDay.length} court
                 {courtsOnSelectedDay.length === 1 ? "" : "s"}
               </span>
@@ -651,7 +651,7 @@ function Desk() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 font-display text-sm font-bold">
-                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 font-score text-[11px] text-primary">
+                      <span className="grid size-6 place-items-center rounded-md bg-primary/10 font-score text-t2 text-primary">
                         {court.number}
                       </span>
                       Court {court.number}
@@ -659,17 +659,22 @@ function Desk() {
                     <CourtStatePill state={state.state} />
                   </div>
 
-                  <p className="mt-2 text-sm">
+                  {/* The names of the match on court are the tile's primary
+                      content, so they take the read tier and hold 14px in both
+                      densities rather than dropping to 13px in Compact. The tag
+                      above is a reference code and the timer below is the value
+                      that needs to be comparable across courts. */}
+                  <p className="mt-2 text-t3">
                     {state.playing ? (
                       <>
-                        <span className="font-score text-[11px] text-muted-foreground">
+                        <span className="font-score text-t4 text-muted-foreground">
                           {state.playing.tag}
                         </span>
                         <br />
                         {label(state.playing.teams[0])} vs {label(state.playing.teams[1])}
                         <br />
                         <span
-                          className={`font-score text-[11px] ${
+                          className={`font-score text-t2 ${
                             state.state === "overrun"
                               ? "font-semibold text-danger-foreground"
                               : "text-muted-foreground"
@@ -693,12 +698,18 @@ function Desk() {
                       </span>
                     )}
                   </p>
-                  <p className="mt-2 border-t border-hairline pt-2 text-xs text-muted-foreground">
+                  {/* The queued pairing is a name, so it takes the identify tier
+                      and scales with density; the readiness detail under it is
+                      reference text. They were one 12px line before, which put
+                      the next players' names below the playing names and left
+                      them unresponsive to density. */}
+                  <div className="mt-2 border-t border-hairline pt-2 text-muted-foreground">
                     {state.next ? (
                       <>
-                        Next: {timeLabel(state.next.scheduled)} · {label(state.next.teams[0])} vs{" "}
-                        {label(state.next.teams[1])}
-                        <br />
+                        <p className="text-t2">
+                          Next: {timeLabel(state.next.scheduled)} · {label(state.next.teams[0])} vs{" "}
+                          {label(state.next.teams[1])}
+                        </p>
                         <ReadinessText
                           readiness={state.readiness}
                           courts={courtMap}
@@ -706,17 +717,17 @@ function Desk() {
                         />
                       </>
                     ) : nextReadyLabel ? (
-                      <>
+                      <p className="text-t2">
                         No match scheduled · ready to place: {nextReadyLabel}
                         {readyUnassigned.length > 1
                           ? ` · ${readyUnassigned.length - 1} more waiting`
                           : ""}
-                      </>
+                      </p>
                     ) : (
-                      "nothing queued"
+                      <p className="text-t4">nothing queued</p>
                     )}
-                  </p>
-                  <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+                  </div>
+                  <p className="mt-2 text-t4 uppercase tracking-widest text-muted-foreground">
                     {state.playing ? "Open score desk" : target ? "Open next match" : ""}
                   </p>
                 </button>
@@ -729,7 +740,7 @@ function Desk() {
           <Panel
             title="Awaiting results"
             right={
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-t4 text-muted-foreground">
                 {dayCounts.remaining} still to play today
               </span>
             }
@@ -770,7 +781,7 @@ function Desk() {
           <Panel
             title="Court progress"
             right={
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-t4 text-muted-foreground">
                 {courtProgress.reduce((sum, row) => sum + row.done, 0)}/
                 {courtProgress.reduce((sum, row) => sum + row.total, 0)} matches done
               </span>
@@ -779,8 +790,11 @@ function Desk() {
             {courtProgress.length ? (
               <ul className="divide-y divide-hairline">
                 {courtProgress.map((row) => (
-                  <li key={row.court.id} className="flex items-center gap-3 py-2 text-sm">
-                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 font-score text-[11px] text-primary">
+                  <li
+                    key={row.court.id}
+                    className="flex min-h-[var(--row-height)] items-center gap-3 py-1 text-t3"
+                  >
+                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 font-score text-t2 text-primary">
                       {row.court.number}
                     </span>
                     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -792,7 +806,7 @@ function Desk() {
                     <span className="w-16 text-right font-score text-xs text-muted-foreground">
                       {row.done}/{row.total}
                     </span>
-                    <span className="w-16 text-right font-score text-[11px] text-muted-foreground">
+                    <span className="w-20 text-right font-score text-t2 text-muted-foreground">
                       {row.remaining ? `${row.remaining} left` : "complete"}
                     </span>
                   </li>
@@ -1121,7 +1135,7 @@ export function MatchOperationsDialog({
             {Array.from({ length: rows }).map((_, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <Input
-                  className="h-12 w-full text-center font-score text-xl"
+                  className="h-12 w-full text-center font-score text-t1"
                   inputMode="numeric"
                   placeholder="—"
                   autoFocus={i === 0 && canEditScores}
@@ -1132,7 +1146,7 @@ export function MatchOperationsDialog({
                 />
                 <span className="w-6 text-center font-score text-lg text-muted-foreground">:</span>
                 <Input
-                  className="h-12 w-full text-center font-score text-xl"
+                  className="h-12 w-full text-center font-score text-t1"
                   inputMode="numeric"
                   placeholder="—"
                   value={values[i]?.[1] ?? ""}
@@ -1144,7 +1158,7 @@ export function MatchOperationsDialog({
             ))}
           </div>
           {rows > 1 ? (
-            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            <p className="mt-2 text-center text-t4 text-muted-foreground">
               Games 1–{rows}, top to bottom. {gamesNeededToWin(scoringRule)} wins take the match.
             </p>
           ) : null}
@@ -1374,7 +1388,7 @@ export function MatchOperationsDialog({
             >
               Clear result
             </Button>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
+            <p className="mt-1.5 text-t4 text-muted-foreground">
               Sends this match back to unplayed so the score can be entered again. A round-one
               result cannot be cleared once round two was built from it — regenerate round two
               instead.
@@ -1445,7 +1459,7 @@ function CourtStatePill({
   };
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 font-score text-[10px] uppercase tracking-wider ${classes[state]}`}
+      className={`inline-flex rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ${classes[state]}`}
     >
       {labels[state]}
     </span>

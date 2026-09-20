@@ -144,68 +144,68 @@ export function DetailsStep({
       </Panel>
 
       <Panel title="Venue and contact">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="t-venue">Venue</Label>
-              <Input
-                id="t-venue"
-                value={basics.venueName}
-                placeholder="Riverside Sports Hall"
-                onChange={(e) => setBasics({ venueName: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="t-address">Address</Label>
-              <Input
-                id="t-address"
-                value={basics.venueAddress}
-                placeholder="12 River Road, Springfield"
-                onChange={(e) => setBasics({ venueAddress: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="t-org">Organizer</Label>
-              <Input
-                id="t-org"
-                value={basics.organizerName}
-                placeholder="Dana Reed"
-                onChange={(e) => setBasics({ organizerName: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="t-org-email">Email</Label>
-              <Input
-                id="t-org-email"
-                type="email"
-                value={basics.organizerEmail}
-                placeholder="dana@example.com"
-                onChange={(e) => setBasics({ organizerEmail: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="t-org-phone">Phone</Label>
-              <Input
-                id="t-org-phone"
-                value={basics.organizerPhone}
-                placeholder="+1 555 0100"
-                onChange={(e) => setBasics({ organizerPhone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="t-notes">Note</Label>
-              <Textarea
-                id="t-notes"
-                value={basics.notes}
-                rows={3}
-                maxLength={NOTES_MAX_LENGTH}
-                placeholder="Parking is behind the hall. Warm-up courts open at 08:00."
-                onChange={(e) => setBasics({ notes: e.target.value })}
-              />
-              <p className="text-right font-score text-[11px] text-muted-foreground">
-                {basics.notes.length}/{NOTES_MAX_LENGTH}
-              </p>
-            </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="t-venue">Venue</Label>
+            <Input
+              id="t-venue"
+              value={basics.venueName}
+              placeholder="Riverside Sports Hall"
+              onChange={(e) => setBasics({ venueName: e.target.value })}
+            />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="t-address">Address</Label>
+            <Input
+              id="t-address"
+              value={basics.venueAddress}
+              placeholder="12 River Road, Springfield"
+              onChange={(e) => setBasics({ venueAddress: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="t-org">Organizer</Label>
+            <Input
+              id="t-org"
+              value={basics.organizerName}
+              placeholder="Dana Reed"
+              onChange={(e) => setBasics({ organizerName: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="t-org-email">Email</Label>
+            <Input
+              id="t-org-email"
+              type="email"
+              value={basics.organizerEmail}
+              placeholder="dana@example.com"
+              onChange={(e) => setBasics({ organizerEmail: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="t-org-phone">Phone</Label>
+            <Input
+              id="t-org-phone"
+              value={basics.organizerPhone}
+              placeholder="+1 555 0100"
+              onChange={(e) => setBasics({ organizerPhone: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="t-notes">Note</Label>
+            <Textarea
+              id="t-notes"
+              value={basics.notes}
+              rows={3}
+              maxLength={NOTES_MAX_LENGTH}
+              placeholder="Parking is behind the hall. Warm-up courts open at 08:00."
+              onChange={(e) => setBasics({ notes: e.target.value })}
+            />
+            <p className="text-right font-score text-t4 text-muted-foreground">
+              {basics.notes.length}/{NOTES_MAX_LENGTH}
+            </p>
+          </div>
+        </div>
       </Panel>
     </div>
   );
