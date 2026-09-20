@@ -1399,10 +1399,14 @@ function PlacementSchedulePage() {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+              </SettingsSection>
 
               {isAdmin ? (
-                <div className="flex flex-wrap items-center gap-3 border-t border-hairline pt-3">
+                <SettingsSection
+                  title="Danger zone"
+                  hint="Clears every match, result, seed order and waiver. Cannot be undone."
+                >
                   <Button
                     variant="destructive"
                     size="sm"
@@ -1411,10 +1415,7 @@ function PlacementSchedulePage() {
                   >
                     Delete results &amp; schedule
                   </Button>
-                  <span className="text-[11px] text-muted-foreground">
-                    Clears every match, result, seed order and waiver. Cannot be undone.
-                  </span>
-                </div>
+                </SettingsSection>
               ) : null}
             </div>
           </Panel>
