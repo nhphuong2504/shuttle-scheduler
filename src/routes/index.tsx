@@ -155,6 +155,26 @@ function Desk() {
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  /**
+   * Whether the displayed clock has been adopted from this browser yet.
+   *
+   * `now` itself cannot be nullable: it drives overdue detection, court state and match
+   * readiness, and those have to be computed on the server too. The problem is not that
+   * the value exists, it is that rendering it as text is guaranteed to disagree with the
+   * client - the server can only ever render the instant *it* rendered, and the client
+   * hydrates some milliseconds or a whole minute later.
+   *
+   * The consequence was worse than a console warning. React treats the mismatch as fatal
+   * for that subtree, discards the server HTML for the whole Desk and regenerates it on
+   * the client - so a live event's busiest screen silently threw away its server render
+   * whenever a minute boundary fell inside the load. It is intermittent by construction,
+   * which is exactly why it survived: it only fires when the clock ticks mid-load.
+   *
+   * The fix is to keep the clock out of the server render entirely. Server and first
+   * client render agree on the neutral label, the mount effect adopts the browser's
+   * clock, and the time appears on the next paint. Nothing derived from `now` changes.
+   */
+  const [clockAdopted, setClockAdopted] = useState(false);
   const { data: categories } = useCategories();
   const { data: courts } = useCourts();
   const { data: teams } = useTeams();
@@ -235,6 +255,15 @@ function Desk() {
     m.teams.flatMap((id) => (id ? teamPlayerIds(teamMap.get(id)) : []));
 
   useEffect(() => {
+    // Adopt this browser's clock, then keep it ticking.
+    //
+    // The `setNow` on mount is not redundant with the initial state. That state is
+    // `Date.now()` evaluated wherever the render ran - on the server that is the
+    // server's clock, which is a different instant and, in production, a different
+    // timezone. Adopting the browser's value here is what makes the displayed time the
+    // reader's time rather than the server's.
+    setNow(Date.now());
+    setClockAdopted(true);
     const tick = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(tick);
   }, []);
@@ -533,7 +562,9 @@ function Desk() {
           title="Act now"
           right={
             <span className="text-t4 text-muted-foreground">
-              {timeLabel(new Date(now))} · updates every 30s
+              {clockAdopted
+                ? `${timeLabel(new Date(now))} · updates every 30s`
+                : "updates every 30s"}
             </span>
           }
         >
