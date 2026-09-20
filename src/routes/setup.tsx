@@ -175,6 +175,8 @@ function SetupPage() {
       if (isNew) {
         id = await createTournamentDraft(toDraftInput(form));
         hydratedFor.current = id;
+        // The first step now owns the dates too, so they are saved with the draft.
+        await saveTournamentDays(id, form.days);
       } else if (id) {
         await saveStep(step, id, form);
       }
