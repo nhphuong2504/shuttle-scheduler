@@ -216,6 +216,23 @@ export async function createStaffIdentity(
   return { email, password, userId: created.user.id, role, client };
 }
 
+/**
+ * A signed-in client for an identity this suite already provisioned.
+ *
+ * The fixture helpers sign in as part of creating an identity, which is the right default.
+ * A test that deletes an identity and recreates it cannot use them for the second half: it
+ * needs to sign in to an address it chose itself. Exposing the sign-in step keeps the
+ * publishable key in one place instead of leaking it into the test that needs it.
+ */
+export async function signInClient(email: string, password: string): Promise<AppClient> {
+  const client = createClient<Database>(url, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(`signing in as ${email} failed: ${error.message}`);
+  return client;
+}
+
 /** Removes an identity and its staff row. Safe to call for an identity that was never made. */
 export async function destroyStaffIdentity(identity: TestIdentity | undefined): Promise<void> {
   if (!identity) return;
