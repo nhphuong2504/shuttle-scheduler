@@ -62,7 +62,8 @@ WITH expected(version) AS (
     ('20260919020000'),
     ('20260919030000'),
     ('20260919040000'),
-    ('20260920000000')
+    ('20260920000000'),
+    ('20260921000000')
 ),
 applied AS (
   SELECT version::text AS version, name
