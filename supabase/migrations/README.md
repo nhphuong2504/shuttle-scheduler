@@ -1573,6 +1573,66 @@ two `text || "char"` concatenations (`provolatile`, `defaclobjtype`) that Postgr
 resolve. `run-sql.mjs` is also verified to refuse a non-read-only statement, a multi-statement
 file, and a missing connection string.
 
+### Running both without a database password
+
+Neither script needs one. `run-sql.mjs` takes `--project-ref` and goes through the Management API
+using `SUPABASE_ACCESS_TOKEN`:
+
+```sh
+node scripts/run-sql.mjs scripts/parity-dump.sql --project-ref <ref>
+```
+
+That transport is not a convenience. Neither replacement project has a database password anyone
+holds — the connection string the API returns carries `[YOUR-PASSWORD]` where the password goes —
+so without it these two scripts are unrunnable in exactly the situation they were written for. The
+read-only refusal is enforced on both paths.
+
+### Replaying the migrations: `scripts/apply-migrations.mjs`
+
+`supabase db push` is still the canonical path, and stays the one to use once a database password
+exists. It cannot be used with a personal access token alone: the CLI first calls the project's
+database-config endpoint to mint a login role, and is refused with
+`LegacyDbConfigLoginRoleStatusError: unexpected login role status 403`. `apply-migrations.mjs`
+replays the same files through the `database/query` endpoint instead, which needs neither a
+password nor a login role.
+
+Each file is applied in one transaction **together with its history row**, so a migration that
+fails leaves neither partial DDL nor a version record, and the run stops at the first failure. The
+history table is created with the CLI's own DDL and rows are inserted in the CLI's own shape, both
+read out of the v2.117 binary, so a later `db push` sees a history it recognises. `statements` is
+left `NULL` — which is what a version of the CLI predating that column leaves. The production ref
+is refused unless `--allow-production` is passed.
+
+### What replaying onto the replacement project showed
+
+| Check | Result |
+| --- | --- |
+| All 34 migrations, in order, unedited | 34/34 on the first pass |
+| `migration-drift-check.sql` against the replayed project | `OK` — applied=34, expected=34, matched=34 |
+| `parity-dump.sql` against the replayed project | 1,442 rows across 17 kinds |
+| `supabase_realtime` publication membership | 19 tables, exactly the list the migration names |
+| `types.ts` regenerated and diffed against the committed file | byte-identical — 1,607 lines, 0 differences |
+| Anonymous surface, hosted vs replayed, publishable key only | same status on all 13 tables probed |
+| `npm run test:integration` against the replayed project | 25 passed, 0 failed, 0 skipped |
+
+The `types.ts` result is the strongest signal available without the hosted project's connection
+string. That file was generated against the hosted project, so drift in any table, column or
+function signature would have appeared as a diff.
+
+Three qualifications, because the table above is easy to over-read:
+
+- **The anonymous comparison is a surface check, not a definition check.** `players` and
+  `desk_activity` are denied outright on both projects and the other eleven answer `200` on both.
+  Row counts differ on three tables, which is data rather than schema. Worth knowing for the
+  cutover: **the migration set seeds demo data** — `20260910043000_reconstruct_demo_tournament_data`
+  and `20260910200000_fake_day_one_results` insert a tournament with played results — so replaying
+  it onto an empty project creates that data.
+- **Function bodies, policy `qual` expressions and trigger definitions are still unverified.** They
+  need the hosted project's connection string. Signatures and the visible authorization surface
+  agree; a body that behaves differently while keeping its signature would not show up in either.
+- **`20260909233700` and `20260910000044` remain indistinguishable from the files alone**, which is
+  why the replay result and not the file list is the evidence.
+
 ### Verifying the whole backend, not just the schema
 
 The Playwright suite is hermetic — it intercepts transport — so it cannot see the backend at all.
