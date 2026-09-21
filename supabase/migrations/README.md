@@ -1633,6 +1633,42 @@ Three qualifications, because the table above is easy to over-read:
 - **`20260909233700` and `20260910000044` remain indistinguishable from the files alone**, which is
   why the replay result and not the file list is the evidence.
 
+### The strongest comparison available without a connection string
+
+Lovable Cloud exposes **no database dashboard and no Postgres connection string**, so
+`parity-dump.sql` cannot be pointed at the old backend and the definition-level comparison it was
+written for is not obtainable. That limitation is real and is not worked around below.
+
+What is obtainable is PostgREST's own OpenAPI document, which it serves at the REST root
+(`GET /rest/v1/`) to a key holder. It enumerates every exposed table and view with every column and
+its Postgres type and format, and every exposed RPC with its argument names, types and required
+flags. Compared between the two backends:
+
+| Surface | Old | Replayed | Result |
+| --- | --- | --- | --- |
+| Tables and views | 20 | 20 | identical |
+| Columns (type and format) | 207 | 207 | identical |
+| RPCs (arguments and required flags) | 52 | 52 | identical |
+| Table paths | 21 | 21 | identical |
+
+The 207 columns agree with the `column` rows in `parity-dump.sql`'s own output, which is an
+independent confirmation from a different source.
+
+One credential note: the comparison is not symmetric in what it needs. The old backend still serves
+the REST root to a **publishable** key, while a current Supabase project refuses it with
+`401 Secret API key required`. Both documents describe the same schema, so the credential differs
+rather than the thing being measured.
+
+**This is not a substitute for a definition dump, and the gap is narrower but not closed.** RPC
+*argument names and types* are compared; RPC *bodies* are not visible over PostgREST at all. Nor
+are policy `qual` expressions, trigger definitions, or function volatility and `search_path`. A body
+that behaves differently while keeping its signature would pass every check above. Treat the table
+as "the API surface matches, the internals are unverified."
+
+The comparison is also verified not to be a false pass: run against the empty
+`tournova-production` project it reports 92 differences, so it detects divergence rather than
+reporting agreement unconditionally.
+
 ### Verifying the whole backend, not just the schema
 
 The Playwright suite is hermetic — it intercepts transport — so it cannot see the backend at all.
