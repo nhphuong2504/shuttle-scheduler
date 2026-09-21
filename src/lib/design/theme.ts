@@ -32,7 +32,7 @@
 
 export type Theme = "light" | "dark";
 
-export const THEME_STORAGE_KEY = "shuttlenet.theme";
+export const THEME_STORAGE_KEY = "tournova.theme";
 
 /**
  * The class the stylesheet keys its dark tokens off. `.dark` is declared in

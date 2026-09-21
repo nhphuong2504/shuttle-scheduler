@@ -23,13 +23,13 @@ import { computeStandings, poolIsComplete } from "@/lib/tournament/standings";
 export const Route = createFileRoute("/pools")({
   head: () => ({
     meta: [
-      { title: "Pools & Standings | ShuttleNet Tournament Ops" },
+      { title: "Pools & Standings | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Generate round-robin pools of four or five and track live standings with head-to-head tie-breaks.",
       },
-      { property: "og:title", content: "Pools & Standings | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Pools & Standings | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:

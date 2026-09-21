@@ -47,13 +47,13 @@ import { timeLabel } from "@/lib/tournament/format";
 export const Route = createFileRoute("/schedule")({
   head: () => ({
     meta: [
-      { title: "Court Schedule | ShuttleNet Tournament Ops" },
+      { title: "Court Schedule | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Build the court schedule day by day with stage-specific rest gaps and overrun forecasts.",
       },
-      { property: "og:title", content: "Court Schedule | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Court Schedule | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:

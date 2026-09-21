@@ -38,13 +38,13 @@ import { mulberry32 } from "@/lib/tournament/rng";
 export const Route = createFileRoute("/placement")({
   head: () => ({
     meta: [
-      { title: "Placement | ShuttleNet Tournament Ops" },
+      { title: "Placement | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Set the seed order for a two-round placement tournament and see which Draw A, B, C or D tier each entrant has sorted into. Results are entered on the Scores page.",
       },
-      { property: "og:title", content: "Placement | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Placement | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:

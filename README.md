@@ -1,4 +1,4 @@
-# ShuttleNet
+# Tournova
 
 Tournament operations console for badminton events. Built to be run live at a desk
 during a tournament, on imperfect wifi, by a small control team.

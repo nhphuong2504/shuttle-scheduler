@@ -232,10 +232,10 @@ export function AppShell({
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
           <Link to="/" className="flex items-center gap-2">
             <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-t2 font-bold text-primary-foreground shadow-panel">
-              S
+              T
             </span>
             <span className="font-display text-sm font-bold tracking-tight text-primary">
-              SHUTTLENET<span className="text-muted-foreground"> / ops</span>
+              TOURNOVA<span className="text-muted-foreground"> / ops</span>
             </span>
           </Link>
           <nav className="flex flex-wrap items-center gap-1">

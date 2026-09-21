@@ -88,8 +88,8 @@ describe("theme and density are independent preferences", () => {
     // The whole separation rests on this. One shared key would make choosing a theme
     // overwrite a density, and the symptom would look like a density bug.
     expect(THEME_STORAGE_KEY).not.toBe(DENSITY_STORAGE_KEY);
-    expect(THEME_STORAGE_KEY).toBe("shuttlenet.theme");
-    expect(DENSITY_STORAGE_KEY).toBe("shuttlenet.density");
+    expect(THEME_STORAGE_KEY).toBe("tournova.theme");
+    expect(DENSITY_STORAGE_KEY).toBe("tournova.density");
   });
 
   it("gives each preference only the inputs it needs", () => {

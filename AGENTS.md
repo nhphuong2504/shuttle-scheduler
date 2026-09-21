@@ -16,7 +16,7 @@ repository, which is why the history rule above still applies.
 
 ## What this project is
 
-ShuttleNet — a badminton tournament operations console. TanStack Start + React +
+Tournova — a badminton tournament operations console. TanStack Start + React +
 TypeScript, Tailwind v4, Supabase (Postgres, RLS, RPCs), deployed on Cloudflare
 Workers. It is operated live at a desk during a tournament, often on imperfect
 wifi, by people who cannot reload a page mid-match.

@@ -19,7 +19,7 @@
 
 export type Density = "comfortable" | "compact";
 
-export const DENSITY_STORAGE_KEY = "shuttlenet.density";
+export const DENSITY_STORAGE_KEY = "tournova.density";
 
 /**
  * Routes whose default is Compact.

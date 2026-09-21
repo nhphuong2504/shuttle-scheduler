@@ -88,13 +88,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       // once the class is known. Without this, a dark-preferring browser can show a
       // white flash before any of our CSS applies.
       { name: "color-scheme", content: "light dark" },
-      { title: "ShuttleNet | Badminton Tournament Operations" },
+      { title: "Tournova | Badminton Tournament Operations" },
       {
         name: "description",
         content:
           "Run a two-day, four-category badminton tournament: pools, draws, scores and court scheduling.",
       },
-      { property: "og:title", content: "ShuttleNet | Badminton Tournament Operations" },
+      { property: "og:title", content: "Tournova | Badminton Tournament Operations" },
       {
         property: "og:description",
         content:

@@ -1,4 +1,4 @@
-# ShuttleNet design system
+# Tournova design system
 
 This document describes the design system **as shipped**. It is descriptive, not
 prescriptive: where this document and the code disagree, the code is right and

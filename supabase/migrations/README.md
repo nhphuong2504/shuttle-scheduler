@@ -1418,7 +1418,7 @@ commented reset block in the seed file remains the way to clear it from the SQL 
 
 ### Verify after running
 
-Expect MS 13, MD 9, XD 8, WS 7, WD 5 entries, and 50 players carrying a `@shuttlenet.test` email.
+Expect MS 13, MD 9, XD 8, WS 7, WD 5 entries, and 50 players carrying a `@tournova.test` email.
 The odd fields are deliberate: an odd field is what makes the placement engine hold one entrant out
 of round one and give them two make-up matches in round two, which is the format's least obvious
 path.

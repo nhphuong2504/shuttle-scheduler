@@ -28,13 +28,13 @@ import { isByeMatch } from "@/lib/tournament/match-status";
 export const Route = createFileRoute("/draws")({
   head: () => ({
     meta: [
-      { title: "Knockout Draws A–D | ShuttleNet Tournament Ops" },
+      { title: "Knockout Draws A–D | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Build seeded A/B/C/D knockout brackets once every pool in a category has reported its results.",
       },
-      { property: "og:title", content: "Knockout Draws A–D | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Knockout Draws A–D | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:
