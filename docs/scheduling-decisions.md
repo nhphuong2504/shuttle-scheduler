@@ -1,3 +1,30 @@
+# Day 1 group-stage scheduler: implementation record
+
+> **This is a record of shipped behaviour, not a pending task.**
+>
+> Despite the imperative phrasing it was originally written in, the scheduler
+> described below **is implemented**. It was written as a build prompt and has been
+> kept because it is the most complete written statement of the scheduling decisions
+> the code embodies - decisions that are otherwise only visible by reading the
+> solver.
+>
+> Do not treat this as work to be done. Read it to understand why the scheduler
+> behaves the way it does. If the code and this document disagree, the code wins.
+>
+> Where it lives now:
+> - [`src/lib/scheduling/solvers/grasp.ts`](../src/lib/scheduling/solvers/grasp.ts)
+> - [`src/lib/scheduling/solvers/hybrid.ts`](../src/lib/scheduling/solvers/hybrid.ts) — "GRASP, seeded with greedy"
+> - [`src/lib/scheduling/solvers/types.ts`](../src/lib/scheduling/solvers/types.ts)
+> - [`src/lib/scheduling/domain.ts`](../src/lib/scheduling/domain.ts)
+>
+> The decisions below were verified against the code when this document was moved
+> into `docs/`: court-driven construction, fixed-match preloading, soft round and
+> category semantics, stall handling, the top-K restricted candidate list with seeded
+> multi-run search, independent validation, the weighted final score, the court-idle
+> metric, and default configuration values.
+
+---
+
 Implement Day 1 group-stage scheduler V2 by replacing the current match-driven greedy scheduler with a court-driven GRASP-style scheduler.
 
 Keep the existing data model, fixed-match handling, and database persistence flow where possible. Focus changes on `scheduleDay()` / `scheduleMatches()` and related helper functions.
