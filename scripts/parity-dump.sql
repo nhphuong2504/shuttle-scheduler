@@ -48,6 +48,7 @@ WITH lines AS (
   JOIN pg_namespace n ON n.oid = e.extnamespace
 
   -- Columns ------------------------------------------------------------------
+  UNION ALL
   SELECT 'column',
          n.nspname || '.' || c.relname || '.' || a.attname,
          'type=' || format_type(a.atttypid, a.atttypmod)
@@ -105,7 +106,7 @@ WITH lines AS (
          n.nspname || '.' || p.proname
            || '(' || pg_get_function_identity_arguments(p.oid) || ')',
          'security_definer=' || p.prosecdef::text
-           || ' volatility=' || p.provolatile
+           || ' volatility=' || p.provolatile::text
            || ' search_path=' || COALESCE(array_to_string(p.proconfig, ','), '-')
            || chr(10) || pg_get_functiondef(p.oid)
   FROM pg_proc p
@@ -199,7 +200,7 @@ WITH lines AS (
   UNION ALL
   SELECT 'default_acl',
          COALESCE(n.nspname, '-'),
-         pg_get_userbyid(d.defaclrole) || ' ' || d.defaclobjtype
+         pg_get_userbyid(d.defaclrole) || ' ' || d.defaclobjtype::text
            || ' ' || array_to_string(d.defaclacl::text[], ',')
   FROM pg_default_acl d
   LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
