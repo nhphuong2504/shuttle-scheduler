@@ -8,18 +8,25 @@
  */
 import { createClient } from "@supabase/supabase-js";
 
-const url =
-  process.env.SUPABASE_URL ??
-  process.env.VITE_SUPABASE_URL ??
-  "https://hdmfxndanyrbxedgboev.supabase.co";
+const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const publishable =
-  process.env.SUPABASE_PUBLISHABLE_KEY ??
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-  "sb_publishable_6A1AhD2WpHIKfFlj7gsz-g_9WDaZUso";
+  process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 const deskEmail = process.env.SUPABASE_DESK_EMAIL;
 const deskPassword = process.env.SUPABASE_DESK_PASSWORD;
+
+/**
+ * There is deliberately no default target: the project must be stated. See the
+ * equivalent guard in `reset-tournament-data.mjs` for why.
+ */
+if (!url || !publishable) {
+  console.error(
+    "Missing SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY (or their VITE_ twins).\n" +
+      "Set them in .env, or export them for one run, before running this script.",
+  );
+  process.exit(1);
+}
 
 function loserScore(id) {
   return 10 + (Math.abs(hashCode(id)) % 8);
