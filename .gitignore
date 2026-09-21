@@ -24,6 +24,16 @@ dist-ssr
 .env.*
 !.env.example
 
+# Package manager
+# `bun.lock` is deliberately untracked. CI installs with npm, so
+# `package-lock.json` is the lockfile a build actually reads. A tracked `bun.lock`
+# that no build consults can still conflict on every merge and drift silently from
+# `package.json` - which is exactly how main's CI broke, when a tool bumped the
+# dependency in `package.json` and only this file. `bunfig.toml` stays: its 24h
+# `minimumReleaseAge` guard still applies to anyone who runs bun locally, though
+# note that npm does not honour it.
+bun.lock
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
