@@ -1633,6 +1633,33 @@ Three qualifications, because the table above is easy to over-read:
 - **`20260909233700` and `20260910000044` remain indistinguishable from the files alone**, which is
   why the replay result and not the file list is the evidence.
 
+### The one step a replay cannot do
+
+The migrations seed `staff_roles` by email, so the first admin's authorization row exists as soon as
+the schema is applied. They cannot create the `auth.users` identity, because that is GoTrue's table
+and seeding it would mean writing a password hash by hand.
+
+So a replay leaves the project with a staff row whose `user_id` is NULL and no way to sign in.
+`scripts/create-staff-login.mjs` closes that, and it is a one-command step rather than a migration:
+
+```sh
+node scripts/create-staff-login.mjs --project-ref <ref> --email <the-seeded-admin-email>
+```
+
+There is **no identity to migrate and no backfill to write**, which is worth stating because it is
+the intuitive thing to expect. Email is the durable key: `on_auth_user_created_link_staff` is an
+`AFTER INSERT` trigger on `auth.users` that fills `staff_roles.user_id` from a matching email, so
+creating the identity *is* the linking step, and `current_staff_role()` matches on
+`user_id = auth.uid()` OR the JWT email. Old UUIDs, password hashes and sessions are left behind
+deliberately.
+
+The script verifies rather than assuming: it signs in as the account and asserts that
+`current_staff_role()` resolves, that an admin-only RPC is accepted, and that an anonymous caller is
+refused — the last so a pass cannot come from a guard that is not running. Re-running it is safe: it
+detects an existing identity and **does not reset its password** unless passed `--reset-password`,
+because silently replacing a password from a script whose job is to verify is how an operator locks
+themselves out.
+
 ### The strongest comparison available without a connection string
 
 Lovable Cloud exposes **no database dashboard and no Postgres connection string**, so
