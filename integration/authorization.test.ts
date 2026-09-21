@@ -103,9 +103,28 @@ describe("an unauthenticated visitor", () => {
     expect(error.message.toLowerCase()).toContain("permission denied");
   });
 
-  it("cannot read staff roles", async () => {
-    const error = await expectRefused(() => anon.from("staff_roles").select("id").limit(1));
-    expect(error.message.toLowerCase()).toContain("permission denied");
+  it("reads no staff rows", async () => {
+    // Deliberately not `expectRefused`, and the difference is the point. Unlike `players`,
+    // `staff_roles` still carries the default `anon` table grant, so the request succeeds
+    // and RLS - which has no `anon` policy at all - is what keeps every row out. Asked with
+    // its publishable key, the old project answers identically, so asserting a permission
+    // error here would assert something the database never promised on either side of the
+    // migration. What matters is that no row comes back.
+    const { data, error } = await anon.from("staff_roles").select("id");
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  it("cannot write a staff row", async () => {
+    // Because the grant is present, it covers INSERT and UPDATE too, which makes RLS the
+    // only thing between an anonymous caller and granting itself a role. Worth asserting
+    // directly rather than inferring from the read above.
+    const error = await expectRefused(() =>
+      anon
+        .from("staff_roles")
+        .insert({ email: "anon@tournova.test", role: "admin" } as never),
+    );
+    expect(error.message.toLowerCase()).toContain("row-level security");
   });
 });
 
@@ -142,7 +161,7 @@ describe("role resolution", () => {
   });
 });
 
-describe("the registrar cannot write structure or results", () => {
+describe("the registrar can generate but not administer or score", () => {
   it("cannot save tournament basics", async () => {
     const outcome = await guardOutcome(registrar, "save_tournament_draft", {
       p_tournament_id: randomUUID(),
@@ -151,13 +170,17 @@ describe("the registrar cannot write structure or results", () => {
     expect(outcome.refused).toBe(true);
   });
 
-  it("cannot generate pools", async () => {
+  it("is allowed through the pool generation guard", async () => {
+    // Generating is registrar work in this product, not scheduler work. `canGenerate` in
+    // src/hooks/useSession.ts is admin|registrar, and the guard in
+    // 20260915000000_tournament_scoping.sql matches it exactly - so the registrar is not
+    // merely tolerated here, it is the role the feature is for.
     const outcome = await guardOutcome(registrar, "apply_pool_generation", {
       p_category_id: randomUUID(),
       p_force: false,
       p_payload: [],
     });
-    expect(outcome.refused).toBe(true);
+    expect(outcome.message).not.toContain(NOT_AUTHORIZED);
   });
 
   it("cannot report a result", async () => {
@@ -170,16 +193,27 @@ describe("the registrar cannot write structure or results", () => {
   });
 });
 
-describe("the scheduler can plan but not score", () => {
-  it("is allowed through the pool generation guard", async () => {
-    // The role guard is the first statement in the function, so a permitted role falls
-    // through to the body and fails on the missing category instead. Asserting on the
-    // *absence* of the refusal is what distinguishes "allowed" from "allowed and then
-    // failed for an unrelated reason".
+describe("the scheduler schedules but cannot generate or score", () => {
+  it("is refused by the pool generation guard", async () => {
+    // The inverse of the registrar's assertion above, and the reason both are kept: the two
+    // roles are easy to conflate by name, and `canGenerate` deliberately excludes scheduler.
+    // If this starts failing, the guard has been widened by accident.
     const outcome = await guardOutcome(scheduler, "apply_pool_generation", {
       p_category_id: randomUUID(),
       p_force: false,
       p_payload: [],
+    });
+    expect(outcome.refused).toBe(true);
+  });
+
+  it("is allowed through a scheduling guard", async () => {
+    // So that the scheduler is not simply refused everywhere. The role guard is the first
+    // statement in `sync_placement_entrants`, so a permitted role falls through to the body
+    // and fails on the unknown category instead. Asserting on the *absence* of the refusal
+    // is what distinguishes "allowed" from "allowed and then failed for an unrelated
+    // reason" - and the category id is random, so this cannot write anything.
+    const outcome = await guardOutcome(scheduler, "sync_placement_entrants", {
+      p_category_id: randomUUID(),
     });
     expect(outcome.message).not.toContain(NOT_AUTHORIZED);
   });

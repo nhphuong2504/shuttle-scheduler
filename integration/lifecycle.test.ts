@@ -72,27 +72,64 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  if (tournamentId) {
+  // Every step is guarded independently, and the reason is not tidiness. This teardown used
+  // to run as one straight sequence with the identity deletion last, so a failure anywhere
+  // above it skipped the only step that matters for hygiene. That is exactly how two
+  // `itest-lifecycle-*` identities leaked onto the shared project: the run went red, and it
+  // left an authenticated admin and its `staff_roles` row behind.
+  //
+  // Teardown failing is survivable. Teardown failing partway, silently, and leaving a login
+  // behind on a project every future run shares is not - so failures are collected and
+  // reported rather than abandoned.
+  const failures: string[] = [];
+  const step = async (label: string, run: () => Promise<unknown>) => {
+    try {
+      await run();
+    } catch (cause) {
+      failures.push(`${label}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    }
+  };
+
+  await step("delete the tournament", async () => {
     // Cascades to days, categories, teams, pools and matches.
-    await deleteTournament(tournamentId).catch(() => undefined);
+    if (tournamentId) await deleteTournament(tournamentId);
+  });
+  await step("delete the players", async () => {
+    if (playerIds.length > 0) await admin.client.from("players").delete().in("id", playerIds);
+  });
+  await step("restore the previously active tournament", async () => {
+    if (previouslyActiveTournamentId) {
+      await admin.client.rpc("set_active_tournament", {
+        p_tournament_id: previouslyActiveTournamentId,
+      } as never);
+    }
+  });
+  await step("sign out the application client", async () => {
+    await supabase.auth.signOut();
+  });
+  await step("destroy the staff identity", async () => {
+    await destroyStaffIdentity(admin);
+  });
+
+  if (failures.length > 0) {
+    // Deliberately a failure, not a warning. A leaked fixture is not a passing run: the
+    // leftovers are an auth user, a staff row and possibly an active tournament, and the
+    // next run inherits all of them.
+    throw new Error(`integration teardown did not finish cleanly:\n  - ${failures.join("\n  - ")}`);
   }
-  if (playerIds.length > 0) {
-    await admin.client.from("players").delete().in("id", playerIds);
-  }
-  if (previouslyActiveTournamentId) {
-    await admin.client.rpc("set_active_tournament", {
-      p_tournament_id: previouslyActiveTournamentId,
-    } as never);
-  }
-  await supabase.auth.signOut();
-  await destroyStaffIdentity(admin);
 }, 120_000);
 
 describe("a tournament can be created and run end to end", () => {
   it("creates a draft, promotes it, registers entries and reports a complete pool", async () => {
     // --- Setup -----------------------------------------------------------------
+    // `venueName` is not decoration. The activation gate refuses a tournament whose
+    // `venue_name` is NULL, and `create_tournament_draft` maps an absent value to NULL
+    // rather than to an empty string - so leaving it out is precisely what "not ready"
+    // looks like, and the promotion below would be refused for a reason that has nothing
+    // to do with what this test is trying to prove.
     tournamentId = await createTournamentDraft({
       name: `itest-lifecycle-${Date.now().toString(36)}`,
+      venueName: "Integration Test Venue",
       venueTimezone: "America/Chicago",
     });
     expect(tournamentId).toBeTruthy();
