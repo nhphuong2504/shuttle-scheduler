@@ -28,6 +28,11 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Supabase CLI scratch state (`supabase link`, `db push`).
+# Holds the linked project ref, the pooler URL and cached service versions. Machine-local:
+# committing it would pin one developer's linked project into the repository.
+supabase/.temp/
+
 # Local benchmark output (`npm run bench:scheduling` writes its report here)
 .benchmark/
 
