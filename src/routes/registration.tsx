@@ -226,7 +226,7 @@ function RegistrationPage() {
 
   return (
     <AppShell title="Registration" subtitle={capSubtitle(categoryCap)}>
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile
           label="Players"
           value={stats.totalPlayers}
@@ -257,7 +257,7 @@ function RegistrationPage() {
         })}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
         <div className="space-y-4">
           <Panel title="Add player">
             <div className="space-y-3">
@@ -391,7 +391,9 @@ function RegistrationPage() {
                         key={t.id}
                         className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
                       >
-                        <span className={t.withdrawn ? "text-muted-foreground line-through" : ""}>
+                        <span
+                          className={`min-w-0 break-words ${t.withdrawn ? "text-muted-foreground line-through" : ""}`}
+                        >
                           {teamLabel(t, playerMap)}
                         </span>
                         <span className="flex gap-2">

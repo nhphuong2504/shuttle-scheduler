@@ -219,7 +219,7 @@ function BracketSection({
           </div>
         </Panel>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {PLACEMENT_TIERS.map((tierMapping) => {
             const draw = draws.find((entry) => entry.tier === tierMapping.tier);
             const rounds = draw
@@ -283,7 +283,7 @@ function TierMatchRow({
   const bye = isByeMatch(match);
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-hairline px-2 py-1.5">
-      <div className="min-w-0 text-xs">
+      <div className="min-w-0 break-words text-xs">
         <span className="font-medium">{label(match.entrant_a_id)}</span>
         <span className="mx-1.5 text-muted-foreground">vs</span>
         <span className="font-medium">{label(match.entrant_b_id)}</span>
