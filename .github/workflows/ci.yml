@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Superseded runs are cancelled: a force-pushed branch should not hold a runner.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# THERE ARE NO SECRETS HERE, ON PURPOSE.
+#
+# The values below are placeholders. Every request the browser app makes is intercepted
+# by `e2e/fixtures/app-mock.ts`, and any Supabase request the mock does not answer is
+# aborted rather than passed through - so the app under test cannot reach the hosted
+# project even if a gap in the fixture exists. The variables are present only because
+# `src/integrations/supabase/client.ts` throws when they are missing.
+#
+# This is why the workflow needs no repository secrets at all:
+#
+#   - No `SUPABASE_SERVICE_ROLE_KEY` is provided to any job. The operator scripts that
+#     read it are not run here.
+#   - A broken mock fails the browser job rather than silently reaching production,
+#     because production is not the fallback - an abort is.
+#
+# `npm run lint` is deliberately absent. It reports a large pre-existing Prettier backlog
+# that predates this work, so it would fail every run for a reason unrelated to the change
+# under test. It is documented as out of scope rather than fixed or silently ignored.
+env:
+  SUPABASE_URL: https://e2e-placeholder.supabase.co
+  SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+  VITE_SUPABASE_URL: https://e2e-placeholder.supabase.co
+  VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+
+jobs:
+  checks:
+    name: Typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  browser:
+    name: Rendered app, hermetic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e
+
+      # The skip guard, run against the JSON report the config always writes.
+      #
+      # This is the one place the workflow goes slightly beyond the plan, which left the
+      # final gate entirely local. The plan's stated goal was that "a skip can never be
+      # read as a pass", and since the suite became hermetic the guard needs neither
+      # credentials nor a recorded session - so running it here costs one step and closes
+      # the loophole in CI as well as locally. `npm run test:e2e:final` differs only by also
+      # setting `E2E_REQUIRE_STAFF=1`, which fails at the moment of skipping with a clearer
+      # message; that remains the local phase-close gate.
+      - run: node scripts/assert-no-skips.mjs
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7

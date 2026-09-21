@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+
+import { expect, test } from "./fixtures/app";
 
 import { DENSITIES, openCell, ROUTES, THEMES } from "./fixtures/matrix";
 
@@ -529,6 +531,13 @@ test.describe("2.5.7 dragging movements, new in WCAG 2.2", () => {
    * What this test adds is a check that survives a later refactor moving one of them out of
    * that gate.
    */
+  // The affordance only exists for an editor whose seeds are locked, so the session is a
+  // prerequisite this spec *supplies* rather than waits for: the mock already serves the
+  // seeded entrants the gate needs. Because the prerequisite is therefore never missing,
+  // the check below is a hard assertion - a zero result means the gate broke, not that
+  // there was nothing to look at.
+  test.use({ appMock: { preset: "layout", role: "admin" } });
+
   test("every draggable row keeps a non-drag alternative", async ({ page }) => {
     await openCell(page, "/placement", { theme: "light", density: "comfortable" });
 
@@ -542,18 +551,11 @@ test.describe("2.5.7 dragging movements, new in WCAG 2.2", () => {
       };
     });
 
-    if (result.draggable === 0) {
-      // The skip is the point rather than an inconvenience. `canEdit` is false for an
-      // unauthenticated visitor, so no draggable row is rendered against the seeded
-      // environment and there is nothing to inspect - the same blocker as the four
-      // staff-only Playwright tests. Recorded as unverified, not reported as a pass.
-      test.skip(
-        true,
-        "/placement rendered no draggable rows because canEdit is false without an authenticated " +
-          "session. Needs an authenticated staff session to exercise; unverified until then.",
-      );
-      return;
-    }
+    expect(
+      result.draggable,
+      "no draggable row rendered although the session and the seeded entrants are both present",
+    ).toBeGreaterThan(0);
+
     expect(
       result.withoutAlternative,
       `${result.withoutAlternative} of ${result.draggable} draggable rows offer no non-drag alternative`,

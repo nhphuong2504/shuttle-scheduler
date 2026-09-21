@@ -1,56 +1,84 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+
+import { expect, test } from "./fixtures/app";
+import { settleAnimations } from "./fixtures/settle";
 
 /**
- * Layer 2 of the staff-surface strategy: authenticated integration.
+ * The staff-only surfaces: the Court Dashboard, the Schedule settings panel, and the
+ * score dialog.
  *
- * What this file is for, and what it deliberately is not.
+ * ## What this file is for, and what it deliberately is not
  *
- * It is NOT where the status and urgency matrix is validated. That matrix cannot
- * be reached by driving the app at all - a live tournament is in one status per
- * match, so routing can only ever sample it. The matrix belongs to component
- * rendering in jsdom, where every permutation can be mounted at once.
+ * It is NOT where the status and urgency matrix is validated. That matrix cannot be
+ * reached by driving the app at all - a court is in exactly one state at a time, so
+ * routing can only ever sample it. The matrix belongs to component rendering in jsdom,
+ * where every permutation can be mounted at once.
  *
  * It IS where the properties a jsdom render cannot observe get checked: the real
- * cascade, real focus behaviour, and that a staff role actually flips the
- * `disabled` attribute rather than merely being read. Reconnaissance showed the
- * role gates controls, not pages, so "this control becomes enabled" is the real
- * assertion - not "this page becomes reachable".
+ * cascade, real focus behaviour, and that a staff role actually flips the `disabled`
+ * attribute rather than merely being read. Reconnaissance showed the role gates
+ * *controls*, not pages, so "this control is enabled" is the real assertion - not "this
+ * page is reachable", which is true signed out as well.
  *
- * Recording a session:
- *   npm run test:e2e:record-auth
- * Without one, every test here skips with that instruction rather than failing, so the
- * suite stays runnable on a machine with no credentials.
+ * ## Why there is no session file any more
  *
- * REQUIRED_STAFF closes that loophole for final validation. A skipped suite looks
- * identical to a passing one in CI output, so "4 skipped" can be reported as "green"
- * by anyone reading the summary - and the staff surfaces, which are the ones this whole
- * redesign is aimed at, would never have been rendered once. Setting
- *   E2E_REQUIRE_STAFF=1 npm run test:e2e
- * turns the skip into a failure. Final validation runs in that mode, so the gate
- * cannot be closed by the absence of a session file.
+ * These tests used to skip unless `e2e/.auth/staff.json` existed, and that file had to be
+ * recorded from a live backend before the gate could be closed. That made a green run
+ * depend on a developer having credentials and remembering to record them, and a skipped
+ * suite is indistinguishable from a passing one in a summary line.
+ *
+ * Now the session is synthetic and network-free: the shared mock in
+ * `./fixtures/app-mock.ts` seeds the `localStorage` entry that `supabase.auth.getSession()`
+ * reads and answers the `current_staff_role` RPC. Nothing is recorded, nothing is
+ * committed, and no credentials are needed here or in CI.
+ *
+ * `npm run test:e2e:record-auth` still exists for manual checks against a live backend.
+ * It is not part of this file.
+ *
+ * ## Prerequisite versus expectation
+ *
+ * The two are different and the code says so explicitly:
+ *
+ *   - A **missing prerequisite** means the harness could not set up the situation - here,
+ *     that the authenticated shell never rendered. Outside required mode this skips with
+ *     a reason, because the alternative is a suite that cannot run at all without
+ *     credentials. Under `E2E_REQUIRE_STAFF=1` it fails, so final validation cannot be
+ *     satisfied by absence.
+ *   - An **unmet expectation** is a control or dialog that is not there *when the session
+ *     and the data are present*. That is always a hard failure, in both modes. Collapsing
+ *     this into a skip is exactly how a suite reports green while never opening the score
+ *     dialog once, which is the loophole this file used to have.
  */
 
-const STAFF_STATE = join(import.meta.dirname, ".auth", "staff.json");
-const hasSession = existsSync(STAFF_STATE);
 const REQUIRED_STAFF = process.env["E2E_REQUIRE_STAFF"] === "1";
 
-const SKIP_REASON =
-  "No staff session. Record one with `npm run test:e2e:record-auth` to run staff-surface checks.";
+/** Every test in this file runs signed in as a tournament admin against fixture data. */
+test.use({ appMock: { preset: "layout", role: "admin" } });
 
-// In required mode there is no skip: the absence of a session is itself the failure.
-if (!hasSession && REQUIRED_STAFF) {
-  test.describe("staff surfaces", () => {
-    test("staff surfaces were validated, not skipped", () => {
-      throw new Error(
-        `${SKIP_REASON}\n\nE2E_REQUIRE_STAFF=1 is set, so this is a failure. Staff surfaces ` +
-          `(Court Dashboard, Settings panels, score dialogs) have NOT been validated.`,
-      );
-    });
-  });
+/**
+ * Skips outside required mode, fails inside it. Only for a genuinely absent prerequisite.
+ */
+function requirePrerequisite(met: boolean, reason: string): void {
+  if (met) return;
+  if (REQUIRED_STAFF) {
+    throw new Error(
+      `${reason}\n\nE2E_REQUIRE_STAFF=1 is set, so a missing prerequisite is a failure. ` +
+        `Staff surfaces have NOT been validated.`,
+    );
+  }
+  test.skip(true, `Prerequisite missing: ${reason}`);
+}
+
+/**
+ * Always fails. Use for anything that must be present given a valid session and data.
+ */
+function expectPresent(met: boolean, what: string): void {
+  expect(
+    met,
+    `${what} is absent although the session and data are valid. This is an unmet ` +
+      `expectation, not a missing prerequisite, so it is never skipped.`,
+  ).toBe(true);
 }
 
 async function scan(page: Page) {
@@ -59,69 +87,84 @@ async function scan(page: Page) {
     .analyze();
 }
 
+const violationIds = (results: { violations: { id: string }[] }): string[] =>
+  results.violations.map((v) => v.id).sort();
+
+/** Navigates to the Desk and confirms the authenticated shell rendered. */
+async function openStaffShell(page: Page): Promise<void> {
+  await page.goto("/", { waitUntil: "load" });
+  await page.waitForLoadState("networkidle");
+  const signOut = await page.getByRole("button", { name: /sign out/i }).count();
+  requirePrerequisite(signOut > 0, "The authenticated shell did not render");
+}
+
 test.describe("staff surfaces", () => {
-  // A skip, not a failure, in the default mode: the suite has to stay runnable
-  // without credentials or the gate becomes a secret dependency people work around.
-  // The suite-level check above converts this to a hard failure under E2E_REQUIRE_STAFF,
-  // so the default stays friendly without the gate ever being quietly satisfiable.
-  test.skip(!hasSession, SKIP_REASON);
-  test.use(hasSession ? { storageState: STAFF_STATE } : {});
+  test("the session is a staff session", async ({ page }) => {
+    await openStaffShell(page);
 
-  test("the session is actually a staff session", async ({ page }) => {
-    await page.goto("/", { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
-
-    // If this fails the recorded state is stale or belongs to a non-staff
-    // account, which would make every assertion below meaningless rather than
-    // failing loudly on its own.
-    const signedIn = await page
-      .getByRole("button", { name: /sign out|sign in/i })
-      .first()
-      .textContent();
-    expect(signedIn?.toLowerCase() ?? "").toContain("sign out");
+    // The role is rendered beside the email in the shell. If it is missing the session
+    // is not a staff one, and every assertion below would be meaningless rather than
+    // failing on its own.
+    const account = await page.getByText(/@example\.test/).first().textContent();
+    expect(account ?? "", "the account chip does not name a staff role").toContain("admin");
   });
 
   test("role-gated controls are enabled, not merely read", async ({ page }) => {
+    await openStaffShell(page);
     await page.goto("/placement-schedule", { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    // The page is just as reachable signed out - it was scanned that way in the
-    // unauthenticated baseline. What changes is `disabled`. Asserting on
-    // presence would pass either way and prove nothing.
     const build = page.getByRole("button", { name: /build/i }).first();
-    if ((await build.count()) > 0) {
-      await expect(build).toBeEnabled();
-    }
+    expectPresent(
+      (await build.count()) > 0,
+      "The Build control on /placement-schedule for an admin session",
+    );
+    // The page is just as reachable signed out. What changes is `disabled`, so
+    // asserting on presence alone would pass either way and prove nothing.
+    await expect(build).toBeEnabled();
 
-    const results = await scan(page);
-    expect(results.violations.map((v) => v.id).sort()).toEqual([]);
+    expect(violationIds(await scan(page))).toEqual([]);
   });
 
   test("the score dialog opens by interaction and is accessible", async ({ page }) => {
+    await openStaffShell(page);
     await page.goto("/matches", { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    // The dialog is mounted inside a closed Dialog, so no route scan can see it.
-    // Opening it is the only way to validate its contents.
-    const row = page.getByRole("row").nth(1);
-    if ((await row.count()) === 0) {
-      test.skip(true, "No matches in the active tournament to open.");
-    }
-    await row.click();
-    await page.waitForTimeout(500);
+    /**
+     * The knockout rows are behind the second tab - the group tab holds pools and
+     * placement rounds - so the tab has to be selected before any row exists to open.
+     * The tab is also the thing being exercised: a row that is reachable only after a
+     * real interaction is a different assertion from one that renders immediately.
+     */
+    await page.getByRole("tab", { name: /knockout/i }).click();
+
+    /**
+     * The dialog is mounted inside a closed Radix `Dialog`, so no route scan can see it.
+     * Opening it is the only way to validate its contents, which is why "it did not open"
+     * must be a failure rather than a skip.
+     */
+    const opener = page.getByRole("button", { name: /^open$/i }).first();
+    expectPresent(
+      (await opener.count()) > 0,
+      "A match row with an Open control on /matches with fixture data present",
+    );
+
+    await opener.click();
 
     const dialog = page.getByRole("dialog");
-    if ((await dialog.count()) === 0) {
-      test.skip(true, "Row did not open a dialog in this tournament state.");
-    }
+    await expect(dialog).toBeVisible();
 
-    const results = await scan(page);
-    expect(results.violations.map((v) => v.id).sort()).toEqual([]);
+    // The entrance animation has to finish before anything is measured. Scanning mid-fade
+    // blends the dialog with the page behind it and reports contrast failures that are not
+    // there once it is opaque.
+    await settleAnimations(page, '[role="dialog"]');
+
+    expect(violationIds(await scan(page))).toEqual([]);
   });
 
-  test("focus ring is visible on an authenticated surface", async ({ page }) => {
-    await page.goto("/", { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
+  test("focus is visible on an authenticated surface", async ({ page }) => {
+    await openStaffShell(page);
 
     await page.keyboard.press("Tab");
     const indicator = await page.evaluate(() => {
@@ -135,5 +178,14 @@ test.describe("staff surfaces", () => {
     });
     expect(indicator, "Tab reached no focusable element").not.toBeNull();
     expect(indicator?.visible, `no visible focus indicator on <${indicator?.tag}>`).toBe(true);
+  });
+
+  test("the authenticated desk announces the read-only banner is absent", async ({ page }) => {
+    await openStaffShell(page);
+
+    // The banner is the signed-out affordance. Its presence on a staff session would mean
+    // the role was read but the session was not, which the two tests above cannot tell
+    // apart on their own.
+    await expect(page.getByText(/read-only view/i)).toHaveCount(0);
   });
 });

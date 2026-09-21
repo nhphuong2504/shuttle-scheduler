@@ -338,7 +338,7 @@ export function Panel({
       )}
     >
       {title || right ? (
-        <header className="flex items-center justify-between gap-2 border-b border-hairline px-4 py-2.5">
+        <header className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-hairline px-4 py-2.5">
           <h2 className="font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">
             {title}
           </h2>

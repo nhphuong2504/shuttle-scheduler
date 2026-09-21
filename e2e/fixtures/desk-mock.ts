@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test";
-
 /**
  * Deterministic, deliberately hostile data for the Desk layout validation.
  *
@@ -499,41 +497,16 @@ const tables = (
 });
 
 /**
- * Serves the fixture to every Supabase REST call the app makes.
+ * The rows this fixture serves, as a table-name keyed map.
  *
- * Must be installed before the first navigation. Because the rows are built when this
- * is called and then frozen, the same page load always sees the same content, so a
- * failure is reproducible even though the timestamps are relative.
+ * Built on every call rather than held at module scope, so a long test run cannot drift
+ * the "minutes ago" values apart from the rows actually being served. The result is
+ * frozen for the life of one page load, which is what makes a failure reproducible.
+ *
+ * Installing it is `installAppMock`'s job (`./app-mock`), which owns the transport,
+ * the auth session and the safety net. This module is now data only.
  */
-export async function installDeskMock(
-  page: Page,
-  preset: DeskMockPreset = "layout",
-): Promise<void> {
-  // Built once here rather than at module scope, so a long test run cannot drift the
-  // "minutes ago" values apart from the rows actually being served.
+export function deskTables(preset: DeskMockPreset = "layout"): Record<string, unknown[]> {
   const chosen = PRESETS[preset];
-  const rows = tables(chosen.specs, chosen.pools, chosen.entries, chosen.poolMatches);
-
-  await page.route("**/rest/v1/**", async (route) => {
-    const url = new URL(route.request().url());
-    const target = url.pathname.split("/rest/v1/")[1] ?? "";
-
-    // The only RPCs the desk reaches. An unauthenticated role is the honest answer and
-    // is what the layout question is asked against.
-    if (target === "rpc/current_staff_role") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: "null" });
-      return;
-    }
-    if (target.startsWith("rpc/tournament_readiness")) {
-      await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
-      return;
-    }
-
-    const table = target.split("?")[0] ?? "";
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(rows[table] ?? []),
-    });
-  });
+  return tables(chosen.specs, chosen.pools, chosen.entries, chosen.poolMatches);
 }

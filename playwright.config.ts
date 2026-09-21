@@ -21,7 +21,16 @@ export default defineConfig({
   // A stray `test.only` would silently shrink the gate in CI.
   forbidOnly: Boolean(process.env["CI"]),
   retries: 0,
-  reporter: [["list"]],
+  reporter: [
+    ["list"],
+    /**
+     * The machine-readable report `scripts/assert-no-skips.mjs` reads.
+     *
+     * Always written rather than opt-in, because the guard is worthless if it depends on
+     * remembering to enable it. `test-results/` is git-ignored.
+     */
+    ["json", { outputFile: "test-results/e2e-report.json" }],
+  ],
   /**
    * Bounded so a slow route cannot take the whole run down with it.
    *
@@ -47,6 +56,12 @@ export default defineConfig({
     actionTimeout: 15_000,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  /**
+   * The transport is mocked by `e2e/fixtures/app-mock.ts`, which every spec receives
+   * through the shared `page` fixture, so the credentials this server boots with are never
+   * used for data. An unmocked Supabase request is aborted rather than passed through, so
+   * a gap in the fixture fails loudly instead of quietly reading the hosted project.
+   */
   webServer: {
     command: "npm run dev",
     url: BASE_URL,

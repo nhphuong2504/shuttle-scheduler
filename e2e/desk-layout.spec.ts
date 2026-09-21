@@ -1,6 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
-import { COURT_COUNT, installDeskMock, LONGEST_PAIRING, WIDEST_SCORE } from "./fixtures/desk-mock";
+import { expect, test } from "./fixtures/app";
+import { installAppMock } from "./fixtures/app-mock";
+import { COURT_COUNT, LONGEST_PAIRING, WIDEST_SCORE } from "./fixtures/desk-mock";
 
 /**
  * P2 layout validation: does the type scale actually fit real content?
@@ -178,7 +180,7 @@ for (const vp of VIEWPORTS) {
   for (const density of DENSITIES) {
     test.describe(`${vp.name} · ${density}`, () => {
       test.beforeEach(async ({ page }) => {
-        await installDeskMock(page);
+        await installAppMock(page, { preset: "layout" });
         await page.setViewportSize({ width: vp.width, height: vp.height });
       });
 
