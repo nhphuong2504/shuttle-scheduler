@@ -79,7 +79,35 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
               output: { dir: "dist", serverDir: "dist/server", publicDir: "dist/client" },
               cloudflare: { nodeCompat: true, deployConfig: true },
             }
-          : { defaultPreset: "cloudflare-module" },
+          : {
+              defaultPreset: "cloudflare-module",
+              // The worker name is stated rather than left to Nitro's default, and this is
+              // load-bearing for the migration rather than cosmetic.
+              //
+              // Nitro derives the name from the git remote - `generateWorkerName` in
+              // nitro/dist/_presets.mjs reads `origin` and produces
+              // `nhphuong2504-shuttle-scheduler`, which is the EXISTING production
+              // Worker's name. A bare `wrangler deploy` from a build of this branch would
+              // therefore publish over the live worker. That is the exact outcome the
+              // migration is meant to avoid, and it needs no mistake to happen: it is
+              // what the default does.
+              //
+              // Setting it here is what makes "a new, separately named Worker" true rather
+              // than aspirational. It also pins the name against a future remote rename,
+              // which would otherwise silently retarget the deployment.
+              //
+              // Scoped to the non-sandbox branch deliberately. Inside a Lovable sandbox the
+              // name is left to Nitro, so the worker the connected pipeline publishes to is
+              // exactly the one it published to before this file changed.
+              //
+              // This only governs the name Nitro writes into the generated wrangler.json.
+              // The existing Worker is not read, renamed or modified by a build.
+              cloudflare: {
+                nodeCompat: true,
+                deployConfig: true,
+                wrangler: { name: "tournova-ops" },
+              },
+            },
       ),
     );
   }
