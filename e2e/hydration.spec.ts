@@ -1,4 +1,6 @@
-import { expect, test, type ConsoleMessage, type Page } from "@playwright/test";
+import { type ConsoleMessage, type Page } from "@playwright/test";
+
+import { expect, test } from "./fixtures/app";
 
 import { cellLabel, MATRIX_CELLS, openCell, ROUTES, seedAppearance } from "./fixtures/matrix";
 

@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+
+import { expect, test } from "./fixtures/app";
 
 import { DENSITY_STORAGE_KEY, type Density } from "../src/lib/design/density";
 import { THEME_STORAGE_KEY, type Theme } from "../src/lib/design/theme";

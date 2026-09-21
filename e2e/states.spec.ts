@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
 import {
   COURT_STATES,
@@ -11,7 +11,8 @@ import {
   MATCH_DISPLAY_LABEL,
   PERSISTED_MATCH_STATUSES,
 } from "../src/lib/tournament/match-status";
-import { installDeskMock } from "./fixtures/desk-mock";
+import { expect, test } from "./fixtures/app";
+import { installAppMock } from "./fixtures/app-mock";
 import { MATRIX_CELLS, WCAG_TAGS, cellLabel, openCell } from "./fixtures/matrix";
 
 /**
@@ -262,7 +263,7 @@ const key = (c: Rgb) => c.map((v) => Math.round(v)).join(",");
 for (const cell of MATRIX_CELLS) {
   test.describe(cellLabel(cell), () => {
     test("every court state renders, with its own label and its own fill", async ({ page }) => {
-      await installDeskMock(page, "states");
+      await installAppMock(page, { preset: "states" });
       await openCell(page, "/", cell);
 
       const chips = await readCourtChips(page);
@@ -330,7 +331,7 @@ for (const cell of MATRIX_CELLS) {
      * 3:1 that large text is allowed.
      */
     test("every court state chip clears 4.5:1 between its ink and its fill", async ({ page }) => {
-      await installDeskMock(page, "states");
+      await installAppMock(page, { preset: "states" });
       await openCell(page, "/", cell);
 
       const chips = await readCourtChips(page);
@@ -353,7 +354,7 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("the four urgency treatments all render and separate", async ({ page }) => {
-      await installDeskMock(page, "states");
+      await installAppMock(page, { preset: "states" });
       await openCell(page, "/", cell);
 
       const report = await page.evaluate(() => {
@@ -435,7 +436,7 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("the state chips survive grayscale and deuteranopia", async ({ page }) => {
-      await installDeskMock(page, "states");
+      await installAppMock(page, { preset: "states" });
       await openCell(page, "/", cell);
 
       const chips = await readCourtChips(page);
@@ -478,7 +479,7 @@ for (const cell of MATRIX_CELLS) {
     test("the running order renders the status vocabulary it can hold", async ({ page }) => {
       // The layout preset, not the states preset: the archived statuses live there,
       // because a match that has finished only needs to exist to be drawn.
-      await installDeskMock(page, "layout");
+      await installAppMock(page, { preset: "layout" });
       await openCell(page, "/placement-schedule", cell);
 
       const pills = await page.evaluate(() =>
@@ -524,7 +525,7 @@ for (const cell of MATRIX_CELLS) {
       // The gap this closes: every scan before this phase ran against an empty
       // tournament, so the court board, the KPI row and the alert list - the surfaces
       // the redesign exists for - had never been scanned with content in them.
-      await installDeskMock(page, "states");
+      await installAppMock(page, { preset: "states" });
       await openCell(page, "/", cell);
 
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
@@ -534,7 +535,7 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("a populated running order introduces no new a11y violation", async ({ page }) => {
-      await installDeskMock(page, "layout");
+      await installAppMock(page, { preset: "layout" });
       await openCell(page, "/placement-schedule", cell);
 
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
@@ -548,7 +549,7 @@ for (const cell of MATRIX_CELLS) {
       // The focus sweep in `matrix.spec.ts` walks every route in every cell, but it
       // walks them empty. A ring can be clipped by the tile that contains it, so the
       // populated tile is the case worth stating separately.
-      await installDeskMock(page, "states");
+      await installAppMock(page, { preset: "states" });
       await openCell(page, "/", cell);
 
       await page.locator("button[aria-label^='Court ']").first().focus();
