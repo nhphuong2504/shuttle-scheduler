@@ -13,8 +13,47 @@ import type { Database } from "@/integrations/supabase/types";
  * is worse than one that is absent, because it reports success while proving nothing.
  */
 
-/** The Lovable Cloud project this repository is migrating away from. Never a test target. */
-const PRODUCTION_PROJECT_REF = "hdmfxndanyrbxedgboev";
+/**
+ * The project refs the suite must never target.
+ *
+ * The Lovable Cloud project this repository is migrating away from, and the go-forward
+ * production project. Both hold real staff accounts, and this suite creates and deletes
+ * fixtures - so pointing it at either is a destructive mistake rather than a slow test.
+ */
+const PRODUCTION_PROJECT_REFS = ["hdmfxndanyrbxedgboev", "bwzemvaftzforfmaprif"];
+
+/**
+ * Load `integration/.env` into the process environment.
+ *
+ * `vitest.integration.config.ts` sets `envDir` to this directory so the repository's
+ * production `.env` is never read here, but Vitest only routes `VITE_`-prefixed values into
+ * `import.meta.env`. The names this suite requires - `SUPABASE_TEST_*` - are read from
+ * `process.env`, so without this the file is inert and the suite reports itself as "not
+ * configured" no matter how carefully it has been filled in.
+ *
+ * Values already present win, so a CI secret and an explicit shell export both take
+ * precedence over the file, and this cannot silently override either.
+ */
+function loadIntegrationEnvFile(): void {
+  let text: string;
+  try {
+    text = readFileSync(join(__dirname, ".env"), "utf8");
+  } catch {
+    // No file: fall back to the ambient environment, and let `required()` report what is missing.
+    return;
+  }
+  for (const line of text.split("\n")) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    const name = match[1];
+    const rawValue = match[2];
+    if (name === undefined || rawValue === undefined) continue;
+    if (process.env[name] !== undefined) continue;
+    process.env[name] = rawValue.trim().replace(/^["']|["']$/g, "");
+  }
+}
+
+loadIntegrationEnvFile();
 
 /**
  * The project ref embedded in a Supabase URL.
@@ -81,7 +120,7 @@ export const TEST_PROJECT_REF = projectRef(url);
  * partway through a test that has already written rows.
  */
 export function assertNotProduction(ref: string): void {
-  const forbidden = new Set([PRODUCTION_PROJECT_REF, ...repositoryEnvRefs()]);
+  const forbidden = new Set([...PRODUCTION_PROJECT_REFS, ...repositoryEnvRefs()]);
   if (forbidden.has(ref)) {
     throw new Error(
       `Refusing to run: the integration suite is pointed at project "${ref}", which is a ` +
