@@ -58,7 +58,30 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
     const { nitro } = await import("nitro/vite");
     // The Cloudflare Workers target. Stated rather than inferred: without it a build can
     // silently fall back to a Node target, which this project does not deploy.
-    plugins.push(nitro({ defaultPreset: "cloudflare-module" }));
+    //
+    // Inside a Lovable sandbox the publish artifact has to land in `dist/` - that is where
+    // the connected pipeline reads it from, and `dist` is git-ignored for exactly that
+    // reason. Nitro's own default is `.output/`, so a build here would succeed and publish
+    // nothing. The wrapper set these directories only in its sandbox branch, which is why
+    // dropping it silently changed the artifact path rather than the artifact.
+    //
+    // This is transitional: it exists so the branch stays deployable through Lovable until
+    // the cutover. Removing it is part of the decommission, together with `.lovable/`.
+    const inLovableSandbox =
+      process.env["LOVABLE_SANDBOX"] === "1" ||
+      Boolean(process.env["DEV_SERVER__PROJECT_PATH"]);
+
+    plugins.push(
+      nitro(
+        inLovableSandbox
+          ? {
+              preset: "cloudflare-module",
+              output: { dir: "dist", serverDir: "dist/server", publicDir: "dist/client" },
+              cloudflare: { nodeCompat: true, deployConfig: true },
+            }
+          : { defaultPreset: "cloudflare-module" },
+      ),
+    );
   }
 
   plugins.push(viteReact());
