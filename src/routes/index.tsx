@@ -125,13 +125,13 @@ import { courtsForDay, dayWindowBounds } from "@/lib/tournament/scheduling/day-p
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ShuttleNet Control Desk | Live Badminton Tournament Ops" },
+      { title: "Tournova Control Desk | Live Badminton Tournament Ops" },
       {
         name: "description",
         content:
           "Live control desk for one tournament day: its court board, its matches, and the operational alerts that need someone chasing.",
       },
-      { property: "og:title", content: "ShuttleNet Control Desk | Live Badminton Tournament Ops" },
+      { property: "og:title", content: "Tournova Control Desk | Live Badminton Tournament Ops" },
       {
         property: "og:description",
         content:

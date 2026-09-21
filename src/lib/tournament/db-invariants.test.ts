@@ -332,3 +332,98 @@ describe("tournament day management migration", () => {
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.remove_tournament_day/);
   });
 });
+
+/**
+ * Realtime publication membership.
+ *
+ * The failure this guards is silent in a way almost nothing else in the schema is. Every
+ * screen subscribes with one unfiltered `postgres_changes` channel
+ * (`useRealtimeRefresh`), so a table missing from the publication does not narrow the
+ * subscription - it drops that table's events. The websocket still reports `SUBSCRIBED`,
+ * so the desk still shows its `Live` badge while a result entered on one court never
+ * appears on another. There is no error, no log line and no failing query to notice.
+ *
+ * Membership was configured in the Supabase dashboard, so this is checked against the
+ * migration source. The expected list is derived from the tables the migrations actually
+ * create rather than restated, so adding a table without publishing it fails here instead
+ * of degrading a live tournament.
+ */
+describe("realtime publication membership migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const file = "20260920000000_realtime_publication_membership.sql";
+  const sql = readFileSync(join(dir, file), "utf8");
+
+  /** Every table the schema ends up with, following renames and drops in file order. */
+  function schemaTables(): string[] {
+    const tables = new Set<string>();
+    for (const name of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+      const source = readFileSync(join(dir, name), "utf8");
+      for (const m of source.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?public\.([a-z_]+)/g)) {
+        tables.add(m[1] as string);
+      }
+      for (const m of source.matchAll(
+        /ALTER TABLE (?:IF EXISTS )?public\.([a-z_]+)\s+RENAME TO (?:public\.)?([a-z_]+)/g,
+      )) {
+        // A rename has to move the entry, or the old name reads as an unpublished table.
+        if (tables.delete(m[1] as string)) tables.add(m[2] as string);
+      }
+      for (const m of source.matchAll(/DROP TABLE (?:IF EXISTS )?public\.([a-z_]+)/g)) {
+        tables.delete(m[1] as string);
+      }
+    }
+    return [...tables].sort();
+  }
+
+  function publishedTables(): string[] {
+    const array = sql.match(/text\[\] := ARRAY\[([\s\S]*?)\];/);
+    expect(array, "the migration must declare its table list as a text[] literal").toBeTruthy();
+    return [...(array?.[1] ?? "").matchAll(/'([a-z_]+)'/g)].map((m) => m[1] as string).sort();
+  }
+
+  it("publishes every table the schema creates", () => {
+    // Set equality in both directions: a missing table drops its events, and a stale entry
+    // would mean the migration is describing a database that no longer exists.
+    expect(publishedTables()).toEqual(schemaTables());
+  });
+
+  it("covers the tables the desk depends on, explicitly", () => {
+    // Named rather than left to the derived comparison, so a future edit that removed all
+    // of them at once could not still pass by shrinking both sides.
+    for (const table of [
+      "pool_matches",
+      "draw_matches",
+      "placement_matches",
+      "tier_draw_matches",
+      "tournament_days",
+      "desk_activity",
+    ]) {
+      expect(publishedTables()).toContain(table);
+    }
+  });
+
+  it("creates the publication when the project does not have one", () => {
+    // `20260917080000` returned early with a NOTICE when the publication was absent, which
+    // is precisely the silent case: the app runs, and realtime never delivers.
+    expect(sql).toMatch(/CREATE PUBLICATION supabase_realtime/);
+    expect(sql).toMatch(/IF NOT EXISTS \(SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime'\)/);
+  });
+
+  it("is idempotent, because ADD TABLE raises on a duplicate", () => {
+    expect(sql).toMatch(/FROM pg_publication_tables/);
+    expect(sql).toMatch(/ALTER PUBLICATION supabase_realtime ADD TABLE public\.%I/);
+  });
+
+  it("skips a table this database does not have rather than failing", () => {
+    expect(sql).toMatch(/c\.relkind = 'r'/);
+    expect(sql).toMatch(/RAISE NOTICE 'Skipping public\.%/);
+  });
+
+  it("adds no table grant", () => {
+    // A blanket `GRANT SELECT ON ALL TABLES` here would look harmless and would reverse the
+    // deliberate `REVOKE SELECT ON public.players FROM anon`, re-exposing the roster -
+    // including emails and phone numbers - to anyone holding the publishable key.
+    const withoutComments = sql.replace(/--.*$/gm, "");
+    expect(withoutComments).not.toMatch(/\bGRANT\b/);
+    expect(withoutComments).not.toMatch(/\bREVOKE\b/);
+  });
+});

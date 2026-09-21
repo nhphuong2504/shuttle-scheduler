@@ -59,13 +59,13 @@ export const Route = createFileRoute("/setup")({
   },
   head: () => ({
     meta: [
-      { title: "Tournament setup | ShuttleNet Tournament Ops" },
+      { title: "Tournament setup | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Create a badminton tournament: basics, dates, events and competition structure, then activate it.",
       },
-      { property: "og:title", content: "Tournament setup | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Tournament setup | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:

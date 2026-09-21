@@ -16,7 +16,7 @@ repository, which is why the history rule above still applies.
 
 ## What this project is
 
-ShuttleNet — a badminton tournament operations console. TanStack Start + React +
+Tournova — a badminton tournament operations console. TanStack Start + React +
 TypeScript, Tailwind v4, Supabase (Postgres, RLS, RPCs), deployed on Cloudflare
 Workers. It is operated live at a desk during a tournament, often on imperfect
 wifi, by people who cannot reload a page mid-match.
@@ -115,6 +115,12 @@ npm run build
 - `npm run test:e2e:final` sets `E2E_REQUIRE_STAFF=1`, which turns any skipped test
   into a failure, and then asserts that the run contained **zero** skips. A skipped
   test is never a passing test.
+- **`npm run test:integration` is not part of that list.** It runs the real application
+  against a real Supabase project — authentication, RLS and RPC authorization per role,
+  realtime delivery, and the tournament lifecycle. It needs a **dedicated test project**
+  and refuses to run against production, so it cannot be a credential-free CI gate. Run it
+  by hand whenever a change touches RLS policies, RPC guards or realtime publication
+  membership; those are the surfaces the hermetic suite structurally cannot see.
 - **`npm run lint` is not a gate.** It reports a large pre-existing Prettier backlog
   that predates the current design work. Do not run a repo-wide format as part of an
   unrelated change; it buries the real diff.

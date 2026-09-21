@@ -49,13 +49,13 @@ import { MatchOperationsDialog } from "./index";
 export const Route = createFileRoute("/matches")({
   head: () => ({
     meta: [
-      { title: "Score Entry | ShuttleNet Tournament Ops" },
+      { title: "Score Entry | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Enter live badminton results so pool standings and knockout draws update immediately.",
       },
-      { property: "og:title", content: "Score Entry | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Score Entry | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:

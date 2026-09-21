@@ -26,9 +26,9 @@ const STAFF_DESCRIPTION =
 export const Route = createFileRoute("/staff")({
   head: () => ({
     meta: [
-      { title: "Staff | ShuttleNet Tournament Ops" },
+      { title: "Staff | Tournova Tournament Ops" },
       { name: "description", content: STAFF_DESCRIPTION },
-      { property: "og:title", content: "Staff | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Staff | Tournova Tournament Ops" },
       { property: "og:description", content: STAFF_DESCRIPTION },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

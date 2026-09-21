@@ -1,4 +1,4 @@
-# ShuttleNet
+# Tournova
 
 Tournament operations console for badminton events. Built to be run live at a desk
 during a tournament, on imperfect wifi, by a small control team.
@@ -96,3 +96,43 @@ new one.
 
 Exactly one tournament is active at a time. The `players` table is global rather than
 tournament-scoped.
+
+### Operator scripts
+
+These are run by hand, are not part of any gate, and mostly need a privileged credential.
+Each refuses to act on an unknown target rather than defaulting to one.
+
+| Script | What it does |
+| --- | --- |
+| `scripts/apply-migrations.mjs` | Applies `supabase/migrations/*.sql` in filename order, recording each in `supabase_migrations.schema_migrations` in the same transaction. Use `supabase db push` instead when a database password exists; this exists for a personal access token, which `db push` cannot use. Refuses the production ref without `--allow-production`. |
+| `scripts/create-staff-login.mjs` | Creates the `auth.users` identity for an email the migrations already seeded into `staff_roles`, and verifies the role resolves. Email is the durable key — the `on_auth_user_created_link_staff` trigger fills in `staff_roles.user_id`, so there is no UUID or password to migrate. |
+| `scripts/compare-api-surface.mjs` | Diffs the tables, columns and RPC signatures of two backends using their keys. A narrower check than `parity-dump.sql`: function bodies and policies are not visible over HTTP. |
+| `scripts/run-sql.mjs` | Runs one read-only `.sql` file against a project, either over a Postgres connection string or, with `--project-ref`, through the Management API. Refuses anything that is not a single read-only statement. |
+| `scripts/verify-build-target.mjs` | Asserts a build was compiled against the backend currently in `.env`. See "Deploying the Worker" below. |
+| `scripts/reset-tournament-data.mjs` | Clears tournament data while keeping `staff_roles`. Requires `SUPABASE_URL` and a key; it has no hardcoded project. |
+
+The database-side counterparts — `parity-dump.sql` and `migration-drift-check.sql` — are
+documented in [`supabase/migrations/README.md`](supabase/migrations/README.md).
+
+### Deploying the Worker
+
+```sh
+npm run deploy:dry   # build, verify the target, show what would be uploaded
+npm run deploy       # build, verify the target, upload
+```
+
+The Worker is `tournova-ops`, named explicitly in [`vite.config.ts`](vite.config.ts).
+Nitro would otherwise derive the name from the git remote, which resolves to the existing
+production Worker's name.
+
+**The backend is compiled in, not configured.** `vite.config.ts` injects every `VITE_`
+variable as a literal define, so the Supabase URL and publishable key are baked into the
+bundle at build time. A deployed Worker exposes no vars for them — only the `ASSETS`
+binding — and therefore **cannot be repointed by changing a Cloudflare variable**. Changing
+backend means rebuilding and redeploying.
+
+That is why `npm run deploy` runs `scripts/verify-build-target.mjs` before uploading: it
+fails when the bundle does not contain the project named in `.env`, which is the difference
+between deploying to staging and quietly deploying to production.
+
+

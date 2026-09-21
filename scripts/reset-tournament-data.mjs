@@ -21,18 +21,29 @@
 import { createInterface } from "node:readline/promises";
 import { createClient } from "@supabase/supabase-js";
 
-const url =
-  process.env.SUPABASE_URL ??
-  process.env.VITE_SUPABASE_URL ??
-  "https://hdmfxndanyrbxedgboev.supabase.co";
+const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const publishable =
-  process.env.SUPABASE_PUBLISHABLE_KEY ??
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-  "sb_publishable_6A1AhD2WpHIKfFlj7gsz-g_9WDaZUso";
+  process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
 const deskEmail = process.env.SUPABASE_DESK_EMAIL;
 const deskPassword = process.env.SUPABASE_DESK_PASSWORD;
+
+/**
+ * There is deliberately no default target.
+ *
+ * This script deletes data, so the project it points at must be stated, never
+ * inferred from a fallback that a future reader cannot see. It previously defaulted
+ * to a hardcoded Lovable Cloud project URL and publishable key, which meant an
+ * operator with no environment configured would silently run against that project.
+ */
+if (!url || !publishable) {
+  console.error(
+    "Missing SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY (or their VITE_ twins).\n" +
+      "Set them in .env, or export them for one run, before running this script.",
+  );
+  process.exit(1);
+}
 
 const args = new Set(process.argv.slice(2));
 const skipConfirm = args.has("--yes") || args.has("-y");

@@ -1,5 +1,5 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "tournova",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -11,12 +11,20 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "bench:scheduling": "vitest run --config vitest.benchmark.config.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:final": "E2E_REQUIRE_STAFF=1 playwright test && node scripts/assert-no-skips.mjs",
     "test:all": "npm run test && npm run test:e2e",
-    "test:e2e:record-auth": "node scripts/record-staff-session.mjs"
+    "test:e2e:record-auth": "node scripts/record-staff-session.mjs",
+    "db:link": "supabase link --project-ref \"$SUPABASE_PROJECT_ID\"",
+    "db:push": "supabase db push",
+    "db:types": "supabase gen types typescript --linked > src/integrations/supabase/types.ts",
+    "db:parity": "node scripts/run-sql.mjs scripts/parity-dump.sql",
+    "db:drift": "node scripts/run-sql.mjs scripts/migration-drift-check.sql",
+    "deploy:dry": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy --dry-run",
+    "deploy": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -94,11 +102,15 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "jsdom": "^29.1.1",
+    "lightningcss": "^1.33.0",
     "nitro": "3.0.260603-beta",
+    "pg": "^8.23.0",
     "prettier": "^3.7.3",
+    "supabase": "^2.117.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "8.1.5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "4.135.0"
   }
 }

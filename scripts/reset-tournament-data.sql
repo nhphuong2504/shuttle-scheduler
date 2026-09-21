@@ -6,7 +6,7 @@
 --
 -- Safe to re-run: deleting already-deleted rows is a no-op.
 --
--- Run it in the Supabase SQL editor for project hdmfxndanyrbxedgboev, as one
+-- Run it in the Supabase SQL editor for the project you intend to reset, as one
 -- script. Then create the new tournament from /setup in the app.
 
 BEGIN;

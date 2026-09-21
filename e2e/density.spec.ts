@@ -70,7 +70,7 @@ test.describe("density defaults", () => {
     // otherwise navigating away would leave the operator stuck in Compact.
     await freshAt(page, DESK);
     await expectDensity(page, "compact");
-    expect(await page.evaluate(() => localStorage.getItem("shuttlenet.density"))).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem("tournova.density"))).toBeNull();
   });
 
   test("applies the density before first paint, so there is no reflow", async ({ page }) => {
@@ -122,7 +122,7 @@ test.describe("an explicit choice outlives the route that inspired it", () => {
     // "Default" is only offered once a choice exists.
     await page.getByRole("button", { name: "Default" }).click();
     await expectDensity(page, "compact");
-    expect(await page.evaluate(() => localStorage.getItem("shuttlenet.density"))).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem("tournova.density"))).toBeNull();
   });
 
   test("offers no reset before a choice has been made", async ({ page }) => {

@@ -22,11 +22,11 @@
 -- ---------------------------------------------------------------------------
 --
 -- Names are plain and realistic, as asked for. The handle is the EMAIL instead:
--- every test player gets `<name>@shuttlenet.test`. `.test` is reserved by
+-- every test player gets `<name>@tournova.test`. `.test` is reserved by
 -- RFC 2606 and can never resolve, so it cannot collide with a real person, and
 -- the app never renders a player's email — only `staff_roles.email` is shown, on
 -- the staff page. So the roster and every court screen look like a genuine
--- field, while `WHERE email LIKE '%@shuttlenet.test'` stays an exact handle for
+-- field, while `WHERE email LIKE '%@tournova.test'` stays an exact handle for
 -- both the reset and the cleanup.
 --
 -- ---------------------------------------------------------------------------
@@ -121,10 +121,10 @@ BEGIN
   --    than relying on the player -> team cascade.
   -- -------------------------------------------------------------------------
   DELETE FROM public.teams
-  WHERE player_1_id IN (SELECT id FROM public.players WHERE email LIKE '%@shuttlenet.test')
-     OR player_2_id IN (SELECT id FROM public.players WHERE email LIKE '%@shuttlenet.test');
+  WHERE player_1_id IN (SELECT id FROM public.players WHERE email LIKE '%@tournova.test')
+     OR player_2_id IN (SELECT id FROM public.players WHERE email LIKE '%@tournova.test');
 
-  DELETE FROM public.players WHERE email LIKE '%@shuttlenet.test';
+  DELETE FROM public.players WHERE email LIKE '%@tournova.test';
 
   -- -------------------------------------------------------------------------
   -- 3. The 50 players. The email is derived from the name so the list stays
@@ -133,7 +133,7 @@ BEGIN
   INSERT INTO public.players (name, gender, email)
   SELECT v.name,
          v.gender,
-         lower(replace(v.name, ' ', '.')) || '@shuttlenet.test'
+         lower(replace(v.name, ' ', '.')) || '@tournova.test'
   FROM (VALUES
     ('Daniel Okafor',     'M'),
     ('Wei Zhang',         'M'),
@@ -199,7 +199,7 @@ BEGIN
          p.gender,
          row_number() OVER (PARTITION BY p.gender ORDER BY p.name, p.id) AS n
   FROM public.players p
-  WHERE p.email LIKE '%@shuttlenet.test';
+  WHERE p.email LIKE '%@tournova.test';
 
   SELECT count(*) FILTER (WHERE gender = 'M'),
          count(*) FILTER (WHERE gender = 'F'),
@@ -306,7 +306,7 @@ BEGIN
   FROM public.teams t
   JOIN public.players p ON p.id = t.player_1_id
   WHERE t.tournament_id = v_tournament
-    AND p.email LIKE '%@shuttlenet.test';
+    AND p.email LIKE '%@tournova.test';
 
   -- -------------------------------------------------------------------------
   -- 6. Entrants, for the test teams only.
@@ -325,7 +325,7 @@ BEGIN
   FROM public.teams t
   JOIN public.players p ON p.id = t.player_1_id
   WHERE t.tournament_id = v_tournament
-    AND p.email LIKE '%@shuttlenet.test'
+    AND p.email LIKE '%@tournova.test'
   ON CONFLICT (category_id, team_id) DO NOTHING;
 
   SELECT count(*) INTO v_entrants
@@ -333,7 +333,7 @@ BEGIN
   JOIN public.teams t ON t.id = e.team_id
   JOIN public.players p ON p.id = t.player_1_id
   WHERE e.tournament_id = v_tournament
-    AND p.email LIKE '%@shuttlenet.test';
+    AND p.email LIKE '%@tournova.test';
 
   -- -------------------------------------------------------------------------
   -- 7. Skill levels, so the skill-block seeding has all three blocks to shuffle
@@ -348,7 +348,7 @@ BEGIN
     JOIN public.teams t   ON t.id = e.team_id
     JOIN public.players p ON p.id = t.player_1_id
     WHERE t.tournament_id = v_tournament
-      AND p.email LIKE '%@shuttlenet.test'
+      AND p.email LIKE '%@tournova.test'
   )
   UPDATE public.placement_entrants e
   SET skill_level = CASE
@@ -370,7 +370,7 @@ BEGIN
     FROM public.players p
     JOIN public.teams t
       ON t.player_1_id = p.id OR t.player_2_id = p.id
-    WHERE p.email LIKE '%@shuttlenet.test'
+    WHERE p.email LIKE '%@tournova.test'
       AND t.tournament_id = v_tournament
     GROUP BY p.id
   ) per_player;
@@ -392,7 +392,7 @@ BEGIN
     FROM public.categories c
     LEFT JOIN public.teams t   ON t.category_id = c.id
     LEFT JOIN public.players p ON p.id = t.player_1_id
-                              AND p.email LIKE '%@shuttlenet.test'
+                              AND p.email LIKE '%@tournova.test'
     WHERE c.tournament_id = v_tournament
     GROUP BY c.code, c.sort_order
     ORDER BY c.sort_order
@@ -417,13 +417,13 @@ JOIN public.teams t   ON t.category_id = c.id
 JOIN public.players p ON p.id = t.player_1_id
 LEFT JOIN public.placement_entrants e ON e.team_id = t.id
 WHERE c.tournament_id = (SELECT id FROM public.tournaments WHERE is_active = true)
-  AND p.email LIKE '%@shuttlenet.test'
+  AND p.email LIKE '%@tournova.test'
 GROUP BY c.code, c.entry_type, c.sort_order
 ORDER BY c.sort_order;
 
 SELECT count(*) AS test_players
 FROM public.players
-WHERE email LIKE '%@shuttlenet.test';
+WHERE email LIKE '%@tournova.test';
 
 -- ===========================================================================
 -- Reset the placement stage
@@ -458,4 +458,4 @@ WHERE email LIKE '%@shuttlenet.test';
 -- ===========================================================================
 --
 -- DELETE FROM public.players
--- WHERE email LIKE '%@shuttlenet.test';
+-- WHERE email LIKE '%@tournova.test';

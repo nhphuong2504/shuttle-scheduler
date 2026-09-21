@@ -12,8 +12,17 @@ pool, draw and match row, materialises `tournament_days` from the old `day_1` / 
 columns, and only then enforces `NOT NULL` and drops the retired day columns. Existing
 live results survive.
 
-There is no local Supabase CLI wired up in this repo (`supabase/config.toml` holds only
-the project ref), so pick one of these:
+The Supabase CLI is wired up as a devDependency, so the migrations can also be pushed
+straight from a checkout (link once per clone, then push):
+
+```sh
+SUPABASE_PROJECT_ID=<ref> npm run db:link
+npm run db:push
+```
+
+`db:link` and `db:push` read the token from `SUPABASE_ACCESS_TOKEN`. Pushing from the CLI and
+letting Lovable apply pending migrations are alternative routes to the same state; use one, not
+both. Where a change is applied by hand instead, pick one of these:
 
 1. **Lovable sync (preferred).** Push the branch that contains this file. Lovable applies
    pending migrations to the connected project, and the file also becomes visible in the
@@ -1418,7 +1427,279 @@ commented reset block in the seed file remains the way to clear it from the SQL 
 
 ### Verify after running
 
-Expect MS 13, MD 9, XD 8, WS 7, WD 5 entries, and 50 players carrying a `@shuttlenet.test` email.
+Expect MS 13, MD 9, XD 8, WS 7, WD 5 entries, and 50 players carrying a `@tournova.test` email.
 The odd fields are deliberate: an odd field is what makes the placement engine hold one entrant out
 of round one and give them two make-up matches in round two, which is the format's least obvious
 path.
+
+---
+
+## Applying `20260920000000_realtime_publication_membership.sql`
+
+Declares the whole `supabase_realtime` publication membership in the repository, so a rebuilt
+database behaves like the hosted one.
+
+### Why `20260917080000` was not enough
+
+That migration adds the six placement tables and returns early with a `NOTICE` if the publication
+is absent. It also only ever covered the placement work. The rest of the membership —
+`pool_matches`, `draw_matches`, the tournament structure, the roster — was configured in the
+Supabase dashboard and exists **only** in the hosted project.
+
+That is invisible until it is not. Every screen subscribes with one unfiltered channel:
+
+```ts
+supabase.channel("ops-live").on("postgres_changes", { event: "*", schema: "public" }, …)
+```
+
+The subscription has no table filter, so a table that is missing from the publication does not
+narrow the subscription — it silently drops that table's events. The channel still reports
+`SUBSCRIBED`, so the desk still shows its `Live` badge, while a result entered on one court never
+appears on another until someone reloads by hand. A subscribed channel that never fires is
+indistinguishable from a quiet tournament, which is what makes this worth a migration rather than
+a note.
+
+### What it does
+
+One `DO` block that ensures the publication exists, then adds every table the application reads
+that is not already a member. Membership is checked against `pg_publication_tables` before each
+`ADD`, because `ALTER PUBLICATION … ADD TABLE` raises on a duplicate; a table that does not exist
+in a given database is skipped with a `NOTICE` rather than failing.
+
+Nineteen tables are listed. The list is deliberately **every table the app reads**, not only the
+match tables: because the subscription is unfiltered, omitting one drops its events rather than
+excluding it from a narrower subscription.
+
+### What it deliberately does not do
+
+It adds **no `GRANT`**. It is tempting to grant `SELECT` on all tables so the publication is
+"readable", but Realtime authorizes `postgres_changes` through each table's RLS policies, and a
+blanket grant here would reverse `REVOKE SELECT ON public.players FROM anon` from
+`20260910000115` — which exists precisely to stop the roster, including emails and phone numbers,
+being readable with the publishable key. Table grants belong with their table.
+
+### Verify after applying
+
+```sql
+SELECT tablename
+FROM pg_publication_tables
+WHERE pubname = 'supabase_realtime' AND schemaname = 'public'
+ORDER BY tablename;
+```
+
+Every table the app reads must be listed. Better, prove it end to end: open `/` in two browser
+windows and report a match in one — the other should update without a refresh. `npm run
+test:integration` also asserts delivery for the roster and for a tournament day write.
+
+### Rolling back
+
+```sql
+ALTER PUBLICATION supabase_realtime DROP TABLE public.<table>;
+```
+
+Harmless, but the desk goes back to manual refresh.
+
+---
+
+## Comparing two projects: `scripts/parity-dump.sql` and `scripts/migration-drift-check.sql`
+
+The files here are **not a complete record of the live schema**, and these two scripts exist to
+measure the difference rather than assume it. They matter if this project is ever replayed onto a
+new Supabase project.
+
+### Why not to trust a replay
+
+- `20260909233700_tournament_hardening.sql` and
+  `20260910000044_d292a59b-d108-4b79-9c0e-7ed044025230.sql` are **near-duplicates** — 706 and 696
+  lines defining the same 17 functions, 1 table, 13 policies and 5 triggers, differing by 58 lines
+  that are almost entirely comments. Which one represents the intended state is not recoverable
+  from the files.
+- Six migrations carry **UUID filenames** rather than timestamps (`95225afa`, `da4b8e8e`,
+  `d292a59b`, `db7cefc0`, `24b8a1fb`, `a81552e2`), which is the naming the dashboard writes when a
+  change is made in the editor. `20260909220822` is a single `ALTER TABLE`.
+- No migration runs `CREATE EXTENSION`, yet the schema needs `pgcrypto` for `gen_random_uuid()`.
+- No migration creates the `supabase_realtime` publication.
+
+Each of those is a change that may live only in the hosted database. Replaying the repository onto
+a fresh project can therefore succeed and still produce a different database.
+
+### `scripts/parity-dump.sql`
+
+Run on both projects, save each result, and `diff` them:
+
+```sh
+SUPABASE_DB_URL='postgresql://...old' npm run db:parity > /tmp/old.tsv
+SUPABASE_DB_URL='postgresql://...new' npm run db:parity > /tmp/new.tsv
+diff /tmp/old.tsv /tmp/new.tsv
+```
+
+`SUPABASE_DB_URL` is the Postgres connection string from the dashboard's Connect panel — not the
+`https://<ref>.supabase.co` API URL. It goes through `scripts/run-sql.mjs`, which refuses anything
+that is not a single read-only statement, so pointing it at the live project cannot write.
+
+It emits a definition-level dump — rows of
+`kind | name | definition`, ordered deterministically — covering schemas, extensions, columns,
+constraints, indexes, sequences, functions (full `pg_get_functiondef` bodies, plus
+`security_definer` and `search_path`), policies (including `qual` and `with_check`), RLS flags,
+triggers (including `auth`), views (including `reloptions`, so a lost `security_invoker` shows up),
+table and function grants read from the ACL, default privileges, publication membership, and
+database settings.
+
+Definitions rather than counts, because a count of 17 functions matches whether or not the bodies
+are identical — and a body is where the scoring and generation rules live. Likewise, a policy with
+the same name and a different `qual` is a different authorization rule.
+
+### `scripts/migration-drift-check.sql`
+
+Run on the **old** project:
+
+```sh
+SUPABASE_DB_URL='postgresql://...old' npm run db:drift
+```
+
+It compares `supabase_migrations.schema_migrations` against the file
+list and reports three things: versions applied with no local file (a change that exists only in
+that database), files never applied, and an explicit `OK` line with the counts when they agree. It
+prints an `OK` row rather than nothing, because zero rows is indistinguishable from a query that
+did not run.
+
+The expected list is generated from `ls supabase/migrations/*.sql`; regenerate it if migrations are
+added before the check is run.
+
+Both scripts were run against a real Postgres engine (PGlite) before they were first used against a
+hosted project, and doing so caught two defects that would otherwise have surfaced on the first
+real run: a missing `UNION ALL` between the extensions and columns branches of the parity dump, and
+two `text || "char"` concatenations (`provolatile`, `defaclobjtype`) that Postgres refuses to
+resolve. `run-sql.mjs` is also verified to refuse a non-read-only statement, a multi-statement
+file, and a missing connection string.
+
+### Running both without a database password
+
+Neither script needs one. `run-sql.mjs` takes `--project-ref` and goes through the Management API
+using `SUPABASE_ACCESS_TOKEN`:
+
+```sh
+node scripts/run-sql.mjs scripts/parity-dump.sql --project-ref <ref>
+```
+
+That transport is not a convenience. Neither replacement project has a database password anyone
+holds — the connection string the API returns carries `[YOUR-PASSWORD]` where the password goes —
+so without it these two scripts are unrunnable in exactly the situation they were written for. The
+read-only refusal is enforced on both paths.
+
+### Replaying the migrations: `scripts/apply-migrations.mjs`
+
+`supabase db push` is still the canonical path, and stays the one to use once a database password
+exists. It cannot be used with a personal access token alone: the CLI first calls the project's
+database-config endpoint to mint a login role, and is refused with
+`LegacyDbConfigLoginRoleStatusError: unexpected login role status 403`. `apply-migrations.mjs`
+replays the same files through the `database/query` endpoint instead, which needs neither a
+password nor a login role.
+
+Each file is applied in one transaction **together with its history row**, so a migration that
+fails leaves neither partial DDL nor a version record, and the run stops at the first failure. The
+history table is created with the CLI's own DDL and rows are inserted in the CLI's own shape, both
+read out of the v2.117 binary, so a later `db push` sees a history it recognises. `statements` is
+left `NULL` — which is what a version of the CLI predating that column leaves. The production ref
+is refused unless `--allow-production` is passed.
+
+### What replaying onto the replacement project showed
+
+| Check | Result |
+| --- | --- |
+| All 34 migrations, in order, unedited | 34/34 on the first pass |
+| `migration-drift-check.sql` against the replayed project | `OK` — applied=34, expected=34, matched=34 |
+| `parity-dump.sql` against the replayed project | 1,442 rows across 17 kinds |
+| `supabase_realtime` publication membership | 19 tables, exactly the list the migration names |
+| `types.ts` regenerated and diffed against the committed file | byte-identical — 1,607 lines, 0 differences |
+| Anonymous surface, hosted vs replayed, publishable key only | same status on all 13 tables probed |
+| `npm run test:integration` against the replayed project | 25 passed, 0 failed, 0 skipped |
+
+The `types.ts` result is the strongest signal available without the hosted project's connection
+string. That file was generated against the hosted project, so drift in any table, column or
+function signature would have appeared as a diff.
+
+Three qualifications, because the table above is easy to over-read:
+
+- **The anonymous comparison is a surface check, not a definition check.** `players` and
+  `desk_activity` are denied outright on both projects and the other eleven answer `200` on both.
+  Row counts differ on three tables, which is data rather than schema. Worth knowing for the
+  cutover: **the migration set seeds demo data** — `20260910043000_reconstruct_demo_tournament_data`
+  and `20260910200000_fake_day_one_results` insert a tournament with played results — so replaying
+  it onto an empty project creates that data.
+- **Function bodies, policy `qual` expressions and trigger definitions are still unverified.** They
+  need the hosted project's connection string. Signatures and the visible authorization surface
+  agree; a body that behaves differently while keeping its signature would not show up in either.
+- **`20260909233700` and `20260910000044` remain indistinguishable from the files alone**, which is
+  why the replay result and not the file list is the evidence.
+
+### The one step a replay cannot do
+
+The migrations seed `staff_roles` by email, so the first admin's authorization row exists as soon as
+the schema is applied. They cannot create the `auth.users` identity, because that is GoTrue's table
+and seeding it would mean writing a password hash by hand.
+
+So a replay leaves the project with a staff row whose `user_id` is NULL and no way to sign in.
+`scripts/create-staff-login.mjs` closes that, and it is a one-command step rather than a migration:
+
+```sh
+node scripts/create-staff-login.mjs --project-ref <ref> --email <the-seeded-admin-email>
+```
+
+There is **no identity to migrate and no backfill to write**, which is worth stating because it is
+the intuitive thing to expect. Email is the durable key: `on_auth_user_created_link_staff` is an
+`AFTER INSERT` trigger on `auth.users` that fills `staff_roles.user_id` from a matching email, so
+creating the identity *is* the linking step, and `current_staff_role()` matches on
+`user_id = auth.uid()` OR the JWT email. Old UUIDs, password hashes and sessions are left behind
+deliberately.
+
+The script verifies rather than assuming: it signs in as the account and asserts that
+`current_staff_role()` resolves, that an admin-only RPC is accepted, and that an anonymous caller is
+refused — the last so a pass cannot come from a guard that is not running. Re-running it is safe: it
+detects an existing identity and **does not reset its password** unless passed `--reset-password`,
+because silently replacing a password from a script whose job is to verify is how an operator locks
+themselves out.
+
+### The strongest comparison available without a connection string
+
+Lovable Cloud exposes **no database dashboard and no Postgres connection string**, so
+`parity-dump.sql` cannot be pointed at the old backend and the definition-level comparison it was
+written for is not obtainable. That limitation is real and is not worked around below.
+
+What is obtainable is PostgREST's own OpenAPI document, which it serves at the REST root
+(`GET /rest/v1/`) to a key holder. It enumerates every exposed table and view with every column and
+its Postgres type and format, and every exposed RPC with its argument names, types and required
+flags. Compared between the two backends:
+
+| Surface | Old | Replayed | Result |
+| --- | --- | --- | --- |
+| Tables and views | 20 | 20 | identical |
+| Columns (type and format) | 207 | 207 | identical |
+| RPCs (arguments and required flags) | 52 | 52 | identical |
+| Table paths | 21 | 21 | identical |
+
+The 207 columns agree with the `column` rows in `parity-dump.sql`'s own output, which is an
+independent confirmation from a different source.
+
+One credential note: the comparison is not symmetric in what it needs. The old backend still serves
+the REST root to a **publishable** key, while a current Supabase project refuses it with
+`401 Secret API key required`. Both documents describe the same schema, so the credential differs
+rather than the thing being measured.
+
+**This is not a substitute for a definition dump, and the gap is narrower but not closed.** RPC
+*argument names and types* are compared; RPC *bodies* are not visible over PostgREST at all. Nor
+are policy `qual` expressions, trigger definitions, or function volatility and `search_path`. A body
+that behaves differently while keeping its signature would pass every check above. Treat the table
+as "the API surface matches, the internals are unverified."
+
+The comparison is also verified not to be a false pass: run against the empty
+`tournova-production` project it reports 92 differences, so it detects divergence rather than
+reporting agreement unconditionally.
+
+### Verifying the whole backend, not just the schema
+
+The Playwright suite is hermetic — it intercepts transport — so it cannot see the backend at all.
+`npm run test:integration` runs the application against a real project instead, covering
+authentication, role resolution, RLS and RPC authorization for every staff role, realtime delivery,
+and the tournament lifecycle from draft through a fully reported pool. It needs a **dedicated test
+project** and refuses to run against production; see `vitest.integration.config.ts`.

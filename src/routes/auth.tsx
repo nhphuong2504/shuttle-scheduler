@@ -11,8 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Desk Sign In | ShuttleNet Tournament Ops" },
-      { name: "description", content: "Control desk sign in for ShuttleNet badminton tournament operations." },
+      { title: "Desk Sign In | Tournova Tournament Ops" },
+      { name: "description", content: "Control desk sign in for Tournova badminton tournament operations." },
     ],
   }),
   component: AuthPage,

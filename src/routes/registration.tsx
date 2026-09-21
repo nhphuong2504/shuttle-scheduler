@@ -28,13 +28,13 @@ import {
 export const Route = createFileRoute("/registration")({
   head: () => ({
     meta: [
-      { title: "Registration | ShuttleNet Tournament Ops" },
+      { title: "Registration | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Register players and doubles pairs across the tournament's active badminton categories, up to the per-player limit the tournament is configured with.",
       },
-      { property: "og:title", content: "Registration | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Registration | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:

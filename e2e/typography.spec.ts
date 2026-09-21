@@ -62,7 +62,7 @@ function measure(page: Page) {
 
 async function atDensity(page: Page, density: (typeof DENSITIES)[number], route: string) {
   await page.goto(route);
-  await page.evaluate((d) => localStorage.setItem("shuttlenet.density", d), density);
+  await page.evaluate((d) => localStorage.setItem("tournova.density", d), density);
   await page.goto(route, { waitUntil: "networkidle" });
   // Confirm the density actually took effect, so a route that silently ignored the
   // preference cannot make this suite pass while measuring the wrong scale.

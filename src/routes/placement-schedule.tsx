@@ -84,13 +84,13 @@ import {
 export const Route = createFileRoute("/placement-schedule")({
   head: () => ({
     meta: [
-      { title: "Court Schedule | ShuttleNet Tournament Ops" },
+      { title: "Court Schedule | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Lay out the placement rounds and the A/B/C/D knockouts across the courts as one queue, filling each day's slots in turn.",
       },
-      { property: "og:title", content: "Court Schedule | ShuttleNet Tournament Ops" },
+      { property: "og:title", content: "Court Schedule | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:
