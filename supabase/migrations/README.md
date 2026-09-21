@@ -12,8 +12,17 @@ pool, draw and match row, materialises `tournament_days` from the old `day_1` / 
 columns, and only then enforces `NOT NULL` and drops the retired day columns. Existing
 live results survive.
 
-There is no local Supabase CLI wired up in this repo (`supabase/config.toml` holds only
-the project ref), so pick one of these:
+The Supabase CLI is wired up as a devDependency, so the migrations can also be pushed
+straight from a checkout (link once per clone, then push):
+
+```sh
+SUPABASE_PROJECT_ID=<ref> npm run db:link
+npm run db:push
+```
+
+`db:link` and `db:push` read the token from `SUPABASE_ACCESS_TOKEN`. Pushing from the CLI and
+letting Lovable apply pending migrations are alternative routes to the same state; use one, not
+both. Where a change is applied by hand instead, pick one of these:
 
 1. **Lovable sync (preferred).** Push the branch that contains this file. Lovable applies
    pending migrations to the connected project, and the file also becomes visible in the
@@ -1516,7 +1525,19 @@ a fresh project can therefore succeed and still produce a different database.
 
 ### `scripts/parity-dump.sql`
 
-Run on both projects, save each result, and `diff` them. It emits a definition-level dump — rows of
+Run on both projects, save each result, and `diff` them:
+
+```sh
+SUPABASE_DB_URL='postgresql://...old' npm run db:parity > /tmp/old.tsv
+SUPABASE_DB_URL='postgresql://...new' npm run db:parity > /tmp/new.tsv
+diff /tmp/old.tsv /tmp/new.tsv
+```
+
+`SUPABASE_DB_URL` is the Postgres connection string from the dashboard's Connect panel — not the
+`https://<ref>.supabase.co` API URL. It goes through `scripts/run-sql.mjs`, which refuses anything
+that is not a single read-only statement, so pointing it at the live project cannot write.
+
+It emits a definition-level dump — rows of
 `kind | name | definition`, ordered deterministically — covering schemas, extensions, columns,
 constraints, indexes, sequences, functions (full `pg_get_functiondef` bodies, plus
 `security_definer` and `search_path`), policies (including `qual` and `with_check`), RLS flags,
@@ -1530,7 +1551,13 @@ the same name and a different `qual` is a different authorization rule.
 
 ### `scripts/migration-drift-check.sql`
 
-Run on the **old** project. It compares `supabase_migrations.schema_migrations` against the file
+Run on the **old** project:
+
+```sh
+SUPABASE_DB_URL='postgresql://...old' npm run db:drift
+```
+
+It compares `supabase_migrations.schema_migrations` against the file
 list and reports three things: versions applied with no local file (a change that exists only in
 that database), files never applied, and an explicit `OK` line with the counts when they agree. It
 prints an `OK` row rather than nothing, because zero rows is indistinguishable from a query that
@@ -1538,6 +1565,13 @@ did not run.
 
 The expected list is generated from `ls supabase/migrations/*.sql`; regenerate it if migrations are
 added before the check is run.
+
+Both scripts were run against a real Postgres engine (PGlite) before they were first used against a
+hosted project, and doing so caught two defects that would otherwise have surfaced on the first
+real run: a missing `UNION ALL` between the extensions and columns branches of the parity dump, and
+two `text || "char"` concatenations (`provolatile`, `defaclobjtype`) that Postgres refuses to
+resolve. `run-sql.mjs` is also verified to refuse a non-read-only statement, a multi-statement
+file, and a missing connection string.
 
 ### Verifying the whole backend, not just the schema
 
