@@ -14,7 +14,7 @@
     "bench:scheduling": "vitest run --config vitest.benchmark.config.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:final": "E2E_REQUIRE_STAFF=1 playwright test",
+    "test:e2e:final": "E2E_REQUIRE_STAFF=1 playwright test && node scripts/assert-no-skips.mjs",
     "test:all": "npm run test && npm run test:e2e",
     "test:e2e:record-auth": "node scripts/record-staff-session.mjs"
   },
