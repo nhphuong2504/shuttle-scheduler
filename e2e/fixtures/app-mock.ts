@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import type { Page } from "@playwright/test";
 
-import { deskTables, type DeskMockPreset } from "./desk-mock";
+import { REFERENCE, deskTables, type DeskMockPreset } from "./desk-mock";
 
 /**
  * The hermetic application mock.
@@ -148,6 +148,22 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
   if (!INSTALLED.has(page)) {
     INSTALLED.add(page);
     ESCAPES.set(page, []);
+
+    /**
+     * The app's clock is pinned to the fixture's reference instant.
+     *
+     * The two have to agree or the seeded times mean nothing: the mock builds every
+     * `scheduled`/`started` from `REFERENCE`, and the app derives each court's state by
+     * comparing those instants to its own `Date.now()`. Left on the real clock, the
+     * derivation moves with the wall clock - which is exactly how these tests used to fail
+     * between midnight and 00:16, when a fixture seeded to show an overrun could not produce
+     * one. See `REFERENCE` in `desk-mock.ts`.
+     *
+     * `setFixedTime` rather than `install`: it fixes `Date` while leaving timers running, so
+     * intervals, animation frames and `transitionend` still fire. Freezing the timers too
+     * would stall the app rather than stabilise it.
+     */
+    await page.clock.setFixedTime(REFERENCE);
 
     /**
      * Realtime is a websocket, which `page.route` cannot see.
