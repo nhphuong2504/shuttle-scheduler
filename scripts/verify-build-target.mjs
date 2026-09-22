@@ -21,14 +21,12 @@
 // such problem - it is a unique opaque string that appears only if that project is the target.
 //
 // Usage:
-//   node scripts/verify-build-target.mjs            # the normal build (`.output/`)
-//   node scripts/verify-build-target.mjs --sandbox   # the Lovable build (`dist/`)
+//   node scripts/verify-build-target.mjs
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const sandbox = process.argv.includes("--sandbox");
-const outputDir = sandbox ? "dist" : ".output";
+const outputDir = ".output";
 const serverDir = join(outputDir, "server");
 
 function readEnvFile(path) {
@@ -80,10 +78,7 @@ if (!expectedUrl || !expectedKey) {
 
 const files = [...walk(serverDir)];
 if (files.length === 0) {
-  console.error(
-    `No JavaScript found in ${serverDir}.\n` +
-      `Run \`npm run build\`${sandbox ? " with LOVABLE_SANDBOX=1" : ""} first.`,
-  );
+  console.error(`No JavaScript found in ${serverDir}.\nRun \`npm run build\` first.`);
   process.exit(1);
 }
 

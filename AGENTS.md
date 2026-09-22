@@ -1,18 +1,19 @@
 <!-- LOVABLE:BEGIN -->
 > [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
+> This project is no longer connected to [Lovable](https://lovable.dev). The
+> disconnect is complete: nothing here is built, deployed or hosted by it, and
+> no Lovable package is a dependency. `.lovable/` is gone.
 >
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
+> The block is kept only to record that, and can be deleted once the remaining
+> Lovable references listed in the README are cleared. The history rule it used
+> to carry is gone with the connection — though rewriting published history is
+> still worth avoiding, for the ordinary reasons.
 <!-- LOVABLE:END -->
 
 # Working in this repository
 
-Cursor is the primary development environment. Lovable remains connected to the
-repository, which is why the history rule above still applies.
+Cursor is the primary development environment, and the repository is
+self-contained: it builds and deploys without any external editor or platform.
 
 ## What this project is
 

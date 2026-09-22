@@ -20,14 +20,13 @@ SUPABASE_PROJECT_ID=<ref> npm run db:link
 npm run db:push
 ```
 
-`db:link` and `db:push` read the token from `SUPABASE_ACCESS_TOKEN`. Pushing from the CLI and
-letting Lovable apply pending migrations are alternative routes to the same state; use one, not
-both. Where a change is applied by hand instead, pick one of these:
+`db:link` and `db:push` read the token from `SUPABASE_ACCESS_TOKEN`, and `db:push` additionally
+needs a database password. With only a personal access token the CLI is refused when it asks
+the project for a login role (403), so use `scripts/apply-migrations.mjs` in that case — it
+replays the same files through the Management API, which needs no password. Where a change is
+applied by hand instead:
 
-1. **Lovable sync (preferred).** Push the branch that contains this file. Lovable applies
-   pending migrations to the connected project, and the file also becomes visible in the
-   Supabase dashboard's migration history.
-2. **Supabase SQL editor.** Open the project's SQL editor, paste the whole file and run it
+1. **Supabase SQL editor.** Open the project's SQL editor, paste the whole file and run it
    as a single script. Afterwards, refresh the API schema cache so PostgREST picks up the
    new `tournaments` / `tournament_days` tables and the changed function signatures:
 
@@ -65,7 +64,7 @@ this migration (i.e. a second tournament) has no equivalent in the old singleton
 ## Applying `20260916000000_tournament_creation_flow.sql`
 
 This is the migration behind the admin-only tournament creation wizard. Apply it after the
-scoping migration, exactly the same way (Lovable sync, or paste into the SQL editor and then
+scoping migration, exactly the same way (paste into the SQL editor, then
 `NOTIFY pgrst, 'reload schema';`).
 
 It is **additive and safe on a live database**: every new column has a default, and existing
@@ -375,7 +374,7 @@ restore the previous bodies of the two draft RPCs.
 ## Applying `20260917000000_placement_stage.sql` and `20260917010000_placement_stage_rpcs.sql`
 
 These two add the storage and the RPCs for the **two-round placement** format. Apply them in
-order, exactly the same way as the others (Lovable sync, or paste into the SQL editor and then
+order, exactly the same way as the others (paste into the SQL editor, then
 `NOTIFY pgrst, 'reload schema';`).
 
 They are **purely additive**. The legacy round-robin tables (`pools`, `pool_entries`,
@@ -1404,8 +1403,8 @@ state the removed `sliceRowsByDay` behaviour also preferred.
 
 ## The test field: `../seed/50-test-players.sql`
 
-Not a migration, and the directory is the point. **Nothing in `supabase/seed/` is applied by
-Lovable**, so this file leaves the hosted project alone until it is pasted into the SQL editor.
+Not a migration, and the directory is the point. **Nothing in `supabase/seed/` is applied
+automatically**, so this file leaves the hosted project alone until it is pasted into the SQL editor.
 Moving it into this directory would instead make it fifty fake entrants in the live tournament on
 the next push.
 
