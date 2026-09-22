@@ -15,6 +15,7 @@ import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
 import { REFERENCE } from "./fixtures/desk-mock";
 import { MATRIX_CELLS, WCAG_TAGS, cellLabel, openCell } from "./fixtures/matrix";
+import { settleAnimations } from "./fixtures/settle";
 
 /**
  * Phase 6: every state and every urgency treatment, through the rendered app.
@@ -125,16 +126,51 @@ const DETACHED = "<<detached>>";
  * refetch, and a read that straddles one measures half an old tree. Retrying is the
  * honest response - the alternative is a colour assertion that is occasionally about
  * elements that are no longer on screen.
+ *
+ * ## Two waits that are not optional
+ *
+ * The tiles have `transition-all`, so their border colour *animates* into place after
+ * mount, and `getComputedStyle` during that animation returns the previous colour rather
+ * than the final one. Measured on this board, the borders start as the shared hairline and
+ * take about 190ms to reach their real colours, which means for that window every tile's
+ * edge reads identically. That is not a hypothesis: sampling every animation frame from
+ * before first paint shows exactly it -
+ *
+ *   distinct=1/8  oklch(0.915 0.006 250)   <- every tile, the hairline
+ *   distinct=2/8  oklab(0.915 -0.00205212 ...)
+ *   distinct=4/8  oklch(0.875 0.055 27)    <- settled
+ *
+ * - and it is what a CI run reported as `playing=224,227,231, overrun=224,227,231, ...`,
+ * every state sharing one edge. The board's pills were fine because they carry no
+ * transition, which is the asymmetry that made this look like a token defect.
+ *
+ * So the read waits for the tiles to exist, waits for their transitions to finish, and
+ * then requires two consecutive identical reads. The stability check is what makes it
+ * correct rather than merely slower: if the class change lands between settling and
+ * reading, the next iteration sees the transition that just started, and the loop only
+ * returns once two reads agree. Nothing is applied to the page to force this - the colours
+ * measured are the ones a reader gets.
  */
+const COURT_TILE = "button[aria-label^='Court ']";
+
 async function readCourtChips(page: Page): Promise<Chips[]> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  await page.locator(COURT_TILE).first().waitFor({ state: "attached", timeout: 20_000 });
+
+  let previous: string | null = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      return await readCourtChipsOnce(page);
+      await settleAnimations(page, COURT_TILE);
+      const chips = await readCourtChipsOnce(page);
+      const signature = JSON.stringify(chips);
+      if (signature === previous) return chips;
+      previous = signature;
     } catch (error) {
       if (!(error instanceof Error) || !error.message.includes(DETACHED)) throw error;
+      // A re-render invalidates the previous signature, so the next read must stand alone.
+      previous = null;
     }
   }
-  throw new Error("the court board re-rendered on every attempt to measure it");
+  throw new Error("the court board never settled to a stable set of colours");
 }
 
 async function readCourtChipsOnce(page: Page): Promise<Chips[]> {
