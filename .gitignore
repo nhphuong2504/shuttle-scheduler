@@ -43,6 +43,10 @@ bun.lock
 # committing it would pin one developer's linked project into the repository.
 supabase/.temp/
 
+# Created by running the local stack (`npx supabase start`). Holds only `_current_branch`,
+# but it is machine-local scratch state like the above, not a source file.
+supabase/.branches/
+
 # Local benchmark output (`npm run bench:scheduling` writes its report here)
 .benchmark/
 

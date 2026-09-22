@@ -123,10 +123,28 @@ npm run build
   shard boundary, and it reports the wall time and billed minutes for each shard count.
 - **`npm run test:integration` is not part of that list.** It runs the real application
   against a real Supabase project — authentication, RLS and RPC authorization per role,
-  realtime delivery, and the tournament lifecycle. It needs a **dedicated test project**
-  and refuses to run against production, so it cannot be a credential-free CI gate. Run it
-  by hand whenever a change touches RLS policies, RPC guards or realtime publication
-  membership; those are the surfaces the hermetic suite structurally cannot see.
+  realtime delivery, and the tournament lifecycle. Run it by hand whenever a change touches
+  RLS policies, RPC guards or realtime publication membership; those are the surfaces the
+  hermetic suite structurally cannot see.
+
+  **It runs against the local stack, not staging.** The guard refuses any project a root
+  environment file names, and `.env` names staging — deliberately, because the suite writes
+  rows and flips the active-tournament pointer, so a shared project is a destructive
+  mistake rather than a slow test. A dedicated cloud project is not an option on the free
+  plan's two-project limit, so the target is `npx supabase start`:
+
+  ```
+  npx supabase start                       # needs a container runtime (colima or Docker)
+  npm run integration:target -- local      # points integration/.env at it
+  npm run test:integration
+  npm run integration:target -- use staging # switches back when done
+  ```
+
+  `integration:target show` reports the current target, and pointing at `local` snapshots
+  whatever the suite pointed at first, so switching is never one-way. A freshly started
+  stack is not streaming yet, which is why `realtime.test.ts` warms the tenant before it
+  asserts: without that, the first test to run fails on a cold stack and passes on every
+  later run.
 - **`npm run lint` is not a gate.** It reports a large pre-existing Prettier backlog
   that predates the current design work. Do not run a repo-wide format as part of an
   unrelated change; it buries the real diff.
