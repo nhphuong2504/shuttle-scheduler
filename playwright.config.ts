@@ -40,11 +40,20 @@ export default defineConfig({
    * for 30s at a time, and the tests queued behind them would then hit their own 30s limit
    * and fail for a reason that had nothing to do with what they assert. Two changes fix
    * that structurally rather than by hoping the machine is quiet: a worker count that is
-   * stated rather than inferred (so a run is reproducible across machines, which matters
-   * more here than squeezing out the last second), and a test timeout with realistic room
-   * for a cold Vite transform of the heaviest route.
+   * stated rather than inferred (so a run is reproducible across machines), and a test
+   * timeout with realistic room for a cold Vite transform of the heaviest route.
+   *
+   * Stated as a single value for both environments, and deliberately 4 rather than the 2
+   * CI used to use. The suite is close to perfectly parallel - 2282s of summed worker time
+   * at 2 workers took 19.0 minutes in CI, and 1884s at 4 workers took 7.8 minutes locally,
+   * both within 2% of dividing by the worker count - so the old CI value was throttling the
+   * job rather than protecting it, and it accounted for essentially the whole wall time on
+   * a runner that has 4 vCPU sat half idle.
+   *
+   * Raise this only with a larger runner; on a smaller one it oversubscribes. The test
+   * timeout, not the worker count, is what absorbs a slow route.
    */
-  workers: process.env["CI"] ? 2 : 4,
+  workers: 4,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {
