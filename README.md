@@ -84,6 +84,7 @@ review the diff.
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
 | [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md) | The manual checks no automated gate covers |
 | [`docs/recovery-runbook.md`](docs/recovery-runbook.md) | Getting the database back after data loss: what a backup does and does not contain, and the restore procedure |
+| [`docs/cleanup-deferred.md`](docs/cleanup-deferred.md) | What an earlier cleanup removed, and the candidates it deliberately left alone |
 | [`supabase/migrations/README.md`](supabase/migrations/README.md) | Applying and verifying database migrations |
 | [`src/routes/README.md`](src/routes/README.md) | File-based routing conventions |
 
