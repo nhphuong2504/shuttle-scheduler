@@ -21,7 +21,8 @@
 // such problem - it is a unique opaque string that appears only if that project is the target.
 //
 // Usage:
-//   node scripts/verify-build-target.mjs
+//   node scripts/verify-build-target.mjs                # checks a `npm run build` output
+//   node scripts/verify-build-target.mjs --mode development   # checks a `build:dev` output
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -63,7 +64,27 @@ function* walk(dir) {
   }
 }
 
-const env = { ...readEnvFile(".env"), ...process.env };
+/**
+ * Resolve environment files the way Vite does: `.env` first, then `.env.<mode>` overriding it,
+ * with the real environment overriding both.
+ *
+ * This precedence is the whole reason the check still means anything after `env-split`:
+ * `npm run dev` runs mode=development and sees `.env` (staging), while `npm run build` runs
+ * mode=production and sees `.env.production`. A guard that only read `.env` would compare a
+ * production bundle against staging values, report a mismatch, and be wrong - or worse, be
+ * "fixed" by someone pointing `.env` back at production.
+ */
+function mode() {
+  const index = process.argv.indexOf("--mode");
+  const value = index === -1 ? undefined : process.argv[index + 1];
+  return value ?? "production";
+}
+
+const env = {
+  ...readEnvFile(".env"),
+  ...readEnvFile(`.env.${mode()}`),
+  ...process.env,
+};
 const expectedUrl = env["VITE_SUPABASE_URL"] || env["SUPABASE_URL"];
 const expectedKey = env["VITE_SUPABASE_PUBLISHABLE_KEY"] || env["SUPABASE_PUBLISHABLE_KEY"];
 
