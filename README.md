@@ -132,7 +132,20 @@ binding — and therefore **cannot be repointed by changing a Cloudflare variabl
 backend means rebuilding and redeploying.
 
 That is why `npm run deploy` runs `scripts/verify-build-target.mjs` before uploading: it
-fails when the bundle does not contain the project named in `.env`, which is the difference
-between deploying to staging and quietly deploying to production.
+fails when the bundle does not contain the project the build was configured for, which is
+the difference between deploying to production and quietly deploying to staging.
+
+Which project that is comes from the environment files, split so that a mistake has to be
+deliberate:
+
+| File | Mode | Used by | Points at |
+| --- | --- | --- | --- |
+| `.env` | development | `npm run dev`, `npm run build:dev` | staging |
+| `.env.production` | production | `npm run build`, `npm run deploy` | production |
+
+Both are git-ignored; `.env.example` documents every variable. The guard resolves these in
+Vite's own order — `.env`, then `.env.<mode>`, then the real environment — so it compares a
+build against the values that build actually used rather than against whichever file it
+happened to read.
 
 
