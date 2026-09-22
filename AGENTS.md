@@ -86,7 +86,9 @@ migration — add a new one.
 
 ## Workflow
 
-Short-lived branches and pull requests. Both CI jobs must be green before merge.
+Short-lived branches and pull requests. Every CI job must be green before merge. The browser
+job is **sharded across two runners** - the suite is CPU-bound, not worker-bound, so its wall
+time comes from running fewer tests per machine rather than more workers on one.
 
 ```mermaid
 flowchart LR
@@ -97,7 +99,7 @@ flowchart LR
   phase -->|yes| final["final gate + manual checklist"]
   phase -->|no| pr["Pull request"]
   final --> pr
-  pr --> ci["CI: checks + browser"]
+  pr --> ci["CI: checks + 2 browser shards"]
   ci --> merge["Merge to main"]
 ```
 
