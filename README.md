@@ -111,6 +111,7 @@ Each refuses to act on an unknown target rather than defaulting to one.
 | `scripts/run-sql.mjs` | Runs one read-only `.sql` file against a project, either over a Postgres connection string or, with `--project-ref`, through the Management API. Refuses anything that is not a single read-only statement. |
 | `scripts/verify-build-target.mjs` | Asserts a build was compiled against the backend currently in `.env`. See "Deploying the Worker" below. |
 | `scripts/reset-tournament-data.mjs` | Clears tournament data while keeping `staff_roles`. Requires `SUPABASE_URL` and a key; it has no hardcoded project. |
+| `scripts/restore-backup.mjs` | Restores a `pg_dump` backup into the local stack, or into a named project with `--project-ref`. Refuses the production ref without `--allow-production`. See "Backups" below. |
 
 The database-side counterparts — `parity-dump.sql` and `migration-drift-check.sql` — are
 documented in [`supabase/migrations/README.md`](supabase/migrations/README.md).
@@ -124,9 +125,17 @@ npm run restore:to-local -- backups/<dump> --yes   # rehearses a restore into th
 
 A dump is `public` data only: the schema is rebuilt from the migrations, and `auth` is
 deliberately excluded because recreating a staff login is `scripts/create-staff-login.mjs`.
-Dumps go to `backups/`, which is git-ignored. **Read
-[`docs/recovery-runbook.md`](docs/recovery-runbook.md) before relying on one** — it records
-what is verified, and the steps a hosted restore needs that a local drill does not cover.
+Dumps go to `backups/`, which is git-ignored.
+
+`scripts/restore-backup.mjs` restores into the local stack by default and into a named
+project with `--project-ref <ref>`, which needs `--allow-production` for the live one. It
+makes load order irrelevant — the dump's tables are alphabetical, so 29 of 50 foreign keys
+arrive out of order, and a trigger that derives a column needs its source rows — by dropping
+the foreign keys and disabling user triggers around the load, then putting both back.
+
+**Read [`docs/recovery-runbook.md`](docs/recovery-runbook.md) before relying on a dump.** It
+records what has been verified and what has not, and the auth seam that stops staff signing
+in after a restore.
 
 ### Deploying the Worker
 

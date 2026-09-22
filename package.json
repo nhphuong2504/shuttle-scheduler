@@ -14,7 +14,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "integration:target": "node scripts/integration-target.mjs",
     "backup:production": "node scripts/backup-production.mjs",
-    "restore:to-local": "node scripts/restore-to-local.mjs",
+    "restore:to-local": "node scripts/restore-backup.mjs",
     "ci:shard-plan": "node scripts/shard-plan.mjs",
     "bench:scheduling": "vitest run --config vitest.benchmark.config.ts",
     "typecheck": "tsc --noEmit",

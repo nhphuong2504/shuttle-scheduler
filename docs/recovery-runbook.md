@@ -20,24 +20,24 @@ The recovery model is two-part, and the two parts come from different places:
 Verified on 2026-09-22 against production (`bwzemvaftzforfmaprif`):
 
 - **The migrations reproduce production's schema exactly.** A database rebuilt from the 35
-  migrations was compared against production using `scripts/parity-dump.sql`, which emits
+  migrations was compared against production with `scripts/parity-dump.sql`, which emits
   `pg_get_functiondef`, `pg_get_constraintdef` and policy `qual` text rather than names.
   61 function bodies, 38 policy expressions, 207 columns, 119 constraints, 68 indexes, 643
   table grants and 211 routine grants were **identical**. The only differences were
   platform infrastructure: the local stack's `_realtime` / `supabase_functions` schemas,
   Supabase's internal `supabase_realtime_messages_publication`, and `statement_timeout`.
-- **A production dump restores into that rebuilt schema**, and the restored values match
-  production field for field — not just row counts.
+- **A production dump restores into that rebuilt schema**, with values matching production
+  field for field — not just row counts.
+- **The restore procedure handles a populated bracket.** A dump containing rows in
+  `draws`, `draw_matches`, `tier_draws` and `tier_draw_matches`, with a child row
+  physically preceding its parent, loads in a single pass. All 54 foreign keys are re-added
+  and the trigger-derived columns come out correct.
 
 **Not verified — treat as untested:**
 
 - **No restore has been run against the hosted project.** Every drill so far has used the
-  local stack. The procedure in [Procedure B](#procedure-b--restore-into-a-hosted-project)
-  is the one that *would* be used, and its two approaches are reasoned rather than
-  exercised.
-- **No backup has been restored that contains a populated bracket.** Every dump so far has
-  `draw_matches` and `tier_draw_matches` empty, which is what makes the ordered approach
-  work. See [Foreign keys are the hard part](#foreign-keys-are-the-hard-part).
+  local stack. Procedure B uses a code path that is verified locally and permitted by
+  production's privileges, but that is an argument, not a rehearsal.
 
 ## Prerequisites
 
@@ -48,10 +48,10 @@ Verified on 2026-09-22 against production (`bwzemvaftzforfmaprif`):
   export PATH=/opt/homebrew/opt/libpq/bin:$PATH
   ```
 - **`SUPABASE_DB_PASSWORD`** — the database password from Project Settings → Database. Lives
-  in `.env.local` (git-ignored). A publishable key will not work: `pg_dump` authenticates as
-  the database role.
-- **`SUPABASE_ACCESS_TOKEN`** — in `.env`. Used to look up the pooler host and, via
-  `scripts/run-sql.mjs`, to run read-only catalogue queries.
+  in `.env.local` (git-ignored). A publishable key will not work: both `pg_dump` and
+  `pg_restore` authenticate as the database role.
+- **`SUPABASE_ACCESS_TOKEN`** — in `.env`. Used to look up the pooler host, and by
+  `scripts/run-sql.mjs` to run read-only catalogue queries.
 
 ## Taking a backup
 
@@ -70,113 +70,111 @@ event.
 
 ## Procedure A — rehearse into the local stack
 
-This is the drill, and it is scripted:
-
 ```sh
 npm run restore:to-local -- backups/<dump> --yes
 ```
 
-It calls `supabase db reset` first, so the schema is rebuilt from the migrations exactly as
-it would be in a real recovery, then truncates the migration baseline and loads the dump's
-data. It finishes by comparing every table against the counts recorded in the dump, and
-fails loudly on any mismatch.
+This empties every table in `public`, makes the load order-independent, loads the dump in a
+single pass, puts the constraints and triggers back, and then compares every table against
+the counts **derived from the dump itself** — so the numbers it checks against are a
+property of the file being restored, not of anything left lying around.
 
-**Why the truncate matters:** `20260910043000_reconstruct_demo_tournament_data.sql` bakes in
-a demo tournament with *the same row counts* as a fresh production dump. Without truncating
+**Why the emptying matters:** `20260910043000_reconstruct_demo_tournament_data.sql` bakes in
+a demo tournament with *the same row counts* as a fresh production dump. Without emptying
 first, a restore that did nothing at all would still report matching counts.
 
-It connects as `supabase_admin` for the load so it can pass `--disable-triggers`. That role
-is local-only, and is why this exact invocation does not carry over to production.
+The drill and a real recovery run the same code path, so the rehearsal exercises what an
+incident would actually run. That is deliberate — an earlier version of this script worked
+one way locally and could not work at all on a hosted project.
 
 ## Procedure B — restore into a hosted project
 
-> **Untested.** No hosted restore has been rehearsed. Read
-> [Foreign keys are the hard part](#foreign-keys-are-the-hard-part) before relying on this.
+```sh
+node scripts/restore-backup.mjs backups/<dump> \
+  --project-ref bwzemvaftzforfmaprif --allow-production --yes
+```
 
-There is deliberately no script for this. The local script refuses any target it cannot
-prove is the local stack, because it deletes everything it touches, and a script that can be
-pointed at production is a script that eventually will be.
+The target has to be named explicitly, and the production ref needs `--allow-production` on
+top of `--yes`, so a mistyped invocation cannot quietly overwrite the live database.
 
-The shape of it:
+Before running it, the schema has to exist — the script loads data, it does not apply
+migrations, because "rebuild the schema" and "overwrite the data" are separate decisions:
+
+```sh
+node scripts/apply-migrations.mjs bwzemvaftzforfmaprif --allow-production
+```
+
+Then, in summary:
 
 1. **Stop writes.** Take the app down or put it in maintenance. A restore replaces data; any
    write that lands during it is lost.
-2. **Rebuild the schema** by applying every migration. `scripts/apply-migrations.mjs` does
-   this with a personal access token, recording each file in
-   `supabase_migrations.schema_migrations` in the same transaction.
-3. **Load the data** — see below.
+2. **Rebuild the schema** — `scripts/apply-migrations.mjs`.
+3. **Load the data** — `scripts/restore-backup.mjs` with `--allow-production`.
 4. **Recreate the staff logins** — see [The auth seam](#the-auth-seam).
-5. **Verify** against the dump's `.counts.json`.
+5. **Verify** — the script does this itself and fails if a table does not match.
 
 The connection string must use the pooler's **session** port (5432), not the transaction
 port (6543). Transaction mode may run each statement on a different backend connection, and
-a restore needs a consistent session; the failure is an obscure mid-restore error rather
-than a clear one.
+a restore needs a consistent session. The script forces the session port rather than
+trusting it, because the failure is an obscure mid-restore error rather than a clear one.
 
-```sh
-# session mode, as the postgres role
-export PGURL="postgresql://postgres:<password>@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
+### Why loading order is the hard part
+
+A data-only restore lands rows into a schema that already has its constraints and triggers.
+Two separate mechanisms make the dump's own order unusable, and only fixing the first is a
+trap.
+
+**Foreign keys.** The dump's tables are ordered alphabetically, so `categories` is restored
+before the `tournaments` row it references. Against a full production dump, **29 of 50
+foreign key relationships are out of order**, and a plain `pg_restore --data-only` fails
+partway through.
+
+**Triggers that derive columns.** `pool_entries_membership` is a BEFORE INSERT trigger that
+reads `tournament_id` from `pools` and writes it onto the new row:
+
+```sql
+SELECT category_id, tournament_id INTO pool_cat, pool_tournament
+FROM public.pools WHERE id = NEW.pool_id;
+...
+NEW.tournament_id := pool_tournament;
 ```
 
-### Foreign keys are the hard part
+If `pools` has not been loaded yet, it writes **NULL**, and a NOT NULL constraint rejects the
+row. Dropping the foreign keys does nothing about this: with all 54 dropped, `pool_entries`
+still loaded **0 of 145 rows**. Only disabling the trigger fixes it.
 
-Restoring only data means the foreign keys already exist, and this is where a naive restore
-fails. Two facts about this schema:
+### What the script does instead of ordering
 
-- **The dump's table order is alphabetical, not dependency-ordered** — `categories` is
-  restored before `tournaments` that it references. Against this dump, **29 of 50 foreign
-  key relationships are out of order**, so a plain `pg_restore --data-only` will fail
-  partway.
-- **The usual two escapes are both unavailable on hosted.** `--disable-triggers` and
-  `SET session_replication_role = replica` both require superuser, and the `postgres` role
-  is not one on a hosted project:
-  ```
-  ERROR: 42501: permission denied to set parameter "session_replication_role"
-  ```
+It makes the order stop mattering:
 
-That leaves two workable approaches.
+- **Drops the 54 foreign keys**, then re-adds them. `ADD CONSTRAINT` validates every existing
+  row as it is added, so re-adding is itself an integrity check rather than a formality.
+- **Disables user triggers** for the duration, then re-enables them.
 
-**1. Ordered restore — load one table at a time, parents first.** No superuser, no schema
-changes. This is verified locally: with the tables emptied first, `pg_restore --data-only
---table=<name>` for each table in topological order restored all 935 rows with no trigger
-suppression at all.
+`ALTER TABLE ... DISABLE TRIGGER USER` is permitted to the **table owner**, not a superuser,
+and that is the whole reason this works on a hosted project — `postgres` owns all 19 tables
+there. The two obvious alternatives do not:
 
-```sh
-# Dependency order, computed from the foreign-key graph. RECOMPUTE THIS when a migration
-# adds a table or a foreign key - a stale list restores silently and incompletely.
-for t in desk_activity players staff_roles tournaments categories courts \
-         tournament_days draws pools teams tournament_day_breaks \
-         tournament_day_courts draw_matches placement_entrants pool_entries \
-         pool_matches placement_matches tier_draws tier_draw_matches; do
-  pg_restore --data-only --no-owner --no-privileges --table="$t" --dbname "$PGURL" <dump>
-done
+```
+pg_restore --disable-triggers   →  needs superuser
+SET session_replication_role    →  ERROR: 42501: permission denied to set parameter
 ```
 
-Two traps:
+Both were checked against production; `postgres` is not a superuser there. Verified locally
+that the approach works as a non-superuser (`rolsuper=false`).
 
+If the script is interrupted after the constraints are dropped, it has written
+`<dump>.repair.sql` containing the statements to put them back. That file is the record of
+how to repair the schema, so do not delete it mid-incident.
+
+### Two traps if you hand-roll any of this
+
+- **`pg_restore` exits 0 when a COPY fails.** The exit code is not a success signal; the
+  output has to be read. A script that only checks `$?` will report a clean restore over a
+  half-empty database.
 - **`--table` must be unqualified.** `--table=public.players` matches no entry in the
-  archive and exits **0** having restored nothing — a silent no-op that looks exactly like
-  success. This is how the first version of this drill was fooled. Always check row counts
-  afterwards.
-- **It cannot handle self-referencing foreign keys.** `draw_matches.parent_a_id` /
-  `parent_b_id` reference `draw_matches` itself, as do the same columns on
-  `tier_draw_matches`. Within a single table's load the rows arrive in dump order, and a row
-  referencing a later row in the same table fails. **Both tables are empty today, which is
-  the only reason this works.** The first dump containing a real bracket will break it.
-
-**2. Drop the foreign keys, load, re-add them — the approach that survives a populated
-bracket.** The `postgres` role owns all 19 `public` tables, so it can drop and re-add its own
-constraints without superuser. Load order then stops mattering entirely:
-
-1. Record every constraint definition first (`parity-dump.sql`'s `constraint` and
-   `trigger` sections already emit them, and the migrations can recreate them).
-2. `ALTER TABLE ... DROP CONSTRAINT ...` for all 54 foreign keys.
-3. Restore the data in any order.
-4. Re-add the constraints and verify with a parity diff against a database rebuilt from
-   migrations.
-
-This is the recommended production procedure, and it is the one thing here that has **not**
-been exercised. Verify it against a real dump with a populated bracket before trusting it.
+  archive and exits **0** having restored nothing. This is how the first version of this
+  drill was fooled into reporting success. Always check row counts afterwards.
 
 ## The auth seam
 
