@@ -66,25 +66,29 @@ export function projectRef(url: string): string {
 }
 
 /**
- * Project refs that appear in the repository's own `.env`.
- *
- * Read as text rather than through `import.meta.env` on purpose: this check must see the
- * production values even though the suite deliberately does not load them. If `.env` is
- * absent - CI, or a fresh checkout - there is nothing to compare against and the hardcoded
- * ref above still applies.
- */
-/**
  * Every project this repository is *configured to talk to*, read from the root environment
  * files - so a project the app can reach in any mode counts as protected.
  *
  * Reading `.env` alone was a mistake that survived one refactor too long: it made the
  * guard's protection depend on which file a project happened to live in. `env-split` moved
- * production out of `.env` and put staging in, and the guard silently changed from
- * "staging is allowed" to "staging is forbidden" without anyone editing it. The invariant
- * should not be able to change that way - so read all of them.
+ * production out of `.env` and put staging in, and the guard silently changed which projects
+ * it covered without anyone editing it. The invariant should not be able to change that way,
+ * so all of them are read.
  *
- * `integration/.env` is deliberately NOT read: that is the suite's own declared target, and
- * folding it in would forbid the very project the suite is meant to run against.
+ * The consequence is deliberate and worth stating plainly, because it is not obvious and was
+ * once misdescribed: **staging is now protected.** `.env` names the staging project, so the
+ * suite refuses to target it. That is not a bug to work around - it is the guard saying the
+ * suite needs a project of its own, because it writes rows and flips the active-tournament
+ * pointer. Pointing `integration/.env` at any project named by a root env file will be
+ * refused; `PRODUCTION_PROJECT_REFS` above covers the two that are not named there.
+ *
+ * `integration/.env` is deliberately NOT read. It is the suite's own declared target, so
+ * folding it in would let the suite forbid itself no matter where it points - and the target
+ * is meant to be an explicit choice, not a second source of protected refs.
+ *
+ * The files are read as text rather than through `import.meta.env`, because the suite sets
+ * its own `envDir` and so never loads the root `VITE_` values - reading them this way is what
+ * lets the check see a project the suite itself is not configured to reach.
  */
 const REPOSITORY_ENV_FILES = [".env", ".env.local", ".env.development", ".env.production"];
 
