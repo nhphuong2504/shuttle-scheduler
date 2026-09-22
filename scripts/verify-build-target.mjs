@@ -108,7 +108,7 @@ let sawKey = false;
 // Kept for visibility rather than for the decision, and marked so a reader does not mistake a
 // library default for the deployment target.
 const hosts = new Set();
-const HOSTS = /https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:supabase\.co|lovable\.cloud)/gi;
+const HOSTS = /https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.supabase\.co/gi;
 
 for (const file of files) {
   const contents = readFileSync(file, "utf8");
