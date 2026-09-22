@@ -25,8 +25,8 @@ const PRODUCTION_PROJECT_REFS = ["hdmfxndanyrbxedgboev", "bwzemvaftzforfmaprif"]
 /**
  * Load `integration/.env` into the process environment.
  *
- * `vitest.integration.config.ts` sets `envDir` to this directory so the repository's
- * production `.env` is never read here, but Vitest only routes `VITE_`-prefixed values into
+ * `vitest.integration.config.ts` sets `envDir` to this directory so a root `VITE_` variable
+ * never reaches the suite, but Vitest only routes `VITE_`-prefixed values into
  * `import.meta.env`. The names this suite requires - `SUPABASE_TEST_*` - are read from
  * `process.env`, so without this the file is inert and the suite reports itself as "not
  * configured" no matter how carefully it has been filled in.
@@ -73,18 +73,38 @@ export function projectRef(url: string): string {
  * absent - CI, or a fresh checkout - there is nothing to compare against and the hardcoded
  * ref above still applies.
  */
+/**
+ * Every project this repository is *configured to talk to*, read from the root environment
+ * files - so a project the app can reach in any mode counts as protected.
+ *
+ * Reading `.env` alone was a mistake that survived one refactor too long: it made the
+ * guard's protection depend on which file a project happened to live in. `env-split` moved
+ * production out of `.env` and put staging in, and the guard silently changed from
+ * "staging is allowed" to "staging is forbidden" without anyone editing it. The invariant
+ * should not be able to change that way - so read all of them.
+ *
+ * `integration/.env` is deliberately NOT read: that is the suite's own declared target, and
+ * folding it in would forbid the very project the suite is meant to run against.
+ */
+const REPOSITORY_ENV_FILES = [".env", ".env.local", ".env.development", ".env.production"];
+
 function repositoryEnvRefs(): string[] {
-  let text = "";
-  try {
-    text = readFileSync(join(__dirname, "..", ".env"), "utf8");
-  } catch {
-    return [];
-  }
   const refs: string[] = [];
-  for (const key of ["SUPABASE_URL", "VITE_SUPABASE_URL"]) {
-    const match = text.match(new RegExp(`^\\s*${key}\\s*=\\s*([^\\s#]+)`, "m"));
-    const value = match?.[1]?.replace(/^["']|["']$/g, "");
-    if (value && /^https?:/.test(value)) refs.push(projectRef(value));
+  for (const file of REPOSITORY_ENV_FILES) {
+    let text: string;
+    try {
+      text = readFileSync(join(__dirname, "..", file), "utf8");
+    } catch {
+      continue;
+    }
+    for (const key of ["SUPABASE_URL", "VITE_SUPABASE_URL"]) {
+      const match = text.match(new RegExp(`^\\s*${key}\\s*=\\s*([^\\s#]*)`, "m"));
+      const value = match?.[1]?.replace(/^["']|["']$/g, "");
+      // An empty assignment (as in `.env.example`) is a placeholder, not a project.
+      if (!value || !/^https?:/.test(value)) continue;
+      const ref = projectRef(value);
+      if (ref) refs.push(ref);
+    }
   }
   return refs;
 }
@@ -123,10 +143,11 @@ export function assertNotProduction(ref: string): void {
   const forbidden = new Set([...PRODUCTION_PROJECT_REFS, ...repositoryEnvRefs()]);
   if (forbidden.has(ref)) {
     throw new Error(
-      `Refusing to run: the integration suite is pointed at project "${ref}", which is a ` +
-        "production project for this repository.\n" +
-        "These tests create and delete data. Use a dedicated test project and set " +
-        "SUPABASE_TEST_URL to it.",
+      `Refusing to run: the integration suite is pointed at project "${ref}", which this ` +
+        "repository is configured to use as a real backend (a root environment file names " +
+        "it, or it is a known production project).\n" +
+        "These tests write rows and flip the active-tournament pointer. Use a dedicated " +
+        "test project and set SUPABASE_TEST_URL to it.",
     );
   }
 }

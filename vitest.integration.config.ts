@@ -21,14 +21,16 @@ import tsconfigPaths from "vite-tsconfig-paths";
  * So these tests talk to a real project, which means they must never talk to the production
  * one. Two independent controls enforce that:
  *
- *   1. `envDir` is pointed at `integration/`, which contains no `.env`. The repository's
- *      root `.env` points at production, and the application prefers `import.meta.env`
- *      over `process.env` - so without this, a test run would silently authenticate
- *      against production. This is the subtle failure the setting exists to prevent.
+ *   1. `envDir` is pointed at `integration/`, which holds only this suite's own (git-ignored)
+ *      `.env`. The root environment files name the two backends the app is configured for -
+ *      `.env` staging, `.env.production` production - and the application prefers
+ *      `import.meta.env` over `process.env`, so without this redirect a root `VITE_` value
+ *      would be loaded and a test run would silently authenticate against a real backend.
+ *      This is the subtle failure the setting exists to prevent.
  *   2. `integration/setup-guard.ts` asserts, before any test body runs, that the URL the
- *      application will actually resolve is the configured test project and is not the
- *      production ref. If either control is misconfigured the run aborts rather than
- *      writing to production.
+ *      application will actually resolve is the configured test project and is not a
+ *      protected ref. If either control is misconfigured the run aborts rather than
+ *      writing to a real project.
  *
  * Run with `npm run test:integration`. It exits non-zero with an explanatory message when
  * the test project is not configured - never a silent pass.
