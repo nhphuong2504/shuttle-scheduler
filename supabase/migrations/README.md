@@ -1,7 +1,12 @@
 # Migrations
 
-Files here are applied in filename order (timestamp prefix). The hosted project is
-`hdmfxndanyrbxedgboev` (see `supabase/config.toml`).
+Files here are applied in filename order (timestamp prefix).
+
+The hosted projects are `dzilzdxzdrrbdimhbiwv` (staging) and `bwzemvaftzforfmaprif`
+(production); migrations reach them with `npm run db:push`, or `scripts/apply-migrations.mjs`
+where `db:push` cannot log in — see "Replaying the migrations" below. The ref in
+`supabase/config.toml` is not one of them: it names the *local* stack, and the CLI keeps the
+linked hosted project separately in `supabase/.temp/`.
 
 ## Applying `20260915000000_tournament_scoping.sql`
 

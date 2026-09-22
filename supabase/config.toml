@@ -1,1 +1,10 @@
-project_id = "hdmfxndanyrbxedgboev"
+# The local stack's project id. This is NOT a hosted project ref: while the checkout is
+# linked, the CLI names the local containers after the linked hosted project, which it keeps
+# in `supabase/.temp/`. This value is what a *fresh, unlinked* checkout uses, so it should
+# name this project rather than a cloud one.
+#
+# It previously held `hdmfxndanyrbxedgboev` — the Lovable Cloud project this repository
+# migrated away from. Left here, it read as "the project this repository belongs to", which
+# was wrong twice over: that project is no longer used, and it was never what the CLI used
+# anyway.
+project_id = "tournova"
