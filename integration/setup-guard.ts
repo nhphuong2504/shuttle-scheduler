@@ -1,10 +1,10 @@
 /**
  * Runs before any test body in the integration suite.
  *
- * `vitest.integration.config.ts` redirects `envDir` so the repository's production `.env`
- * is not loaded, and `integration/env.ts` refuses a production project ref. This file closes
- * the remaining gap between those two controls: it checks the URL the *application* will
- * actually resolve, which is the value that would send production writes.
+ * `vitest.integration.config.ts` redirects `envDir` so the repository's root environment
+ * files are not loaded, and `integration/env.ts` refuses a protected project ref. This file
+ * closes the remaining gap between those two controls: it checks the URL the *application*
+ * will actually resolve, which is the value that would send production writes.
  *
  * The distinction matters because the guard in `env.ts` validates `SUPABASE_TEST_URL` -
  * the suite's own configuration - while the application reads
