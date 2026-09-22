@@ -109,7 +109,7 @@ Each refuses to act on an unknown target rather than defaulting to one.
 | `scripts/create-staff-login.mjs` | Creates the `auth.users` identity for an email the migrations already seeded into `staff_roles`, and verifies the role resolves. Email is the durable key — the `on_auth_user_created_link_staff` trigger fills in `staff_roles.user_id`, so there is no UUID or password to migrate. |
 | `scripts/compare-api-surface.mjs` | Diffs the tables, columns and RPC signatures of two backends using their keys. A narrower check than `parity-dump.sql`: function bodies and policies are not visible over HTTP. |
 | `scripts/run-sql.mjs` | Runs one read-only `.sql` file against a project, either over a Postgres connection string or, with `--project-ref`, through the Management API. Refuses anything that is not a single read-only statement. |
-| `scripts/verify-build-target.mjs` | Asserts a build was compiled against the backend currently in `.env`. See "Deploying the Worker" below. |
+| `scripts/verify-build-target.mjs` | Asserts a build was compiled against the backend currently in `.env`, that a production build targets the production project, and that the generated Worker is `tournova-ops`. See "Deploying the Worker" below. |
 | `scripts/reset-tournament-data.mjs` | Clears tournament data while keeping `staff_roles`. Requires `SUPABASE_URL` and a key; it has no hardcoded project. |
 | `scripts/restore-backup.mjs` | Restores a `pg_dump` backup into the local stack, or into a named project with `--project-ref`. Refuses the production ref without `--allow-production`. See "Backups" below. |
 
@@ -140,9 +140,11 @@ in after a restore.
 ### Deploying the Worker
 
 ```sh
-npm run deploy:dry   # build, verify the target, show what would be uploaded
+npm run deploy:check # build, verify the target, show what would be uploaded (no upload)
 npm run deploy       # build, verify the target, upload
 ```
+
+`npm run deploy:dry` is an alias of `deploy:check`.
 
 The Worker is `tournova-ops`, named explicitly in [`vite.config.ts`](vite.config.ts).
 Nitro would otherwise derive the name from the git remote, which resolves to the existing
@@ -157,6 +159,13 @@ backend means rebuilding and redeploying.
 That is why `npm run deploy` runs `scripts/verify-build-target.mjs` before uploading: it
 fails when the bundle does not contain the project the build was configured for, which is
 the difference between deploying to production and quietly deploying to staging.
+
+In production mode — the default, and what both scripts above use — the check is stricter
+than that. It also requires the configured project to be the production project, gets it
+wrong for neither the legacy Lovable Cloud project nor staging, and reads the generated
+`.output/server/wrangler.json` to confirm the Worker is still `tournova-ops`. A
+`--mode development` check keeps the weaker comparison, because a staging build is allowed
+to target staging.
 
 Which project that is comes from the environment files, split so that a mistake has to be
 deliberate:

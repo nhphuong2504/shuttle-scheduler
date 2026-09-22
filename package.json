@@ -27,7 +27,8 @@
     "db:types": "supabase gen types typescript --linked > src/integrations/supabase/types.ts",
     "db:parity": "node scripts/run-sql.mjs scripts/parity-dump.sql",
     "db:drift": "node scripts/run-sql.mjs scripts/migration-drift-check.sql",
-    "deploy:dry": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy --dry-run",
+    "deploy:check": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy --dry-run",
+    "deploy:dry": "npm run deploy:check",
     "deploy": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy"
   },
   "overrides": {
