@@ -83,6 +83,7 @@ review the diff.
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
 | [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md) | The manual checks no automated gate covers |
+| [`docs/recovery-runbook.md`](docs/recovery-runbook.md) | Getting the database back after data loss: what a backup does and does not contain, and the restore procedure |
 | [`supabase/migrations/README.md`](supabase/migrations/README.md) | Applying and verifying database migrations |
 | [`src/routes/README.md`](src/routes/README.md) | File-based routing conventions |
 
@@ -113,6 +114,19 @@ Each refuses to act on an unknown target rather than defaulting to one.
 
 The database-side counterparts — `parity-dump.sql` and `migration-drift-check.sql` — are
 documented in [`supabase/migrations/README.md`](supabase/migrations/README.md).
+
+### Backups
+
+```sh
+npm run backup:production                          # pg_dump of public/, needs SUPABASE_DB_PASSWORD
+npm run restore:to-local -- backups/<dump> --yes   # rehearses a restore into the local stack
+```
+
+A dump is `public` data only: the schema is rebuilt from the migrations, and `auth` is
+deliberately excluded because recreating a staff login is `scripts/create-staff-login.mjs`.
+Dumps go to `backups/`, which is git-ignored. **Read
+[`docs/recovery-runbook.md`](docs/recovery-runbook.md) before relying on one** — it records
+what is verified, and the steps a hosted restore needs that a local drill does not cover.
 
 ### Deploying the Worker
 
