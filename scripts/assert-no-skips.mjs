@@ -62,6 +62,24 @@ function main() {
   const tests = collectTests(report, [], []);
 
   /**
+   * A report with no tests is a failure, not a vacuously clean run.
+   *
+   * This matters more since the browser job is sharded. Each shard is a separate runner
+   * with its own report, so a shard whose `--shard` argument is wrong - or that silently
+   * collects nothing - would otherwise print "0 test(s) ran, none skipped" and pass. That
+   * is the same silent-coverage failure this guard exists to catch, one level up: not a
+   * test pretending to pass, but a whole slice of the suite not existing.
+   */
+  if (tests.length === 0) {
+    console.error(
+      `assert-no-skips: ${REPORT} contains no tests at all.\n` +
+        "An empty report is not a clean run. Under sharding this is how a shard that was\n" +
+        "handed the wrong --shard argument would pass while running nothing.",
+    );
+    process.exit(1);
+  }
+
+  /**
    * A skip is any test whose *result status* is `skipped`, which covers both a static
    * `test.skip(...)` and a runtime `test.skip(true, ...)`. Checking the result status
    * rather than the expectation is deliberate: a test that was expected to be skipped

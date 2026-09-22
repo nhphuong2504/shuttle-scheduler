@@ -52,8 +52,23 @@ jobs:
       - run: npm run build
 
   browser:
-    name: Rendered app, hermetic
+    # Sharded, not because the tests are slow individually but because the job is
+    # machine-bound. `ubuntu-latest` has 4 vCPU and a Playwright worker drives a whole
+    # Chromium, so 2 workers already saturate the runner: raising the worker count to 4
+    # measured 1132s against 1141s, i.e. no gain, while inflating per-test cost 1.9x and
+    # failing 20 tests on contention. More workers cannot help a job that has no free CPU.
+    # More machines can.
+    #
+    # The denominator is `strategy.job-total`, derived from the matrix, so adding a shard
+    # cannot leave the two halves disagreeing about how many there are.
+    name: Rendered app, hermetic (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
+    strategy:
+      # Both shards report even when one fails. One shard's failure should not hide the
+      # other's, which is most of the reason for splitting the run in the first place.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
 
@@ -66,9 +81,11 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
-      - run: npm run test:e2e
+      - run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
-      # The skip guard, run against the JSON report the config always writes.
+      # The skip guard, run against the JSON report the config always writes. It runs per
+      # shard: each shard is a separate runner with its own report, and a skipped test is
+      # never a passing test whichever slice of the suite it was in.
       #
       # This is the one place the workflow goes slightly beyond the plan, which left the
       # final gate entirely local. The plan's stated goal was that "a skip can never be
@@ -79,9 +96,10 @@ jobs:
       # message; that remains the local phase-close gate.
       - run: node scripts/assert-no-skips.mjs
 
+      # Named per shard: a matrix job cannot upload two artifacts under one name.
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
