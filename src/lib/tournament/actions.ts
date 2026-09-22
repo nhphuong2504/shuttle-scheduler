@@ -979,27 +979,6 @@ export async function setTournamentDayBreaks(
   if (error) throw new Error(error.message);
 }
 
-export interface TournamentCategoryInput {
-  code: string;
-  name: string;
-  entryType: string;
-  sortOrder: number;
-  active: boolean;
-  maxEntries: number | null;
-}
-
-export interface CreateTournamentInput {
-  name: string;
-  dayCount: number;
-  courtCount: number;
-  startDate: string;
-  categories: TournamentCategoryInput[];
-}
-
-/**
- * Creates a tournament and everything it owns (days, courts, categories) in one
- * transaction, then makes it the active tournament.
- */
 // ---------------------------------------------------------------------------
 // Tournament creation: a persisted, resumable draft
 //
@@ -1228,32 +1207,6 @@ export async function deleteTournament(tournamentId: string): Promise<void> {
     p_tournament_id: tournamentId,
   });
   if (error) throw new Error(error.message);
-}
-
-/**
- * Creates an active tournament in one call. Superseded by the draft wizard, and
- * kept only so any remaining caller still compiles.
- *
- * @deprecated Use `createTournamentDraft` followed by `activateTournament`.
- */
-export async function createTournament(input: CreateTournamentInput): Promise<string> {
-  const payload = input.categories.map((c) => ({
-    code: c.code,
-    name: c.name,
-    entry_type: c.entryType,
-    sort_order: c.sortOrder,
-    active: c.active,
-    max_entries: c.maxEntries,
-  }));
-  const { data, error } = await supabase.rpc("create_tournament", {
-    p_name: input.name.trim(),
-    p_day_count: input.dayCount,
-    p_court_count: input.courtCount,
-    p_start_date: input.startDate,
-    p_categories: payload as never,
-  });
-  if (error) throw new Error(error.message);
-  return data as string;
 }
 
 export async function inviteStaff(
