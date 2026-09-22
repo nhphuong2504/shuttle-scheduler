@@ -71,3 +71,7 @@ blob-report/
 # Recorded Playwright staff session (`npm run test:e2e:record-auth`).
 # Contains a live auth token - never commit.
 e2e/.auth/
+
+# Logical backups of the hosted database. Restored by `npm run restore:to-local`.
+# Contains real tournament data - never commit.
+backups/
