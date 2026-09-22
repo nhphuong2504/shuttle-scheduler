@@ -68,7 +68,19 @@ jobs:
       # other's, which is most of the reason for splitting the run in the first place.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        # 4 shards, chosen from measurement rather than intuition - see `npm run
+        # ci:shard-plan`, which prints the wall time and billed minutes for each count.
+        #
+        # The count is not "as many as possible". More shards keeps splitting the same
+        # imbalance more finely and eventually makes it worse: 6 was predicted at 7.9 min
+        # against 4's 7.0, with total minutes nearly doubling. Nor is fewer cheaper - 3 was
+        # predicted slower (9.8 against 7.0) AND more expensive (29.5 billed minutes against
+        # 28.1) because 3 shards spreads 36 minutes of work unevenly enough that one shard
+        # carries 17.9 min while the others idle near 9.
+        #
+        # Re-run that script after adding a spec file: the split is by test count, so a new
+        # file reshuffles every shard boundary.
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
 
