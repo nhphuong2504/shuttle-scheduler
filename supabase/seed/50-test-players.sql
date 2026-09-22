@@ -2,10 +2,11 @@
 -- 50 test players for the two-round placement format.
 --
 -- NOT A MIGRATION, and the location is the point. Everything under
--- `supabase/migrations/` is applied to the connected project by Lovable, so a
--- file there would drop fifty fake entrants into the live tournament the moment
--- it was pushed. This is in `supabase/seed/`, so nothing happens until you paste
--- it into the Supabase SQL editor and run it.
+-- `supabase/migrations/` is applied to the connected project by `npm run db:push`
+-- (or `scripts/apply-migrations.mjs`), so a file there would drop fifty fake
+-- entrants into the live tournament the moment it was pushed. This is in
+-- `supabase/seed/`, so nothing happens until you paste it into the Supabase SQL
+-- editor and run it.
 --
 -- Against the ACTIVE tournament it:
 --   * inserts 50 players (30 men, 20 women) with realistic names

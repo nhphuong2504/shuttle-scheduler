@@ -1,15 +1,3 @@
-<!-- LOVABLE:BEGIN -->
-> [!IMPORTANT]
-> This project is no longer connected to [Lovable](https://lovable.dev). The
-> disconnect is complete: nothing here is built, deployed or hosted by it, and
-> no Lovable package is a dependency. `.lovable/` is gone.
->
-> The block is kept only to record that, and can be deleted once the remaining
-> Lovable references listed in the README are cleared. The history rule it used
-> to carry is gone with the connection — though rewriting published history is
-> still worth avoiding, for the ordinary reasons.
-<!-- LOVABLE:END -->
-
 # Working in this repository
 
 Cursor is the primary development environment, and the repository is
@@ -172,7 +160,7 @@ tests are the floor, not the argument.
 - The `P<n>:` prefix convention in existing history is fine to continue for phased
   work.
 - **Squash is not mandatory.** Preserve independent commits where they carry meaning.
-- Never force-push or rewrite published commits — see the Lovable note at the top.
+- Never force-push or rewrite published commits; they are shared history.
 - Keep `main` working. Every commit on it should build and pass tests.
 
 ## When a change is user-visible
