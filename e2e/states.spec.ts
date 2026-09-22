@@ -13,6 +13,7 @@ import {
 } from "../src/lib/tournament/match-status";
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
+import { REFERENCE } from "./fixtures/desk-mock";
 import { MATRIX_CELLS, WCAG_TAGS, cellLabel, openCell } from "./fixtures/matrix";
 
 /**
@@ -58,6 +59,33 @@ import { MATRIX_CELLS, WCAG_TAGS, cellLabel, openCell } from "./fixtures/matrix"
  */
 
 test.describe.configure({ timeout: 180_000 });
+
+/**
+ * The harness invariant this file depends on, asserted rather than assumed.
+ *
+ * Every state on this board is *derived* - `overrun` means a court has been live longer than
+ * its slot - so the app's idea of "now" has to match the instants the fixture seeded. It did
+ * not, once: the fixture clamped seeded times to just after midnight, so between 00:00 and
+ * about 00:16 a board seeded to show all five states could not produce an `overrun` at all,
+ * and this file failed for reasons unrelated to any change. CI runs in UTC, so that was a red
+ * gate after every UTC midnight.
+ *
+ * Anchoring both clocks to `REFERENCE` fixes it, and the two must move together - reverting
+ * either one alone re-opens the gap. This test fails if the pin is dropped, which is the
+ * realistic way to reintroduce it, because a dropped pin is invisible at every other hour.
+ */
+test("the app clock is pinned to the fixture reference", async ({ page }) => {
+  await installAppMock(page, { preset: "states" });
+  await openCell(page, "/", MATRIX_CELLS[0]!);
+
+  const appNow = await page.evaluate(() => Date.now());
+  expect(
+    Math.abs(appNow - REFERENCE.getTime()),
+    `the page clock drifted from the fixture reference by ${Math.round(
+      (appNow - REFERENCE.getTime()) / 1000,
+    )}s - derived states such as overrun are measured against it`,
+  ).toBeLessThan(1_000);
+});
 
 /** The state vocabulary as the aria-label spells it: hyphens replaced by spaces. */
 const ariaState = (state: CourtState) => state.replace("-", " ");

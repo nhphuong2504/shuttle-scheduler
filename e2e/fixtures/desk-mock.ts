@@ -58,14 +58,34 @@ const MINUTE = 60 * 1000;
 export const DAY_DATE = `${DAY_START.getFullYear()}-${String(DAY_START.getMonth() + 1).padStart(2, "0")}-${String(DAY_START.getDate()).padStart(2, "0")}`;
 
 /**
- * An instant `minutes` from now, never earlier than the start of the current day.
+ * An instant `minutes` from the fixture's reference time.
  *
- * The clamp is what makes the fixture hourly-agnostic: run at 01:00 and a "four hours
- * ago" match would otherwise be dated yesterday and vanish from the day it is meant to
- * populate.
+ * This is anchored to `REFERENCE` - a fixed hour of the current day - and deliberately not
+ * to `Date.now()`. It used to read `Math.max(DAY_START + 1min, Date.now() + minutes)`, which
+ * clamped every seeded instant to just after midnight. The clamp was there so a "four hours
+ * ago" match would not be dated yesterday and vanish from the day it was meant to populate,
+ * but it destroyed the *spacing* between offsets whenever the day was young: at 00:05 both
+ * `-50` and `-48` collapsed onto 00:01, so court 1's overrun match was only four minutes into
+ * a fifteen-minute slot and derived as `playing` instead.
+ *
+ * That made these tests fail purely by the clock: between 00:00 and about 00:16 local, a
+ * board seeded to show all five court states could not show `overrun` at all. CI runs in
+ * UTC, so the gate was red for roughly a quarter of an hour after every UTC midnight, with
+ * failures that had nothing to do with the change under test.
+ *
+ * Anchoring to a fixed hour removes the dependence entirely: offsets are applied to a
+ * constant instant, so spacing is preserved and every state is reachable at any hour.
+ * `REFERENCE` is midday because the widest offset used here is -240 minutes, which keeps
+ * every seeded instant inside the same calendar day.
+ *
+ * The app must agree on "now" for any of this to mean anything, so `installAppMock` pins the
+ * page clock to this same instant. The two are a pair: changing one without the other
+ * reintroduces the drift, in the other direction.
  */
+export const REFERENCE = new Date(DAY_START.getTime() + 12 * 60 * MINUTE);
+
 const at = (minutes: number): string =>
-  new Date(Math.max(DAY_START.getTime() + MINUTE, Date.now() + minutes * MINUTE)).toISOString();
+  new Date(REFERENCE.getTime() + minutes * MINUTE).toISOString();
 
 const TID = "00000000-0000-4000-8000-00000000ffff";
 const CREATED = new Date(DAY_START.getTime() - DAY_MS).toISOString();
