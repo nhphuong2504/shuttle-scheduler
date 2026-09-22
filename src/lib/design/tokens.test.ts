@@ -197,23 +197,29 @@ const deadTokens = [...colorMap.keys()].filter((token) => !live.has(token)).sort
  * evidence for the audit finding that tier 4 collapses onto one ink, and deleting
  * them is the fix rather than the cover-up.
  *
- * What remains is genuinely unrelated to the state vocabulary. `chart-*` and the
- * `sidebar-primary` pair belong to primitives the app does not currently render.
- * `info-*` is defined but no surface uses the info tone. `ring-offset-background`
- * is a shadcn default with no consumer.
+ * Shrank from 11 to 6 when the 36 unused shadcn primitives were deleted: the
+ * `chart-*` series and the whole `sidebar-*` family existed only for `chart.tsx`
+ * and `sidebar.tsx`, so their `--color-*` keys and both theme declarations went
+ * with them rather than being left as dead debt.
+ *
+ * What remains is deliberate rather than forgotten:
+ *
+ * - `card` / `card-foreground` are the third step of the chassis ramp
+ *   (`--background` -> `--surface` -> `--card`) named in docs/design-system.md.
+ *   No component renders `bg-card` today, but the surface is part of the shipped
+ *   vocabulary, so the token stays.
+ * - `info-*` is defined but no surface uses the info tone.
+ * - `ring-offset-background` is a shadcn default whose utility does appear on the
+ *   live `dialog`, `select` and `tabs` primitives; the scanner cannot see it
+ *   because the class reads `ring-offset-background` rather than `ring-<token>`.
  */
 const KNOWN_DEAD = [
-  "chart-1",
-  "chart-2",
-  "chart-3",
-  "chart-4",
-  "chart-5",
+  "card",
+  "card-foreground",
   "info-border",
   "info-foreground",
   "info-surface",
   "ring-offset-background",
-  "sidebar-primary",
-  "sidebar-primary-foreground",
 ];
 
 describe("token references all resolve", () => {

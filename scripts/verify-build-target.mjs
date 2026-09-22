@@ -20,6 +20,14 @@
 // "exactly one backend host" rule fails on a perfectly good build. The publishable key has no
 // such problem - it is a unique opaque string that appears only if that project is the target.
 //
+// IN PRODUCTION MODE (the default) the check is stronger than "the bundle matches the
+// configured values". The configured project must BE the production project, and the
+// generated wrangler.json must name the expected Worker. Both exist because the migration
+// left three Supabase projects and two Workers in play: a build that quietly carries the
+// Lovable or staging project produces a working Worker writing to the wrong database, and
+// the failure is not visible in the output. `--mode development` keeps the weaker check,
+// because a staging build is allowed to target staging.
+//
 // Usage:
 //   node scripts/verify-build-target.mjs                # checks a `npm run build` output
 //   node scripts/verify-build-target.mjs --mode development   # checks a `build:dev` output
@@ -30,6 +38,23 @@ import { join } from "node:path";
 const outputDir = ".output";
 const serverDir = join(outputDir, "server");
 
+/**
+ * The project this repository deploys to, and the two a production build must never
+ * silently target instead. `hdmfxndanyrbxedgboev` is the Lovable Cloud project the
+ * migration moved away from; `dzilzdxzdrrbdimhbiwv` is staging. Both hold real data.
+ */
+const PRODUCTION_PROJECT_REF = "bwzemvaftzforfmaprif";
+const KNOWN_WRONG_REFS = {
+  hdmfxndanyrbxedgboev: "the legacy Lovable Cloud project",
+  dzilzdxzdrrbdimhbiwv: "the staging project",
+};
+
+/**
+ * Pinned in `vite.config.ts` so Nitro cannot derive a name from the git remote, which
+ * resolved to the name of the pre-existing production Worker.
+ */
+const EXPECTED_WORKER_NAME = "tournova-ops";
+
 function readEnvFile(path) {
   const out = {};
   let text = "";
@@ -38,7 +63,11 @@ function readEnvFile(path) {
   } catch {
     return out;
   }
-  for (const line of text.split("\n")) {
+  // Split on `\r?\n`, not `\n`. On Windows the file is CRLF, and a line that keeps its
+  // trailing `\r` cannot match `(.*)$` below - `.` never matches `\r` - so every value
+  // silently reads as absent and the guard reports "set VITE_SUPABASE_URL" instead of
+  // checking anything. A BOM would break the first assignment the same way.
+  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
     if (!match) continue;
     const name = match[1];
@@ -80,9 +109,12 @@ function mode() {
   return value ?? "production";
 }
 
+const activeMode = mode();
+const productionMode = activeMode === "production";
+
 const env = {
   ...readEnvFile(".env"),
-  ...readEnvFile(`.env.${mode()}`),
+  ...readEnvFile(`.env.${activeMode}`),
   ...process.env,
 };
 const expectedUrl = env["VITE_SUPABASE_URL"] || env["SUPABASE_URL"];
@@ -97,10 +129,62 @@ if (!expectedUrl || !expectedKey) {
   process.exit(2);
 }
 
+/** `https://abcdefghijklmnop.supabase.co` -> `abcdefghijklmnop`. */
+function projectRef(url) {
+  try {
+    return new URL(url).hostname.split(".")[0] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+if (productionMode) {
+  const configuredRef = projectRef(expectedUrl);
+  const wrongBecause = KNOWN_WRONG_REFS[configuredRef];
+  if (wrongBecause) {
+    console.error(
+      `Refusing a production check configured against ${wrongBecause} (${configuredRef}).\n` +
+        `A production build must target ${PRODUCTION_PROJECT_REF}. Fix .env.production, then rebuild.`,
+    );
+    process.exit(1);
+  }
+  if (configuredRef !== PRODUCTION_PROJECT_REF) {
+    console.error(
+      `Refusing a production check: the configured project is ` +
+        `"${configuredRef || "(unreadable)"}", not ${PRODUCTION_PROJECT_REF}.\n` +
+        "A production build bakes this in, so deploying it would publish a Worker pointed at\n" +
+        "another database with nothing in the output to signal it.",
+    );
+    process.exit(1);
+  }
+}
+
 const files = [...walk(serverDir)];
 if (files.length === 0) {
   console.error(`No JavaScript found in ${serverDir}.\nRun \`npm run build\` first.`);
   process.exit(1);
+}
+
+// Nitro writes the Worker name into the generated wrangler.json, so this reads what a
+// `wrangler deploy` would actually target rather than what the config intends.
+let workerName = "";
+try {
+  workerName = JSON.parse(readFileSync(join(serverDir, "wrangler.json"), "utf8")).name ?? "";
+} catch {
+  workerName = "";
+}
+
+if (workerName !== EXPECTED_WORKER_NAME) {
+  const detail =
+    `The generated Worker is named "${workerName || "(none)"}", not "${EXPECTED_WORKER_NAME}".\n` +
+    "The name is pinned in vite.config.ts because Nitro's default is derived from the git\n" +
+    "remote and resolved to the pre-existing production Worker, which a bare deploy would\n" +
+    "have published over.";
+  if (productionMode) {
+    console.error(`\n${detail}`);
+    process.exit(1);
+  }
+  console.warn(`\nWarning: ${detail}`);
 }
 
 let sawUrl = false;
@@ -118,7 +202,9 @@ for (const file of files) {
 }
 
 console.log(`Build output : ${serverDir}`);
+console.log(`Mode         : ${activeMode}${productionMode ? " (production assertions on)" : ""}`);
 console.log(`Built against: ${expectedUrl}`);
+console.log(`Worker       : ${workerName || "(not found)"}`);
 console.log(`Modules      : ${files.length}`);
 if (hosts.size > 0) {
   console.log(
@@ -128,7 +214,12 @@ if (hosts.size > 0) {
 }
 
 if (sawUrl && sawKey) {
-  console.log("\nOK: the build contains the configured project's URL and publishable key.");
+  console.log(
+    productionMode
+      ? `\nOK: production check passed. The build carries ${PRODUCTION_PROJECT_REF}'s URL and\n` +
+          `publishable key, and the generated Worker is ${EXPECTED_WORKER_NAME}.`
+      : "\nOK: the build contains the configured project's URL and publishable key.",
+  );
   process.exit(0);
 }
 
