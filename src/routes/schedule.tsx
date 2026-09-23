@@ -419,7 +419,7 @@ function SchedulePage() {
                         id={`day-${day.id}-date`}
                         type="date"
                         pickerLabel={`Open the calendar for day ${day.day_number}`}
-                        className="mt-1 w-36"
+                        className="mt-1 w-38 md:w-36"
                         value={window.date}
                         disabled={!canSchedule || busy || locked}
                         onChange={(e) => setWindow(day, { date: e.target.value })}
@@ -436,7 +436,7 @@ function SchedulePage() {
                         id={`day-${day.id}-start`}
                         type="time"
                         pickerLabel={`Open the start time picker for day ${day.day_number}`}
-                        className="mt-1 w-28"
+                        className="mt-1 w-33 md:w-32"
                         value={window.start}
                         disabled={!canSchedule || busy || locked}
                         onChange={(e) => setWindow(day, { start: e.target.value })}
@@ -453,7 +453,7 @@ function SchedulePage() {
                         id={`day-${day.id}-end`}
                         type="time"
                         pickerLabel={`Open the end time picker for day ${day.day_number}`}
-                        className="mt-1 w-28"
+                        className="mt-1 w-33 md:w-32"
                         value={window.end}
                         disabled={!canSchedule || busy || locked}
                         onChange={(e) => setWindow(day, { end: e.target.value })}

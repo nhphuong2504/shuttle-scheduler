@@ -1404,7 +1404,7 @@ function PlacementSchedulePage() {
                                   id={`day-${day.id}-date`}
                                   type="date"
                                   pickerLabel={`Open the calendar for day ${day.day_number}`}
-                                  className="mt-1 w-36"
+                                  className="mt-1 w-38 md:w-36"
                                   value={window.date}
                                   disabled={!canSchedule || busy}
                                   onChange={(event) => setWindow(day, { date: event.target.value })}
@@ -1422,7 +1422,7 @@ function PlacementSchedulePage() {
                                   id={`day-${day.id}-start`}
                                   type="time"
                                   pickerLabel={`Open the start time picker for day ${day.day_number}`}
-                                  className="mt-1 w-28"
+                                  className="mt-1 w-33 md:w-32"
                                   value={window.start}
                                   disabled={!canSchedule || busy}
                                   onChange={(event) => setWindow(day, { start: event.target.value })}
@@ -1440,7 +1440,7 @@ function PlacementSchedulePage() {
                                   id={`day-${day.id}-end`}
                                   type="time"
                                   pickerLabel={`Open the end time picker for day ${day.day_number}`}
-                                  className="mt-1 w-28"
+                                  className="mt-1 w-33 md:w-32"
                                   value={window.end}
                                   disabled={!canSchedule || busy}
                                   onChange={(event) => setWindow(day, { end: event.target.value })}
@@ -1541,7 +1541,7 @@ function PlacementSchedulePage() {
                                     aria-label="Start"
                                     type="time"
                                     pickerLabel={`Open the start time picker for break ${index + 1}`}
-                                    className="h-8 w-[7.5rem] shrink-0"
+                                    className="h-8 w-33 shrink-0 md:w-32"
                                     value={row.start}
                                     disabled={!canSchedule || busy}
                                     onChange={(event) =>
@@ -1562,7 +1562,7 @@ function PlacementSchedulePage() {
                                     aria-label="End"
                                     type="time"
                                     pickerLabel={`Open the end time picker for break ${index + 1}`}
-                                    className="h-8 w-[7.5rem] shrink-0"
+                                    className="h-8 w-33 shrink-0 md:w-32"
                                     value={row.end}
                                     disabled={!canSchedule || busy}
                                     onChange={(event) =>
@@ -1625,7 +1625,7 @@ function PlacementSchedulePage() {
                         id="new-day-date"
                         type="date"
                         pickerLabel="Open the calendar for the new day"
-                        className="mt-1 w-36"
+                        className="mt-1 w-38 md:w-36"
                         disabled={!canSchedule || busy}
                         value={newDayDate ?? suggestedNewDayDate}
                         onChange={(event) => setNewDayDate(event.target.value)}

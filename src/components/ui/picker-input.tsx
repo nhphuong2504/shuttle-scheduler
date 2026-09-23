@@ -27,6 +27,20 @@ import { cn } from "@/lib/utils";
  * rather than from an effect or a timeout. It is absent in older engines and throws on a
  * disabled or read-only field, so focus is the fallback rather than a failure: a reader
  * who cannot open the popup is still put on the field it belongs to.
+ *
+ * ## The width belongs to the call site, and it is load-bearing
+ *
+ * A date or time value is laid out from its field's content-box left edge, so `padding-right`
+ * cannot create the space between the value and the icon - a field too narrow for its value
+ * paints through that padding and under the glyph. The only lever is the field's width, and
+ * the value's painted width moves with the type size, which is 16px below `md` and 14px
+ * above it (`Input` carries `text-base md:text-sm`, there to stop a phone zooming on focus).
+ *
+ * So the width steps down at the same breakpoint the type does: `w-33 md:w-32` for a time,
+ * `w-38 md:w-36` for a date, both leaving the value several px inside the padding's
+ * reservation and the value's right edge around 12-18px clear of the icon. Sizing for the
+ * narrower rendering instead is what put the mobile value 8px underneath the icon; the
+ * `e2e/staff-surfaces.spec.ts` fit guard measures this rather than trusting the class list.
  */
 const GLYPHS = {
   date: { Icon: CalendarDays, name: "Open the calendar" },
@@ -70,14 +84,26 @@ export const PickerInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
 
     return (
       // `className` lands here, so a call site keeps sizing the field the way it sized
-      // the input: `w-36` on the wrapper, and the input fills it. `h-9` is only a default
-      // for the sites that never set a height.
+      // the input: `w-33 md:w-32` on the wrapper, and the input fills it. `h-9` is only a
+      // default for the sites that never set a height.
       <div className={cn("relative h-9", className)}>
         <Input
           ref={attach}
           type={type}
-          // `pr-9` clears the 28px button and its 4px inset, so the field's own text can
-          // never run underneath it.
+          /**
+           * `pr-9` is a reservation, not the spacing.
+           *
+           * The icon's footprint is 32px from the field's right edge (4px inset plus a 28px
+           * button), so this padding ends the content box 4px ahead of it. That is the floor
+           * - the value cannot reach the glyph *while it fits its content box*.
+           *
+           * It is not what creates the visible gap. A date or time value is laid out from the
+           * content box's left edge, so a field too narrow for its value paints straight
+           * through this padding and under the icon: at the 7rem the day windows used, a
+           * desktop value ended 2px short of the icon and the 16px mobile value overlapped it
+           * by 8px, with this padding in place throughout. The gap is set by the call site's
+           * width; the widths in use are sized so the value fits the box below.
+           */
           className="picker-field h-full pr-9"
           {...props}
         />

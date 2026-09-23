@@ -219,6 +219,124 @@ test.describe("staff surfaces", () => {
     expect(reached?.ring, `no visible focus indicator on the picker control`).toBe(true);
   });
 
+  /**
+   * The value has to fit the box the field's padding reserves for it.
+   *
+   * A date or time value is laid out from its field's content-box left edge, so a field too
+   * narrow for its value paints straight through the right padding and under the picker icon
+   * - the padding does not stop it, and `pr-9` was in place throughout the whole of that
+   * defect. The reservation is what the padding is actually for: the content box ends 4px
+   * ahead of the icon's footprint, so a value that fits it cannot reach the glyph.
+   *
+   * Measured rather than asserted from the class list, because the painted width is the
+   * engine's and moves with the font size, which is 16px below `md` and 14px above it. The
+   * day windows were 7rem wide, which passed at 1366px and overlapped the icon by 8px at
+   * 390px - so both widths are checked, and the narrower one is the one that bites.
+   */
+  const MEASURE_FIT = `
+    (() => {
+      const shown = (el) => {
+        if (el.type === "time") {
+          const [h, m] = (el.value || "00:00").split(":");
+          const hour = Number(h);
+          const suffix = hour < 12 ? "AM" : "PM";
+          const twelve = hour % 12 === 0 ? 12 : hour % 12;
+          return String(twelve).padStart(2, "0") + ":" + m + " " + suffix;
+        }
+        if (el.type === "date" && el.value) {
+          // The display order is the locale's, not the value's, so it has to be reproduced
+          // to measure what is actually painted.
+          return new Intl.DateTimeFormat(undefined, {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(new Date(el.value + "T00:00:00"));
+        }
+        return null;
+      };
+
+      return [...document.querySelectorAll('input[type="time"], input[type="date"]')]
+        .filter((el) => el.offsetParent !== null)
+        .map((el) => {
+          const style = getComputedStyle(el);
+          const span = document.createElement("span");
+          span.textContent = shown(el) || "";
+          span.style.cssText = [
+            "position:absolute",
+            "left:-9999px",
+            "top:0",
+            "white-space:pre",
+            "font-style:" + style.fontStyle,
+            "font-weight:" + style.fontWeight,
+            "font-size:" + style.fontSize,
+            "font-family:" + style.fontFamily,
+            "letter-spacing:" + style.letterSpacing,
+            "font-variant-numeric:tabular-nums",
+          ].join(";");
+          document.body.append(span);
+          const textWidth = span.getBoundingClientRect().width;
+          span.remove();
+
+          const contentWidth =
+            el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+
+          return {
+            id: el.getAttribute("aria-label") || el.id,
+            fontSize: style.fontSize,
+            text: shown(el),
+            contentWidth: Math.round(contentWidth),
+            textWidth: Math.round(textWidth),
+            slack: Math.round(contentWidth - textWidth),
+          };
+        });
+    })()
+  `;
+
+  test("a picker's value fits the box its padding reserves, at both field widths", async ({
+    page,
+  }) => {
+    await openStaffShell(page);
+    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.evaluate(() => document.fonts.ready);
+    await page.getByRole("button", { name: /settings/i }).first().click();
+    await page.getByRole("button", { name: /add break/i }).first().click();
+
+    const failures: string[] = [];
+
+    for (const width of [1366, 390]) {
+      // 390 is below `md`, so the fields paint at 16px there rather than 14px.
+      await page.setViewportSize({ width, height: 900 });
+      await settleAnimations(page, "main");
+      await page.evaluate(() => document.fonts.ready);
+
+      const fields = (await page.evaluate(MEASURE_FIT)) as {
+        id: string;
+        fontSize: string;
+        text: string | null;
+        contentWidth: number;
+        textWidth: number;
+        slack: number;
+      }[];
+
+      expectPresent(fields.length > 0, `A picker field to measure at ${width}px`);
+
+      for (const field of fields) {
+        if (field.slack < 0) {
+          failures.push(
+            `${width}px  ${field.id}  "${field.text}" at ${field.fontSize}: ` +
+              `${field.textWidth}px of value in a ${field.contentWidth}px content box ` +
+              `(${field.slack}px) - the value paints into the icon's reservation`,
+          );
+        }
+      }
+    }
+
+    expect(failures, `picker values overrunning their fields\n  ${failures.join("\n  ")}`).toEqual(
+      [],
+    );
+  });
+
   test("the score dialog opens by interaction and is accessible", async ({ page }) => {
     await openStaffShell(page);
     await page.goto("/matches", { waitUntil: "load" });
