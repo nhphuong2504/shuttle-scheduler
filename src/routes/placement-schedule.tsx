@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PickerInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/useSession";
@@ -197,9 +198,10 @@ function PlacementSchedulePage() {
   const [savingDayId, setSavingDayId] = useState<string | null>(null);
   /** The date typed into "Add a day", or null while it still shows the suggested one. */
   const [newDayDate, setNewDayDate] = useState<string | null>(null);
-
   const tournamentDays = useMemo(() => days ?? [], [days]);
   const dayCount = tournament?.day_count ?? tournamentDays.length;
+  /** The venue's court pool, read once so the settings sections cannot disagree. */
+  const courtCount = (courts ?? []).length;
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -1223,7 +1225,7 @@ function PlacementSchedulePage() {
             onClick={() => setShowSettings((value) => !value)}
             aria-expanded={showSettings}
           >
-            {showSettings ? "Hide settings" : "Settings"}
+            {showSettings ? "Hide settings" : "Tournament settings"}
           </Button>
           <Button
             disabled={
@@ -1292,176 +1294,168 @@ function PlacementSchedulePage() {
 
         {showSettings ? (
           <Panel
-            title="Settings"
+            title="Tournament settings"
             bodyClassName="p-0"
             right={
               <span className="font-score text-t4 text-muted-foreground">saved as you go</span>
             }
           >
             <div className="divide-y divide-hairline">
-              <SettingsSection title="Courts">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {(courts ?? []).length} court
-                    {(courts ?? []).length === 1 ? "" : "s"} at the venue
-                  </p>
-                  <div className="flex gap-1.5">
+              <SettingsSection
+                title="Venue courts"
+                summary={`${courtCount} court${courtCount === 1 ? "" : "s"}`}
+              >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div
+                    role="group"
+                    aria-label="Number of courts at the venue"
+                    className="inline-flex items-center rounded-lg border border-input bg-surface"
+                  >
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={!canSchedule || busy}
-                      onClick={() => void setCourtCount((courts ?? []).length + 1)}
+                      className="h-9 rounded-r-none px-2.5 font-score text-t2"
+                      aria-label="Remove the last court"
+                      disabled={!canSchedule || busy || courtCount <= 1}
+                      onClick={() => void setCourtCount(courtCount - 1)}
                     >
-                      Add a court
+                      −
                     </Button>
-                    {(courts ?? []).length > 1 ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={!canSchedule || busy}
-                        onClick={() => void setCourtCount((courts ?? []).length - 1)}
-                      >
-                        Remove court {(courts ?? []).length}
-                      </Button>
-                    ) : null}
+                    <span
+                      className="min-w-9 border-x border-hairline px-2 text-center font-score text-t2 font-semibold"
+                      aria-live="polite"
+                    >
+                      {courtCount}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 rounded-l-none px-2.5 font-score text-t2"
+                      aria-label="Add a court"
+                      disabled={!canSchedule || busy || courtCount >= 64}
+                      onClick={() => void setCourtCount(courtCount + 1)}
+                    >
+                      +
+                    </Button>
                   </div>
+                  <p className="text-t4 text-muted-foreground">
+                    Every playing day uses all of them unless it is narrowed below.
+                  </p>
                 </div>
               </SettingsSection>
 
-              <SettingsSection title="Playing days">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-end justify-between gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"}
-                      {tournamentDays.length >= 7
-                        ? " · 7 is the maximum"
-                        : " · add one if the tournament overruns"}
-                    </p>
-                    {tournamentDays.length < 7 ? (
-                      <div className="flex items-end gap-2">
-                        <div>
-                          <Label htmlFor="new-day-date" className="text-xs text-muted-foreground">
-                            New day
-                          </Label>
-                          <Input
-                            id="new-day-date"
-                            type="date"
-                            className="mt-1 h-9 w-36"
-                            disabled={!canSchedule || busy}
-                            value={newDayDate ?? suggestedNewDayDate}
-                            onChange={(event) => setNewDayDate(event.target.value)}
-                          />
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!canSchedule || busy}
-                          onClick={() => void addDay(newDayDate ?? suggestedNewDayDate)}
-                        >
-                          Add day
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {tournamentDays.map((day) => {
-                      const window = windowFor(day);
-                      return (
-                        <div
-                          key={day.id}
-                          className="space-y-3 rounded-lg border border-hairline bg-surface p-3"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-display text-sm font-semibold">
-                              Day {day.day_number}
-                            </p>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-score text-t4 text-muted-foreground">
-                                {savingDayId === day.id
-                                  ? "Saving…"
-                                  : `${courtsFor(day).length} of ${(courts ?? []).length} courts`}
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-t4"
-                                disabled={
-                                  !canSchedule ||
-                                  busy ||
-                                  tournamentDays.length <= 1 ||
-                                  daysWithMatches.has(day.id)
-                                }
-                                title={
-                                  tournamentDays.length <= 1
-                                    ? "A tournament needs at least one day."
-                                    : daysWithMatches.has(day.id)
-                                      ? "This day has matches on it. Clear or move them first."
-                                      : undefined
-                                }
-                                onClick={() => void removeDay(day)}
-                              >
-                                Remove
-                              </Button>
-                            </div>
+              <SettingsSection
+                title="Playing days"
+                summary={`${tournamentDays.length} day${tournamentDays.length === 1 ? "" : "s"}${
+                  tournamentDays.length >= 7 ? " · 7 is the maximum" : ""
+                }`}
+              >
+                <div className="divide-y divide-hairline rounded-lg border border-hairline">
+                  {tournamentDays.map((day) => {
+                    const window = windowFor(day);
+                    const breakCount = breakRows(day).length;
+                    return (
+                      <div key={day.id} className="px-3 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                          <h4 className="font-display text-sm font-semibold">
+                            Day {day.day_number}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className="font-score text-t4 text-muted-foreground">
+                              {savingDayId === day.id
+                                ? "Saving…"
+                                : `${courtsFor(day).length} of ${courtCount} courts`}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-t4"
+                              aria-label={`Remove day ${day.day_number}`}
+                              disabled={
+                                !canSchedule ||
+                                busy ||
+                                tournamentDays.length <= 1 ||
+                                daysWithMatches.has(day.id)
+                              }
+                              title={
+                                tournamentDays.length <= 1
+                                  ? "A tournament needs at least one day."
+                                  : daysWithMatches.has(day.id)
+                                    ? "This day has matches on it. Clear or move them first."
+                                    : undefined
+                              }
+                              onClick={() => void removeDay(day)}
+                            >
+                              Remove
+                            </Button>
                           </div>
+                        </div>
 
+                        <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
                           <div className="flex flex-wrap items-end gap-2">
                             <div>
                               <Label
                                 htmlFor={`day-${day.id}-date`}
-                                className="text-xs text-muted-foreground"
+                                className="text-t4 text-muted-foreground"
                               >
                                 Date
                               </Label>
-                              <Input
-                                id={`day-${day.id}-date`}
-                                type="date"
-                                className="mt-1 h-9 w-36"
-                                value={window.date}
-                                disabled={!canSchedule || busy}
-                                onChange={(event) => setWindow(day, { date: event.target.value })}
-                                onBlur={() => void commitDayWindow(day)}
-                              />
+                                <PickerInput
+                                  id={`day-${day.id}-date`}
+                                  type="date"
+                                  pickerLabel={`Open the calendar for day ${day.day_number}`}
+                                  className="mt-1 w-36"
+                                  value={window.date}
+                                  disabled={!canSchedule || busy}
+                                  onChange={(event) => setWindow(day, { date: event.target.value })}
+                                  onBlur={() => void commitDayWindow(day)}
+                                />
                             </div>
                             <div>
                               <Label
                                 htmlFor={`day-${day.id}-start`}
-                                className="text-xs text-muted-foreground"
+                                className="text-t4 text-muted-foreground"
                               >
                                 Start
                               </Label>
-                              <Input
-                                id={`day-${day.id}-start`}
-                                type="time"
-                                className="mt-1 h-9 w-28"
-                                value={window.start}
-                                disabled={!canSchedule || busy}
-                                onChange={(event) => setWindow(day, { start: event.target.value })}
-                                onBlur={() => void commitDayWindow(day)}
-                              />
+                                <PickerInput
+                                  id={`day-${day.id}-start`}
+                                  type="time"
+                                  pickerLabel={`Open the start time picker for day ${day.day_number}`}
+                                  className="mt-1 w-28"
+                                  value={window.start}
+                                  disabled={!canSchedule || busy}
+                                  onChange={(event) => setWindow(day, { start: event.target.value })}
+                                  onBlur={() => void commitDayWindow(day)}
+                                />
                             </div>
                             <div>
                               <Label
                                 htmlFor={`day-${day.id}-end`}
-                                className="text-xs text-muted-foreground"
+                                className="text-t4 text-muted-foreground"
                               >
                                 End
                               </Label>
-                              <Input
-                                id={`day-${day.id}-end`}
-                                type="time"
-                                className="mt-1 h-9 w-28"
-                                value={window.end}
-                                disabled={!canSchedule || busy}
-                                onChange={(event) => setWindow(day, { end: event.target.value })}
-                                onBlur={() => void commitDayWindow(day)}
-                              />
+                                <PickerInput
+                                  id={`day-${day.id}-end`}
+                                  type="time"
+                                  pickerLabel={`Open the end time picker for day ${day.day_number}`}
+                                  className="mt-1 w-28"
+                                  value={window.end}
+                                  disabled={!canSchedule || busy}
+                                  onChange={(event) => setWindow(day, { end: event.target.value })}
+                                  onBlur={() => void commitDayWindow(day)}
+                                />
                             </div>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <p className="text-xs text-muted-foreground">Courts this day</p>
-                            <div className="flex flex-wrap gap-1.5">
+                          <div
+                            role="group"
+                            aria-label={`Courts used on day ${day.day_number}`}
+                            className="min-w-0"
+                          >
+                            <p className="text-t4 text-muted-foreground">Courts</p>
+                            <div className="mt-1 flex min-h-9 flex-wrap items-center gap-1.5">
                               {(courts ?? []).map((court) => {
                                 const on = courtsFor(day).some((entry) => entry.id === court.id);
                                 const lastOn = on && courtsFor(day).length === 1;
@@ -1486,130 +1480,170 @@ function PlacementSchedulePage() {
                               })}
                             </div>
                           </div>
-
-                          <div className="space-y-2">
-                            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                              <p className="min-w-0 text-xs text-muted-foreground">Breaks</p>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="shrink-0"
-                                disabled={!canSchedule || busy}
-                                onClick={() =>
-                                  updateBreakRows(day.id, [
-                                    ...breakRows(day),
-                                    { label: "", start: "12:00", end: "13:00" },
-                                  ])
-                                }
-                              >
-                                Add break
-                              </Button>
-                            </div>
-                            {breakRows(day).length === 0 ? (
-                              <p className="text-t4 text-muted-foreground">
-                                No breaks — play runs straight through.
-                              </p>
-                            ) : (
-                              <div className="divide-y divide-border rounded-lg border border-border">
-                                {breakRows(day).map((row, index) => (
-                                  <div
-                                    key={index}
-                                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-2 sm:flex sm:flex-wrap"
-                                  >
-                                    <Input
-                                      className="h-8 min-w-0 sm:w-32"
-                                      placeholder="Lunch"
-                                      value={row.label}
-                                      disabled={!canSchedule || busy}
-                                      onChange={(event) =>
-                                        updateBreakRows(
-                                          day.id,
-                                          breakRows(day).map((entry, i) =>
-                                            i === index
-                                              ? { ...entry, label: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                    />
-                                    <div className="col-span-2 flex items-center gap-1.5">
-                                      <Input
-                                        type="time"
-                                        className="h-8 w-[7.5rem] shrink-0"
-                                        value={row.start}
-                                        disabled={!canSchedule || busy}
-                                        onChange={(event) =>
-                                          updateBreakRows(
-                                            day.id,
-                                            breakRows(day).map((entry, i) =>
-                                              i === index
-                                                ? { ...entry, start: event.target.value }
-                                                : entry,
-                                            ),
-                                          )
-                                        }
-                                      />
-                                      <span className="shrink-0 text-xs text-muted-foreground">
-                                        to
-                                      </span>
-                                      <Input
-                                        type="time"
-                                        className="h-8 w-[7.5rem] shrink-0"
-                                        value={row.end}
-                                        disabled={!canSchedule || busy}
-                                        onChange={(event) =>
-                                          updateBreakRows(
-                                            day.id,
-                                            breakRows(day).map((entry, i) =>
-                                              i === index
-                                                ? { ...entry, end: event.target.value }
-                                                : entry,
-                                            ),
-                                          )
-                                        }
-                                      />
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="ml-auto shrink-0 text-muted-foreground"
-                                        disabled={!canSchedule || busy}
-                                        onClick={() =>
-                                          updateBreakRows(
-                                            day.id,
-                                            breakRows(day).filter((_, i) => i !== index),
-                                          )
-                                        }
-                                      >
-                                        Remove
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {breaksDirty(day) ? (
-                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-2.5 py-2">
-                                <p className="text-t4 text-muted-foreground">
-                                  Unsaved break changes for this day.
-                                </p>
-                                <Button
-                                  size="sm"
-                                  disabled={!canSchedule || busy}
-                                  onClick={() => void saveBreaks(day)}
-                                >
-                                  Save breaks
-                                </Button>
-                              </div>
-                            ) : null}
-                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                          <p className="text-t4 text-muted-foreground">Breaks</p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-t4"
+                            disabled={!canSchedule || busy}
+                            onClick={() =>
+                              updateBreakRows(day.id, [
+                                ...breakRows(day),
+                                { label: "", start: "12:00", end: "13:00" },
+                              ])
+                            }
+                          >
+                            Add break
+                          </Button>
+                          {breakCount === 0 ? (
+                            <p className="text-t4 text-muted-foreground">
+                              None — play runs straight through.
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {breakCount > 0 ? (
+                          <div className="mt-2 divide-y divide-hairline rounded-lg border border-hairline">
+                            {breakRows(day).map((row, index) => (
+                              <div
+                                key={index}
+                                role="group"
+                                aria-label={`Break ${index + 1}`}
+                                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-2 sm:flex sm:flex-wrap"
+                              >
+                                {/*
+                                 * The row carries its own group name and every field inside it is
+                                 * named, because a placeholder is not an accessible name - the two
+                                 * time inputs had none at all, which the panel scan now catches.
+                                 */}
+                                <Input
+                                  aria-label="Name"
+                                  className="h-8 min-w-0 sm:w-32"
+                                  placeholder="Lunch"
+                                  value={row.label}
+                                  disabled={!canSchedule || busy}
+                                  onChange={(event) =>
+                                    updateBreakRows(
+                                      day.id,
+                                      breakRows(day).map((entry, i) =>
+                                        i === index
+                                          ? { ...entry, label: event.target.value }
+                                          : entry,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <div className="col-span-2 flex flex-wrap items-center gap-1.5">
+                                  <PickerInput
+                                    aria-label="Start"
+                                    type="time"
+                                    pickerLabel={`Open the start time picker for break ${index + 1}`}
+                                    className="h-8 w-[7.5rem] shrink-0"
+                                    value={row.start}
+                                    disabled={!canSchedule || busy}
+                                    onChange={(event) =>
+                                      updateBreakRows(
+                                        day.id,
+                                        breakRows(day).map((entry, i) =>
+                                          i === index
+                                            ? { ...entry, start: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                  <span className="shrink-0 text-t4 text-muted-foreground">
+                                    to
+                                  </span>
+                                  <PickerInput
+                                    aria-label="End"
+                                    type="time"
+                                    pickerLabel={`Open the end time picker for break ${index + 1}`}
+                                    className="h-8 w-[7.5rem] shrink-0"
+                                    value={row.end}
+                                    disabled={!canSchedule || busy}
+                                    onChange={(event) =>
+                                      updateBreakRows(
+                                        day.id,
+                                        breakRows(day).map((entry, i) =>
+                                          i === index
+                                            ? { ...entry, end: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="ml-auto shrink-0 text-muted-foreground"
+                                    aria-label={`Remove break ${index + 1}`}
+                                    disabled={!canSchedule || busy}
+                                    onClick={() =>
+                                      updateBreakRows(
+                                        day.id,
+                                        breakRows(day).filter((_, i) => i !== index),
+                                      )
+                                    }
+                                  >
+                                    Remove
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {breaksDirty(day) ? (
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-2.5 py-2">
+                            <p className="text-t4 text-muted-foreground">
+                              Unsaved break changes for this day.
+                            </p>
+                            <Button
+                              size="sm"
+                              disabled={!canSchedule || busy}
+                              onClick={() => void saveBreaks(day)}
+                            >
+                              Save breaks
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
+                {tournamentDays.length < 7 ? (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <Label htmlFor="new-day-date" className="text-t4 text-muted-foreground">
+                        New day
+                      </Label>
+                      <PickerInput
+                        id="new-day-date"
+                        type="date"
+                        pickerLabel="Open the calendar for the new day"
+                        className="mt-1 w-36"
+                        disabled={!canSchedule || busy}
+                        value={newDayDate ?? suggestedNewDayDate}
+                        onChange={(event) => setNewDayDate(event.target.value)}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!canSchedule || busy}
+                      onClick={() => void addDay(newDayDate ?? suggestedNewDayDate)}
+                    >
+                      Add day
+                    </Button>
+                  </div>
+                ) : null}
               </SettingsSection>
 
-              <SettingsSection title="Match format">
+              <SettingsSection title="Match format" summary="2 stages">
                 {tournament ? (
                   <div className="grid gap-3 lg:grid-cols-2">
                     <MatchFormatCard
@@ -1976,24 +2010,37 @@ function PlacementSchedulePage() {
 }
 
 /**
- * One labelled block inside the Settings panel: a title column with the controls
- * beside it on wide screens.
+ * One labelled block inside the settings panel: a header row with the section's own
+ * summary on the right, then its controls across the full width.
  *
- * The title column carries the heading only. Each section used to explain itself
- * underneath, which made the panel read as prose to be worked through rather than
- * as settings to be changed.
+ * The header used to be a fixed 13rem column beside the content, which reserved that
+ * width for a section that only holds a title - the venue's court count was three
+ * words of label and thirteen rem of empty space - and squeezed every control into
+ * what was left. Putting the heading above the body, with the count in its own
+ * right-aligned slot, keeps one rhythm across all three sections and gives the day
+ * rows and the match-format cards the panel's whole width.
+ *
+ * The summary is the section's own headline number or state ("8 courts", "2 days",
+ * "2 stages"), so the panel can be scanned without reading the controls underneath.
  */
 function SettingsSection({
   title,
+  summary,
   children,
 }: {
   title: string;
+  summary?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-3 px-4 py-4 md:grid-cols-[13rem_1fr] md:gap-6">
-      <h3 className="font-display text-sm font-semibold">{title}</h3>
-      <div className="min-w-0">{children}</div>
+    <section className="px-4 py-4">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="font-display text-sm font-semibold">{title}</h3>
+        {summary ? (
+          <span className="font-score text-t4 text-muted-foreground">{summary}</span>
+        ) : null}
+      </div>
+      <div className="min-w-0 space-y-3">{children}</div>
     </section>
   );
 }

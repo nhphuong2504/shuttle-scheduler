@@ -1,6 +1,7 @@
 import { Panel } from "@/components/app-shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PickerInput } from "@/components/ui/picker-input";
 import {
   Select,
   SelectContent,
@@ -94,18 +95,20 @@ export function DetailsStep({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="t-range-start">First day</Label>
-              <Input
+              <PickerInput
                 id="t-range-start"
                 type="date"
+                pickerLabel="Open the calendar for the first day"
                 value={start}
                 onChange={(e) => applyRange(e.target.value, end)}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="t-range-end">Last day</Label>
-              <Input
+              <PickerInput
                 id="t-range-end"
                 type="date"
+                pickerLabel="Open the calendar for the last day"
                 value={end}
                 min={start || undefined}
                 max={lastAllowed}

@@ -126,6 +126,99 @@ test.describe("staff surfaces", () => {
     expect(violationIds(await scan(page))).toEqual([]);
   });
 
+  test("the tournament settings panel opens by interaction and is accessible", async ({ page }) => {
+    await openStaffShell(page);
+    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    /**
+     * The panel is behind a toggle, so no route scan can see it - the same reason the
+     * score dialog is opened rather than scanned in place. It is also the only surface
+     * that holds the venue's court pool, the playing days and the match format, so
+     * leaving it unscanned would leave the whole settings vocabulary unvalidated.
+     */
+    const toggle = page.getByRole("button", { name: /settings/i }).first();
+    expectPresent(
+      (await toggle.count()) > 0,
+      "The settings toggle on /placement-schedule with an admin session",
+    );
+    await toggle.click();
+
+    // The three sections are the redesigned surface: assert each is present rather than
+    // trusting one heading to stand for the panel.
+    for (const name of [/venue courts/i, /playing days/i, /match format/i]) {
+      await expect(page.getByRole("heading", { name })).toBeVisible();
+    }
+
+    // A day's breaks are edited in place, so adding one puts the break rows in front of
+    // axe without any disclosure to open first.
+    await page.getByRole("button", { name: /add break/i }).first().click();
+    await settleAnimations(page, "main");
+
+    expect(violationIds(await scan(page))).toEqual([]);
+  });
+
+  test("a replaced picker glyph is a real control that takes the focus ring", async ({ page }) => {
+    await openStaffShell(page);
+    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /settings/i }).first().click();
+
+    /**
+     * The engines draw their own calendar and clock inside a date or time field. It takes
+     * no token, no size and no focus ring, so `PickerInput` removes it and draws an icon
+     * from the set - as a button, because the glyph it replaces was already a separate
+     * click target and decoration would have removed the only way into the popup.
+     *
+     * That makes it a control, which is what needs proving: `e2e/criteria.spec.ts` walks
+     * real focus order across the routes but this panel is behind a toggle, so without
+     * this the ring on the replacement would be asserted nowhere.
+     */
+    const field = page.locator('input[type="date"]').first();
+    expectPresent(
+      (await field.count()) > 0,
+      "A date field in the settings panel with an admin session",
+    );
+    // The class is what ties the field to the rule that removes the engine's glyph. It is
+    // asserted here rather than measured, because the indicator is a user-agent
+    // pseudo-element that `getComputedStyle` reports the default for either way.
+    expect(await field.getAttribute("class")).toContain("picker-field");
+
+    // Stepped forward from the field rather than asserted as the immediate next stop:
+    // Chromium keeps a date field's month, day and year as segments in the tab order, so
+    // the picker control is a few stops after the field rather than one. What is being
+    // proved is that it is reachable in keyboard order from its own field, and that it
+    // paints a ring when it is - not how many presses it takes.
+    await field.focus();
+    const walk: { name: string; tag: string; ring: boolean }[] = [];
+    for (let i = 0; i < 12; i += 1) {
+      await page.keyboard.press("Tab");
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el || el === document.body) return null;
+        const style = getComputedStyle(el);
+        return {
+          name: el.getAttribute("aria-label") ?? "",
+          tag: el.tagName.toLowerCase(),
+          // The shared ring is a box-shadow; the stylesheet also declares an outline
+          // colour, so either counts as a visible indicator.
+          ring:
+            style.boxShadow !== "none" ||
+            (style.outlineStyle !== "none" && style.outlineWidth !== "0px"),
+        };
+      });
+      if (stop) walk.push(stop);
+      if (stop && /open the (calendar|start time picker|end time picker)/i.test(stop.name)) break;
+    }
+
+    const reached = walk.find((stop) =>
+      /open the (calendar|start time picker|end time picker)/i.test(stop.name),
+    );
+    expect(reached, "the picker control was not reachable by Tab from its own field").toBeDefined();
+    expect(reached?.tag, "the picker affordance is not a real control").toBe("button");
+    expect(reached?.ring, `no visible focus indicator on the picker control`).toBe(true);
+  });
+
   test("the score dialog opens by interaction and is accessible", async ({ page }) => {
     await openStaffShell(page);
     await page.goto("/matches", { waitUntil: "load" });

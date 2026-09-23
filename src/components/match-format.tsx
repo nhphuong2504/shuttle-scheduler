@@ -135,14 +135,14 @@ export function MatchFormatCard({
   }, [activePreset.custom]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-hairline bg-surface p-3.5">
+    <div className="flex flex-col gap-3 rounded-lg border border-hairline bg-surface p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="font-display text-sm font-semibold">{title}</p>
+        <h4 className="font-display text-sm font-semibold">{title}</h4>
         <Badge variant={activePreset.custom ? "secondary" : "outline"}>
           {activePreset.custom ? "Custom" : activePreset.label}
         </Badge>
       </div>
-      <p className="text-xs text-muted-foreground">{detail}</p>
+      <p className="text-t4 text-muted-foreground">{detail}</p>
 
       <div className="flex flex-wrap gap-2">
         {SCORING_PRESETS.filter((preset) => !preset.custom).map((preset) => (
@@ -175,7 +175,7 @@ export function MatchFormatCard({
       {showCustom ? (
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
-            <Label htmlFor={`${title}-games-to`} className="text-xs text-muted-foreground">
+            <Label htmlFor={`${title}-games-to`} className="text-t4 text-muted-foreground">
               Game to
             </Label>
             <Input
@@ -191,7 +191,7 @@ export function MatchFormatCard({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${title}-win-by`} className="text-xs text-muted-foreground">
+            <Label htmlFor={`${title}-win-by`} className="text-t4 text-muted-foreground">
               Win by
             </Label>
             <Input
@@ -207,7 +207,7 @@ export function MatchFormatCard({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${title}-best-of`} className="text-xs text-muted-foreground">
+            <Label htmlFor={`${title}-best-of`} className="text-t4 text-muted-foreground">
               Best of
             </Label>
             <Input
@@ -228,7 +228,7 @@ export function MatchFormatCard({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor={`${title}-slot`} className="text-xs text-muted-foreground">
+          <Label htmlFor={`${title}-slot`} className="text-t4 text-muted-foreground">
             Match length
           </Label>
           <div className="flex items-center gap-2">
@@ -242,11 +242,11 @@ export function MatchFormatCard({
               onChange={(event) => onSlotChange(event.target.value)}
               onBlur={(event) => onSlotCommit(event.target.value)}
             />
-            <span className="text-xs text-muted-foreground">min</span>
+            <span className="text-t4 text-muted-foreground">min</span>
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${title}-rest`} className="text-xs text-muted-foreground">
+          <Label htmlFor={`${title}-rest`} className="text-t4 text-muted-foreground">
             Rest before the next match
           </Label>
           <div className="flex items-center gap-2">
@@ -260,7 +260,7 @@ export function MatchFormatCard({
               onChange={(event) => onRestChange(event.target.value)}
               onBlur={(event) => onRestCommit(event.target.value)}
             />
-            <span className="text-xs text-muted-foreground">min</span>
+            <span className="text-t4 text-muted-foreground">min</span>
           </div>
         </div>
       </div>

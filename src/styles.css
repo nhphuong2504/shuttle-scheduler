@@ -493,6 +493,22 @@
     outline-width: 2px;
     outline-offset: 2px;
   }
+
+  /**
+   * The engine-drawn picker glyph, removed where `PickerInput` draws an icon instead.
+   *
+   * `::-webkit-calendar-picker-indicator` is the browser's own affordance for
+   * `input[type=date]` and `input[type=time]`. It cannot be restyled - it takes no token,
+   * no size and no focus ring - so replacing it means removing it. Scoped to the class
+   * rather than written against the input types, so a future field is not silently
+   * stripped of its native control by deciding to exist.
+   *
+   * Chromium and Safari both expose this pseudo-element; Firefox draws no glyph for a
+   * date field at all, which is the third reason the icon belongs to the page.
+   */
+  .picker-field::-webkit-calendar-picker-indicator {
+    display: none;
+  }
 }
 
 @utility font-score {
