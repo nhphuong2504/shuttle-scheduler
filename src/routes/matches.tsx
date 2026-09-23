@@ -127,13 +127,14 @@ function MatchRow({
       <StatusPill status={match.status} />
       {/* A game score is a number, so it must never be broken across lines. The fixed
           `w-24` this replaces was narrower than three games at the 30-point cap
-          ("30-29, 29-30, 30-28"), and because the cell could not grow the value wrapped:
-          in Compact it split as "30-29, 29-30, 30-" / "28", which reads as a different
-          score. `whitespace-nowrap` forbids the break and the min-width lets the column
-          take the space it needs; the row is already `flex-wrap`, so under real pressure
-          the whole cell moves to the next line instead of the number giving way.
-          A minimum rather than a fixed width keeps the right edges aligned for the
-          ordinary case, where every score is short and the minimum wins. */}
+          ("30-29, 29-30, 30-28"), and because the cell could not grow the value
+          wrapped onto two lines: "30-29, 29-30, 30-" / "28", which reads as a
+          different score. `whitespace-nowrap` forbids the break and the min-width
+          lets the column take the space it needs; the row is already `flex-wrap`, so
+          under real pressure the whole cell moves to the next line instead of the
+          number giving way. A minimum rather than a fixed width keeps the right edges
+          aligned for the ordinary case, where every score is short and the minimum
+          wins. */}
       <span className="min-w-24 shrink-0 whitespace-nowrap text-right font-score text-t2">
         {match.score ?? "—"}
       </span>

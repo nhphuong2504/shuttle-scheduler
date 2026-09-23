@@ -23,7 +23,7 @@ import { cellLabel, MATRIX_CELLS, openCell, ROUTES, seedAppearance } from "./fix
  *
  *   1. Every route is checked, not just the Desk. The defect happened to be on the Desk, but
  *      the next one need not be.
- *   2. Every route is checked in all four cells, because the appearance is applied by an
+ *   2. Every route is checked in both cells, because the appearance is applied by an
  *      inline script before React runs, and that script writes to the same `<html>` element
  *      React is hydrating. Any future mistake there surfaces here rather than as an
  *      unexplained test flake.
@@ -95,7 +95,7 @@ test.describe("the desk clock is client-owned", () => {
   test("the server render carries no wall-clock time", async ({ page }) => {
     // Blocking the bundle is the honest way to see the server HTML: with scripting live,
     // React has already replaced the tree by the time any assertion could read it.
-    await seedAppearance(page, { theme: "light", density: "comfortable" });
+    await seedAppearance(page, { theme: "light" });
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
@@ -108,7 +108,7 @@ test.describe("the desk clock is client-owned", () => {
   });
 
   test("the clock appears once React has taken over", async ({ page }) => {
-    await openCell(page, "/", { theme: "light", density: "comfortable" });
+    await openCell(page, "/", { theme: "light" });
     const panel = page.locator("text=updates every 30s").first();
     await expect(panel).toHaveText(/\d{1,2}:\d{2}/);
   });

@@ -10,10 +10,10 @@ import { extendTailwindMerge } from "tailwind-merge";
  * size. The component then renders at whatever size it inherits, which looks
  * plausible and is wrong - the class is in the source but not in the DOM.
  *
- * That is not hypothetical. It is what happened to StatusPill and the density
- * toggle: both passed `text-t2`/`text-t4` through `cn` next to a colour class, so
- * neither ever applied, and a component test asserting `text-state-live-ink`
- * would still have passed because colours were never the problem.
+ * That is not hypothetical. It is what happened to StatusPill: it passed
+ * `text-t2` through `cn` next to a colour class, so the size never applied, and a
+ * component test asserting `text-state-live-ink` would still have passed because
+ * colours were never the problem.
  *
  * Registering the four tier names here makes the tier utility resolve as a font
  * size, so it coexists with a colour the way `text-sm` already did.

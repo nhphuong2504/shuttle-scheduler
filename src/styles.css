@@ -88,9 +88,9 @@
   --color-state-completed-ink: var(--state-completed-ink);
 
   /* Importance tiers. `text-tN` emits font-size + line-height together, so a
-     component names the job and the density decides the size. The values are
-     `inline` references to the density-scoped tokens, which is what makes the
-     utilities follow `data-density` without any component re-rendering. */
+     component names the job and the scale decides the size. The values are `inline`
+     references to the `--type-*` tokens rather than literals, so editing the scale
+     moves every tier at once without any component changing. */
   --text-t1: var(--type-t1-size);
   --text-t1--line-height: var(--type-t1-lh);
   --text-t2: var(--type-t2-size);
@@ -289,8 +289,8 @@
   --state-void-ink: oklch(0.4 0.014 255);
 
   /* --- Type scale, by importance rather than by size ---------------------
-     Tiers are named for the JOB the text does, not for how large it is, so a
-     density change can resize them without any component changing its markup.
+     Tiers are named for the JOB the text does, not for how large it is, so the
+     scale can be adjusted without any component changing its markup.
 
         T1 Glance     values read without scanning   match score, timer
         T2 Identify   things named while moving      court id, player names, status
@@ -299,10 +299,7 @@
 
      12px is the floor. Nothing in the app may render below it - the entire
      legacy scale (64 uses of 11px, 18 of 10px) sat under it, which is the defect
-     this scale exists to remove rather than a preference being expressed.
-
-     Comfortable is the base, declared here so a missing or unrecognised
-     `data-density` resolves to it rather than to nothing. */
+     this scale exists to remove rather than a preference being expressed. */
   --type-t1-size: 1.5rem;    /* 24 */
   --type-t1-lh: 1.75rem;     /* 28 */
   --type-t2-size: 0.875rem;  /* 14 */
@@ -312,31 +309,6 @@
   --type-t4-size: 0.75rem;   /* 12 */
   --type-t4-lh: 1rem;        /* 16 */
   --row-height: 2.75rem;     /* 44 */
-}
-
-/* --- Density -------------------------------------------------------------
-   The only difference between the two modes is these six values. Both are real
-   and neither is a degraded version of the other: Compact is not "small text",
-   it is the same three lower tiers with a shorter first tier and tighter rows,
-   so a dense desk list gains rows rather than losing legibility.
-
-   No tier is ever scaled below 12px, so switching to Compact cannot push text
-   under the floor. T4 is deliberately identical in both modes - reference text
-   is already at the floor and shrinking it is not an option.
-
-   Scoped as `:root[data-density=...]` rather than `[data-density=...]` so it
-   cannot be out-specified by the base `:root` block, which has equal specificity
-   as a bare attribute selector and would then depend on source order. */
-:root[data-density="compact"] {
-  --type-t1-size: 1.25rem;   /* 20 */
-  --type-t1-lh: 1.5rem;      /* 24 */
-  --type-t2-size: 0.8125rem; /* 13 */
-  --type-t2-lh: 1.125rem;    /* 18 */
-  --type-t3-size: 0.875rem;  /* 14 */
-  --type-t3-lh: 1.25rem;     /* 20 */
-  --type-t4-size: 0.75rem;   /* 12 */
-  --type-t4-lh: 1rem;        /* 16 */
-  --row-height: 2rem;        /* 32 */
 }
 
 /*
@@ -568,8 +540,8 @@
   }
 
   & tbody td {
-    /* Cells take the density row height, so the dense schedule table gains rows
-       in Compact without any cell deciding a padding for itself. */
+    /* Cells take the shared row height, so every table in the app lines its rows
+       up without any cell deciding a padding for itself. */
     height: var(--row-height);
     padding: 0.5rem 0.625rem;
     border-bottom: 1px solid color-mix(in oklab, var(--hairline) 70%, transparent);

@@ -2,7 +2,7 @@ import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
 
-import { DENSITIES, openCell, ROUTES, THEMES } from "./fixtures/matrix";
+import { openCell, ROUTES, THEMES } from "./fixtures/matrix";
 
 /**
  * The WCAG 2.2 AA criteria that no axe rule reaches, measured rather than asserted.
@@ -340,7 +340,7 @@ test.describe("1.4.11 non-text contrast, which no axe rule covers", () => {
       let edged = 0;
 
       for (const route of ROUTES) {
-        await openCell(page, route, { theme, density: "comfortable" });
+        await openCell(page, route, { theme });
         const result = await measureControls(page);
         selected += result.selected.length;
         edged += result.edged.length;
@@ -365,7 +365,7 @@ test.describe("1.4.11 non-text contrast, which no axe rule covers", () => {
       let stops = 0;
 
       for (const route of ROUTES) {
-        await openCell(page, route, { theme, density: "comfortable" });
+        await openCell(page, route, { theme });
         const walked = await tabThrough(page, 45);
         stops += walked.length;
         const bad = walked
@@ -400,43 +400,41 @@ test.describe("1.4.10 reflow", () => {
    * happen is the document itself scrolling sideways, which would put the header and the
    * navigation off-screen.
    */
-  for (const density of DENSITIES) {
-    test(`no route scrolls the page sideways at 320px (${density})`, async ({ page }) => {
-      await page.setViewportSize({ width: 320, height: 640 });
-      const failures: string[] = [];
+  test(`no route scrolls the page sideways at 320px`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    const failures: string[] = [];
 
-      for (const route of ROUTES) {
-        await openCell(page, route, { theme: "light", density });
-        const overflow = await page.evaluate(() => {
-          const doc = document.documentElement;
-          const visible = doc.clientWidth;
-          if (doc.scrollWidth <= visible + 1) return null;
-          // Name what is sticking out, so a failure is actionable rather than a number.
-          const culprits = [...document.querySelectorAll("*")]
-            .filter((el) => {
-              const r = el.getBoundingClientRect();
-              return r.width > 0 && r.right > visible + 1;
-            })
-            .slice(0, 3)
-            .map((el) => {
-              const cls =
-                typeof el.className === "string"
-                  ? el.className.split(/\s+/).slice(0, 3).join(".")
-                  : "";
-              return `<${el.tagName.toLowerCase()}${cls ? "." + cls : ""}>`;
-            });
-          return { scrolled: doc.scrollWidth, visible, culprits };
-        });
-        if (overflow) {
-          failures.push(
-            `${route}: document is ${overflow.scrolled}px in a ${overflow.visible}px viewport; ` +
-              `widest: ${overflow.culprits.join(", ")}`,
-          );
-        }
+    for (const route of ROUTES) {
+      await openCell(page, route, { theme: "light" });
+      const overflow = await page.evaluate(() => {
+        const doc = document.documentElement;
+        const visible = doc.clientWidth;
+        if (doc.scrollWidth <= visible + 1) return null;
+        // Name what is sticking out, so a failure is actionable rather than a number.
+        const culprits = [...document.querySelectorAll("*")]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.right > visible + 1;
+          })
+          .slice(0, 3)
+          .map((el) => {
+            const cls =
+              typeof el.className === "string"
+                ? el.className.split(/\s+/).slice(0, 3).join(".")
+                : "";
+            return `<${el.tagName.toLowerCase()}${cls ? "." + cls : ""}>`;
+          });
+        return { scrolled: doc.scrollWidth, visible, culprits };
+      });
+      if (overflow) {
+        failures.push(
+          `${route}: document is ${overflow.scrolled}px in a ${overflow.visible}px viewport; ` +
+            `widest: ${overflow.culprits.join(", ")}`,
+        );
       }
-      expect(failures, `page-level horizontal scroll at 320px`).toEqual([]);
-    });
-  }
+    }
+    expect(failures, `page-level horizontal scroll at 320px`).toEqual([]);
+  });
 });
 
 test.describe("2.4.11 focus not obscured, new in WCAG 2.2", () => {
@@ -456,7 +454,7 @@ test.describe("2.4.11 focus not obscured, new in WCAG 2.2", () => {
       const perRoute: number[] = [];
 
       for (const route of ROUTES) {
-        await openCell(page, route, { theme, density: "comfortable" });
+        await openCell(page, route, { theme });
         const walked = await tabThrough(page, 45);
         const relevant = walked.filter((s) => !s.insideHeader);
         perRoute.push(relevant.length);
@@ -488,7 +486,7 @@ test.describe("2.3.3 reduced motion", () => {
   for (const theme of THEMES) {
     test(`a reduced-motion preference actually reduces motion (${theme})`, async ({ page }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await openCell(page, "/", { theme, density: "compact" });
+      await openCell(page, "/", { theme });
 
       const durations = await page.evaluate(() => {
         const out: number[] = [];
@@ -539,7 +537,7 @@ test.describe("2.5.7 dragging movements, new in WCAG 2.2", () => {
   test.use({ appMock: { preset: "layout", role: "admin" } });
 
   test("every draggable row keeps a non-drag alternative", async ({ page }) => {
-    await openCell(page, "/placement", { theme: "light", density: "comfortable" });
+    await openCell(page, "/placement", { theme: "light" });
 
     const result = await page.evaluate(() => {
       const rows = [...document.querySelectorAll('tr[draggable="true"]')];

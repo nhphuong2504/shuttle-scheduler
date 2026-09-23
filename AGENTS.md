@@ -43,8 +43,8 @@ that matter most when writing code:
   hover surface.
 - **A fill colour and its text twin are separate tokens.** If text sits on a new
   fill, it needs an ink token solved against it.
-- **Theme takes no pathname and density does.** They answer different questions;
-  do not merge them.
+- **Theme takes no pathname.** Its fallback is the operating system, not the route, so
+  navigating must never change the lighting.
 - **Tier-4 match states render as ink only**, with no chip.
 
 The design system is the current, shipped system: a cool neutral slate chassis with
@@ -168,5 +168,5 @@ tests are the floor, not the argument.
 Run the manual checklist in
 [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md). It covers what no
 automated gate can judge: focus order, visual hierarchy, status recognition at a
-glance, truncation, density legibility, and empty and error states. Record the run
-and state the skip count explicitly.
+glance, truncation, legibility at the target widths, and empty and error states. Record
+the run and state the skip count explicitly.

@@ -10,7 +10,6 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { DESK_PATHS, DENSITY_STORAGE_KEY } from "@/lib/design/density";
 import { DARK_CLASS, SYSTEM_DARK_QUERY, THEME_STORAGE_KEY } from "@/lib/design/theme";
 
 import appCss from "../styles.css?url";
@@ -127,43 +126,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 /**
- * Applies density and theme before first paint.
+ * Applies the theme before first paint.
  *
- * Without this both are set in an effect, which runs after the browser has already
- * laid out the page, so every load shows the wrong appearance first. For density on
- * the Desk - whose default is Compact - that is a visible reflow, rows first
- * rendering at 44px and then collapsing to 32px. For theme it is worse: a dark
- * preference would flash a full-brightness light page on every navigation, which in
- * a dim venue is exactly the thing dark mode exists to prevent.
+ * Without this the theme is set in an effect, which runs after the browser has
+ * already laid out the page, so every load would flash a full-brightness light page
+ * before correcting itself - which in a dim venue is exactly the thing dark mode
+ * exists to prevent.
  *
- * The two preferences are read here in separate `try` blocks on purpose. They are
- * independent settings, and a failure in one must not silently reset the other -
- * sharing a block would mean a `localStorage` throw while reading density also
- * discarded a theme choice that had been read successfully.
- *
- * `DESK_PATHS` is injected rather than restated, so the desk-route list still has
- * one definition, and the stored-value literals are injected from the same modules
- * the runtime uses so the script cannot drift from `parseStoredDensity` and
- * `parseStoredTheme`. This runs before the bundle, so it reads `localStorage`
- * directly instead of importing those modules.
+ * The stored-value literals are injected from the same module the runtime uses, so
+ * the script cannot drift from `parseStoredTheme`. This runs before the bundle, so
+ * it reads `localStorage` directly instead of importing that module.
  */
 const APPEARANCE_BOOTSTRAP = `
 (function () {
   var root = document.documentElement;
-
-  try {
-    var stored = localStorage.getItem(${JSON.stringify(DENSITY_STORAGE_KEY)});
-    root.dataset.density =
-      stored === "compact" || stored === "comfortable"
-        ? stored
-        : ${JSON.stringify(DESK_PATHS)}.indexOf(
-              location.pathname.replace(/\\/+$/, "") || "/",
-            ) !== -1
-          ? "compact"
-          : "comfortable";
-  } catch (error) {
-    root.dataset.density = "comfortable";
-  }
 
   try {
     var theme = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
@@ -186,7 +162,7 @@ const APPEARANCE_BOOTSTRAP = `
 function RootShell({ children }: { children: ReactNode }) {
   return (
     // `suppressHydrationWarning` is required, not cosmetic. APPEARANCE_BOOTSTRAP adds
-    // `data-density` and the `dark` class to this element before React runs, so the
+    // the `dark` class to this element before React runs, so the
     // server HTML and the client's expected props genuinely differ. React would
     // otherwise log a hydration mismatch and refuse to patch them - and an
     // unavoidable warning here would hide a real one added later.
@@ -208,9 +184,9 @@ function RootComponent() {
 
   // Marks the point at which React has attached its event handlers.
   //
-  // The density attribute and the theme class both appear before hydration -
-  // deliberately, so there is no reflow or flash - which means "the appearance is
-  // already correct" says nothing about whether the page is interactive yet. An
+  // The theme class appears before hydration - deliberately, so there is no flash -
+  // which means "the appearance is already correct" says nothing about whether the page
+  // is interactive yet. An
   // interaction test that clicks as soon as the attribute looks right can click a
   // button React has not wired up, and then fail for a reason that has nothing to do
   // with the behaviour it is testing.

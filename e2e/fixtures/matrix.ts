@@ -1,16 +1,15 @@
 import { type Page } from "@playwright/test";
 
-import { DENSITY_STORAGE_KEY, type Density } from "../../src/lib/design/density";
 import { THEME_STORAGE_KEY, type Theme } from "../../src/lib/design/theme";
 
 /**
- * The infrastructure matrix: routes x themes x densities.
+ * The infrastructure matrix: routes x themes.
  *
- * P4 validates these three axes against each other, so all three sweeps - contrast,
- * focus and layout - must agree about what a "cell" is. Defining the axes once here
- * rather than in each spec is what makes that agreement structural: a route added to
- * `ROUTES` is picked up by every sweep at once, instead of silently appearing in one
- * and being missed by the others.
+ * The sweeps validate their axes against each other, so all of them - contrast,
+ * focus, layout and hydration - must agree about what a "cell" is. Defining the axes
+ * once here rather than in each spec is what makes that agreement structural: a route
+ * added to `ROUTES` is picked up by every sweep at once, instead of silently appearing
+ * in one and being missed by the others.
  *
  * This module lives in `fixtures/` rather than beside the specs because Playwright's
  * `testDir` only collects `*.spec.ts` - a non-spec module here is importable without
@@ -52,44 +51,34 @@ export const ROUTES = [
 ] as const;
 
 export const THEMES = ["light", "dark"] as const satisfies readonly Theme[];
-export const DENSITIES = ["comfortable", "compact"] as const satisfies readonly Density[];
 
 export const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
-export type MatrixCell = { theme: Theme; density: Density };
+export type MatrixCell = { theme: Theme };
 
 /**
- * All four combinations, in a fixed order so a run is reproducible.
+ * Every theme, in a fixed order so a run is reproducible.
  *
- * Every route is scanned in every cell rather than only in its own default density.
- * That is deliberate: the Desk's default is Compact, so scanning it at Comfortable is
- * testing the override path, and scanning a comfortable route at Compact is testing the
- * path its own default hides. A matrix measured only at each route's default is four
- * independent measurements pretending to be a grid.
+ * Theme is the only appearance axis there is. A route renders one type scale and one
+ * row height, so every route is measured in both themes and there is no second axis to
+ * cross them with.
  */
-export const MATRIX_CELLS: readonly MatrixCell[] = THEMES.flatMap((theme) =>
-  DENSITIES.map((density) => ({ theme, density })),
-);
+export const MATRIX_CELLS: readonly MatrixCell[] = THEMES.map((theme) => ({ theme }));
 
 /**
  * A stable key for one cell of the matrix.
  *
- * The unmarked key is light + comfortable, so the 24 keys recorded before this phase
- * keep their meaning and the baseline diff is readable: `#dark` and `#compact` are
- * additions rather than a rewrite.
+ * The unmarked key is light, so every key recorded for the light theme keeps its
+ * meaning and a baseline diff stays readable: `#dark` is an addition rather than a
+ * rewrite.
  */
 export function cellKey(route: string, cell: MatrixCell): string {
-  const marks = [
-    cell.theme === "dark" ? "dark" : null,
-    cell.density === "compact" ? "compact" : null,
-  ];
-  const present = marks.filter((mark): mark is string => mark !== null);
-  return present.length === 0 ? route : `${route}#${present.join("+")}`;
+  return cell.theme === "dark" ? `${route}#dark` : route;
 }
 
 /** A readable name for a test title, so a failure names the cell rather than the key. */
 export function cellLabel(cell: MatrixCell): string {
-  return `${cell.theme}, ${cell.density}`;
+  return cell.theme;
 }
 
 /**
@@ -100,24 +89,23 @@ export function cellLabel(cell: MatrixCell): string {
  * hydration. A scan that waits for hydration to correct the page can miss anything that
  * only exists in the wrong initial state.
  *
- * Both preferences are set explicitly, including when the value equals the default. An
- * empty storage would resolve the same way for most routes, but the Desk's density
- * default differs by route, so leaving it implicit would make the matrix depend on which
- * route happened to be under test.
+ * The theme is always set explicitly, including when it equals the default. An empty
+ * storage would resolve to the operating system's preference, which varies with the
+ * machine running the suite and would make the matrix depend on the environment rather
+ * than on the cell under test.
  */
 export async function seedAppearance(page: Page, cell: MatrixCell): Promise<void> {
   await page.addInitScript(
-    ([theme, density, themeKey, densityKey]) => {
+    ([theme, themeKey]) => {
       try {
         localStorage.setItem(themeKey!, theme!);
-        localStorage.setItem(densityKey!, density!);
       } catch {
         // Blocked storage leaves the page on its defaults. The sweep then measures the
-        // default cell, and the baseline reports the other cells as violations rather
-        // than the run passing silently against the wrong appearance.
+        // system-default cell, and the baseline reports the other cell as a violation
+        // rather than the run passing silently against the wrong appearance.
       }
     },
-    [cell.theme, cell.density, THEME_STORAGE_KEY, DENSITY_STORAGE_KEY],
+    [cell.theme, THEME_STORAGE_KEY],
   );
 }
 
@@ -159,14 +147,11 @@ export async function openCell(page: Page, route: string, cell: MatrixCell): Pro
 
   // The appearance is verified rather than assumed. If storage were blocked or the
   // bootstrap were broken, every cell would silently render the same way and the matrix
-  // would report four identical columns as if that were a result.
+  // would report two identical columns as if that were a result.
   const applied = await page.evaluate(() => ({
     theme: document.documentElement.classList.contains("dark") ? "dark" : "light",
-    density: document.documentElement.dataset["density"],
   }));
-  if (applied.theme !== cell.theme || applied.density !== cell.density) {
-    throw new Error(
-      `${route} did not apply ${cellLabel(cell)}: got ${applied.theme}, ${applied.density}`,
-    );
+  if (applied.theme !== cell.theme) {
+    throw new Error(`${route} did not apply ${cellLabel(cell)}: got ${applied.theme}`);
   }
 }

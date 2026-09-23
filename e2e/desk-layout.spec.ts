@@ -38,8 +38,8 @@ import { COURT_COUNT, LONGEST_PAIRING, WIDEST_SCORE } from "./fixtures/desk-mock
  *      wider. Glyph widths are measured with a `Range` instead, which measures the text
  *      rather than the box's scrolling area.
  *   2. Fonts load asynchronously, and a fallback face has different metrics. An early run
- *      measured the 13px tier as *wider* than the 14px tier, which is impossible for one
- *      font and was the tell. `document.fonts.ready` is awaited before anything is
+ *      measured the smaller tier as *wider* than the larger one, which is impossible for a
+ *      single font and was the tell. `document.fonts.ready` is awaited before anything is
  *      measured.
  *
  * A wrapped value is a third failure mode that neither of the above catches, because
@@ -51,23 +51,6 @@ const VIEWPORTS = [
   { name: "1920x1080", width: 1920, height: 1080 },
   { name: "2560x1440", width: 2560, height: 1440 },
 ] as const;
-
-const DENSITIES = ["comfortable", "compact"] as const;
-
-type Density = (typeof DENSITIES)[number];
-
-/**
- * Density is applied as the attribute the hook would set, rather than by clicking the
- * toggle. The toggle's own behaviour, its persistence and its precedence over the Desk
- * default are covered by `density.spec.ts`; repeating that here would only make this file
- * slower and its failures harder to attribute.
- */
-async function applyDensity(page: Page, density: Density) {
-  await page.evaluate((d) => {
-    document.documentElement.dataset["density"] = d;
-  }, density);
-  await page.waitForTimeout(150);
-}
 
 /** Awaits the web font, without which every width measurement is a guess. */
 async function awaitFonts(page: Page) {
@@ -177,90 +160,86 @@ const PROBE = (args: { pairing: string; score: string }) => {
 };
 
 for (const vp of VIEWPORTS) {
-  for (const density of DENSITIES) {
-    test.describe(`${vp.name} · ${density}`, () => {
-      test.beforeEach(async ({ page }) => {
-        await installAppMock(page, { preset: "layout" });
-        await page.setViewportSize({ width: vp.width, height: vp.height });
-      });
-
-      test("the court board fits a long doubles pairing without clipping", async ({ page }) => {
-        await page.goto("/", { waitUntil: "networkidle" });
-        await applyDensity(page, density);
-        await awaitFonts(page);
-
-        const r = await page.evaluate(PROBE, { pairing: LONGEST_PAIRING, score: WIDEST_SCORE });
-        const where = `${vp.name}/${density}`;
-
-        // The board is populated at all: an empty board would trivially "fit".
-        expect(r.tileCount, `court tiles rendered at ${where}`).toBe(COURT_COUNT);
-
-        expect(
-          r.docScrollW,
-          `horizontal page overflow at ${where}: ${r.docScrollW} > ${r.docClientW}`,
-        ).toBeLessThanOrEqual(r.docClientW + 1);
-
-        expect(r.minFont, `smallest rendered text at ${where}`).toBeGreaterThanOrEqual(12);
-
-        // The hostile pairing is present, and the element that holds it was really found.
-        expect(r.bodyHasPairing, `pairing rendered at ${where}`).toBe(true);
-        expect(r.pairing, `pairing element located at ${where}`).not.toBeNull();
-        expect(r.pairing!.clippedByAncestor, `pairing clipped at ${where}`).toBeNull();
-
-        // A 65-character pairing is expected to wrap on a narrow tile; what it must not do
-        // is overflow the element that contains it.
-        expect(
-          r.pairing!.textWidth,
-          `pairing glyphs wider than their box at ${where}: ${r.pairing!.textWidth}px in ` +
-            `${r.pairing!.cellWidth}px`,
-        ).toBeLessThanOrEqual(r.pairing!.cellWidth + 1);
-
-        expect(
-          r.overflows,
-          `overflowing elements at ${where}: ${JSON.stringify(r.overflows)}`,
-        ).toEqual([]);
-      });
-
-      test("the score list keeps a three-game 30-29 score on one line", async ({ page }) => {
-        await page.goto("/matches", { waitUntil: "networkidle" });
-        await applyDensity(page, density);
-        await awaitFonts(page);
-
-        // The knockout tab is unmounted until selected, and that is where the fixtures put
-        // the reported matches whose scores are widest.
-        await page.getByRole("tab", { name: /Knockout/ }).click();
-        await page.waitForTimeout(300);
-
-        const r = await page.evaluate(PROBE, { pairing: LONGEST_PAIRING, score: WIDEST_SCORE });
-        const where = `${vp.name}/${density}`;
-
-        expect(r.bodyHasScore, `widest score rendered at ${where}`).toBe(true);
-        expect(r.score, `score element located at ${where}`).not.toBeNull();
-        expect(r.docScrollW).toBeLessThanOrEqual(r.docClientW + 1);
-        expect(r.minFont).toBeGreaterThanOrEqual(12);
-
-        // The assertion this test exists for. A score is a number: splitting it across
-        // lines can change what it reads as, so one line box is required, not preferred.
-        expect(
-          r.score!.lineBoxes,
-          `score wrapped onto ${r.score!.lineBoxes} lines at ${where}: "${r.score!.text}"`,
-        ).toBe(1);
-
-        // And having been kept on one line, it must still fit the space it was given
-        // rather than spilling over the control beside it.
-        expect(
-          r.score!.textWidth,
-          `score glyphs wider than their cell at ${where}: ${r.score!.textWidth}px in ` +
-            `${r.score!.cellWidth}px`,
-        ).toBeLessThanOrEqual(r.score!.cellWidth + 1);
-        expect(r.score!.clippedByAncestor, `score clipped at ${where}`).toBeNull();
-
-        // The pairing must not be the element that gives way to make the score fit.
-        expect(r.bodyHasPairing).toBe(true);
-        expect(r.pairing).not.toBeNull();
-        expect(r.pairing!.clippedByAncestor).toBeNull();
-        expect(r.overflows).toEqual([]);
-      });
+  test.describe(vp.name, () => {
+    test.beforeEach(async ({ page }) => {
+      await installAppMock(page, { preset: "layout" });
+      await page.setViewportSize({ width: vp.width, height: vp.height });
     });
-  }
+
+    test("the court board fits a long doubles pairing without clipping", async ({ page }) => {
+      await page.goto("/", { waitUntil: "networkidle" });
+      await awaitFonts(page);
+
+      const r = await page.evaluate(PROBE, { pairing: LONGEST_PAIRING, score: WIDEST_SCORE });
+      const where = vp.name;
+
+      // The board is populated at all: an empty board would trivially "fit".
+      expect(r.tileCount, `court tiles rendered at ${where}`).toBe(COURT_COUNT);
+
+      expect(
+        r.docScrollW,
+        `horizontal page overflow at ${where}: ${r.docScrollW} > ${r.docClientW}`,
+      ).toBeLessThanOrEqual(r.docClientW + 1);
+
+      expect(r.minFont, `smallest rendered text at ${where}`).toBeGreaterThanOrEqual(12);
+
+      // The hostile pairing is present, and the element that holds it was really found.
+      expect(r.bodyHasPairing, `pairing rendered at ${where}`).toBe(true);
+      expect(r.pairing, `pairing element located at ${where}`).not.toBeNull();
+      expect(r.pairing!.clippedByAncestor, `pairing clipped at ${where}`).toBeNull();
+
+      // A 65-character pairing is expected to wrap on a narrow tile; what it must not do
+      // is overflow the element that contains it.
+      expect(
+        r.pairing!.textWidth,
+        `pairing glyphs wider than their box at ${where}: ${r.pairing!.textWidth}px in ` +
+          `${r.pairing!.cellWidth}px`,
+      ).toBeLessThanOrEqual(r.pairing!.cellWidth + 1);
+
+      expect(
+        r.overflows,
+        `overflowing elements at ${where}: ${JSON.stringify(r.overflows)}`,
+      ).toEqual([]);
+    });
+
+    test("the score list keeps a three-game 30-29 score on one line", async ({ page }) => {
+      await page.goto("/matches", { waitUntil: "networkidle" });
+      await awaitFonts(page);
+
+      // The knockout tab is unmounted until selected, and that is where the fixtures put
+      // the reported matches whose scores are widest.
+      await page.getByRole("tab", { name: /Knockout/ }).click();
+      await page.waitForTimeout(300);
+
+      const r = await page.evaluate(PROBE, { pairing: LONGEST_PAIRING, score: WIDEST_SCORE });
+      const where = vp.name;
+
+      expect(r.bodyHasScore, `widest score rendered at ${where}`).toBe(true);
+      expect(r.score, `score element located at ${where}`).not.toBeNull();
+      expect(r.docScrollW).toBeLessThanOrEqual(r.docClientW + 1);
+      expect(r.minFont).toBeGreaterThanOrEqual(12);
+
+      // The assertion this test exists for. A score is a number: splitting it across
+      // lines can change what it reads as, so one line box is required, not preferred.
+      expect(
+        r.score!.lineBoxes,
+        `score wrapped onto ${r.score!.lineBoxes} lines at ${where}: "${r.score!.text}"`,
+      ).toBe(1);
+
+      // And having been kept on one line, it must still fit the space it was given
+      // rather than spilling over the control beside it.
+      expect(
+        r.score!.textWidth,
+        `score glyphs wider than their cell at ${where}: ${r.score!.textWidth}px in ` +
+          `${r.score!.cellWidth}px`,
+      ).toBeLessThanOrEqual(r.score!.cellWidth + 1);
+      expect(r.score!.clippedByAncestor, `score clipped at ${where}`).toBeNull();
+
+      // The pairing must not be the element that gives way to make the score fit.
+      expect(r.bodyHasPairing).toBe(true);
+      expect(r.pairing).not.toBeNull();
+      expect(r.pairing!.clippedByAncestor).toBeNull();
+      expect(r.overflows).toEqual([]);
+    });
+  });
 }

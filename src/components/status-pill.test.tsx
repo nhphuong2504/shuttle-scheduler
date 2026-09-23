@@ -73,9 +73,8 @@ describe("StatusPill renders the tiered vocabulary", () => {
     // Pinned because it drifted once already: the component shipped at T4 while the
     // design canvas said T2, and no test noticed, because the assertions above check
     // structure and colour but never size. A status label is the primary operational
-    // signal, so it is deliberately not the smallest text on screen - and since T2
-    // is 13px in Compact, this is also what keeps a status out of the band where it
-    // would compete with the 12px floor.
+    // signal, so it is deliberately not the smallest text on screen. A status at T4
+    // would sit in the band where it competes with the 12px floor.
     for (const status of PERSISTED_MATCH_STATUSES) {
       expect(pill(status).className).toContain("text-t2");
     }

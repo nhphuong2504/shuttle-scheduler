@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { DENSITY_STORAGE_KEY, isDensity, parseStoredDensity, resolveDensity } from "./density";
 import * as themeModule from "./theme";
 import {
   DARK_CLASS,
@@ -12,14 +11,14 @@ import {
 } from "./theme";
 
 /**
- * Theme precedence, and the separation from density.
+ * Theme precedence.
  *
- * The required behaviour is easy to get subtly wrong in the same way density was:
- * the fallback is the operating system's setting, which changes while the page is
- * open, so the obvious implementation - write the system's current value to storage
- * on first load - converts "I have not chosen" into "I chose whatever the system
- * happened to be", and the operator can never get back to following it. These tests
- * pin the rule at the pure-function level, where it is cheap to check exhaustively.
+ * The required behaviour is easy to get subtly wrong: the fallback is the operating
+ * system's setting, which changes while the page is open, so the obvious
+ * implementation - write the system's current value to storage on first load -
+ * converts "I have not chosen" into "I chose whatever the system happened to be",
+ * and the operator can never get back to following it. These tests pin the rule at
+ * the pure-function level, where it is cheap to check exhaustively.
  */
 describe("theme resolution", () => {
   it("prefers an explicit choice over the system", () => {
@@ -75,49 +74,20 @@ describe("theme has no route default, and that is the design", () => {
   });
 
   it("exports nothing route-shaped to resolve a default with", () => {
-    // The negative assertion is the point: density exports `defaultDensityFor(pathname)`
-    // and theme must not grow the equivalent. Checked on the module rather than by
-    // reading the source, so the documentation of this decision cannot trip it.
+    // The negative assertion is the point: the theme's fallback is the environment,
+    // not the route, and no route-shaped default may creep in. Checked on the module
+    // rather than by reading the source, so the documentation of this decision cannot
+    // trip it.
     expect("defaultThemeFor" in themeModule).toBe(false);
     expect("THEME_PATHS" in themeModule).toBe(false);
   });
 });
 
-describe("theme and density are independent preferences", () => {
-  it("stores them under different keys", () => {
-    // The whole separation rests on this. One shared key would make choosing a theme
-    // overwrite a density, and the symptom would look like a density bug.
-    expect(THEME_STORAGE_KEY).not.toBe(DENSITY_STORAGE_KEY);
-    expect(THEME_STORAGE_KEY).toBe("tournova.theme");
-    expect(DENSITY_STORAGE_KEY).toBe("tournova.density");
-  });
-
-  it("gives each preference only the inputs it needs", () => {
-    // Symmetric guard to the arity check above: density must not consult the system
-    // colour scheme, and theme must not consult the route. Each takes exactly the two
-    // arguments its own question requires - no more.
-    expect(resolveDensity.length).toBe(2);
-    expect(resolveTheme.length).toBe(2);
-  });
-
-  it("cannot produce a value the other axis would accept", () => {
-    // A cross-contamination bug would most likely show up as one preference's value
-    // landing in the other's storage key and being accepted by its parser, so that is
-    // what is checked. Note this is the *parsers* and not the resolvers: a resolver
-    // takes an already-parsed value and trusts it, so asking it to reject a foreign
-    // string would be testing a contract it does not have.
-    for (const theme of ["light", "dark"] as const) {
-      expect(parseStoredDensity(theme)).toBeNull();
-      expect(isDensity(theme)).toBe(false);
-    }
-    for (const density of ["comfortable", "compact"] as const) {
-      expect(parseStoredTheme(density)).toBeNull();
-      expect(isTheme(density)).toBe(false);
-    }
-  });
-});
-
 describe("theme switch contract", () => {
+  it("stores its choice under its own key", () => {
+    expect(THEME_STORAGE_KEY).toBe("tournova.theme");
+  });
+
   it("keys the dark tokens off a class the stylesheet declares", () => {
     expect(DARK_CLASS).toBe("dark");
   });

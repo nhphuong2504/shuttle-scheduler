@@ -31,8 +31,6 @@ const ROUTES = [
   "/staff",
 ];
 
-const DENSITIES = ["comfortable", "compact"] as const;
-
 /** Every painted text run, with the size the browser resolved for it. */
 function measure(page: Page) {
   return page.evaluate(() => {
@@ -60,56 +58,41 @@ function measure(page: Page) {
   });
 }
 
-async function atDensity(page: Page, density: (typeof DENSITIES)[number], route: string) {
-  await page.goto(route);
-  await page.evaluate((d) => localStorage.setItem("tournova.density", d), density);
+async function atRoute(page: Page, route: string) {
   await page.goto(route, { waitUntil: "networkidle" });
-  // Confirm the density actually took effect, so a route that silently ignored the
-  // preference cannot make this suite pass while measuring the wrong scale.
-  await expect(page.locator("html")).toHaveAttribute("data-density", density);
   await page.waitForTimeout(150);
 }
 
-for (const density of DENSITIES) {
-  test.describe(`rendered type at ${density} density`, () => {
-    // A large desktop monitor: the size the design was tuned against.
-    test.use({ viewport: { width: 2560, height: 1440 } });
-
-    for (const route of ROUTES) {
-      test(`${route} renders nothing below 12px`, async ({ page }) => {
-        await atDensity(page, density, route);
-        const rows = await measure(page);
-        // A page that rendered nothing would pass vacuously.
-        expect(rows.length, `${route} rendered no text at all`).toBeGreaterThan(3);
-
-        const small = rows.filter((r) => r.px < 12);
-        const unique = [
-          ...new Map(small.map((r) => [`${r.px}|${r.tag}|${r.cls}|${r.text}`, r])).values(),
-        ];
-        expect(
-          unique.map((r) => `${r.px}px <${r.tag}> "${r.text}" class="${r.cls}"`),
-          `${route} has text below the 12px floor at ${density}`,
-        ).toEqual([]);
-      });
-    }
-  });
-}
-
-test.describe("density changes real sizes, not just the attribute", () => {
+test.describe("rendered type", () => {
+  // A large desktop monitor: the size the design was tuned against.
   test.use({ viewport: { width: 2560, height: 1440 } });
 
-  test("the Desk's identify tier is 13px compact and 14px comfortable", async ({ page }) => {
-    // Pins the actual values from the approved scale. If someone edits the token
-    // values, this fails rather than the change going unnoticed.
-    await atDensity(page, "compact", "/");
-    expect(
-      await page.evaluate(() => {
-        const el = document.querySelector(".text-t2");
-        return el ? Number.parseFloat(getComputedStyle(el).fontSize) : null;
-      }),
-    ).toBe(13);
+  for (const route of ROUTES) {
+    test(`${route} renders nothing below 12px`, async ({ page }) => {
+      await atRoute(page, route);
+      const rows = await measure(page);
+      // A page that rendered nothing would pass vacuously.
+      expect(rows.length, `${route} rendered no text at all`).toBeGreaterThan(3);
 
-    await atDensity(page, "comfortable", "/");
+      const small = rows.filter((r) => r.px < 12);
+      const unique = [
+        ...new Map(small.map((r) => [`${r.px}|${r.tag}|${r.cls}|${r.text}`, r])).values(),
+      ];
+      expect(
+        unique.map((r) => `${r.px}px <${r.tag}> "${r.text}" class="${r.cls}"`),
+        `${route} has text below the 12px floor`,
+      ).toEqual([]);
+    });
+  }
+});
+
+test.describe("the type scale renders at its approved values", () => {
+  test.use({ viewport: { width: 2560, height: 1440 } });
+
+  test("the identify tier is 14px", async ({ page }) => {
+    // Pins the actual value from the approved scale. If someone edits the token value,
+    // this fails rather than the change going unnoticed.
+    await atRoute(page, "/");
     expect(
       await page.evaluate(() => {
         const el = document.querySelector(".text-t2");
@@ -118,21 +101,14 @@ test.describe("density changes real sizes, not just the attribute", () => {
     ).toBe(14);
   });
 
-  test("a dense list row is taller in comfortable than in compact", async ({ page }) => {
-    // Row height is the other half of density: the point of Compact is more rows on
-    // screen, not smaller type, so this asserts the rows actually move.
-    const rowHeight = async () =>
-      page.evaluate(() =>
-        Number.parseFloat(
-          getComputedStyle(document.documentElement).getPropertyValue("--row-height"),
-        ),
-      );
-
-    await atDensity(page, "compact", "/");
-    const compact = await rowHeight();
-    await atDensity(page, "comfortable", "/");
-    const comfortable = await rowHeight();
-
-    expect(compact).toBeLessThan(comfortable);
+  test("the row height is the 44px the scale declares", async ({ page }) => {
+    // Row height is the other half of the scale, and it is shared rather than restated
+    // per table: the schedule and the score list must not drift apart. Read from the
+    // computed custom property, which is the value every cell inherits.
+    await atRoute(page, "/");
+    const rowHeight = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--row-height").trim(),
+    );
+    expect(rowHeight).toBe("2.75rem");
   });
 });

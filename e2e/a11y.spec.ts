@@ -22,9 +22,9 @@ import { cellKey, cellLabel, MATRIX_CELLS, openCell, ROUTES, WCAG_TAGS } from ".
  * already failing may keep failing until its phase fixes it; a rule that starts
  * failing when it was not failing before fails the suite immediately.
  *
- * The scan covers the full infrastructure matrix - every route in both themes and both
- * densities - for the reason recorded in `fixtures/matrix.ts`: each axis was a blind spot
- * in turn, and each was found by widening the sweep rather than by reading the code.
+ * The scan covers the full infrastructure matrix - every route in both themes - for the
+ * reason recorded in `fixtures/matrix.ts`: each axis was a blind spot in turn, and each
+ * was found by widening the sweep rather than by reading the code.
  *
  * Record a new baseline with:  A11Y_RECORD=1 npm run test:e2e
  */

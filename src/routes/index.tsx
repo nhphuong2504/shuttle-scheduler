@@ -709,10 +709,9 @@ function Desk() {
                   </div>
 
                   {/* The names of the match on court are the tile's primary
-                      content, so they take the read tier and hold 14px in both
-                      densities rather than dropping to 13px in Compact. The tag
-                      above is a reference code and the timer below is the value
-                      that needs to be comparable across courts. */}
+                      content, so they take the read tier. The tag above is a
+                      reference code and the timer below is the value that needs to
+                      be comparable across courts. */}
                   <p className="mt-2 text-t3">
                     {state.playing ? (
                       <>
@@ -747,11 +746,10 @@ function Desk() {
                       </span>
                     )}
                   </p>
-                  {/* The queued pairing is a name, so it takes the identify tier
-                      and scales with density; the readiness detail under it is
-                      reference text. They were one 12px line before, which put
-                      the next players' names below the playing names and left
-                      them unresponsive to density. */}
+                  {/* The queued pairing is a name, so it takes the identify tier;
+                      the readiness detail under it is reference text. They were one
+                      12px line before, which put the next players' names below the
+                      playing names at the same size as the detail. */}
                   <div className="mt-2 border-t border-hairline pt-2 text-muted-foreground">
                     {state.next ? (
                       <>

@@ -71,15 +71,15 @@ jobs:
         # 4 shards, chosen from measurement rather than intuition - see `npm run
         # ci:shard-plan`, which prints the wall time and billed minutes for each count.
         #
-        # The count is not "as many as possible". More shards keeps splitting the same
-        # imbalance more finely and eventually makes it worse: 6 was predicted at 7.9 min
-        # against 4's 7.0, with total minutes nearly doubling. Nor is fewer cheaper - 3 was
-        # predicted slower (9.8 against 7.0) AND more expensive (29.5 billed minutes against
-        # 28.1) because 3 shards spreads 36 minutes of work unevenly enough that one shard
-        # carries 17.9 min while the others idle near 9.
+        # Re-measured when the density axis was removed, which took the suite from 297
+        # tests to 161. 4 shards now predicts 2.5 min wall on 7.3 billed minutes. 3 is
+        # slower (3.1 min wall) and only slightly cheaper (6.4 billed), and 5 buys 0.2 min
+        # of wall (2.3) for 0.9 more billed minutes, so the extra shard does not pay for
+        # itself. 6 is worse on both counts (2.5 wall, 9.1 billed) - shards split by test
+        # *count*, not duration, so a finer split shuffles the heavy specs back together.
         #
-        # Re-run that script after adding a spec file: the split is by test count, so a new
-        # file reshuffles every shard boundary.
+        # Re-run that script after adding or removing a spec file: the split is by test
+        # count, so it reshuffles every shard boundary.
         shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7

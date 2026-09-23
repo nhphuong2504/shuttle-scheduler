@@ -1,12 +1,10 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useDensity } from "@/hooks/useDensity";
 import { useSession } from "@/hooks/useSession";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
-import type { Density } from "@/lib/design/density";
 import type { Theme } from "@/lib/design/theme";
 import {
   BYE_NOTE,
@@ -37,100 +35,25 @@ const NAV = [
   { to: "/matches", label: "Scores" },
 ] as const;
 
-const DENSITY_OPTIONS: { value: Density; label: string }[] = [
-  { value: "comfortable", label: "Comfortable" },
-  { value: "compact", label: "Compact" },
-];
-
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ];
 
 /**
- * Density switch.
- *
- * A `role="group"` of pressed buttons rather than a radiogroup: these apply
- * immediately and are not a form field awaiting submission, so `aria-pressed`
- * describes them accurately while a radio role would imply a pending value.
- *
- * The pressed button always reflects what is actually rendering, including when
- * that came from a route default - the control never misrepresents the state to
- * make the choice look deliberate. "Default" appears only once a choice exists,
- * because resetting has no meaning before then.
- */
-function DensityToggle({
-  density,
-  isExplicit,
-  onChange,
-  onReset,
-}: {
-  density: Density;
-  isExplicit: boolean;
-  onChange: (next: Density) => void;
-  onReset: () => void;
-}) {
-  return (
-    <div className="hidden items-center gap-1.5 sm:flex">
-      <div
-        role="group"
-        aria-label="Text and row density"
-        className="flex items-center rounded-full border border-hairline bg-muted/60 p-0.5"
-      >
-        {DENSITY_OPTIONS.map((option) => {
-          const active = density === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(option.value)}
-              className={cn(
-                "rounded-full px-2.5 py-1 font-semibold transition-colors",
-                "text-t4",
-                // The ring is the selected-state boundary. Without it the active segment
-                // is `bg-surface` on a `bg-muted` container, which measures 1.09:1 in
-                // light and 1.02:1 in dark - a selected state a low-vision user cannot
-                // see. `ring` draws a box-shadow, so this costs no layout.
-                active
-                  ? "bg-surface text-foreground shadow-panel ring-1 ring-border-selected"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-      {isExplicit ? (
-        <button
-          type="button"
-          onClick={onReset}
-          title="Go back to this page's default density"
-          className="text-t4 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
-          Default
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-/**
  * Theme switch.
  *
- * A separate control from the density switch rather than one merged "appearance"
- * control, because the two answer different questions: density is about how much fits
- * on the screen, theme is about what can be seen in the room. A dense list in a
- * brightly lit hall is a completely ordinary combination, and folding the two together
- * would make choosing one imply something about the other.
+ * The shell's only appearance control. A `role="group"` of pressed buttons rather
+ * than a radiogroup, on the same reasoning as any other immediate-apply control:
+ * themes take effect as they are pressed and are not a form field awaiting
+ * submission, so `aria-pressed` describes them accurately while a radio role would
+ * imply a pending value.
  *
- * Same pressed-button group as the density switch, deliberately - the interaction is
- * already learned from the control beside it - and the same honesty rule: the pressed
- * button reflects what is actually rendering, including when that came from the
- * operating system rather than from a choice made here. "System" appears only once a
- * choice exists, because returning to the system has no meaning before then, and its
- * tooltip says which way the system currently points.
+ * The honesty rule: the pressed button reflects what is actually rendering,
+ * including when that came from the operating system rather than from a choice made
+ * here. "System" appears only once a choice exists, because returning to the system
+ * has no meaning before then, and its tooltip says which way the system currently
+ * points.
  */
 function ThemeToggle({
   theme,
@@ -204,13 +127,8 @@ export function AppShell({
 }) {
   const { session, signedIn, role, isAdmin } = useSession();
   const navigate = useNavigate();
-  // The route decides the *default* density, and only the default - an explicit
-  // choice is resolved ahead of it inside useDensity.
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { density, isExplicit, setDensity, clearDensity } = useDensity(pathname);
-  // The theme takes no pathname, and that is the design rather than an omission: its
-  // fallback is the operating system, not the route, so there is nothing for a route
-  // to contribute. See `resolveTheme`.
+  // The theme's fallback is the operating system rather than the route, so there is
+  // nothing for a route to contribute here. See `resolveTheme`.
   const {
     theme,
     systemPrefersDark,
@@ -255,12 +173,6 @@ export function AppShell({
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 text-xs">
-            <DensityToggle
-              density={density}
-              isExplicit={isExplicit}
-              onChange={setDensity}
-              onReset={clearDensity}
-            />
             <ThemeToggle
               theme={theme}
               systemPrefersDark={systemPrefersDark}

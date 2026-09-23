@@ -2,24 +2,12 @@
  * Theme resolution.
  *
  * Two themes exist and both are solved independently in the stylesheet; this module
- * decides which one is in effect. It is modelled on `density.ts` and deliberately
- * not merged with it, because the two preferences answer different questions and
- * have different fallbacks:
- *
- *   Density  "how much can I fit on this screen?"   Operational - it is a property
- *            of the *task*. The Desk is a dense list, so Compact is its default, and
- *            the default is therefore a function of the route.
- *
- *   Theme    "what can I see in this room?"        Environmental - it is a property
- *            of the *place*. A dim hall and a bright hall are the same task with
- *            different lighting, so the fallback is the operating system's setting
- *            and the route has no opinion at all.
- *
- * Sharing one module for both would have forced one of those two fallbacks onto the
- * other, and the route-shaped answer is simply wrong for theme: navigating to the
- * Desk must never change the lighting. Keeping them apart also means a bug in either
- * resolution rule cannot silently change the other preference, and it is why there
- * is no `defaultThemeFor(pathname)` below - the absence is the design.
+ * decides which one is in effect. The preference answers an environmental question -
+ * "what can I see in this room?" - rather than an operational one. A dim hall and a
+ * bright hall are the same task under different lighting, so the fallback is the
+ * operating system's setting and the route has no opinion at all. That is why there
+ * is no `defaultThemeFor(pathname)` below: the absence is the design, because
+ * navigating to the Desk must never change the lighting.
  *
  * An explicit choice is stored; the absence of one is not. There is no stored value
  * meaning "follow the system", because that state is already spelled by having
@@ -60,10 +48,9 @@ export function parseStoredTheme(raw: string | null | undefined): Theme | null {
  * the module exists to encode: once an operator has said "dark" in a bright room,
  * resizing the window or arriving after sunset must not overrule them.
  *
- * Note the absence of a pathname parameter. Density needs one because its default is
- * a route; theme's default is the environment, so there is nothing for a route to
- * contribute - and passing one would invite exactly the coupling this module is
- * shaped to avoid.
+ * Note the absence of a pathname parameter. The default is the environment, so there
+ * is nothing for a route to contribute - and passing one would invite exactly the
+ * coupling this module is shaped to avoid.
  */
 export function resolveTheme(stored: Theme | null, systemPrefersDark: boolean): Theme {
   return stored ?? (systemPrefersDark ? "dark" : "light");

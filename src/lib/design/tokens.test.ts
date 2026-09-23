@@ -312,11 +312,11 @@ describe("both themes define the same colour tokens", () => {
   });
 
   it("keeps only theme-independent tokens out of .dark", () => {
-    // Structural and density values - radius, elevation, row height and the type
-    // scale - are deliberately shared rather than duplicated per theme: neither
-    // darkness nor lightness changes how tall a row is. If a *colour* ever appears
-    // in this list the previous test fails first; this one documents the exempt set
-    // so an addition has to be justified rather than go unnoticed.
+    // Structural values - radius, elevation, row height and the type scale - are
+    // deliberately shared rather than duplicated per theme: neither darkness nor
+    // lightness changes how tall a row is. If a *colour* ever appears in this list the
+    // previous test fails first; this one documents the exempt set so an addition has
+    // to be justified rather than go unnoticed.
     const dark = unprefixed(darkNames);
     const lightOnly = [...lightNames].filter((name) => !dark.has(name.replace(/^--/, ""))).sort();
     expect(lightOnly).toEqual([
@@ -480,59 +480,45 @@ describe("every colour utility resolves to a theme key", () => {
 });
 
 /**
- * Density token parity.
+ * The type scale is complete, and its declared values respect the floor.
  *
- * Same failure shape as the theme-parity tests above, one axis over. A tier token
- * declared in the base block but missing from the compact block does not fail to
- * render - it silently keeps its comfortable value, so Compact is 90% applied and
- * one tier is quietly too large. Nothing reports that.
- *
- * The compact block is a delta, so this test is what keeps it a complete one.
+ * The class scan above proves no *utility* asks for a size below 12px, and the
+ * stylesheet scan below proves no bare `font-size` declaration does. Neither reads
+ * the `--type-*` tokens, which is where the tiers are actually set: a token dropped
+ * to 0.6875rem would take every tier referencing it under the floor, and both of
+ * those checks would still pass.
  */
-describe("both densities define the same type tokens", () => {
+describe("the type scale is complete and stays above the floor", () => {
   function blockFor(selector: string): string {
     const start = CSS.indexOf(`\n${selector} {`);
     return start === -1 ? "" : CSS.slice(start, CSS.indexOf("\n}", start));
   }
 
-  const baseTypeNames = namesIn(blockFor(":root"));
-  const compactBlock = blockFor(':root[data-density="compact"]');
-  const compactNames = namesIn(compactBlock);
+  const baseNames = namesIn(blockFor(":root"));
 
-  it("finds the compact block at all", () => {
-    // Otherwise every assertion below would pass vacuously against an empty set,
-    // which is the failure mode of a parity test written the obvious way.
-    expect(compactBlock.length).toBeGreaterThan(0);
-    expect(compactNames.size).toBeGreaterThan(0);
+  it("declares every tier, and the row height that goes with them", () => {
+    const typeTokens = [...baseNames].filter((name) => name.startsWith("--type-")).sort();
+    // Eight: a size and a line-height for each of the four tiers.
+    expect(typeTokens).toEqual([
+      "--type-t1-lh",
+      "--type-t1-size",
+      "--type-t2-lh",
+      "--type-t2-size",
+      "--type-t3-lh",
+      "--type-t3-size",
+      "--type-t4-lh",
+      "--type-t4-size",
+    ]);
+    expect(baseNames.has("--row-height")).toBe(true);
   });
 
-  it("defines every --type-* token in the compact block", () => {
-    const typeTokens = [...baseTypeNames].filter((name) => name.startsWith("--type-")).sort();
-    // Sanity check: the base must actually declare a scale, or this proves nothing.
-    expect(typeTokens.length).toBeGreaterThanOrEqual(8);
-    const missing = typeTokens.filter((name) => !compactNames.has(name));
-    expect(missing).toEqual([]);
-  });
-
-  it("keeps the row height density-scoped", () => {
-    expect(baseTypeNames.has("--row-height")).toBe(true);
-    expect(compactNames.has("--row-height")).toBe(true);
-  });
-
-  it("never lets a density push a tier below the 12px floor", () => {
-    // The floor is the reason the old scale was replaced, so a density that
-    // undercut it would reintroduce the defect in the mode least able to afford
-    // it. Read from both blocks rather than trusting the comment.
-    for (const [label, block] of [
-      ["comfortable", blockFor(":root")],
-      ["compact", compactBlock],
-    ] as const) {
-      for (const match of block.matchAll(/--type-(t\d)-size:\s*([\d.]+)rem/g)) {
-        const px = Number(match[2]) * 16;
-        expect(px, `${label} ${match[1]} is ${px}px, below the 12px floor`).toBeGreaterThanOrEqual(
-          12,
-        );
-      }
+  it("never declares a tier below the 12px floor", () => {
+    // The floor is the reason the old scale was replaced, so a token that undercut it
+    // would reintroduce the defect at the level every tier inherits from. Read from
+    // the block rather than trusting the comment above it.
+    for (const match of blockFor(":root").matchAll(/--type-(t\d)-size:\s*([\d.]+)rem/g)) {
+      const px = Number(match[2]) * 16;
+      expect(px, `${match[1]} is ${px}px, below the 12px floor`).toBeGreaterThanOrEqual(12);
     }
   });
 });
@@ -554,7 +540,7 @@ describe("type sizes declared in the stylesheet", () => {
     const offenders: string[] = [];
     for (const match of CSS.matchAll(/font-size:\s*([^;]+);/g)) {
       const value = match[1]!.trim();
-      // Token references are governed by the density tests above.
+      // Token references are governed by the type-scale tests above.
       if (value.startsWith("var(")) continue;
       const px = value.endsWith("rem")
         ? Number.parseFloat(value) * 16

@@ -26,7 +26,6 @@ recommending them, it is stale.
 | Status vocabulary and tiers | [`src/lib/tournament/match-status.ts`](../src/lib/tournament/match-status.ts) |
 | Court state vocabulary | [`src/lib/tournament/court-state.ts`](../src/lib/tournament/court-state.ts) |
 | Theme resolution | [`src/lib/design/theme.ts`](../src/lib/design/theme.ts) |
-| Density resolution | [`src/lib/design/density.ts`](../src/lib/design/density.ts) |
 | Shared components | [`src/components/app-shell.tsx`](../src/components/app-shell.tsx) |
 | Pre-hydration appearance bootstrap | [`src/routes/__root.tsx`](../src/routes/__root.tsx) |
 
@@ -246,36 +245,19 @@ and no automatic inversion - each token is chosen for its own theme.
   `defaultThemeFor(pathname)` is the design, not an omission.
 - Applied **before React runs** by a pre-hydration script in
   [`__root.tsx`](../src/routes/__root.tsx), so there is no flash and no hydration
-  mismatch. The script is injected with the shared constants rather than
-  restating them.
-
-## Density
-
-Two modes, both real. Neither is a degraded version of the other.
-
-- `comfortable` is the general default. `compact` is the Desk default, which means
-  the dense operational lists at `/` and `/matches`.
-- **A route default is resolved at read time and never written to storage.** Writing
-  it would convert "I have expressed no preference" into a choice the operator
-  cannot undo by navigating away. An explicit preference always survives.
-- The only difference between the modes is **six values**: the three lower type
-  tiers, the first tier, and `--row-height`. `--type-t4-size` is deliberately
-  identical in both, because reference text is already at the 12px floor and
-  shrinking it is not an option.
-- Scoped as `:root[data-density="compact"]` so it cannot be out-specified by the
-  base `:root` block at equal specificity.
+  mismatch. The script is injected with the shared constant rather than restating it.
 
 ## Typography
 
-Tiers are named for the **job** the text does, not for its size, so a density
-change resizes them without any component changing its markup.
+Tiers are named for the **job** the text does, not for its size, so the scale can be
+adjusted without any component changing its markup.
 
-| Tier | Job | Examples | Comfortable | Compact |
-| --- | --- | --- | --- | --- |
-| T1 Glance | Values read without scanning | match score, timer | 24 / 28 | 20 / 24 |
-| T2 Identify | Things named while moving | court id, player names, status | 14 / 20 | 13 / 18 |
-| T3 Read | Content read in sequence | body copy, form values | 14 / 20 | 14 / 20 |
-| T4 Reference | Detail found on demand | timestamps, captions, hints | 12 / 16 | 12 / 16 |
+| Tier | Job | Examples | Size / line height |
+| --- | --- | --- | --- |
+| T1 Glance | Values read without scanning | match score, timer | 24 / 28 |
+| T2 Identify | Things named while moving | court id, player names, status | 14 / 20 |
+| T3 Read | Content read in sequence | body copy, form values | 14 / 20 |
+| T4 Reference | Detail found on demand | timestamps, captions, hints | 12 / 16 |
 
 Sizes in px; each tier emits font-size and line-height together as `text-tN`.
 
@@ -331,7 +313,7 @@ and `--danger-foreground` are.
 **Do**
 
 - Use a token. Every colour utility must resolve to a `--color-*` key.
-- Use the type tiers. A component names the job (`text-t2`), and density decides the size.
+- Use the type tiers. A component names the job (`text-t2`), and the scale decides the size.
 - Give every state a glyph and a label as well as a colour.
 - Use `bg-primary/10` for primary-tinted fills; it is the tint `--primary-ink` was solved against.
 - Check a new fill for text sitting on it, and add an ink twin if there is any.
@@ -348,7 +330,7 @@ and `--danger-foreground` are.
   it for both themes and checking it in grayscale.
 - Don't use `--accent` as a brand colour.
 - Don't reach for a blue chip for a state - blue means brand action.
-- Don't merge theme and density resolution; their fallbacks answer different questions.
+- Don't make the theme resolve from the route; its fallback is the environment.
 
 ## The gates that enforce this
 
@@ -356,13 +338,13 @@ and `--danger-foreground` are.
 
 | Gate | Covers |
 | --- | --- |
-| [`tokens.test.ts`](../src/lib/design/tokens.test.ts) | Token references resolve; theme parity; density parity; tier-4 ink sharing; the 12px floor; dead tokens; every colour utility has a theme key |
+| [`tokens.test.ts`](../src/lib/design/tokens.test.ts) | Token references resolve; theme parity; tier-4 ink sharing; the 12px floor; the type scale is complete; dead tokens; every colour utility has a theme key |
 | [`status-pill.test.tsx`](../src/components/status-pill.test.tsx), [`stat-tile.test.tsx`](../src/components/stat-tile.test.tsx) | Component rendering per tier and per tone |
 | [`-surfaces.test.ts`](../src/routes/-surfaces.test.ts) | Source-level guards on UI decisions that components cannot see |
-| [`e2e/a11y.spec.ts`](../e2e/a11y.spec.ts) | Axe across every route in both themes and both densities, as a pinned baseline |
+| [`e2e/a11y.spec.ts`](../e2e/a11y.spec.ts) | Axe across every route in both themes, as a pinned baseline |
 | [`e2e/states.spec.ts`](../e2e/states.spec.ts) | Every court state and urgency treatment, rendered with data in the app |
 | [`e2e/criteria.spec.ts`](../e2e/criteria.spec.ts) | WCAG criteria Axe cannot see: 1.4.11, 1.4.10, 2.4.11, 2.3.3, 2.5.7 |
-| [`e2e/theme.spec.ts`](../e2e/theme.spec.ts), [`e2e/density.spec.ts`](../e2e/density.spec.ts) | Precedence, persistence and pre-paint application |
+| [`e2e/theme.spec.ts`](../e2e/theme.spec.ts) | Precedence, persistence and pre-paint application |
 | [`e2e/typography.spec.ts`](../e2e/typography.spec.ts), [`e2e/matrix.spec.ts`](../e2e/matrix.spec.ts) | The 12px floor in the rendered DOM, and contrast across the full matrix |
 | [`e2e/hydration.spec.ts`](../e2e/hydration.spec.ts) | No route discards its server render |
 

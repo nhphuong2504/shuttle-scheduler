@@ -55,15 +55,14 @@ on colour. Each check is done twice: once normally, once in a grayscale screensh
 | 2.4 | The heading order communicates the hierarchy | `h1` is the page, `h2` is a panel; no level is skipped |
 | 2.5 | An operator can tell what to do next without reading a paragraph | Time yourself: under five seconds from looking to knowing |
 
-## 3. Density and legibility
+## 3. Legibility and fit
 
 | # | Check |
 | --- | --- |
-| 3.1 | Comfortable and Compact are both legible; neither is a degraded version |
-| 3.2 | Nothing clips or overlaps in Compact — check the longest doubles pairing and the widest score (`30-29, 29-30, 30-28`) |
-| 3.3 | Switching density does not change what information is shown, only how tightly |
-| 3.4 | The density choice survives a reload and a route change, and the Desk still defaults to Compact when no choice was made |
-| 3.5 | At 1366x768 in Compact, the tables do not require horizontal scrolling for their primary columns |
+| 3.1 | Nothing clips or overlaps — check the longest doubles pairing and the widest score (`30-29, 29-30, 30-28`) |
+| 3.2 | The scale holds at 1366x768 and at 1920x1080 — nothing cramped, nothing sparse |
+| 3.3 | At 1366x768, the tables do not require horizontal scrolling for their primary columns |
+| 3.4 | Nothing renders below the 12px floor, including the smallest reference text |
 
 ## 4. Focus and keyboard
 

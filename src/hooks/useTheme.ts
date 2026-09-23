@@ -1,24 +1,23 @@
 /**
  * Theme state, shared across routes and persisted.
  *
- * Follows the module-scope store pattern used by `useDensity` and `useSession`, and
- * for the same reason: each route renders its own `AppShell`, so a per-component
- * `useState` would reset the control on navigation.
+ * Follows the module-scope store pattern used by `useSession`, and for the same
+ * reason: each route renders its own `AppShell`, so a per-component `useState`
+ * would reset the control on navigation.
  *
- * The one structural difference from `useDensity` is that this store has two inputs,
- * not one. Density's fallback is derived from the route, which is knowable from a
- * single snapshot; theme's fallback is the operating system's colour scheme, which
- * the page does not control and which can change while the page is open. So the
- * store tracks the system preference alongside the stored choice, and subscribes to
+ * The store has two inputs: the stored choice, and the operating system's colour
+ * scheme as a fallback. The fallback is not knowable from storage - the page does
+ * not control it and it can change while the page is open - so the store tracks the
+ * system preference alongside the stored choice, and subscribes to
  * `prefers-color-scheme` so a window that moves from a bright desk to a dim room is
- * followed live - but only while no explicit choice exists, because the resolution
- * rule still puts the operator first.
+ * followed live. Only while no explicit choice exists, because the resolution rule
+ * still puts the operator first.
  *
- * Writability is asymmetric on purpose, exactly as in `useDensity`: `setTheme`
- * records an explicit choice and nothing else writes. In particular, the system
- * preference must never be written to storage - doing so would convert "I have not
- * chosen" into "I chose what the operating system happened to be at the time", and
- * the operator could never get back to following the system.
+ * Writability is asymmetric on purpose: `setTheme` records an explicit choice and
+ * nothing else writes. In particular, the system preference must never be written to
+ * storage - doing so would convert "I have not chosen" into "I chose what the
+ * operating system happened to be at the time", and the operator could never get back
+ * to following the system.
  */
 import { useEffect, useSyncExternalStore } from "react";
 

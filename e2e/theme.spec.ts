@@ -2,14 +2,13 @@ import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
 
-import { DENSITY_STORAGE_KEY, type Density } from "../src/lib/design/density";
 import { THEME_STORAGE_KEY, type Theme } from "../src/lib/design/theme";
 
 /**
  * Theme switching, in a real browser.
  *
  * The unit tests pin the resolution rule; these pin the things that rule cannot see.
- * Three of them matter more than the rest:
+ * Two of them matter more than the rest:
  *
  *   - That the theme is applied by the inline bootstrap script rather than by React.
  *     This is the flicker requirement, and it is invisible to any assertion made after
@@ -19,9 +18,6 @@ import { THEME_STORAGE_KEY, type Theme } from "../src/lib/design/theme";
  *   - That a choice survives a reload and a route change. Both are the same assertion
  *     in spirit but they fail for different reasons: a reload re-runs the bootstrap
  *     script, a route change re-runs the module-scope store and the effect.
- *   - That the two preferences are genuinely independent. The failure this guards
- *     against is not a crash but a coupling - choosing a theme silently resetting the
- *     density, or the Desk's Compact default overwriting the theme.
  *
  * ## Why `seedPreferences` only ever writes
  *
@@ -36,25 +32,18 @@ import { THEME_STORAGE_KEY, type Theme } from "../src/lib/design/theme";
  * reset control is offered when nothing has been chosen.
  */
 
-/** Seeds preferences before any page script runs, including the bootstrap. */
-async function seedPreferences(
-  page: Page,
-  preferences: { theme?: Theme; density?: Density },
-): Promise<void> {
-  const { theme, density } = preferences;
-  if (theme === undefined && density === undefined) return;
-
+/** Seeds the theme before any page script runs, including the bootstrap. */
+async function seedPreferences(page: Page, theme: Theme): Promise<void> {
   await page.addInitScript(
-    ([themeValue, densityValue, themeKey, densityKey]) => {
+    ([themeValue, themeKey]) => {
       try {
-        if (themeValue) localStorage.setItem(themeKey!, themeValue);
-        if (densityValue) localStorage.setItem(densityKey!, densityValue);
+        localStorage.setItem(themeKey!, themeValue!);
       } catch {
         // Storage can be unavailable; the test then runs against the default, which
         // its own assertions will notice rather than passing silently.
       }
     },
-    [theme ?? null, density ?? null, THEME_STORAGE_KEY, DENSITY_STORAGE_KEY],
+    [theme, THEME_STORAGE_KEY],
   );
 }
 
@@ -86,13 +75,13 @@ test.describe("the system preference is the default", () => {
     // wrong, because defaulting to the system and then "letting dark win" both look
     // correct for the dark case.
     await page.emulateMedia({ colorScheme: "dark" });
-    await seedPreferences(page, { theme: "light" });
+    await seedPreferences(page, "light");
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(darkClass(page)).not.toHaveClass(/\bdark\b/);
 
     // Dark chosen while the system is light.
     await page.emulateMedia({ colorScheme: "light" });
-    await seedPreferences(page, { theme: "dark" });
+    await seedPreferences(page, "dark");
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
   });
@@ -104,7 +93,7 @@ test.describe("the theme is applied before React runs", () => {
     // the answer. The stylesheet still loads, so what is being measured is purely
     // whether the inline script in <head> set the class - which is the difference
     // between a first paint in the chosen theme and a flash of the wrong one.
-    await seedPreferences(page, { theme: "dark" });
+    await seedPreferences(page, "dark");
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
@@ -117,7 +106,7 @@ test.describe("the theme is applied before React runs", () => {
     // The mirror case. Without it, a script that unconditionally added the class would
     // pass the test above.
     await page.emulateMedia({ colorScheme: "light" });
-    await seedPreferences(page, { theme: "light" });
+    await seedPreferences(page, "light");
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
@@ -134,7 +123,7 @@ test.describe("the theme is applied before React runs", () => {
     });
     page.on("pageerror", (error) => problems.push(error.message));
 
-    await seedPreferences(page, { theme: "dark" });
+    await seedPreferences(page, "dark");
     await page.goto("/", { waitUntil: "networkidle" });
     await awaitHydration(page);
 
@@ -193,7 +182,7 @@ test.describe("a choice persists", () => {
 
   test("System returns to following the operating system", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" });
-    await seedPreferences(page, { theme: "dark" });
+    await seedPreferences(page, "dark");
     await page.goto("/", { waitUntil: "networkidle" });
     await awaitHydration(page);
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
@@ -212,7 +201,7 @@ test.describe("a choice persists", () => {
 
 test.describe("the theme actually changes what is painted", () => {
   test("resolves different background tokens in each theme", async ({ page }) => {
-    await seedPreferences(page, { theme: "light" });
+    await seedPreferences(page, "light");
     await page.goto("/", { waitUntil: "networkidle" });
     const light = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
@@ -223,7 +212,7 @@ test.describe("the theme actually changes what is painted", () => {
       };
     });
 
-    await seedPreferences(page, { theme: "dark" });
+    await seedPreferences(page, "dark");
     await page.reload({ waitUntil: "networkidle" });
     const dark = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
@@ -249,71 +238,15 @@ test.describe("the theme actually changes what is painted", () => {
   test("repaints the page surface, not just the custom property", async ({ page }) => {
     // Guards against the class being applied while the tokens that depend on it are
     // not, which a property read alone would not catch.
-    await seedPreferences(page, { theme: "light" });
+    await seedPreferences(page, "light");
     await page.goto("/", { waitUntil: "networkidle" });
     const light = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 
-    await seedPreferences(page, { theme: "dark" });
+    await seedPreferences(page, "dark");
     await page.reload({ waitUntil: "networkidle" });
     const dark = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 
     expect(dark).not.toBe(light);
-  });
-});
-
-test.describe("theme and density do not interfere", () => {
-  test("choosing a theme leaves the density alone", async ({ page }) => {
-    // The Desk, whose density default is Compact, with a theme chosen on it. If the
-    // two shared a storage key or a single store, this is where it would show.
-    await page.goto("/", { waitUntil: "networkidle" });
-    await awaitHydration(page);
-    await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
-
-    await page
-      .getByRole("group", { name: "Colour theme" })
-      .getByRole("button", { name: "Dark" })
-      .click();
-
-    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
-    await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
-    const density = await page.evaluate((key) => localStorage.getItem(key), DENSITY_STORAGE_KEY);
-    expect(density, "choosing a theme must not write a density preference").toBeNull();
-  });
-
-  test("choosing a density leaves the theme alone", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto("/", { waitUntil: "networkidle" });
-    await awaitHydration(page);
-    await expect(darkClass(page)).toHaveClass(/\bdark\b/);
-
-    await page
-      .getByRole("group", { name: "Text and row density" })
-      .getByRole("button", { name: "Comfortable" })
-      .click();
-
-    await expect(page.locator("html")).toHaveAttribute("data-density", "comfortable");
-    await expect(darkClass(page)).toHaveClass(/\bdark\b/);
-    const theme = await page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY);
-    expect(theme, "choosing a density must not write a theme preference").toBeNull();
-  });
-
-  test("both choices survive together", async ({ page }) => {
-    await page.goto("/registration", { waitUntil: "networkidle" });
-    await awaitHydration(page);
-
-    await page
-      .getByRole("group", { name: "Colour theme" })
-      .getByRole("button", { name: "Dark" })
-      .click();
-    await page
-      .getByRole("group", { name: "Text and row density" })
-      .getByRole("button", { name: "Compact" })
-      .click();
-
-    await page.reload({ waitUntil: "networkidle" });
-
-    await expect(darkClass(page)).toHaveClass(/\bdark\b/);
-    await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
   });
 });
 
