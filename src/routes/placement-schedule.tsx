@@ -31,6 +31,7 @@ import {
   type ScheduleSummary,
 } from "@/lib/tournament/actions";
 import {
+  fetchCourts,
   fetchPlacementEntrants,
   fetchPlacementMatches,
   fetchTierDrawMatches,
@@ -65,6 +66,7 @@ import { buildStageProgress } from "@/lib/tournament/stage-progress";
 import { StageProgressList } from "@/components/stage-progress";
 import {
   applyPlacementSchedulePlan,
+  courtsAddedToDays,
   courtsForDay,
   dayWindowBounds,
   placementMatchLabel,
@@ -423,12 +425,13 @@ function PlacementSchedulePage() {
   };
 
   /**
-   * Grows or shrinks the venue's court pool from a day card.
+   * Grows or shrinks the venue's court pool — the master list every day draws from.
    *
-   * Courts are shared by every day, so these are venue-level actions that happen to
-   * be reachable from where the courts are chosen. A day that plays on every court
-   * picks a new court up straight away, because "every court" is stored as no rows at
-   * all; a day with an explicit subset keeps its subset and its card shows "n of m".
+   * A day on "every court" is stored as no rows at all, so it picks a new court up for
+   * free. A day narrowed to an explicit subset is not: left alone it would keep playing
+   * on the old courts, and the new court would exist only for the days nobody had
+   * touched. That is what made adding a court look like it worked on some days and not
+   * others, so a grow adds the new courts to every narrowed day as well.
    *
    * `set_tournament_courts` refuses to shrink below a court that still holds a match
    * and says how many are affected, so a removal can never unassign a live match.
@@ -439,12 +442,13 @@ function PlacementSchedulePage() {
       toast.error("A venue needs between 1 and 64 courts.");
       return;
     }
+    const current = courts ?? [];
     // A day with no `tournament_day_courts` rows means "every court", so removing a
     // day's last remaining court would silently widen that day to the whole venue
     // rather than leave it with none. Refuse instead, and name the day.
-    if (next < (courts ?? []).length) {
+    if (next < current.length) {
       const removing = new Set(
-        (courts ?? []).filter((court) => court.number > next).map((court) => court.id),
+        current.filter((court) => court.number > next).map((court) => court.id),
       );
       const orphaned = tournamentDays.find((day) => {
         const set = dayCourtIds.get(day.id);
@@ -461,6 +465,24 @@ function PlacementSchedulePage() {
     setBusy(true);
     try {
       await setTournamentCourts(tournamentId, next);
+      if (next > current.length) {
+        // The new rows are the ones numbered above the old pool, and their ids only
+        // exist once the write has committed, so the list is re-read rather than
+        // derived from the courts this render was handed.
+        const fresh = await fetchCourts(tournamentId);
+        const added = fresh
+          .filter((court) => court.number > current.length)
+          .map((court) => court.id);
+        const writes = courtsAddedToDays(
+          tournamentDays.map((day) => day.id),
+          dayCourtIds,
+          added,
+          fresh.length,
+        );
+        for (const write of writes) {
+          await setTournamentDayCourts(tournamentId, write.dayId, write.courtIds);
+        }
+      }
       await qc.invalidateQueries();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not change the courts");
@@ -1277,10 +1299,36 @@ function PlacementSchedulePage() {
             }
           >
             <div className="divide-y divide-hairline">
-              <SettingsSection
-                title="Playing days"
-                hint="When the tournament runs and which of the venue's courts each day uses. Days can be added or removed after activation; dates save as you leave the field."
-              >
+              <SettingsSection title="Courts">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {(courts ?? []).length} court
+                    {(courts ?? []).length === 1 ? "" : "s"} at the venue
+                  </p>
+                  <div className="flex gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!canSchedule || busy}
+                      onClick={() => void setCourtCount((courts ?? []).length + 1)}
+                    >
+                      Add a court
+                    </Button>
+                    {(courts ?? []).length > 1 ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!canSchedule || busy}
+                        onClick={() => void setCourtCount((courts ?? []).length - 1)}
+                      >
+                        Remove court {(courts ?? []).length}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </SettingsSection>
+
+              <SettingsSection title="Playing days">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-end justify-between gap-2">
                     <p className="text-xs text-muted-foreground">
@@ -1412,29 +1460,7 @@ function PlacementSchedulePage() {
                           </div>
 
                           <div className="space-y-1.5">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-xs text-muted-foreground">Courts this day</p>
-                              <div className="flex gap-1.5">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={!canSchedule || busy}
-                                  onClick={() => void setCourtCount((courts ?? []).length + 1)}
-                                >
-                                  Add a court
-                                </Button>
-                                {(courts ?? []).length > 1 ? (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={!canSchedule || busy}
-                                    onClick={() => void setCourtCount((courts ?? []).length - 1)}
-                                  >
-                                    Remove court {(courts ?? []).length}
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </div>
+                            <p className="text-xs text-muted-foreground">Courts this day</p>
                             <div className="flex flex-wrap gap-1.5">
                               {(courts ?? []).map((court) => {
                                 const on = courtsFor(day).some((entry) => entry.id === court.id);
@@ -1459,10 +1485,6 @@ function PlacementSchedulePage() {
                                 );
                               })}
                             </div>
-                            <p className="text-t4 text-muted-foreground">
-                              A court added here joins the venue, so any day playing on every court
-                              gets it too.
-                            </p>
                           </div>
 
                           <div className="space-y-2">
@@ -1587,10 +1609,7 @@ function PlacementSchedulePage() {
                 </div>
               </SettingsSection>
 
-              <SettingsSection
-                title="Match format"
-                hint="One card per stage. A scoring rule is checked the moment a result is reported; the length and rest gap are read at the next build."
-              >
+              <SettingsSection title="Match format">
                 {tournament ? (
                   <div className="grid gap-3 lg:grid-cols-2">
                     <MatchFormatCard
@@ -1957,24 +1976,23 @@ function PlacementSchedulePage() {
 }
 
 /**
- * One labelled block inside the Settings panel: a sticky-feeling title column
- * with its explanation, and the controls beside it on wide screens.
+ * One labelled block inside the Settings panel: a title column with the controls
+ * beside it on wide screens.
+ *
+ * The title column carries the heading only. Each section used to explain itself
+ * underneath, which made the panel read as prose to be worked through rather than
+ * as settings to be changed.
  */
 function SettingsSection({
   title,
-  hint,
   children,
 }: {
   title: string;
-  hint: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="grid gap-3 px-4 py-4 md:grid-cols-[13rem_1fr] md:gap-6">
-      <div>
-        <h3 className="font-display text-sm font-semibold">{title}</h3>
-        <p className="mt-1 text-t4 leading-snug text-muted-foreground">{hint}</p>
-      </div>
+      <h3 className="font-display text-sm font-semibold">{title}</h3>
       <div className="min-w-0">{children}</div>
     </section>
   );

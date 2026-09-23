@@ -258,19 +258,28 @@ export function useTournamentDaysFor(tournamentId: string | null | undefined) {
   });
 }
 
+/**
+ * The venue's courts, in number order.
+ *
+ * Shared by the two hooks and the court-count writer, so a pool that has just grown can be
+ * re-read for the rows it created without a second query definition drifting from this one.
+ */
+export function fetchCourts(tournamentId: string): Promise<Court[]> {
+  return must<Court[]>(
+    supabase
+      .from("courts")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .order("number"),
+  );
+}
+
 /** Courts for a specific tournament, so a non-active draft can be edited. */
 export function useCourtsFor(tournamentId: string | null | undefined) {
   return useQuery({
     queryKey: scopedKey(keys.courts, tournamentId),
     enabled: !!tournamentId,
-    queryFn: () =>
-      must<Court[]>(
-        supabase
-          .from("courts")
-          .select("*")
-          .eq("tournament_id", tournamentId as string)
-          .order("number"),
-      ),
+    queryFn: () => fetchCourts(tournamentId as string),
   });
 }
 
@@ -376,14 +385,7 @@ export function useCourts() {
   return useQuery({
     queryKey: scopedKey(keys.courts, tournamentId),
     enabled: !!tournamentId,
-    queryFn: () =>
-      must<Court[]>(
-        supabase
-          .from("courts")
-          .select("*")
-          .eq("tournament_id", tournamentId as string)
-          .order("number"),
-      ),
+    queryFn: () => fetchCourts(tournamentId as string),
   });
 }
 

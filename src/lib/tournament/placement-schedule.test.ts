@@ -13,6 +13,7 @@ import type {
 } from "./data";
 import { placementStagesForDay, stagesForDay } from "./data";
 import {
+  courtsAddedToDays,
   courtsForDay,
   placementMatchLabel,
   placementStageLabel,
@@ -739,6 +740,40 @@ describe("courtsForDay", () => {
 
   it("restricts to the day's own courts when a set is configured", () => {
     expect(courtsForDay(all, new Set(["c1", "c3"])).map((c) => c.number)).toEqual([1, 3]);
+  });
+});
+
+describe("courtsAddedToDays", () => {
+  const days = ["d1", "d2"];
+
+  it("writes nothing for a day that already means every court", () => {
+    // No rows is the "every court" shorthand, so a new court is already on that day and
+    // writing a row for it would only restate it as an exhaustive list.
+    const dayCourtIds = new Map<string, Set<string>>();
+    expect(courtsAddedToDays(days, dayCourtIds, ["c4"], 4)).toEqual([]);
+  });
+
+  it("adds the new court to a day that was narrowed", () => {
+    // The defect this exists for: a day narrowed to 1 and 3 kept playing on 1 and 3 only,
+    // so a fourth court existed for every day except the one that had been touched.
+    const dayCourtIds = new Map([["d1", new Set(["c1", "c3"])]]);
+    expect(courtsAddedToDays(["d1"], dayCourtIds, ["c4"], 4)).toEqual([
+      { dayId: "d1", courtIds: ["c1", "c3", "c4"] },
+    ]);
+  });
+
+  it("restores the shorthand once the union covers the whole pool", () => {
+    // A day that ends up on every court should go back to no rows, or the next court
+    // added to the venue would leave it narrowed without anyone asking for it.
+    const dayCourtIds = new Map([["d1", new Set(["c1", "c2"])]]);
+    expect(courtsAddedToDays(["d1"], dayCourtIds, ["c3"], 3)).toEqual([
+      { dayId: "d1", courtIds: [] },
+    ]);
+  });
+
+  it("writes nothing when the pool did not grow", () => {
+    const dayCourtIds = new Map([["d1", new Set(["c1"])]]);
+    expect(courtsAddedToDays(["d1"], dayCourtIds, [], 4)).toEqual([]);
   });
 });
 

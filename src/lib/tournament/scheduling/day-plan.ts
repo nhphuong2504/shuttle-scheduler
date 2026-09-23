@@ -61,6 +61,37 @@ export function courtsForDay(
 }
 
 /**
+ * The per-day writes a growing venue pool needs, so a court added to the venue joins
+ * **every** day rather than only the days nobody had narrowed.
+ *
+ * A day with no rows already means "every court", so it picks a new court up for free and
+ * needs no write. A day narrowed to an explicit subset does not: left alone, it silently
+ * keeps playing on the old courts and the new court exists only for the days that were
+ * never touched. That asymmetry is what made adding a court look broken from a day card.
+ *
+ * Only the narrowed days are returned, and each is normalised back to the empty list when
+ * the result covers the whole pool, so the "every court" shorthand is restored rather than
+ * left implied by an exhaustive list that a later court addition would then contradict.
+ */
+export function courtsAddedToDays(
+  dayIds: readonly string[],
+  dayCourtIds: ReadonlyMap<string, ReadonlySet<string>>,
+  addedCourtIds: readonly string[],
+  poolSize: number,
+): { dayId: string; courtIds: string[] }[] {
+  if (!addedCourtIds.length) return [];
+  const writes: { dayId: string; courtIds: string[] }[] = [];
+  for (const dayId of dayIds) {
+    const current = dayCourtIds.get(dayId);
+    if (!current || !current.size) continue;
+    const next = new Set(current);
+    for (const courtId of addedCourtIds) next.add(courtId);
+    writes.push({ dayId, courtIds: next.size >= poolSize ? [] : [...next] });
+  }
+  return writes;
+}
+
+/**
  * A day's window as absolute milliseconds, both ends together.
  *
  * Parsing lives here rather than at each call site because a bare `YYYY-MM-DD` is

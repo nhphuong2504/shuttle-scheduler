@@ -42,6 +42,7 @@ import type {
 import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
 import {
   breakWindowsFor,
+  courtsAddedToDays,
   courtsForDay,
   dayWindowBounds,
   runPlanDays,
@@ -62,6 +63,7 @@ const MINUTE = 60_000;
 
 export {
   breakWindowsFor,
+  courtsAddedToDays,
   courtsForDay,
   dayWindowBounds,
   sliceRowsByDay,

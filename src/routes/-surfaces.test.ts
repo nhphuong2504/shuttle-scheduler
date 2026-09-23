@@ -158,8 +158,8 @@ describe("the setup wizard asks only for what activation needs", () => {
  * while the duration box a section above held 25 — and the irreversible reset sat in
  * the same list, one stray click from the day fields.
  *
- * The panel is now grouped by what a match is, the courts live where they are chosen,
- * and the reset stands on its own.
+ * The panel is now grouped by what a match is, the venue's court pool has a section of
+ * its own with each day narrowing it, and the reset stands on its own.
  */
 describe("the schedule settings are grouped by what a match is", () => {
   const schedule = read("placement-schedule.tsx");
@@ -179,11 +179,16 @@ describe("the schedule settings are grouped by what a match is", () => {
     expect(format).toMatch(/SCORING_PRESETS/);
   });
 
-  it("keeps the venue's courts inside each day instead of a section of its own", () => {
-    expect(schedule).not.toMatch(/title="Venue"/);
-    expect(schedule).not.toMatch(/venue-courts/);
+  it("manages the venue's court pool once, and each day's use of it on the day", () => {
+    // The pool used to be grown and shrunk from inside a day card's court block, which
+    // read as a per-day action for something that is venue-wide, and a day narrowed to a
+    // subset silently ignored every court added afterwards. The pool now has a section of
+    // its own; the day cards only narrow it.
+    expect(schedule).toMatch(/title="Courts"/);
+    // Exactly one control offers to add a court, and it is not inside a day card.
+    expect(schedule.match(/Add a court/g)).toHaveLength(1);
     expect(schedule).toMatch(/Courts this day/);
-    expect(schedule).toMatch(/Add a court/);
+    expect(schedule).not.toMatch(/title="Venue"/);
   });
 
   it("will not let a day be left with no courts", () => {

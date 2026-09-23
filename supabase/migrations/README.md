@@ -1206,9 +1206,19 @@ backing the **Courts at the venue** field in the Schedule page's Settings panel.
 every day row as a side effect. This touches only the `courts` rows and the `court_count` summary,
 so it can be called at any point in a tournament's life.
 
-Per-day court assignments are deliberately left alone. With no `tournament_day_courts` rows for a
-day, `courtsForDay` reads that day as "every court", which is exactly the state a fresh venue
-should be in: a newly added court is available everywhere until a host says otherwise.
+Per-day court assignments are deliberately left alone **by this function**. With no
+`tournament_day_courts` rows for a day, `courtsForDay` reads that day as "every court", which
+is exactly the state a fresh venue should be in: a newly added court is available everywhere
+until a host says otherwise.
+
+That shorthand is only free for a day nobody has narrowed. A day that was narrowed to an
+explicit subset would keep playing on the old courts and silently ignore every court added
+afterwards, which is what made "add a court" look like it worked on some days and not others.
+So the *caller* closes the gap: the Schedule page re-reads the pool after a grow and extends
+every narrowed day with the new courts (`courtsAddedToDays`, in
+[`src/lib/tournament/scheduling/day-plan.ts`](../../src/lib/tournament/scheduling/day-plan.ts)).
+Keeping it there rather than here is deliberate — this function is the shape of the pool, and
+it stays independent of how a day chooses to narrow it.
 
 ### The guard that matters
 
