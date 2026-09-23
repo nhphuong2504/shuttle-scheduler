@@ -183,12 +183,41 @@ describe("the schedule settings are grouped by what a match is", () => {
     // The pool used to be grown and shrunk from inside a day card's court block, which
     // read as a per-day action for something that is venue-wide, and a day narrowed to a
     // subset silently ignored every court added afterwards. The pool now has a section of
-    // its own; the day cards only narrow it.
-    expect(schedule).toMatch(/title="Courts"/);
-    // Exactly one control offers to add a court, and it is not inside a day card.
+    // its own; the day rows only narrow it.
+    expect(schedule).toMatch(/title="Venue courts"/);
+    // Exactly one control offers to add a court, and it is not inside a day row.
     expect(schedule.match(/Add a court/g)).toHaveLength(1);
-    expect(schedule).toMatch(/Courts this day/);
+    expect(schedule).toMatch(/Courts used on day/);
     expect(schedule).not.toMatch(/title="Venue"/);
+  });
+
+  it("heads each section with its own summary", () => {
+    // The heading row carries the section's own headline number ("8 courts", "2 days",
+    // "2 stages"), so the panel can be scanned without reading the controls underneath.
+    for (const section of [
+      'title="Venue courts"',
+      'title="Playing days"',
+      'title="Match format"',
+    ]) {
+      expect(schedule).toMatch(new RegExp(`${section}[\\s\\S]{0,140}summary=`));
+    }
+  });
+
+  it("gives each day one breaks control, not a disclosure that reveals a second one", () => {
+    // The day used to carry a "Breaks (n)" disclosure and, once opened, a second
+    // "Add break" button - two clicks for the one action the block exists for. The rows
+    // now render in place behind a single "Add break", so an existing break can also be
+    // corrected without first adding a row that has to be removed again.
+    expect(schedule.match(/Add break/g)).toHaveLength(1);
+    expect(schedule).not.toMatch(/openBreaks/);
+    expect(schedule).not.toMatch(/breaksPanelId/);
+    expect(schedule).toMatch(/breaksDirty\(day\)/);
+    // A placeholder is not an accessible name. The row's two time inputs had none at all
+    // until the panel scan reached them, and axe failed the whole panel for it.
+    expect(schedule).toMatch(/aria-label="Name"/);
+    expect(schedule).toMatch(/aria-label="Start"/);
+    expect(schedule).toMatch(/aria-label="End"/);
+    expect(schedule).toMatch(/Break \$\{index \+ 1\}/);
   });
 
   it("will not let a day be left with no courts", () => {

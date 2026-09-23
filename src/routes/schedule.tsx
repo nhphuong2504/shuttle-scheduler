@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { PickerInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/hooks/useSession";
 import {
@@ -415,10 +415,11 @@ function SchedulePage() {
                       >
                         Date
                       </Label>
-                      <Input
+                      <PickerInput
                         id={`day-${day.id}-date`}
                         type="date"
-                        className="mt-1 h-9 w-36"
+                        pickerLabel={`Open the calendar for day ${day.day_number}`}
+                        className="mt-1 w-38 md:w-36"
                         value={window.date}
                         disabled={!canSchedule || busy || locked}
                         onChange={(e) => setWindow(day, { date: e.target.value })}
@@ -431,10 +432,11 @@ function SchedulePage() {
                       >
                         Start
                       </Label>
-                      <Input
+                      <PickerInput
                         id={`day-${day.id}-start`}
                         type="time"
-                        className="mt-1 h-9 w-28"
+                        pickerLabel={`Open the start time picker for day ${day.day_number}`}
+                        className="mt-1 w-33 md:w-32"
                         value={window.start}
                         disabled={!canSchedule || busy || locked}
                         onChange={(e) => setWindow(day, { start: e.target.value })}
@@ -447,10 +449,11 @@ function SchedulePage() {
                       >
                         End
                       </Label>
-                      <Input
+                      <PickerInput
                         id={`day-${day.id}-end`}
                         type="time"
-                        className="mt-1 h-9 w-28"
+                        pickerLabel={`Open the end time picker for day ${day.day_number}`}
+                        className="mt-1 w-33 md:w-32"
                         value={window.end}
                         disabled={!canSchedule || busy || locked}
                         onChange={(e) => setWindow(day, { end: e.target.value })}
