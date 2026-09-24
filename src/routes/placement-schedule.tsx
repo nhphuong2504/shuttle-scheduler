@@ -1238,7 +1238,7 @@ function PlacementSchedulePage() {
               : busy
                 ? "Planning…"
                 : hasSchedule
-                  ? "Rebuild schedule"
+                  ? "Update schedule"
                   : "Build schedule"}
           </Button>
         </div>

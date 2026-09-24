@@ -114,7 +114,14 @@ test.describe("staff surfaces", () => {
     await page.goto("/placement-schedule", { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    const build = page.getByRole("button", { name: /build/i }).first();
+    /**
+     * The primary schedule action, matched without assuming which of its two labels
+     * is showing. It reads "Build schedule" on a tournament that has never been
+     * built and "Update schedule" once a schedule exists, so `layout` fixture data
+     * - which already has times on it - lands on the second. Matching `/build/i`
+     * alone silently made this assertion depend on the verb "rebuild".
+     */
+    const build = page.getByRole("button", { name: /build|update/i }).first();
     expectPresent(
       (await build.count()) > 0,
       "The Build control on /placement-schedule for an admin session",
