@@ -107,8 +107,14 @@ first on the day.
 
 ## The record
 
-Every phase close appends a row. The skip count is **required**: write `0` if zero, and if it
-is not zero, say which tests skipped and why. A phase cannot be closed with a blank count.
+Every PR or phase close that includes a **user-visible** change appends exactly one row.
+A change with no user-visible surface requires no UX review run and no row — state that
+plainly in the PR instead. The one exception is a PR/phase-close artifact that must record,
+for the record's sake, that no user-visible review applied: that row's Checks run is
+`none` and its Result is `not yet run`.
+
+The skip count is **required**: write `0` if zero, and if it is not zero, say which tests
+skipped and why. A PR or phase close cannot be recorded with a blank count.
 
 | Date | Phase / change | Reviewer | Checks run | Result | Skips | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -123,11 +129,14 @@ is not zero, say which tests skipped and why. A phase cannot be closed with a bl
 - **pass** — every applicable check passed.
 - **pass with notes** — passed, with items recorded in Notes that should be watched.
 - **fail** — something did not pass. Name the check number and open an issue or fix it.
-- **not yet run** — the checklist has not been performed for this change. This is only
-  acceptable for a change with no user-visible surface.
+- **not yet run** — no user-visible review applied, because the change had no user-visible
+  surface. Use it only when the PR/phase-close artifact needs to document that. A change
+  with a user-visible surface may never be recorded as `not yet run`; it gets a real result.
 
 ### What counts as user-visible
 
 Anything an operator can see: layout, copy, tokens, component markup, route structure,
-state presentation, or error handling. A docs-only, test-only, or tooling-only change does
-not require a run, and should say so explicitly rather than leaving the row blank.
+state presentation, or error handling. A docs-only, test-only, or tooling-only change
+requires neither a run nor a row — say so in the PR. Where the artifact's record needs a
+line anyway, write `not yet run` with the reason in Notes rather than leaving the outcome
+blank.

@@ -81,25 +81,43 @@ time comes from running fewer tests per machine rather than more workers on one.
 ```mermaid
 flowchart LR
   branch["Short-lived branch"] --> dev[Implement]
-  dev --> gate1["typecheck + vitest"]
+  dev --> tier{"Change tier"}
+  tier -->|"UI-only iteration"| ui["local visual check + typecheck"]
+  tier -->|"Feature checkpoint"| cp["typecheck + relevant tests + UX review"]
+  tier -->|"PR / phase close"| gate1["typecheck + test"]
   gate1 --> gate2["hermetic Playwright"]
-  gate2 --> phase{"Phase close?"}
-  phase -->|yes| final["final gate + manual checklist"]
-  phase -->|no| pr["Pull request"]
-  final --> pr
+  gate2 --> final["build + final e2e + UX record"]
+  final --> pr["Pull request"]
   pr --> ci["CI: checks + 4 browser shards"]
   ci --> merge["Merge to main"]
 ```
 
+### Verification tiers
+
+Match the verification to the stage, not the size of the diff. Running the full bar after
+every small change is wasted effort; reaching a PR without it is a broken branch.
+
+| Tier | When | Required | Optional |
+| --- | --- | --- | --- |
+| **UI-only iteration** | Tightening a screen while it is still moving — layout, copy, spacing, token or markup changes that alter no behaviour | Local visual check (`npm run dev`) + `npm run typecheck` | Focused tests (`npx vitest run <path>`) |
+| **Feature checkpoint** | The feature is finished and about to be reviewed or handed over | `npm run typecheck` + the relevant tests + the UX review ([`docs/ux-review-checklist.md`](docs/ux-review-checklist.md)) | — |
+| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run typecheck` + `npm run test` + `npm run test:e2e` + `npm run build` + `npm run test:e2e:final` + a UX record row if the change is user-visible | — |
+
+**A high-risk change takes the PR / phase-close bar at every stage.** Scheduling, scoring,
+authorization, the database and RPCs get the full verification regardless of how small the
+change looks or which tier it is nominally in — there is no "run the e2e later" for those
+paths. [Review tiering](#review-tiering) names the same areas and their review requirement.
+
 ### Gate order
 
-Run these locally before pushing. The order matters: each is cheaper than the next.
+The full bar, run locally. This is what a PR / phase close owes, and what any high-risk change
+owes at every stage — not a per-edit ritual. The order matters: each is cheaper than the next.
 
 ```
 npm run typecheck
 npm run test
 npm run test:e2e
-npm run test:e2e:final    # phase close only, also runs assert-no-skips
+npm run test:e2e:final    # PR / phase close, also runs assert-no-skips
 npm run build
 ```
 
@@ -150,8 +168,9 @@ docs, copy and token-only CSS changes.
 | Scoring | `src/lib/tournament/**` scoring paths |
 | Authorization | [`src/hooks/useSession.ts`](src/hooks/useSession.ts), `staff_roles`, RLS policies |
 | Database | `supabase/migrations/**` |
+| RPC | SQL functions in `supabase/migrations/**`, called from `src/lib/tournament/**` |
 
-For those four areas, state in the PR what could break and what you checked. The
+For those areas, state in the PR what could break and what you checked. The
 tests are the floor, not the argument.
 
 ### Commits
@@ -168,5 +187,16 @@ tests are the floor, not the argument.
 Run the manual checklist in
 [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md). It covers what no
 automated gate can judge: focus order, visual hierarchy, status recognition at a
-glance, truncation, legibility at the target widths, and empty and error states. Record
-the run and state the skip count explicitly.
+glance, truncation, legibility at the target widths, and empty and error states.
+
+What that costs depends on the tier:
+
+- **UI-only iteration** — a local visual check, in both themes. No record yet.
+- **Feature checkpoint** — work the checklist and fix what it finds.
+- **PR / phase close** — append the row to the record and state the skip count
+  explicitly.
+
+The record row is owed only when the change is user-visible. A change with no user-visible
+surface takes no run and no row; record `not yet run` only if the PR/phase-close artifact
+needs to document that no user-visible review applied. A user-visible change is never
+recorded as `not yet run`.
