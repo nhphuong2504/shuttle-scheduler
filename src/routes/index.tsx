@@ -1,9 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -98,7 +98,6 @@ import {
   deskKindScoringStage,
   deskKindTable,
   getMatchReadiness,
-  getOperationalKpis,
   isPlacementKind,
   type DeskMatchModel,
   type MatchReadiness,
@@ -111,13 +110,20 @@ import {
 } from "@/lib/tournament/court-state";
 import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
+import {
+  COURT_TRANSITION_CHIP,
+  COURT_TRANSITION_LABEL,
+  nextCourtTransitions,
+  transitionCountdown,
+  transitionOverdueBy,
+  type CourtTransition,
+  type CourtTransitionKind,
+} from "@/lib/tournament/desk-transitions";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
   attributeMatchesToDays,
-  awaitingResultMatches,
   dayIdForTime,
   dayOperationalCounts,
-  expectedEndMs,
   resolveSelectedDay,
 } from "@/lib/tournament/day-scope";
 import { courtsForDay, dayWindowBounds } from "@/lib/tournament/scheduling/day-plan";
@@ -408,15 +414,30 @@ function Desk() {
     state: deriveCourtState(court.id, dayMatches, slotMinutesFor, restMinutesFor, now),
   }));
 
-  // No forecast is passed in: the desk reports the day, so the only finish it knows is the
-  // latest end among the day's own scheduled matches.
-  const kpis = getOperationalKpis(
+  /**
+   * What happens next on each court, venue-wide and read-only.
+   *
+   * Derived from the board's own court states and the same slot rule the board measures with,
+   * so the panel cannot disagree with the tiles above it, and so it introduces no second
+   * schedule or readiness rule. The instants come from `expectedEndMs` - the projection the
+   * overdue detection already uses - and from each match's scheduled time.
+   */
+  const transitions = nextCourtTransitions(
     courtStates.map(({ state }) => state),
-    dayMatches,
     slotMinutesFor,
     now,
   );
 
+  /**
+   * Pools past their scheduled finish with results still missing.
+   *
+   * Deliberately left ungated while the row lists are not: this alert names no result, it
+   * chases one that is missing, and it is the only destructive treatment the Act-now panel
+   * defines. Gating it on the format removed the destructive tier from the format this app
+   * runs, which `states.spec.ts` caught by driving that treatment through a pool planted
+   * inside a placement tournament. Whether the placement stage should raise an overdue-result
+   * alert of its own is a design question rather than a rendering one, so the alert stays.
+   */
   const latePools = useMemo(() => {
     return (pools ?? []).filter((pool) => {
       if (!pool.scheduled_end) return false;
@@ -475,14 +496,6 @@ function Desk() {
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
     : null;
 
-  /** The day's undecided matches that are already past their expected end. */
-  const awaitingResults = useMemo(
-    () => awaitingResultMatches(dayMatches, slotMinutesFor, now),
-    // slotMinutesFor reads only the tournament's timings.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayMatches, tournament, now],
-  );
-
   /**
    * Matches with no usable time at all.
    *
@@ -540,31 +553,6 @@ function Desk() {
             {untimedCount === 1 ? " it is" : " they are"} not counted on any day.
           </p>
         ) : null}
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
-          <DeskKpi
-            label="Courts active"
-            value={`${kpis.activeCourts}/${courtsOnSelectedDay.length}`}
-          />
-          <DeskKpi
-            label="Courts waiting"
-            value={kpis.waitingCourts}
-            tone={kpis.waitingCourts ? "warn" : "normal"}
-          />
-          <DeskKpi label="In progress" value={dayCounts.inProgress} />
-          <DeskKpi label="Completed" value={dayCounts.completed} />
-          <DeskKpi label="Matches left" value={dayCounts.remaining} />
-          <DeskKpi
-            label="Ready, no court"
-            value={readyUnassigned.length}
-            tone={readyUnassigned.length ? "warn" : "normal"}
-          />
-          <DeskKpi
-            label="Awaiting results"
-            value={dayCounts.awaitingResults}
-            tone={dayCounts.awaitingResults ? "warn" : "normal"}
-          />
-        </div>
 
         <Panel
           title="Act now"
@@ -785,44 +773,29 @@ function Desk() {
           </div>
         </Panel>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <Panel
-            title="Awaiting results"
+            title="Next transitions"
             right={
-              <span className="text-t4 text-muted-foreground">
-                {dayCounts.remaining} still to play today
-              </span>
+              transitions.some((t) => t.estimated) ? (
+                <span className="text-t4 text-muted-foreground">~ marks an estimate</span>
+              ) : null
             }
           >
-            {awaitingResults.length ? (
-              <ul className="space-y-1.5 text-sm">
-                {awaitingResults.map((match) => (
-                  <li key={match.id}>
-                    <button
-                      type="button"
-                      className="w-full rounded-md bg-warn-surface px-2.5 py-2 text-left text-warn-foreground hover:brightness-95"
-                      onClick={() => {
-                        setOperationCourtId(match.courtId);
-                        setOpenMatch(match);
-                      }}
-                    >
-                      {label(match.teams[0])} vs {label(match.teams[1])} — expected to finish by{" "}
-                      {timeLabel(
-                        expectedEndMs(match, slotMinutesFor)
-                          ? new Date(expectedEndMs(match, slotMinutesFor)!)
-                          : null,
-                      )}
-                      {match.startedAt
-                        ? ` · ${minutesSince(match.startedAt, now) ?? 0}′ on court`
-                        : " · not started yet"}
-                    </button>
-                  </li>
+            {transitions.length ? (
+              <ul className="divide-y divide-hairline">
+                {transitions.map((transition) => (
+                  <TransitionRow
+                    key={`${transition.courtId}-${transition.kind}`}
+                    transition={transition}
+                    courtNumber={courtMap.get(transition.courtId)?.number ?? null}
+                  />
                 ))}
               </ul>
             ) : (
               <EmptyState
-                title="Nothing outstanding"
-                hint="Every match on this day is either played or still inside its slot."
+                title="Nothing transitioning"
+                hint="No match on these courts is near its expected finish, and none is due to start."
               />
             )}
           </Panel>
@@ -1475,18 +1448,6 @@ export function MatchOperationsDialog({
   );
 }
 
-function DeskKpi({
-  label,
-  value,
-  tone = "normal",
-}: {
-  label: string;
-  value: string | number;
-  tone?: "normal" | "warn" | "danger";
-}) {
-  return <StatTile label={label} value={value} tone={tone} />;
-}
-
 function CourtStatePill({ state }: { state: CourtState }) {
   // The label, the fill and the ink all come from `court-state.ts`, so the sweep in
   // `e2e/states.spec.ts` and this component read one vocabulary rather than two.
@@ -1496,6 +1457,114 @@ function CourtStatePill({ state }: { state: CourtState }) {
     >
       {COURT_STATE_LABEL[state]}
     </span>
+  );
+}
+
+/**
+ * A transition's own glyph.
+ *
+ * A flag for a match about to finish, and the clock the `scheduled` status already uses for a
+ * match about to begin. Reusing that clock is deliberate rather than lazy: "a match that has not
+ * started" is already drawn as a clock everywhere else on the desk, so the two read as one
+ * vocabulary instead of two.
+ *
+ * Colour is never the only channel - the type is also on the chip as words, and the time is a
+ * number - so these are the redundant pair the design system asks every state to carry.
+ */
+const TRANSITION_GLYPH: Record<CourtTransitionKind, ReactNode> = {
+  finish: (
+    <svg
+      viewBox="0 0 18 18"
+      className="size-3 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M6.25 15V3.75" />
+      <path d="M6.25 4.5h6l-1.75 2.25 1.75 2.25h-6z" />
+    </svg>
+  ),
+  start: (
+    <svg
+      viewBox="0 0 18 18"
+      className="size-3 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="9" cy="9" r="6.25" />
+      <path d="M9 5.75V9l2.25 1.5" />
+    </svg>
+  ),
+};
+
+/**
+ * One court transition, as information.
+ *
+ * Not a button, and that is the requirement rather than an omission: the panel reports the
+ * order things are about to happen in and must not become a way to move a match, reorder a
+ * queue or start something early. The board above is where a court is acted on.
+ *
+ * The row carries the four things a moderator needs and nothing else - which court, what kind
+ * of change, which event, and how long - and deliberately not the pairings, which the board is
+ * already showing at a size meant for reading them.
+ *
+ * Every fill and ink pair here is one the system already renders and already measures. The
+ * warn tone sits on its own surface rather than tinting the row, because that is the pair
+ * `--warn-foreground` was solved against, and a row tint would also restate the Act-now
+ * panel's whole-row treatment for the same fact.
+ */
+function TransitionRow({
+  transition,
+  courtNumber,
+}: {
+  transition: CourtTransition<DeskMatch>;
+  courtNumber: number | null;
+}) {
+  const { kind, estimated, overdue, minutesAway, minutesOverdue } = transition;
+  const clock = timeLabel(new Date(transition.atMs));
+
+  return (
+    <li data-transition-row className="flex items-start gap-3 py-2 text-t3">
+      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-foreground/10 font-score text-t2 text-foreground">
+        {courtNumber ?? "?"}
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ${COURT_TRANSITION_CHIP[kind]}`}
+          >
+            {TRANSITION_GLYPH[kind]}
+            {COURT_TRANSITION_LABEL[kind]}
+          </span>
+          {/* The event code, not the pairing: the board owns the pairings. */}
+          {transition.match.tag ? (
+            <span className="font-score text-t4 text-muted-foreground">
+              {transition.match.tag}
+            </span>
+          ) : null}
+        </span>
+        {/* The leading "~" is the marker the panel header explains: this instant is projected. */}
+        <span className="mt-0.5 block font-score text-t4 text-muted-foreground">
+          {overdue ? `was due ${clock}` : estimated ? `~${clock}` : clock}
+        </span>
+      </span>
+
+      {overdue ? (
+        <span className="shrink-0 rounded-md bg-warn-surface px-1.5 py-0.5 font-score text-t4 font-semibold text-warn-foreground">
+          {transitionOverdueBy(minutesOverdue ?? 0)}
+        </span>
+      ) : (
+        <span className="shrink-0 font-score text-t2 font-semibold">
+          {transitionCountdown(minutesAway ?? 0)}
+        </span>
+      )}
+    </li>
   );
 }
 
