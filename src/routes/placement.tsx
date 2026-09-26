@@ -386,7 +386,7 @@ function SeedingPanel({
             <thead>
               <tr>
                 {canReorder ? (
-                  <th className="w-16">
+                  <th className="w-20">
                     <span className="sr-only">Reorder</span>
                   </th>
                 ) : null}
@@ -457,13 +457,20 @@ function SeedingPanel({
                     }}
                   >
                     {canReorder ? (
-                      <td className="w-16 py-1 pr-0" {...dropProps}>
-                        <div className="flex items-center text-muted-foreground">
+                      <td className="w-20 py-1 pr-0" {...dropProps}>
+                        <div className="flex items-center gap-1 text-muted-foreground">
                           <GripVertical className="size-3.5 shrink-0" aria-hidden />
+                          {/*
+                            The arrows are the keyboard and touch path to the same move as a
+                            drag, so they have to be hit-sized: WCAG 2.2 AA asks for a 24px
+                            minimum, and `p-0.5` around a 14px glyph measured 18px with only
+                            12px of safe space between the pair. The glyph stays 14px — the
+                            real control is the whole 24px box around it.
+                          */}
                           <button
                             type="button"
                             draggable={false}
-                            className="rounded p-0.5 hover:bg-muted hover:text-foreground disabled:opacity-30"
+                            className="grid size-6 place-items-center rounded hover:bg-muted hover:text-foreground disabled:opacity-30"
                             aria-label={`Move ${label(entrant.id)} up one seed`}
                             disabled={index === 0 || saving}
                             onClick={() => void step(entrant.id, -1)}
@@ -473,7 +480,7 @@ function SeedingPanel({
                           <button
                             type="button"
                             draggable={false}
-                            className="rounded p-0.5 hover:bg-muted hover:text-foreground disabled:opacity-30"
+                            className="grid size-6 place-items-center rounded hover:bg-muted hover:text-foreground disabled:opacity-30"
                             aria-label={`Move ${label(entrant.id)} down one seed`}
                             disabled={index === rows.length - 1 || saving}
                             onClick={() => void step(entrant.id, 1)}
