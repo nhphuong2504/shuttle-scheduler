@@ -334,6 +334,31 @@ describe("a build reads its rows from the network, not the query cache", () => {
   });
 });
 
+describe("a build shows the plan it just applied", () => {
+  const schedule = read("placement-schedule.tsx");
+  // Both the projection and the apply that calls it, so the order between them is visible.
+  const applyPath = schedule.slice(
+    schedule.indexOf("const projectAppliedPlan"),
+    schedule.indexOf("const build = async"),
+  );
+
+  it("projects the plan into the cache before anything is refetched", () => {
+    // The running order is built from the placement and tier match queries. Waiting for
+    // a refetch to reveal the write is not a guarantee - `invalidateQueries` resolves
+    // even when the refetch it triggers fails - and that leaves the pre-build rows on
+    // screen underneath a success toast until the page is reloaded.
+    expect(applyPath).toMatch(/projectAppliedPlan\(plan\)/);
+    expect(applyPath.indexOf("projectAppliedPlan(plan)")).toBeLessThan(
+      applyPath.indexOf("invalidateQueries"),
+    );
+  });
+
+  it("projects through the same helper for both stages", () => {
+    expect(applyPath).toMatch(/projectSlotsOntoMatches\(placement, plan\.placementSlotPayload\)/);
+    expect(applyPath).toMatch(/projectSlotsOntoMatches\(tier, plan\.knockoutSlotPayload\)/);
+  });
+});
+
 /**
  * A bye is a draw condition, and must never be presented as a match status.
  *

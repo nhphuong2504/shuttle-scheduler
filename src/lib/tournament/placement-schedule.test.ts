@@ -18,6 +18,7 @@ import {
   placementMatchLabel,
   placementStageLabel,
   planPlacementSchedule,
+  projectSlotsOntoMatches,
   sliceRowsByDay,
   uncoveredScheduledMatches,
   type PlanPlacementScheduleInput,
@@ -1804,5 +1805,85 @@ describe("uncoveredScheduledMatches", () => {
 
     expect(result.knockoutScheduledIds).toEqual(["k1"]);
     expect(uncoveredScheduledMatches(result).knockout).toEqual(["k1"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Projecting an applied plan onto the cached rows
+// ---------------------------------------------------------------------------
+
+/**
+ * The page shows the running order from the query cache, so after a build it has to
+ * reflect the plan the writer just accepted rather than wait for a refetch that may
+ * never land. These cases pin the projection to what the RPC actually does: it clears
+ * every scheduled row of the stage and then re-sets exactly the payload's ids.
+ */
+describe("projectSlotsOntoMatches", () => {
+  const slot = (matchId: string, at: string, court: string) => ({
+    match_id: matchId,
+    scheduled_time: at,
+    court_id: court,
+  });
+
+  it("fills in the rows the payload names", () => {
+    const rows = projectSlotsOntoMatches(
+      [placementMatch("m1", "round1", "e1", "e2"), placementMatch("m2", "round1", "e3", "e4")],
+      [slot("m1", "2026-09-17T09:00:00Z", "c1"), slot("m2", "2026-09-17T09:20:00Z", "c2")],
+    );
+
+    expect(rows.map((row) => [row.id, row.scheduled_time, row.court_id])).toEqual([
+      ["m1", "2026-09-17T09:00:00Z", "c1"],
+      ["m2", "2026-09-17T09:20:00Z", "c2"],
+    ]);
+  });
+
+  it("empties a scheduled row the payload leaves out, the way the writer does", () => {
+    // The RPC clears the stage before it re-sets it, so a row the payload omits is a row
+    // that has just lost its court and time. Showing the old time would be the lie.
+    const rows = projectSlotsOntoMatches(
+      [
+        placementMatch("m1", "round1", "e1", "e2", {
+          scheduled_time: "2026-09-17T08:00:00Z",
+          court_id: "c9",
+        }),
+      ],
+      [],
+    );
+
+    expect(rows[0]?.scheduled_time).toBeNull();
+    expect(rows[0]?.court_id).toBeNull();
+  });
+
+  it("never moves an anchor", () => {
+    // Reported, started and void rows are outside the writer's WHERE clause.
+    const anchors = [
+      placementMatch("done", "round1", "e1", "e2", {
+        status: "reported",
+        scheduled_time: "2026-09-17T09:00:00Z",
+        court_id: "c1",
+      }),
+      placementMatch("void", "round1", "e3", "e4", { status: "void", court_id: null }),
+    ];
+    const rows = projectSlotsOntoMatches(anchors, [slot("done", "2026-09-17T11:00:00Z", "c4")]);
+
+    expect(rows.map((row) => row.scheduled_time)).toEqual(["2026-09-17T09:00:00Z", null]);
+    expect(rows[0]?.court_id).toBe("c1");
+  });
+
+  it("leaves a bye alone, because the writer's clear skips them", () => {
+    const bye = tierMatch("k1", 1, 1, null, null, { is_bye: true, court_id: null });
+    const rows = projectSlotsOntoMatches([bye], []);
+
+    expect(rows[0]).toEqual(bye);
+  });
+
+  it("projects the knockout payload onto the tier rows", () => {
+    const rows = projectSlotsOntoMatches(
+      [tierMatch("k1", 1, 1, "e1", "e2")],
+      [slot("k1", "2026-09-17T10:00:00Z", "c3")],
+    );
+
+    expect(rows[0]?.scheduled_time).toBe("2026-09-17T10:00:00Z");
+    expect(rows[0]?.court_id).toBe("c3");
   });
 });
