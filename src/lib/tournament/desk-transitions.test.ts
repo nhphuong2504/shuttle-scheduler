@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  COURT_TRANSITION_CHIP,
   COURT_TRANSITION_KINDS,
   COURT_TRANSITION_LABEL,
   nextCourtTransitions,
@@ -237,24 +236,19 @@ describe("transition countdown wording", () => {
 });
 
 describe("the transition vocabulary", () => {
-  it("gives every kind a label and a chip", () => {
+  it("gives every kind a label", () => {
     for (const kind of COURT_TRANSITION_KINDS) {
       expect(COURT_TRANSITION_LABEL[kind], `${kind} has no label`).toBeTruthy();
-      expect(COURT_TRANSITION_CHIP[kind], `${kind} has no chip`).toBeTruthy();
     }
   });
 
   it("keeps the two kinds distinguishable by name, and only by the names it has", () => {
     const labels = COURT_TRANSITION_KINDS.map((kind) => COURT_TRANSITION_LABEL[kind]);
     expect(new Set(labels).size).toBe(COURT_TRANSITION_KINDS.length);
-    // The estimate/scheduled distinction has to survive the chip being read alone, since the
-    // chip is what a moderator scans. Neither label may be a bare noun that drops it.
+    // The panel renders the kind as words and nothing else, so the name is now the *only*
+    // channel separating a projection from a schedule. Neither label may be a bare noun that
+    // drops the distinction: one of them has to still say it is expected.
     expect(COURT_TRANSITION_LABEL.finish).toMatch(/expected/i);
     expect(COURT_TRANSITION_LABEL.start).toMatch(/scheduled/i);
-  });
-
-  it("draws no two kinds with the same chip", () => {
-    const chips = COURT_TRANSITION_KINDS.map((kind) => COURT_TRANSITION_CHIP[kind]);
-    expect(new Set(chips).size).toBe(chips.length);
   });
 });

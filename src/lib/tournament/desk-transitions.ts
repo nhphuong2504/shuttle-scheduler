@@ -78,19 +78,6 @@ export const COURT_TRANSITION_LABEL: Record<CourtTransitionKind, string> = {
   start: "Scheduled start",
 };
 
-/**
- * The chip fills.
- *
- * Both are existing, already-measured pairs rather than new ones, and each is the treatment the
- * state it belongs to already wears: a playing court's finish borrows the `live` fill and ink,
- * and a scheduled start wears the same neutral chip the `scheduled` status does. One ink pair
- * per fill, and no new hue - the panel introduces no colour the system does not already have.
- */
-export const COURT_TRANSITION_CHIP: Record<CourtTransitionKind, string> = {
-  finish: "bg-state-live-chip text-state-live-ink",
-  start: "bg-muted text-muted-foreground",
-};
-
 /** The default cap: enough to cover a busy hall, few enough to read without scanning. */
 export const TRANSITION_LIMIT = 5;
 

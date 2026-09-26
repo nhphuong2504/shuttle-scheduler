@@ -36,6 +36,7 @@ import { cellLabel, MATRIX_CELLS, openCell } from "./fixtures/matrix";
 
 const PANEL = "section";
 const ROWS = "[data-transition-row]";
+const CELLS = "[data-transition-cell]";
 const PANEL_TITLE = "Next transitions";
 
 /** The panel element itself, addressed by its own heading rather than by position. */
@@ -43,15 +44,32 @@ function panel(page: Page) {
   return page.locator(PANEL).filter({ has: page.getByRole("heading", { name: PANEL_TITLE }) });
 }
 
-/** Rows as the panel draws them, read once so every assertion reads one snapshot. */
+/**
+ * Rows as the panel draws them, read once so every assertion reads one snapshot.
+ *
+ * Cells are read by their declared role rather than by index, because the panel is a table now
+ * and a column's position is a layout decision that the design is deliberately willing to
+ * change - the Transition and Due columns are already absent below `sm`. Asserting against
+ * `cells.court` survives a column being added, dropped or reordered; asserting against
+ * `cells[2]` would fail for a reason that has nothing to do with what is being tested.
+ */
 async function readRows(page: Page) {
   return page.locator(ROWS).evaluateAll((els) =>
-    els.map((el) => ({
-      text: (el.textContent ?? "").trim(),
-      /** The interactive descendants a read-only row must not have. */
-      controls: el.querySelectorAll("button, a, input, select, textarea").length,
-      labels: Array.from(el.querySelectorAll("span")).map((s) => (s.textContent ?? "").trim()),
-    })),
+    els.map((el) => {
+      const cells: Record<string, string> = {};
+      // The selector is inlined rather than closed over: `evaluateAll` serialises this function
+      // and runs it in the page, where this module's scope does not exist.
+      for (const node of Array.from(el.querySelectorAll("[data-transition-cell]"))) {
+        const role = node.getAttribute("data-transition-cell");
+        if (role) cells[role] = (node.textContent ?? "").trim();
+      }
+      return {
+        text: (el.textContent ?? "").trim(),
+        /** The interactive descendants a read-only row must not have. */
+        controls: el.querySelectorAll("button, a, input, select, textarea").length,
+        cells,
+      };
+    }),
   );
 }
 
@@ -65,21 +83,39 @@ for (const cell of MATRIX_CELLS) {
       expect(rows.length, "no transitions rendered").toBeGreaterThan(0);
       expect(rows.length).toBeLessThanOrEqual(TRANSITION_LIMIT);
 
-      // Every row names a court, and the fixture's courts are numbered 1..8. The first span in
-      // a row is the court badge, so this is the badge rather than any digit that happens to
-      // appear in a clock time.
+      // Every row names a court, and the fixture's courts are numbered 1..8. This reads the
+      // Court cell, so it is the court rather than any digit that happens to appear in a clock
+      // time. It was a bare digit in a badge until the redesign, which reads as a rank rather
+      // than as a court; the `C` is the part being asserted, so a row that reverted to a bare
+      // number would fail here.
       for (const row of rows) {
-        expect(row.labels[0], `row with no court number: ${row.text}`).toMatch(/^[1-8]$/);
+        expect(row.cells.court, `row with no court label: ${row.text}`).toMatch(/^C[1-8]$/);
+      }
+
+      // Every row also carries the other four columns, which is what makes it a table rather
+      // than four facts that happen to sit together. A cell that stopped rendering would leave
+      // its column header over nothing.
+      for (const row of rows) {
+        expect(row.cells.match, `row with no match: ${row.text}`).toBeTruthy();
+        expect(row.cells.kind, `row with no transition kind: ${row.text}`).toBeTruthy();
+        expect(row.cells.due, `row with no due time: ${row.text}`).toBeTruthy();
+        expect(row.cells.status, `row with no status: ${row.text}`).toBeTruthy();
       }
 
       // The fixture seeds one match live on court 2 with eight minutes of its slot left, and
       // three courts whose next match is due in twenty. So the order is the finish first, and
       // the derivation is being read rather than restated: this asserts the panel used the
       // fixture's own instants.
-      expect(rows[0]?.text, `first row was not the soonest: ${rows[0]?.text}`).toMatch(
+      expect(rows[0]?.cells.kind, `first row was not the soonest: ${rows[0]?.text}`).toMatch(
         new RegExp(COURT_TRANSITION_LABEL.finish, "i"),
       );
-      expect(rows[0]?.text).toMatch(/in 8 min/);
+      expect(rows[0]?.cells.status).toMatch(/in 8 min/);
+
+      // Nothing is late at the reference instant, so there is no aggregate to state and the
+      // header must not imply one. The header is the panel's name and that one summary, and
+      // nothing else - the column labels live in the table, not up here.
+      await expect(panel(page).locator("header")).not.toContainText("overdue");
+      await expect(panel(page).locator("header")).not.toContainText("Soonest first");
     });
 
     test("distinguishes an estimated finish from a scheduled start", async ({ page }) => {
@@ -96,23 +132,54 @@ for (const cell of MATRIX_CELLS) {
         );
       }
 
-      // The estimate is marked as one in the panel's own words, not only by its fill: the type
-      // is named "Expected finish", the instant carries a tilde, and the header explains the
-      // tilde. A projection presented as a fact is the thing requirement 4 forbids.
-      const estimated = rows.filter((r) => r.text.includes(COURT_TRANSITION_LABEL.finish));
+      // The estimate is marked as one in the panel's own words, not only by the tilde: the
+      // kind reads "Expected finish", the Due cell carries a `~`, and a footnote says what
+      // the `~` means. A projection presented as a fact is the thing requirement 4 forbids.
+      const estimated = rows.filter((r) => r.cells.kind.includes(COURT_TRANSITION_LABEL.finish));
       expect(estimated.length, "no estimated finish to check").toBeGreaterThan(0);
       for (const row of estimated) {
-        expect(row.text, `an estimated finish with no qualifier: ${row.text}`).toMatch(/~\d/);
+        expect(row.cells.due, `an estimated finish with no qualifier: ${row.text}`).toMatch(/~\d/);
       }
       // The tilde is only honest if the panel says what it means.
       await expect(panel(page).getByText(/~ marks an estimate/)).toBeVisible();
 
-      // And the scheduled start carries neither marker.
-      const scheduled = rows.filter((r) => r.text.includes(COURT_TRANSITION_LABEL.start));
+      // And the scheduled start carries neither marker - not in its Due cell, and not in its
+      // kind, which must not be named as an estimate either.
+      const scheduled = rows.filter((r) => r.cells.kind.includes(COURT_TRANSITION_LABEL.start));
       expect(scheduled.length, "no scheduled start to check").toBeGreaterThan(0);
       for (const row of scheduled) {
-        expect(row.text, `a scheduled start marked as an estimate: ${row.text}`).not.toMatch(/~/);
+        expect(row.cells.due, `a scheduled start marked as an estimate: ${row.text}`).not.toMatch(
+          /~/,
+        );
       }
+    });
+
+    test("the kind is carried by words, and the two kinds are different words", async ({
+      page,
+    }) => {
+      await installAppMock(page, { preset: "states" });
+      await openCell(page, "/", cell);
+
+      /**
+       * Colour and the icon used to be a second and third channel for the kind. Both were
+       * removed at review - the panel was asked to shed its icons and all but one of its
+       * filled chips - which leaves the words as the only channel that separates a projection
+       * from a schedule. That is legitimate for information that is never a failure state, but
+       * it is only legitimate if the two labels really are different words; this is what
+       * asserts it in the rendered panel rather than in the vocabulary table.
+       */
+      const kinds = await page
+        .locator(`${CELLS}[data-transition-cell="kind"]`)
+        .evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim()));
+
+      expect(kinds.length, "no kind cells rendered").toBeGreaterThan(0);
+      for (const kind of kinds) expect(kind, "a kind cell with no words").toBeTruthy();
+
+      // Every rendered kind is one of the vocabulary's own labels, and both vocabulary labels
+      // are actually on screen - a sweep that found only one would pass vacuously otherwise.
+      const vocabulary = COURT_TRANSITION_KINDS.map((kind) => COURT_TRANSITION_LABEL[kind]);
+      for (const kind of kinds) expect(vocabulary).toContain(kind);
+      for (const label of vocabulary) expect(kinds, `no row rendered "${label}"`).toContain(label);
     });
 
     test("the panel is read-only, whatever it is showing", async ({ page }) => {
@@ -152,13 +219,14 @@ for (const cell of MATRIX_CELLS) {
       expect(text, "an overdue start was still counted down").toMatch(/overdue/);
 
       // The assertion this test exists for: no row anywhere renders a countdown that has gone
-      // past zero, and none claims a negative or zero "in" interval.
+      // past zero, and none claims a negative or zero "in" interval. Read from the Status
+      // cell, which is the only cell that carries a relative interval.
       for (const row of rows) {
         expect(
-          row.text,
+          row.cells.status,
           `a countdown on a transition that is already late: ${row.text}`,
         ).not.toMatch(/in \d+ min|in -|-?\d+ min late/);
-        expect(row.text).toMatch(/was due|overdue/);
+        expect(row.cells.status).toMatch(/overdue/);
       }
 
       // An overrun is not a transition: the court that is already past its expected finish is
@@ -166,6 +234,32 @@ for (const cell of MATRIX_CELLS) {
       expect(text, "an overrunning finish was restated as a transition").not.toMatch(
         new RegExp(COURT_TRANSITION_LABEL.finish, "i"),
       );
+
+      // Several rows in the same late state are one fact repeated, so the panel states the
+      // count once where the eye lands on entering it - and each row keeps its own figure,
+      // which is the only place a per-court duration exists. The per-row warning chip is gone;
+      // this header summary is the one place the repetition is collapsed.
+      const late = rows.filter((row) => /overdue/.test(row.cells.status)).length;
+      expect(late, "no late rows to aggregate").toBeGreaterThanOrEqual(2);
+      await expect(panel(page).locator("header")).toContainText(`${late} overdue`);
+
+      // Late rows are not drawn as a column of filled warning chips. The single count in the
+      // header is the only filled warn surface the panel paints, which is what stops five
+      // identical states reading as wallpaper.
+      const warnSurfaces = await panel(page).evaluate((el) => {
+        const warn = getComputedStyle(document.documentElement)
+          .getPropertyValue("--warn-surface")
+          .trim();
+        const probe = document.createElement("span");
+        probe.style.backgroundColor = warn;
+        el.appendChild(probe);
+        const resolved = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return Array.from(el.querySelectorAll("*")).filter(
+          (node) => getComputedStyle(node).backgroundColor === resolved,
+        ).length;
+      });
+      expect(warnSurfaces, "every late row painted its own warn chip").toBe(1);
     });
 
     test("an empty board states that nothing is transitioning", async ({ page }) => {
@@ -191,26 +285,14 @@ for (const cell of MATRIX_CELLS) {
 
       expect(await page.locator(ROWS).count(), "an empty board still rendered rows").toBe(0);
       await expect(panel(page).getByText("Nothing transitioning")).toBeVisible();
-      // The empty state must not carry a stale countdown into the panel's header either.
+      // The empty state must not carry a stale countdown into the panel's header either, and
+      // the `~` footnote must go with the rows it explains rather than outliving them.
       await expect(panel(page).getByText(/~ marks an estimate/)).toHaveCount(0);
-    });
-
-    test("every rendered transition type is one the vocabulary defines", async ({ page }) => {
-      await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
-
-      const labels = await page
-        .locator(`${ROWS} span`)
-        .evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim()));
-
-      // A sweep that found nothing would pass vacuously.
-      expect(labels.length).toBeGreaterThan(0);
-
-      // The panel must not grow a third kind without a label and a chip, which is what deriving
-      // the list from the vocabulary rather than restating it here guarantees.
-      const vocabulary = COURT_TRANSITION_KINDS.map((kind) => COURT_TRANSITION_LABEL[kind]);
-      const rendered = labels.filter((label) => vocabulary.includes(label));
-      expect(rendered.length, "no transition type label resolved").toBeGreaterThan(0);
+      // Nor should the table's own column headers survive a body with no rows in it.
+      expect(
+        await panel(page).locator("th").count(),
+        "an empty panel still rendered column headers",
+      ).toBe(0);
     });
   });
 }

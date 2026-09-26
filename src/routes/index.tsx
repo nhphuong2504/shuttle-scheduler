@@ -111,13 +111,11 @@ import {
 import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
 import {
-  COURT_TRANSITION_CHIP,
   COURT_TRANSITION_LABEL,
   nextCourtTransitions,
   transitionCountdown,
   transitionOverdueBy,
   type CourtTransition,
-  type CourtTransitionKind,
 } from "@/lib/tournament/desk-transitions";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
@@ -427,6 +425,19 @@ function Desk() {
     slotMinutesFor,
     now,
   );
+
+  /**
+   * How many of those transitions are already late.
+   *
+   * Used for one summary on the panel's header rather than to change any row. Three courts
+   * all showing "6 min overdue" is one fact repeated three times, and a moderator scanning
+   * the hall wants the count first and the court list second - so the aggregate is stated
+   * once where the eye lands on entering the panel, and each row keeps its own figure
+   * because that is the only place the per-court duration exists.
+   *
+   * Below two late rows there is nothing to aggregate, and the single pill already says it.
+   */
+  const overdueTransitions = transitions.filter((transition) => transition.overdue).length;
 
   /**
    * Pools past their scheduled finish with results still missing.
@@ -773,25 +784,33 @@ function Desk() {
           </div>
         </Panel>
 
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        {/*
+          `items-stretch`, not `items-start`: these two panels are one band, and the shorter
+          one used to end well above the other, leaving a ragged bottom edge across the middle
+          of the page. Stretched, they share a height and the band reads as one unit. The cost
+          is empty space at the foot of whichever panel has fewer rows, which is inherent -
+          Next transitions is capped at one row per court and usually has fewer than the court
+          count - and it is the cheaper of the two costs, since the alternative is padding rows
+          out to fill and losing the density the table was just rebuilt for.
+        */}
+        <div className="grid items-stretch gap-4 lg:grid-cols-2">
           <Panel
             title="Next transitions"
+            /**
+             * One statement of the late count, in place of reading it off three pills. The
+             * rows keep their own figures: this is the aggregate, not a replacement for the
+             * per-court detail, and it stays away when there is only one late row to count.
+             */
             right={
-              transitions.some((t) => t.estimated) ? (
-                <span className="text-t4 text-muted-foreground">~ marks an estimate</span>
+              overdueTransitions >= 2 ? (
+                <span className="shrink-0 rounded-md bg-warn-surface px-1.5 py-0.5 font-score text-t4 font-semibold text-warn-foreground">
+                  {overdueTransitions} overdue
+                </span>
               ) : null
             }
           >
             {transitions.length ? (
-              <ul className="divide-y divide-hairline">
-                {transitions.map((transition) => (
-                  <TransitionRow
-                    key={`${transition.courtId}-${transition.kind}`}
-                    transition={transition}
-                    courtNumber={courtMap.get(transition.courtId)?.number ?? null}
-                  />
-                ))}
-              </ul>
+              <TransitionTable transitions={transitions} courtMap={courtMap} />
             ) : (
               <EmptyState
                 title="Nothing transitioning"
@@ -1461,62 +1480,75 @@ function CourtStatePill({ state }: { state: CourtState }) {
 }
 
 /**
- * A transition's own glyph.
- *
- * A flag for a match about to finish, and the clock the `scheduled` status already uses for a
- * match about to begin. Reusing that clock is deliberate rather than lazy: "a match that has not
- * started" is already drawn as a clock everywhere else on the desk, so the two read as one
- * vocabulary instead of two.
- *
- * Colour is never the only channel - the type is also on the chip as words, and the time is a
- * number - so these are the redundant pair the design system asks every state to carry.
- */
-const TRANSITION_GLYPH: Record<CourtTransitionKind, ReactNode> = {
-  finish: (
-    <svg
-      viewBox="0 0 18 18"
-      className="size-3 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M6.25 15V3.75" />
-      <path d="M6.25 4.5h6l-1.75 2.25 1.75 2.25h-6z" />
-    </svg>
-  ),
-  start: (
-    <svg
-      viewBox="0 0 18 18"
-      className="size-3 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="9" cy="9" r="6.25" />
-      <path d="M9 5.75V9l2.25 1.5" />
-    </svg>
-  ),
-};
+ * One court transition, as a row of the panel's table.
 
-/**
- * One court transition, as information.
  *
  * Not a button, and that is the requirement rather than an omission: the panel reports the
  * order things are about to happen in and must not become a way to move a match, reorder a
  * queue or start something early. The board above is where a court is acted on.
  *
- * The row carries the four things a moderator needs and nothing else - which court, what kind
- * of change, which event, and how long - and deliberately not the pairings, which the board is
- * already showing at a size meant for reading them.
+ * ## Why the row is a table row at all
  *
- * Every fill and ink pair here is one the system already renders and already measures. The
- * warn tone sits on its own surface rather than tinting the row, because that is the pair
- * `--warn-foreground` was solved against, and a row tint would also restate the Act-now
- * panel's whole-row treatment for the same fact.
+ * This panel answers one question with five parallel facts - which court, which match, what
+ * kind of change, when, and whether it is late - and that is the shape a table is for. A list
+ * of rows was the wrong one: each row re-declared the same field order in its own flexible
+ * layout, so the reader compared entries by moving their eye down a ragged edge rather than
+ * down an aligned column. Columns put each fact in one place, put the comparanda in a vertical
+ * line, and let the eye do what it is good at.
+ *
+ * Something concrete came with it: `table`, `td` and `th` are given tabular numerals by the
+ * design system already, so the times and durations in the Due and Status columns align on the
+ * digit without a utility being applied for it. That is the reason "09:00" over "12:20" reads
+ * as a column instead of as two strings.
+ *
+ * ## Five weights, and only two of them loud
+ *
+ *   court   `font-score` semibold - an identifier, narrow, aligned on its digits
+ *   match   semibold foreground - the subject, and the row's anchor
+ *   kind    caption size, muted - reference detail
+ *   due     caption size, muted, right-aligned - reference detail
+ *   status  semibold, right-aligned - the one cell that carries a varying state
+ *
+ * Court and Match are the two the eye lands on, which is what makes a row identifiable in a
+ * scan. Kind and Due are deliberately the same size and the same ink as each other, so neither
+ * can be mistaken for the row's subject.
+ *
+ * ## What replaced what
+ *
+ * The court used to be a bare digit in a badge. A digit in a badge reads as a rank or an
+ * ordinal, and this was the only place in the app a court number appeared with no word beside
+ * it - the board draws the same badge and then spells out "Court 1" next to it. Saying "Court"
+ * once, as a column header, over a column of `C4` is the thing a table is for: name it once
+ * rather than once per row.
+ *
+ * The kind used to be a leading pill, the loudest treatment on the row, spent on the panel's
+ * least useful fact - that a start is a start - and it was what made the rows two lines tall.
+ * It is now words in a column, with no fill and no glyph.
+ *
+ * ## The row height is the band's, not the table's
+ *
+ * The rows take `--row-height`, the same token Court progress uses in the panel beside them,
+ * so the two step down the band in one rhythm instead of two. The single line is what made a
+ * table this dense possible in the first place; the token is what stops it drifting away from
+ * its neighbour, which is a thing it had already done once.
+ *
+ * ## Colour: one hue, one cell, and never alone
+ *
+ * The only hue left in the panel is `--warn-foreground` on a late Status, and the redundancy
+ * rule is intact: the status is written out as words - "6h 2m overdue" - so the colour is the
+ * second channel rather than the only one, and nothing here is conveyed by hue alone.
+ *
+ * What was dropped is the per-row warning chip, which put a filled amber surface on every late
+ * row at once. Five identical filled chips down one column is not emphasis, it is wallpaper;
+ * the place that count is genuinely emphatic is the panel header, which states it once.
+ *
+ * The other two chip fills went with it, which is why `COURT_TRANSITION_CHIP` no longer exists:
+ * the kind's fill had no other consumer, and a token kept after its only renderer is deleted is
+ * a standing claim that something still paints it. The estimate marker survives as the `~` on
+ * the Due cell, explained by the footnote under the table.
+ *
+ * The pairings are still absent on purpose - the board is already showing them at a size meant
+ * for reading them.
  */
 function TransitionRow({
   transition,
@@ -1529,42 +1561,123 @@ function TransitionRow({
   const clock = timeLabel(new Date(transition.atMs));
 
   return (
-    <li data-transition-row className="flex items-start gap-3 py-2 text-t3">
-      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-foreground/10 font-score text-t2 text-foreground">
-        {courtNumber ?? "?"}
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ${COURT_TRANSITION_CHIP[kind]}`}
-          >
-            {TRANSITION_GLYPH[kind]}
-            {COURT_TRANSITION_LABEL[kind]}
+    <tr data-transition-row className="h-[var(--row-height)]">
+      <td
+        data-transition-cell="court"
+        className="py-1 pr-3 align-middle font-score text-t3 font-semibold text-foreground"
+      >
+        C{courtNumber ?? "?"}
+      </td>
+      <td
+        data-transition-cell="match"
+        className="py-1 pr-3 align-middle text-t3 font-semibold text-foreground"
+      >
+        {transition.match.tag || "Match"}
+      </td>
+      {/* Supporting detail: the kind of change, and the instant it was read from. These two
+          columns are the ones dropped at narrow widths, since both are secondary to the
+          match and to its status. */}
+      <td
+        data-transition-cell="kind"
+        className="hidden py-1 pr-3 align-middle text-t4 text-muted-foreground sm:table-cell"
+      >
+        {COURT_TRANSITION_LABEL[kind]}
+      </td>
+      <td
+        data-transition-cell="due"
+        className="hidden whitespace-nowrap py-1 pr-3 text-right align-middle font-score text-t4 text-muted-foreground sm:table-cell"
+      >
+        {/* The leading "~" is the marker the panel's footnote explains: this is projected. */}
+        {estimated ? `~${clock}` : clock}
+      </td>
+      <td
+        data-transition-cell="status"
+        className="whitespace-nowrap py-1 pl-3 text-right align-middle font-score text-t3 font-semibold"
+      >
+        {overdue ? (
+          <span className="text-warn-foreground">
+            {transitionOverdueBy(minutesOverdue ?? 0)}
           </span>
-          {/* The event code, not the pairing: the board owns the pairings. */}
-          {transition.match.tag ? (
-            <span className="font-score text-t4 text-muted-foreground">
-              {transition.match.tag}
-            </span>
-          ) : null}
-        </span>
-        {/* The leading "~" is the marker the panel header explains: this instant is projected. */}
-        <span className="mt-0.5 block font-score text-t4 text-muted-foreground">
-          {overdue ? `was due ${clock}` : estimated ? `~${clock}` : clock}
-        </span>
-      </span>
+        ) : (
+          <span className="text-foreground">{transitionCountdown(minutesAway ?? 0)}</span>
+        )}
+      </td>
+    </tr>
+  );
+}
 
-      {overdue ? (
-        <span className="shrink-0 rounded-md bg-warn-surface px-1.5 py-0.5 font-score text-t4 font-semibold text-warn-foreground">
-          {transitionOverdueBy(minutesOverdue ?? 0)}
-        </span>
-      ) : (
-        <span className="shrink-0 font-score text-t2 font-semibold">
-          {transitionCountdown(minutesAway ?? 0)}
-        </span>
-      )}
-    </li>
+/** The column headers, one weight and one case, so the row of them reads as a rail. */
+const TRANSITION_HEAD = "py-1 pr-3 font-medium text-t4 uppercase tracking-wider text-muted-foreground";
+
+/**
+ * The panel's contents as one table.
+ *
+ * A real `<table>` rather than a grid of divs, for the reason it exists: the header cells are
+ * associated with the data cells, so a screen reader announces "Due, 09:00" rather than
+ * reading five unlabelled strings in sequence. `scope="col"` is what carries that, and it is
+ * the part a div grid cannot reproduce.
+ *
+ * ## The columns step, rather than the table scrolling
+ *
+ * Five columns do not fit the 311px of usable width at 390px, and a horizontally scrolling
+ * operations table is a worse answer than a shorter one - reaching the status would mean
+ * scrolling, and the status is the column the panel exists for. So Kind and Due are dropped
+ * below `sm`, and Court, Match and Status keep the full width. That is also the order of
+ * importance, so the columns that leave are the ones the design already made quietest, and
+ * nothing is hidden that is not simply restated in a cell that stays.
+ */
+function TransitionTable({
+  transitions,
+  courtMap,
+}: {
+  transitions: readonly CourtTransition<DeskMatch>[];
+  courtMap: ReadonlyMap<string, { number: number }>;
+}) {
+  const anyEstimated = transitions.some((transition) => transition.estimated);
+
+  return (
+    <>
+      <table className="w-full border-collapse text-left text-t3">
+        <thead>
+          <tr className="border-b border-hairline">
+            <th scope="col" className={TRANSITION_HEAD}>
+              Court
+            </th>
+            <th scope="col" className={TRANSITION_HEAD}>
+              Match
+            </th>
+            <th scope="col" className={`${TRANSITION_HEAD} hidden sm:table-cell`}>
+              Transition
+            </th>
+            <th scope="col" className={`${TRANSITION_HEAD} hidden text-right sm:table-cell`}>
+              Due
+            </th>
+            {/* The one header that stays at every width: it is the column being scanned. */}
+            <th scope="col" className={`${TRANSITION_HEAD} pl-3 text-right`}>
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-hairline">
+          {transitions.map((transition) => (
+            <TransitionRow
+              key={`${transition.courtId}-${transition.kind}`}
+              transition={transition}
+              courtNumber={courtMap.get(transition.courtId)?.number ?? null}
+            />
+          ))}
+        </tbody>
+      </table>
+      {/*
+        A table footnote rather than a line in the header: it belongs to one column's values,
+        it takes that column's weight, and it leaves the header as the panel's name and its one
+        summary. Shown only when a projection is actually on screen, so no marker is ever
+        explained on a panel that is not showing one.
+      */}
+      {anyEstimated ? (
+        <p className="mt-2 text-t4 text-muted-foreground">~ marks an estimate</p>
+      ) : null}
+    </>
   );
 }
 
