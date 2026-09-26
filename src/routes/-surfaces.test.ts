@@ -241,6 +241,41 @@ describe("the schedule settings are grouped by what a match is", () => {
 });
 
 /**
+ * Each reset is scoped to the tab that owns what it destroys.
+ *
+ * Seeding happens on the Placement tab and scheduling on the Schedule tab, and they are
+ * separate decisions: a host locks seeds, then builds days. The Schedule tab's reset used
+ * to clear the seed order as well, so rebuilding a schedule silently destroyed an order set
+ * by hand. It now calls the schedule-only RPC and keeps the seeding; the full stage reset —
+ * the one that clears the seed order — lives where the seed order is set.
+ */
+describe("each reset is scoped to the tab that owns it", () => {
+  const schedule = read("placement-schedule.tsx");
+  const placement = read("placement.tsx");
+
+  it("keeps the schedule reset off the seed order", () => {
+    expect(schedule).toMatch(/resetPlacementSchedule/);
+    // The stage reset is a different action now, and must not be reachable from here.
+    expect(schedule).not.toMatch(/resetPlacementStage/);
+    // The copy has to say what survives, because that is the difference the host is
+    // choosing between.
+    expect(schedule).toMatch(/seed order\s+and any waivers are kept/);
+  });
+
+  it("puts the stage reset on the tab that owns the seed order", () => {
+    expect(placement).toMatch(/resetPlacementStage/);
+    expect(placement).toMatch(/title="Reset"/);
+    // Folded away on first paint, as on the Schedule tab.
+    expect(placement).toMatch(/showReset/);
+    // Admin-only, and the confirmation names the seed order it destroys while pointing at
+    // the reset that would keep it.
+    expect(placement).toMatch(/isAdmin \? \(/);
+    expect(placement).toMatch(/clears the seed order and any waivers/);
+    expect(placement).toMatch(/Schedule tab instead/);
+  });
+});
+
+/**
  * The day count used to be decided in setup and frozen at activation, so an event
  * that overran could not be given another day without rebuilding the tournament. The
  * Schedule page now adds and removes days, guarded so that neither can strand a match.

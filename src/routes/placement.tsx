@@ -11,9 +11,11 @@ import { entrantCountNote } from "@/lib/tournament/competition-format";
 import {
   buildCategoryView,
   lockPlacementSeeds,
+  resetPlacementStage,
   savePlacementSeedOrder,
   setPlacementSkill,
   shuffleSeedFor,
+  stageResetNote,
   syncPlacementEntrants,
   type CategoryPlacementView,
 } from "@/lib/tournament/placement-actions";
@@ -67,7 +69,7 @@ export const Route = createFileRoute("/placement")({
 
 function PlacementPage() {
   const qc = useQueryClient();
-  const { canEditPlacementEntrants } = useSession();
+  const { canEditPlacementEntrants, isAdmin } = useSession();
   const { tournament } = useTournamentScope();
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
@@ -82,6 +84,44 @@ function PlacementPage() {
 
   const live = (categories ?? []).filter((category) => category.active);
   const wrongFormat = tournament != null && tournament.format !== "two_round_placement";
+
+  /** The reset panel starts folded: it is the only irreversible action on the page. */
+  const [showReset, setShowReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  /**
+   * Discards the whole placement stage and returns it to a registered field.
+   *
+   * This is the reset that clears the seed order, and it belongs on this tab because
+   * this is the tab that owns the seed order — "Shuffle & lock seeds" is here. The
+   * Schedule tab's reset deliberately does not clear the seeding: it discards the
+   * matches, draws and results and leaves the order alone, so rebuilding a schedule
+   * cannot quietly destroy an order set by hand. Admin-only and irreversible, hence
+   * the explicit confirmation that names what it destroys.
+   */
+  const resetStage = async () => {
+    if (!tournament) return;
+    const confirmed = window.confirm(
+      "Start the placement stage over?\n\n" +
+        "This deletes every placement and knockout match, every result and every scheduled " +
+        "time, and it also clears the seed order and any waivers. Every event goes back to a " +
+        "registered field, ready to shuffle and lock seeds again. To clear only the schedule " +
+        "and keep the seed order, use the Reset panel on the Schedule tab instead. It cannot " +
+        "be undone.",
+    );
+    if (!confirmed) return;
+
+    setResetting(true);
+    try {
+      const reset = await resetPlacementStage(tournament.id);
+      refresh();
+      toast.success(stageResetNote(reset));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not reset the placement stage");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   return (
     <AppShell
@@ -123,6 +163,47 @@ function PlacementPage() {
             onRefresh={refresh}
           />
         ))}
+
+        {isAdmin ? (
+          <Panel
+            title="Reset"
+            bodyClassName="p-0"
+            right={
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={showReset}
+                onClick={() => setShowReset((value) => !value)}
+              >
+                {showReset ? "Hide" : "Show"}
+              </Button>
+            }
+          >
+            {showReset ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <p className="max-w-lg text-xs text-muted-foreground">
+                  Deletes every placement and knockout match, every reported result and every
+                  scheduled time, and also clears the seed order and any waivers, so every event
+                  goes back to a registered field ready to shuffle and lock seeds again. This is
+                  the only reset that clears the seed order — the Schedule tab's reset keeps it.
+                  This cannot be undone.
+                </p>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={resetting || !tournament}
+                  onClick={() => void resetStage()}
+                >
+                  Start the placement stage over
+                </Button>
+              </div>
+            ) : (
+              <p className="p-4 text-xs text-muted-foreground">
+                Start the placement stage over, clearing the seed order and every result.
+              </p>
+            )}
+          </Panel>
+        ) : null}
       </div>
     </AppShell>
   );

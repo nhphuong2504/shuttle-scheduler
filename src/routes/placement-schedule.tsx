@@ -79,9 +79,9 @@ import {
 } from "@/lib/tournament/placement-schedule";
 import {
   generateMissingStages,
-  resetPlacementStage,
+  resetPlacementSchedule,
+  scheduleResetNote,
   stageGenerationChanged,
-  stageResetNote,
   type StageGenerationOutcome,
 } from "@/lib/tournament/placement-actions";
 
@@ -1186,35 +1186,38 @@ function PlacementSchedulePage() {
     : [];
 
   /**
-   * Discards the whole placement stage and returns it to a registered field.
+   * Discards the placement and knockout schedule, and keeps the seed order.
    *
-   * Everything unplayed and everything played goes, plus the seed order and the
-   * waivers, so the stage is back to the state it is in after entrants are synced
-   * and the next action is "Shuffle & lock seeds" on the Placement tab. Nothing
-   * here can be undone, hence the explicit confirmation and the admin check.
+   * Scheduling is a later decision than seeding: the host locks seeds on the Placement
+   * tab and builds days here, so a rebuild must not take the seeding with it. Every
+   * match, draw and result goes, plus the derived tier; the seed order, the lock and
+   * the waivers stay, so the stage returns to the start of round one and "Build the
+   * schedule" regenerates from the same order. Starting the tournament over is the
+   * Placement tab's reset, which is the only one that clears the seeds. Nothing here
+   * can be undone, hence the explicit confirmation and the admin check.
    */
   const resetStage = async () => {
     if (!tournament) return;
     const confirmed = window.confirm(
-      "Delete every placement result and the whole schedule?\n\n" +
+      "Delete every placement and knockout match, and every result and scheduled time?\n\n" +
         "This removes both placement rounds, the A/B/C/D draws, every result and every " +
-        "scheduled time, and it also clears the seed order and the waivers. The field goes " +
-        "back to a registered field with nothing played, ready to shuffle and lock seeds " +
-        "again. It cannot be undone.",
+        "scheduled time. The seed order and any waivers are kept, so the stage returns to the " +
+        "start of round one and can be rebuilt on the same seeding. The days, courts and match " +
+        "settings above are kept too. It cannot be undone.",
     );
     if (!confirmed) return;
 
     setBusy(true);
     try {
-      const reset = await resetPlacementStage(tournament.id);
+      const reset = await resetPlacementSchedule(tournament.id);
       // The local summaries describe a schedule that no longer exists, so they are
       // cleared rather than refreshed: "not built yet" is the truth now.
       setResult(null);
       setPreview(null);
       await qc.invalidateQueries();
-      toast.success(stageResetNote(reset));
+      toast.success(scheduleResetNote(reset));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not reset the placement stage");
+      toast.error(error instanceof Error ? error.message : "Could not reset the schedule");
     } finally {
       setBusy(false);
     }
@@ -1855,9 +1858,10 @@ function PlacementSchedulePage() {
             {showDanger ? (
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <p className="max-w-lg text-xs text-muted-foreground">
-                  Clears every placement and knockout match, every reported result, the seed order
-                  and any waivers, so the placement stage starts over. The days, courts and match
-                  settings above are kept. This cannot be undone.
+                  Clears every placement and knockout match, every reported result and every
+                  scheduled time, returning the stage to the start of round one. The seed order
+                  and any waivers are kept, so the schedule can be rebuilt on the same seeding.
+                  The days, courts and match settings above are also kept. This cannot be undone.
                 </p>
                 <Button
                   variant="destructive"
@@ -1870,7 +1874,7 @@ function PlacementSchedulePage() {
               </div>
             ) : (
               <p className="p-4 text-xs text-muted-foreground">
-                Clear results and schedule, and start the placement stage over.
+                Clear results and schedule, keeping the seed order.
               </p>
             )}
           </Panel>

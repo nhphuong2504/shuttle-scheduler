@@ -1401,6 +1401,10 @@ export type Database = {
         Args: { p_match_id: string }
         Returns: undefined
       }
+      reset_placement_schedule: {
+        Args: { p_tournament_id: string }
+        Returns: Json
+      }
       reset_placement_stage: {
         Args: { p_tournament_id: string }
         Returns: Json
