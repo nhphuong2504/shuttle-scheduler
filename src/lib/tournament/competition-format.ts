@@ -118,6 +118,27 @@ export const SUPPORTED_FORMAT: CompetitionFormat = {
   tiers: PLACEMENT_TIERS,
 };
 
+/**
+ * Whether a tournament's stored `format` is the one this app creates and runs.
+ *
+ * Both engines' tables live in the same database, and the live surfaces used to merge
+ * them so one board could carry either format. That merge is wrong for the supported
+ * format: a two-round placement tournament has no pools, so `pools`, `pool_matches`,
+ * `draws` and `draw_matches` rows under one are leftovers — and listing them as results
+ * puts finished matches this event cannot have above the matches it is actually playing.
+ *
+ * The stored value is read rather than the rows inferred, deliberately: an empty table
+ * is not evidence of a format, and `data.ts` keeps the two sets of hooks apart precisely
+ * so no hook has to guess which format it is looking at.
+ *
+ * Only `two_round_placement` returns true. A `null` format is not the supported one —
+ * `createTournament` defaults the column, so a null means the row was written around
+ * the app, and guessing "placement" for it would hide a round-robin event's own matches.
+ */
+export function isSupportedFormat(format: string | null | undefined): boolean {
+  return format === SUPPORTED_FORMAT.id;
+}
+
 /** A one-line explanation of the placement rule, for dense UI. */
 export function placementRuleSummary(): string {
   return PLACEMENT_TIERS.map((entry) => `${entry.record} → ${entry.tier}`).join(", ");

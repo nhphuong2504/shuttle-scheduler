@@ -132,6 +132,9 @@ The round-robin pool format is **legacy but still present and reachable**:
   They are deliberately absent from the navigation, because the creation wizard
   replaced the round-robin engine with two-round placement.
 - The tables, RPCs and library code behind it are untouched.
+- The live surfaces (`/`, `/matches`) list its matches **only for a tournament whose
+  stored `format` is `round_robin`**. A two-round placement event is never shown pools,
+  because they are not a stage it runs.
 
 It is worth knowing because it is not dead code - it is shipped and reachable - and
 because it documents rules that are correct for that format:

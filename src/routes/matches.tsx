@@ -34,6 +34,7 @@ import {
   useTierDrawMatches,
   useTierDraws,
 } from "@/lib/tournament/data";
+import { isSupportedFormat } from "@/lib/tournament/competition-format";
 import { gamesLabel, parseGames, timeLabel } from "@/lib/tournament/format";
 import {
   DEFAULT_KNOCKOUT_RULE,
@@ -189,6 +190,19 @@ function MatchesPage() {
   const courtMap = useMemo(() => indexBy(courts), [courts]);
   const catMap = useMemo(() => indexBy(categories), [categories]);
 
+  /**
+   * Whether the round-robin tables are this tournament's own.
+   *
+   * False for the supported format, which has no pools: the rows still in `pools` and
+   * `pool_matches` under such a tournament are leftovers, and a screen that listed them
+   * would put finished matches this event cannot have above the ones being played — and
+   * would count them in "Matches shown" and "Completed".
+   *
+   * This gates the lists read straight from those tables, which the shared row builder
+   * cannot reach. The builder takes the same format and excludes its copy.
+   */
+  const roundRobin = !isSupportedFormat(tournament?.format);
+
   const label = (id: string | null) => teamLabel(id ? teamMap.get(id) : undefined, playerMap);
   const refresh = () => qc.invalidateQueries();
 
@@ -214,6 +228,7 @@ function MatchesPage() {
   const allRows = useMemo(
     () =>
       buildDeskMatches({
+        format: tournament?.format,
         poolMatches,
         drawMatches,
         draws,
@@ -225,6 +240,7 @@ function MatchesPage() {
         entrantTeam,
       }),
     [
+      tournament?.format,
       poolMatches,
       drawMatches,
       draws,
@@ -269,27 +285,31 @@ function MatchesPage() {
 
   const visiblePool = useMemo(
     () =>
-      (poolMatches ?? []).filter((m) =>
-        keep({ status: m.status, catId: m.category_id, a: m.team_a_id, b: m.team_b_id }),
-      ),
+      roundRobin
+        ? (poolMatches ?? []).filter((m) =>
+            keep({ status: m.status, catId: m.category_id, a: m.team_a_id, b: m.team_b_id }),
+          )
+        : [],
     // keep reads the current filters and the player map; the rows are memoised.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [poolMatches, categoryId, statusFilter, query, teamMap, playerMap],
+    [roundRobin, poolMatches, categoryId, statusFilter, query, teamMap, playerMap],
   );
 
   const visibleDraw = useMemo(
     () =>
-      (drawMatches ?? []).filter((m) =>
-        keep({
-          status: m.status,
-          catId: drawMap.get(m.draw_id)?.category_id ?? "",
-          a: m.team_a_id,
-          b: m.team_b_id,
-        }),
-      ),
+      roundRobin
+        ? (drawMatches ?? []).filter((m) =>
+            keep({
+              status: m.status,
+              catId: drawMap.get(m.draw_id)?.category_id ?? "",
+              a: m.team_a_id,
+              b: m.team_b_id,
+            }),
+          )
+        : [],
     // keep and drawMap read the current filters and the player map; the rows are memoised.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [drawMatches, drawMap, categoryId, statusFilter, query, teamMap, playerMap],
+    [roundRobin, drawMatches, drawMap, categoryId, statusFilter, query, teamMap, playerMap],
   );
 
   /** The group tab holds the pools and the placement rounds; the knockout tab the rest. */

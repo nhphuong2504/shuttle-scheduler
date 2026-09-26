@@ -30,9 +30,14 @@ tokens with the same change.
 `/pools`, `/draws` and `/schedule` plus `src/lib/tournament/pools.ts`,
 `standings.ts` and the pool actions in `actions.ts`.
 
-It is **not dead code**: the routes are reachable by direct URL and the Desk still loads
-both formats. They are deliberately absent from the navigation because the creation wizard
-replaced round-robin with two-round placement ([`tournament-format.md`](tournament-format.md),
+It is **not dead code**: the routes are reachable by direct URL, and the live surfaces
+(`/`, `/matches`) still load the legacy rows — but only for a tournament whose stored
+`format` is `round_robin`. `buildDeskMatches` takes the tournament's format and lists the
+pools and pooled draws for that format alone (`isSupportedFormat` in
+[`competition-format.ts`](../src/lib/tournament/competition-format.ts)), so a two-round
+placement event is not shown finished matches from a stage it does not run. They are
+deliberately absent from the navigation because the creation wizard replaced round-robin
+with two-round placement ([`tournament-format.md`](tournament-format.md),
 "Legacy pool engine"). Removing it is a product decision about whether the format is still
 supported, not a cleanup, and it would touch scoring and standings paths that need the
 stronger review tier.

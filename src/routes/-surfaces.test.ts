@@ -376,3 +376,48 @@ describe("byes are drawn as draw conditions, not as statuses", () => {
     }
   });
 });
+
+/**
+ * The live surfaces list the format the tournament runs, and only that one.
+ *
+ * Both engines' tables live in the same database, and `buildDeskMatches` merges them so
+ * one board can carry either format. That merge is wrong for the supported format, whose
+ * pools are leftovers: a staging tournament holding 230 already-reported pool matches
+ * under 77 placement matches put the finished ones first, buried the placement rounds in
+ * the Group stage tab, and counted the pool rows in "Matches shown" and "Completed".
+ *
+ * The gate belongs in the shared builder rather than in either page — a page filtering
+ * its own copy is how the score desk and the board came to disagree in the first place.
+ * What is asserted here is the shape that would regress silently: the pages still
+ * passing their legacy rows to the builder, or still reading the pool tables directly
+ * for the counts and the panels, which the builder's filter cannot reach.
+ */
+describe("the live surfaces list only the format the tournament runs", () => {
+  const desk = read("index.tsx");
+  const scores = read("matches.tsx");
+
+  it("hands the stored format to the shared row builder", () => {
+    for (const source of [desk, scores]) {
+      expect(source).toMatch(/buildDeskMatches\(\{[\s\S]{0,120}?format: tournament\?\.format/);
+    }
+  });
+
+  it("gates the lists read straight from the round-robin tables", () => {
+    // `visiblePool` and `visibleDraw` are filtered from `poolMatches`/`drawMatches`
+    // directly, and the tab counts, the four tiles and the panels all read them, so the
+    // shared builder's filter never sees them.
+    expect(scores).toMatch(/const roundRobin = !isSupportedFormat\(tournament\?\.format\)/);
+    for (const list of ["visiblePool", "visibleDraw"]) {
+      expect(scores).toMatch(new RegExp(`const ${list} = useMemo\\([\\s\\S]{0,160}?roundRobin`));
+    }
+  });
+
+  it("leaves the desk's overdue-result alert alone", () => {
+    // The single destructive treatment the Act-now panel defines, and the one row list
+    // that is deliberately not gated: it chases a missing result rather than showing one,
+    // so gating it on the format took the destructive tier away from the format this app
+    // runs. It is asserted here because the gate is the obvious "consistency" edit.
+    expect(desk).not.toMatch(/if \(isSupportedFormat\(tournament\?\.format\)\) return \[\]/);
+    expect(desk).toMatch(/const latePools = useMemo/);
+  });
+});

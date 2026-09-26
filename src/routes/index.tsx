@@ -277,6 +277,7 @@ function Desk() {
   const allMatches = useMemo<DeskMatch[]>(
     () =>
       buildDeskMatches({
+        format: tournament?.format,
         poolMatches,
         drawMatches,
         draws,
@@ -288,6 +289,7 @@ function Desk() {
         entrantTeam,
       }),
     [
+      tournament?.format,
       poolMatches,
       drawMatches,
       draws,
