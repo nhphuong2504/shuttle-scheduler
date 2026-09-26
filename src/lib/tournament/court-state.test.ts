@@ -126,6 +126,38 @@ describe("the court-state vocabulary", () => {
     expect(new Set(chips).size).toBe(chips.length);
   });
 
+  it("never paints a chip in its own tile's fill", () => {
+    // The defect this exists for: `playing` shipped with its tile painting the full
+    // `--state-live-chip` - the same fill its chip paints - so the "Playing" pill had
+    // no edge and read as uppercase text on green. Measured on the rendered board the
+    // two were byte-identical in both themes, while every other state separated.
+    //
+    // Comparing the class strings alone would not catch it: `/30` and `/100` are
+    // different strings and the same colour. So this compares the resolved pair of
+    // token and alpha, which is what the browser actually paints, and is the cheap
+    // half of the sweep in `e2e/states.spec.ts` - no browser, no credentials.
+    const fills = (state: CourtState) => {
+      const parse = (classes: string, where: string) => {
+        const match = classes.match(/\bbg-([a-z0-9-]+)(?:\/(\d+))?/);
+        if (!match) throw new Error(`${state} has no background fill in its ${where}`);
+        return { token: match[1]!, alpha: match[2] ?? "100" };
+      };
+      return {
+        chip: parse(COURT_STATE_CHIP[state], "chip"),
+        tile: parse(COURT_STATE_TILE[state], "tile"),
+      };
+    };
+
+    for (const state of COURT_STATES) {
+      const { chip, tile } = fills(state);
+      expect(
+        `${chip.token}/${chip.alpha}`,
+        `${state}: the chip and its own tile paint the same fill, so the pill is not a ` +
+          `container - it is text sitting on the card background`,
+      ).not.toBe(`${tile.token}/${tile.alpha}`);
+    }
+  });
+
   it("shares one edge between the two states that ask for nothing", () => {
     // Documented rather than accidental: `free-blocked` and `idle` both rest on the
     // hairline, because the pill already carries the blocked signal and a second

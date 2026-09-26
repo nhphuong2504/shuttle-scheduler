@@ -211,14 +211,23 @@ treatment:
 
 | State | Label | Chip | Tile edge |
 | --- | --- | --- | --- |
-| `playing` | Playing | `bg-state-live-chip text-state-live-ink` | live ink at 35%, live chip fill |
+| `playing` | Playing | `bg-state-live-chip text-state-live-ink` | live ink at 35%, live chip at 30% |
 | `overrun` | Overrun | `bg-danger-surface text-danger-foreground` | danger border, danger surface at 40% |
 | `free-ready` | Ready | `bg-primary/10 text-primary-ink` | primary at 40%, primary at 5% |
 | `free-blocked` | Waiting | `bg-warn-surface text-warn-foreground` | resting hairline |
 | `idle` | Idle | `bg-muted text-muted-foreground` | resting hairline |
 
-Two things about this table are deliberate:
+Three things about this table are deliberate:
 
+- **The tile is a wash and the chip is the denser surface, in every state.** That is what
+  makes a chip a *container* rather than text sitting on the card. `playing` was the one
+  exception and it was a defect: its tile painted the full `--state-live-chip` - the same
+  fill the chip paints - so the "Playing" pill had no edge at all. Measured on the rendered
+  board the two were byte-identical in both themes (1.000:1, against 1.087:1 for the
+  weakest other state), so the state a moderator reads most often was the one state drawn
+  as bare text. `playing`'s tile is now a 30% wash of the chip, which is still far more
+  tinted than `free-ready`'s 5%: the order of the wall is overrun, then playing, then
+  ready, then the two neutrals that ask for nothing.
 - **`playing` reuses the match `live` tokens** rather than minting a second green.
   The two encode the same fact from different vantage points, and they never
   co-render, so a separate green would be a distinction the reader can see but

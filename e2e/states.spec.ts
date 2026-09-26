@@ -97,6 +97,16 @@ interface Chips {
   fill: Rgb;
   ink: Rgb;
   tileBorder: Rgb;
+  /**
+   * The tile's own background, flattened.
+   *
+   * Added because `fill` alone could not answer the question the pill has to: is the pill a
+   * *discrete surface* on the tile it sits on. A pill whose fill equals its tile's is not a
+   * container, however legible its ink is - `playing` shipped that way, with the tile painting
+   * the same `--state-live-chip` the pill did, so a "Playing" chip read as uppercase text on
+   * green with no edge at all.
+   */
+  tile: Rgb;
 }
 
 type Rgb = [number, number, number];
@@ -264,6 +274,7 @@ async function readCourtChipsOnce(page: Page): Promise<Chips[]> {
         label: pill?.textContent?.trim() ?? null,
         fill: floored([toRgb(pillStyle?.backgroundColor ?? "transparent")]),
         ink: floored([toRgb(pillStyle?.color ?? "transparent")]),
+        tile: [Math.round(tile[0]), Math.round(tile[1]), Math.round(tile[2])] as Rgb,
         // The border is composited over the tile's own background, not the page: the
         // default background-clip is border-box, so the tile's fill already sits under
         // its edge. Both of the translucent edges here depend on that - `playing`'s edge
@@ -326,6 +337,62 @@ const key = (c: Rgb) => c.map((v) => Math.round(v)).join(",");
 
 for (const cell of MATRIX_CELLS) {
   test.describe(cellLabel(cell), () => {
+    /**
+     * The pill has to be a *surface*, not text on the card.
+     *
+     * `playing` shipped with its tile painting the full `--state-live-chip` - the same fill
+     * the pill paints - so a moderator saw the word "Playing" in green ink on a green card
+     * with no chip around it, while "Ready" read clearly because its tile is a 5% wash under
+     * a 10% pill. Measured on the board the two were byte-identical in both themes.
+     *
+     * So this states the requirement the design has for every state: the chip's fill must
+     * differ from the tile it sits on. A colour alone is not the whole signal - the label
+     * and the tile edge carry it too - but a chip painted in its own background is not a
+     * discrete indicator at all, and nothing was measuring that.
+     *
+     * The floor is not chosen to pass. It is the smallest separation the *already shipped*
+     * treatments produce, measured on this board: dark `free-ready` at 8.1 of Euclidean RGB
+     * distance against the 0.0 that `playing` had, with the other states running 18-40. A
+     * change can therefore improve on the design's own tightest case but cannot go below it
+     * and call itself a chip.
+     */
+    const TILE_SEPARATION_MIN = 8;
+
+    test("every court state chip is a discrete surface on its own tile", async ({ page }) => {
+      await installAppMock(page, { preset: "states" });
+      await openCell(page, "/", cell);
+
+      const chips = await readCourtChips(page);
+      const byState = new Map(chips.map((chip) => [chip.state, chip]));
+
+      const failures: string[] = [];
+      const distances: string[] = [];
+      for (const state of COURT_STATES) {
+        const chip = byState.get(state);
+        expect(chip, `no court rendered the ${state} state`).toBeDefined();
+        if (!chip) continue;
+        const delta = Math.sqrt(
+          (chip.fill[0] - chip.tile[0]) ** 2 +
+            (chip.fill[1] - chip.tile[1]) ** 2 +
+            (chip.fill[2] - chip.tile[2]) ** 2,
+        );
+        distances.push(`${state}=${delta.toFixed(1)}`);
+        if (delta < TILE_SEPARATION_MIN) {
+          failures.push(
+            `${state} ${COURT_STATE_LABEL[state]}: the chip and its tile are ${delta.toFixed(1)} ` +
+              `apart (tile ${key(chip.tile)}, chip ${key(chip.fill)}) - a chip painted in its ` +
+              `own card background has no container`,
+          );
+        }
+      }
+      expect(
+        failures,
+        `court state chips that are not a discrete surface; all separations: ` +
+          distances.join(", "),
+      ).toEqual([]);
+      console.log(`[chip vs tile ${cellLabel(cell)}] ${distances.join(", ")}`);
+    });
+
     test("every court state renders, with its own label and its own fill", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
       await openCell(page, "/", cell);
