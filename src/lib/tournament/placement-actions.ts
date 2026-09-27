@@ -800,25 +800,87 @@ export async function resetTierDrawResult(matchId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// The whole-stage reset
+// The two resets
 // ---------------------------------------------------------------------------
+//
+// Scheduling and seeding are separate decisions, made on separate tabs, so they get
+// separate resets rather than one action that always takes both. See
+// `20260926000000_placement_schedule_reset.sql` for the full reasoning.
+//
+//   * `resetPlacementSchedule` — the Schedule tab. Discards the matches, the draws
+//     and the derived tiers; keeps the seed order and the waivers, so the schedule
+//     rebuilds on the same seeding.
+//   * `resetPlacementStage` — the Placement tab, which owns the seed order. Also
+//     clears the seed order and the waivers, back to a registered field.
 
-/** What a reset removed, so the desk can be told rather than left guessing. */
-export interface PlacementStageReset {
+/** What a schedule reset removed, so the desk can be told rather than left guessing. */
+export interface PlacementScheduleReset {
   placementMatches: number;
   tierDraws: number;
   tierMatches: number;
+}
+
+/** What a whole-stage reset removed: a schedule reset plus the entrant state. */
+export interface PlacementStageReset extends PlacementScheduleReset {
   entrants: number;
 }
 
+/** The match and draw counts, shared by both reset notes. */
+function resetCountParts(reset: PlacementScheduleReset): string[] {
+  return [
+    reset.placementMatches > 0
+      ? `${reset.placementMatches} placement match${reset.placementMatches === 1 ? "" : "es"}`
+      : null,
+    reset.tierMatches > 0
+      ? `${reset.tierMatches} knockout match${reset.tierMatches === 1 ? "" : "es"}`
+      : null,
+    reset.tierDraws > 0 ? `${reset.tierDraws} draw${reset.tierDraws === 1 ? "" : "s"}` : null,
+  ].filter((part): part is string => part != null);
+}
+
 /**
- * Discards the entire placement stage: every match, every draw, every result and
- * the whole schedule, back to a registered field with nothing played.
+ * Discards the schedule — every placement and knockout match, every draw and every
+ * result — and keeps the seeding.
+ *
+ * The seed order, the lock and the waivers survive, so the stage comes back at round
+ * one on the same seeding and "Build the schedule" regenerates from it. This is the
+ * reset for rebuilding a schedule, not for starting the tournament over. Admin-only
+ * and irreversible; the caller is expected to have confirmed with the desk first.
+ */
+export async function resetPlacementSchedule(
+  tournamentId: string,
+): Promise<PlacementScheduleReset> {
+  const { data, error } = await supabase.rpc(
+    "reset_placement_schedule" as never,
+    {
+      p_tournament_id: tournamentId,
+    } as never,
+  );
+  if (error) throw new Error(error.message);
+  const counts = (data ?? {}) as Partial<PlacementScheduleReset>;
+  return {
+    placementMatches: counts.placementMatches ?? 0,
+    tierDraws: counts.tierDraws ?? 0,
+    tierMatches: counts.tierMatches ?? 0,
+  };
+}
+
+/** One line describing what a schedule reset discarded, for the confirmation toast. */
+export function scheduleResetNote(reset: PlacementScheduleReset): string {
+  const parts = resetCountParts(reset);
+  if (!parts.length) return "Nothing had been played yet — the seed order is intact.";
+  return `Removed ${parts.join(", ")}. The seed order and waivers are kept.`;
+}
+
+/**
+ * Discards the entire placement stage: every match, every draw, every result and the
+ * whole schedule, back to a registered field with nothing played.
  *
  * The seed order and the waived flags go with it, so this returns the stage to
  * exactly the state it is in after entrants are synced — the next action is
- * "Shuffle & lock seeds". Admin-only and irreversible; the caller is expected to
- * have confirmed with the desk first.
+ * "Shuffle & lock seeds". It is the reset the **Placement** tab offers, because that
+ * is the tab that owns the seed order. Admin-only and irreversible; the caller is
+ * expected to have confirmed with the desk first.
  */
 export async function resetPlacementStage(tournamentId: string): Promise<PlacementStageReset> {
   const { data, error } = await supabase.rpc(
@@ -837,17 +899,9 @@ export async function resetPlacementStage(tournamentId: string): Promise<Placeme
   };
 }
 
-/** One line describing what a reset discarded, for the confirmation toast. */
+/** One line describing what a stage reset discarded, for the confirmation toast. */
 export function stageResetNote(reset: PlacementStageReset): string {
-  const parts = [
-    reset.placementMatches > 0
-      ? `${reset.placementMatches} placement match${reset.placementMatches === 1 ? "" : "es"}`
-      : null,
-    reset.tierMatches > 0
-      ? `${reset.tierMatches} knockout match${reset.tierMatches === 1 ? "" : "es"}`
-      : null,
-    reset.tierDraws > 0 ? `${reset.tierDraws} draw${reset.tierDraws === 1 ? "" : "s"}` : null,
-  ].filter(Boolean);
+  const parts = resetCountParts(reset);
   if (!parts.length) return "Nothing had been played yet — the seeds were unlocked.";
   return `Removed ${parts.join(", ")}. Seeds and waivers cleared.`;
 }

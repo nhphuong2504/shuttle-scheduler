@@ -334,6 +334,86 @@ describe("tournament day management migration", () => {
 });
 
 /**
+ * A schedule reset and a stage reset are different acts, and the difference is exactly
+ * what they do to `placement_entrants`.
+ *
+ * `reset_placement_stage` was the only way back from a bad build, and it took the seed
+ * order with it — so on the Schedule tab, "rebuild the schedule" and "start the
+ * tournament over" were the same button, and a host who only wanted to rebuild lost an
+ * order they had set by hand. Scheduling is a later decision than seeding, so the
+ * schedule reset keeps the seeding and the stage reset clears it.
+ *
+ * Both migrations are asserted together, because the distinction *is* the contract and
+ * either one drifting back toward the other collapses it back into one action.
+ */
+describe("the two placement resets keep their scopes", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const scheduleFile = "20260926000000_placement_schedule_reset.sql";
+  const scheduleSql = readFileSync(join(dir, scheduleFile), "utf8");
+  const stageSql = readFileSync(join(dir, "20260917050000_placement_stage_reset.sql"), "utf8");
+
+  /** The executable SQL with line comments stripped, so prose cannot satisfy a check. */
+  const code = (sql: string) => sql.replace(/--.*$/gm, "");
+
+  it("clears the schedule and the derived tier only", () => {
+    expect(scheduleSql).toMatch(
+      /FUNCTION public\.reset_placement_schedule\(p_tournament_id uuid\)/,
+    );
+    for (const table of ["tier_draw_matches", "tier_draws", "placement_matches"]) {
+      expect(scheduleSql).toMatch(new RegExp(`DELETE FROM public\\.${table} WHERE tournament_id`));
+    }
+    // The tier is decided by the placement record, not the seed, so it cannot outlive
+    // the results it was derived from.
+    expect(code(scheduleSql)).toMatch(/SET tier = NULL/);
+  });
+
+  it("keeps the seed order and the waivers, which is the whole point", () => {
+    // Checked against the executable SQL, not the file: the header comment names all
+    // three columns while explaining why they are deliberately left alone.
+    for (const cleared of [
+      /seed\s*=\s*NULL/,
+      /seed_locked_at\s*=\s*NULL/,
+      /excluded\s*=\s*false/,
+    ]) {
+      expect(code(scheduleSql)).not.toMatch(cleared);
+    }
+    // And the stage reset still clears them, or the two would be the same action.
+    expect(stageSql).toMatch(/seed = NULL/);
+    expect(stageSql).toMatch(/seed_locked_at = NULL/);
+    expect(stageSql).toMatch(/excluded = false/);
+  });
+
+  it("is admin-only and takes the build's advisory lock", () => {
+    expect(scheduleSql).toMatch(/has_staff_role\(ARRAY\['admin'\]\)/);
+    // The same key as `apply_placement_day_schedule` and the live reflow, so a reset
+    // cannot delete rows out from under a build that is halfway through writing slots.
+    expect(scheduleSql).toMatch(/pg_advisory_xact_lock\(hashtext\('live-schedule'\)\)/);
+  });
+
+  it("closes the implicit PUBLIC grant it restores by creating the function", () => {
+    expect(scheduleSql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.reset_placement_schedule\(uuid\) FROM anon, PUBLIC/,
+    );
+    expect(scheduleSql).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.reset_placement_schedule\(uuid\)/,
+    );
+  });
+
+  it("is the last word on reset_placement_schedule", () => {
+    // A later migration that redefines it has to come through this test, not around it.
+    const definers = readdirSync(dir)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .filter((name) =>
+        /FUNCTION public\.reset_placement_schedule\(p_tournament_id uuid\)/.test(
+          readFileSync(join(dir, name), "utf8"),
+        ),
+      );
+    expect(definers.at(-1)).toBe(scheduleFile);
+  });
+});
+
+/**
  * Realtime publication membership.
  *
  * The failure this guards is silent in a way almost nothing else in the schema is. Every

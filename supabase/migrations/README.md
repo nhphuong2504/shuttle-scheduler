@@ -605,8 +605,16 @@ The tables themselves are untouched, so nothing else changes.
 
 ## Applying `20260917050000_placement_stage_reset.sql`
 
-Adds `reset_placement_stage(p_tournament_id)` — the **"Delete results & schedule"** button on the
-Court schedule tab. It is the way back to the start of the event without re-registering the field.
+Adds `reset_placement_stage(p_tournament_id)` — the **"Start the placement stage over"** button in
+the folded Reset panel on the **Placement** tab. It is the way back to the start of the event
+without re-registering the field.
+
+> **Its scope is now half of what it was.** This function also backed the Schedule tab's reset until
+> `20260926000000_placement_schedule_reset.sql` split the two apart. The Schedule tab calls
+> `reset_placement_schedule` now, which leaves the seeding alone; this one is reached only from the
+> Placement tab, which owns the seed order. The entrant state it clears — step 4 below — is now the
+> whole difference between the two actions, so read it as "what the stage reset does that the
+> schedule reset does not".
 
 ### What it does
 
@@ -640,9 +648,9 @@ Scoped to the placement format's own tables. The legacy round-robin tables are u
 
 ### Verify after applying
 
-The button appears next to **Build the schedule** on `/placement-schedule`, and only for admins. It
-asks for confirmation, then reports what it removed. After it, the Placement tab should show every
-event back at **Shuffle & lock seeds** with no matches:
+The button is the folded **Reset** panel at the foot of `/placement`, and only for admins. It asks
+for confirmation, then reports what it removed. After it, the Placement tab should show every event
+back at **Shuffle & lock seeds** with no matches:
 
 ```sql
 -- both expect 0
@@ -659,6 +667,79 @@ deletes, what it clears, the counts it returns, that a second tournament is unto
 second run is harmless, that seeds can be re-locked afterwards without tripping the partial unique
 index, that a waiver is cleared, that `scorer`/`scheduler`/`registrar`/anonymous are all refused,
 and that the function is `SECURITY DEFINER` with no `anon` or `PUBLIC` grant.
+
+## Applying `20260926000000_placement_schedule_reset.sql`
+
+Adds `reset_placement_schedule(p_tournament_id)` — the **Schedule** tab's reset, which discards the
+schedule and **keeps the seed order**. It is the sibling of `reset_placement_stage`, and the two now
+differ by exactly one thing: what they do to `placement_entrants`.
+
+### Why the one action, which did both, had to be split
+
+`reset_placement_stage` was the only way back from a bad build, and it took the seeding with it. So
+on the Schedule tab, "rebuild the schedule" and "start the tournament over" were the same button.
+Scheduling is a later and separate decision than seeding — the host locks seeds on the Placement
+tab, then builds days on the Schedule tab — and a rebuild is routine: days change, a court is lost,
+a stage is regenerated. Losing an order set by hand, or silently re-admitting a withdrawn team by
+clearing its waiver, is not a cost a rebuild should carry.
+
+### What it does
+
+One transaction that:
+
+1. deletes every `tier_draw_matches` row for the tournament,
+2. deletes every `tier_draws` row,
+3. deletes every `placement_matches` row,
+4. clears `placement_entrants.tier` where it is not already null.
+
+It returns what it removed, as `{ placementMatches, tierDraws, tierMatches }`.
+
+**`seed`, `seed_locked_at` and `excluded` are not touched**, and that is the whole point of the
+function. Step 4 is not part of "the seeding": the A/B/C/D draw is decided by the placement RECORD
+(WW/WL/LW/LL), not by the seed, so once the matches holding those results are deleted a stored tier
+is a label with nothing behind it — and the next `apply_tier_draws` overwrites it anyway. Clearing it
+keeps the row honest in the window between the two.
+
+### The stage it leaves is one the Schedule tab can build from
+
+With the seeds still locked and no round-one rows, `buildCategoryView` reads the stage as `round1`,
+and `generateMissingStages` regenerates round one from the seed order. That is the intended shape:
+after this reset, **Build the schedule** rebuilds, and the host still has the ordering they set.
+Clearing the seeds would put the stage back at `seeding`, where the build refuses to run at all —
+which is exactly why the full reset belongs on the tab that also offers **Shuffle & lock seeds**.
+
+### Authorization and locking
+
+Admin-only, and it takes the same `live-schedule` advisory lock as `apply_placement_day_schedule()`
+and `shift_live_schedule_after_match()`, so a reset cannot interleave with a build or a reflow.
+`CREATE FUNCTION` grants `EXECUTE` to `PUBLIC`, so the migration repeats the `REVOKE`/`GRANT` pair
+that every new RPC has to carry for itself.
+
+### Verify after applying
+
+The Reset panel at the foot of `/placement-schedule` (admin-only, folded behind **Show**) discards
+the schedule and reports what it removed. Count the seeding before and after — it must not move:
+
+```sql
+-- run before and after the button; the two rows must be identical
+select count(*) filter (where seed is not null) as seeded,
+       count(*) filter (where excluded)      as waived
+from public.placement_entrants where tournament_id = '<id>'::uuid;
+
+-- expect 0: the schedule is gone
+select (select count(*) from public.placement_matches where tournament_id = '<id>'::uuid) as placement,
+       (select count(*) from public.tier_draws      where tournament_id = '<id>'::uuid) as draws,
+       (select count(*) from public.tier_draw_matches where tournament_id = '<id>'::uuid) as knockout;
+-- expect 0: the derived tier is cleared
+select count(*) from public.placement_entrants
+where tournament_id = '<id>'::uuid and tier is not null;
+```
+
+Proved against a real Postgres engine (PGlite) before it was committed — 11 checks covering the
+counts it returns, that a played field's seeds, lock timestamps and waivers all survive while every
+tier is cleared, that the matches and draws are gone, that a second tournament is untouched, that a
+second run is harmless, that a non-admin and an unknown tournament are both refused, that the stage
+reset still clears the seeding, and that `anon` holds no `EXECUTE` while `authenticated` does.
 
 ## Applying `20260917060000_placement_desk_move.sql`
 
@@ -865,8 +946,10 @@ Court schedule tab's **Build** generates round one. That was already the rule th
 enforced by disabling its button, so the only behaviour that changes is that the RPC now refuses a
 state the client was already refusing to ask for.
 
-The way back from a stage that has matches is unchanged and explicit: `reset_placement_stage()`
-clears matches, draws and seeds together, and re-locking is available immediately afterwards.
+The way back from a stage that has matches is unchanged and explicit, and there are now two of them:
+`reset_placement_schedule()` clears the matches and draws and keeps the seeding, and
+`reset_placement_stage()` clears the seeds along with them. Re-locking is available immediately
+after either.
 
 ### Verify after applying
 
@@ -1433,11 +1516,14 @@ It refuses to run if the placement stage is already under way (any `placement_ma
 seeds), because adding entrants to a category whose round one was already generated from a smaller
 field corrupts the bracket silently.
 
-**To re-run a test rather than remove the field**, use the **Delete results & schedule** button on
-`/placement-schedule` instead of the reset block in that file. It clears the matches, draws, results
-and schedule, and also the seed order and waivers, so the stage is back to "Shuffle & lock seeds" and
-the field itself is left in place — see `20260917050000_placement_stage_reset.sql` above. The
-commented reset block in the seed file remains the way to clear it from the SQL editor.
+**To re-run a test rather than remove the field**, use the **Start the placement stage over** button
+in the Reset panel on `/placement` instead of the reset block in that file. It clears the matches,
+draws, results and schedule, and also the seed order and waivers, so the stage is back to "Shuffle &
+lock seeds" and the field itself is left in place — see `20260917050000_placement_stage_reset.sql`
+above. The Reset panel on `/placement-schedule` is the lighter option when the test is only being
+replayed: it clears the same matches and draws but keeps the seed order, so the schedule can be
+rebuilt on the same seeding. The commented reset block in the seed file remains the way to clear it
+from the SQL editor.
 
 ### Verify after running
 

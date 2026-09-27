@@ -407,3 +407,68 @@ test.describe("staff surfaces", () => {
     await expect(page.getByText(/read-only view/i)).toHaveCount(0);
   });
 });
+
+/**
+ * The two resets, opened rather than scanned in place.
+ *
+ * Both are the app's only irreversible actions and both sit behind a `Show` toggle, so no
+ * route scan reaches either one — the same reason the settings panel and the score dialog
+ * are opened here. That matters more for these than for anything else on the page, because
+ * the wording is load-bearing: §6.3 requires a destructive action to name what it destroys,
+ * and the pair is only correct if each also says what the *other* keeps. A host who cannot
+ * tell them apart loses a seed order they set by hand.
+ *
+ * Both themes, because the panels paint a destructive button and a body-copy block on the
+ * panel surface, which is exactly the pairing a contrast check is for.
+ */
+test.describe("the two resets", () => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test.describe(colorScheme, () => {
+      test.use({ colorScheme });
+
+      test("the schedule reset says the seed order survives", async ({ page }) => {
+        await openStaffShell(page);
+        await page.goto("/placement-schedule", { waitUntil: "load" });
+        await page.waitForLoadState("networkidle");
+
+        const toggle = page.getByRole("button", { name: /^show$/i }).first();
+        expectPresent((await toggle.count()) > 0, "The Reset toggle on /placement-schedule");
+        await toggle.click();
+        await settleAnimations(page, "main");
+
+        // Names what it destroys, and what it keeps. The second half is the whole point of
+        // this reset existing separately from the stage reset.
+        await expect(
+          page.getByText(/every reported result and every\s+scheduled time/i).first(),
+        ).toBeVisible();
+        await expect(
+          page.getByText(/seed order\s+and any waivers are kept/i).first(),
+        ).toBeVisible();
+
+        expect(violationIds(await scan(page))).toEqual([]);
+      });
+
+      test("the placement reset says the seed order goes, and points at the other one", async ({
+        page,
+      }) => {
+        await openStaffShell(page);
+        await page.goto("/placement", { waitUntil: "load" });
+        await page.waitForLoadState("networkidle");
+
+        const toggle = page.getByRole("button", { name: /^show$/i }).first();
+        expectPresent((await toggle.count()) > 0, "The Reset toggle on /placement");
+        await toggle.click();
+        await settleAnimations(page, "main");
+
+        // This is the reset that clears the seeding, so it has to say so — and name the
+        // path that does not, or the host has no way to tell them apart from the label.
+        await expect(
+          page.getByText(/clears the seed order and any waivers/i).first(),
+        ).toBeVisible();
+        await expect(page.getByText(/Schedule tab's reset keeps it/i).first()).toBeVisible();
+
+        expect(violationIds(await scan(page))).toEqual([]);
+      });
+    });
+  }
+});
