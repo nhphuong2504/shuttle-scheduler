@@ -605,8 +605,8 @@ The tables themselves are untouched, so nothing else changes.
 
 ## Applying `20260917050000_placement_stage_reset.sql`
 
-Adds `reset_placement_stage(p_tournament_id)` — the **"Start the placement stage over"** button in
-the folded Reset panel on the **Placement** tab. It is the way back to the start of the event
+Adds `reset_placement_stage(p_tournament_id)` — the **Reset** button in the header of the
+**Placement** tab, beside *Enter results in Scores*. It is the way back to the start of the event
 without re-registering the field.
 
 > **Its scope is now half of what it was.** This function also backed the Schedule tab's reset until
@@ -615,6 +615,11 @@ without re-registering the field.
 > Placement tab, which owns the seed order. The entrant state it clears — step 4 below — is now the
 > whole difference between the two actions, so read it as "what the stage reset does that the
 > schedule reset does not".
+>
+> **It is also gated now.** `20260926010000_placement_stage_reset_gate.sql` makes it refuse while the
+> schedule still holds any match or draw, because the seeding is what round one was paired from. Read
+> the section for that migration before the verify steps below: the button is only available once the
+> schedule has been cleared.
 
 ### What it does
 
@@ -648,9 +653,10 @@ Scoped to the placement format's own tables. The legacy round-robin tables are u
 
 ### Verify after applying
 
-The button is the folded **Reset** panel at the foot of `/placement`, and only for admins. It asks
-for confirmation, then reports what it removed. After it, the Placement tab should show every event
-back at **Shuffle & lock seeds** with no matches:
+The button is the folded **Reset** panel at the top of `/placement`, and only for admins. It is
+available once the schedule has been cleared (see `20260926010000_placement_stage_reset_gate.sql`).
+It asks for confirmation, then reports what it removed. After it, the Placement tab should show every
+event back at **Shuffle & lock seeds** with no matches:
 
 ```sql
 -- both expect 0
@@ -740,6 +746,83 @@ counts it returns, that a played field's seeds, lock timestamps and waivers all 
 tier is cleared, that the matches and draws are gone, that a second tournament is untouched, that a
 second run is harmless, that a non-admin and an unknown tournament are both refused, that the stage
 reset still clears the seeding, and that `anon` holds no `EXECUTE` while `authenticated` does.
+
+## Applying `20260926010000_placement_stage_reset_gate.sql`
+
+Redefines `reset_placement_stage()` so it refuses while the schedule still holds anything paired from
+the seed order. **One guard, everything else identical** — same deletes, same counts, same
+admin-only check and `live-schedule` advisory lock.
+
+### Why the order of the two resets is now enforced
+
+`reset_placement_stage` is the one reset that discards the **seed order**, and that order is not
+free-standing: round one is paired *from* it, so a bracket that still exists is a bracket whose
+pairings only make sense against the seeding behind it. Clearing the seeding while those rows survive
+leaves matches that still play and can no longer explain why anyone faced anyone. That is the same
+hazard `20260917090000` closed for a hand reorder, one step further on: there a stale order
+misreported a live bracket, here it is deleted out from under one.
+
+So the order goes only once nothing depends on it. `reset_placement_schedule` clears the schedule and
+keeps the seeding, so the sequence is **clear the schedule, then clear the seeding**. The two remain
+independent actions; this only fixes their order. Raising rather than silently doing both preserves
+the reason the split exists — a host who only meant to rebuild never loses an order set by hand,
+because the destructive step has to be asked for on its own after the safe one.
+
+### Why the gate is in the database and not only on the button
+
+`reset_placement_stage` is reachable over PostgREST by any admin session, so a guard that lives only
+in the React tree is a guard the next caller does not have. The Placement tab mirrors the refusal —
+it reads the same three tables and disables the header button with the reason on it — so the host is
+told before they press rather than after.
+
+### What it refuses on
+
+Any row in `placement_matches`, `tier_draws` or `tier_draw_matches` — the exact set
+`reset_placement_schedule` clears. `tier_draw_matches` is redundant with `tier_draws` through the
+cascade, but listing it explicitly makes the gate read as that same set, so if the set ever grows the
+two functions drift together rather than one silently admitting a state the other still has work for.
+
+The lock is taken **before** the gate, not after: the check and the deletes have to be one decision,
+or a build that slipped a round-one row in between them would be deleting rows the gate had just
+approved.
+
+### Verify after applying
+
+On `/placement` with a built schedule, the **Reset** button in the header is disabled and carries the
+refusal as its description. Clear the schedule from the Schedule tab first, then it becomes
+available.
+
+From the SQL editor, with anything still paired from the order:
+
+```sql
+-- expect: ERROR: Clear the schedule first: this reset discards the seed order, ...
+SELECT public.reset_placement_stage('<id>'::uuid);
+```
+
+And once the schedule is clear, the same call deletes and reports as it always did:
+
+```sql
+-- anon must still be locked out after the function was replaced
+SELECT has_function_privilege('anon', 'public.reset_placement_stage(uuid)', 'EXECUTE'); -- false
+SELECT has_function_privilege('authenticated', 'public.reset_placement_stage(uuid)', 'EXECUTE'); -- true
+```
+
+Proved against a real Postgres engine (PGlite) before it was committed — 21 checks. They cover the
+differential first: the **base** definition does not refuse a fully built schedule and deletes the
+bracket and the seeding together, which is the behaviour this migration changes. Then that each of
+the three tables stops the reset **on its own**, so no branch of the gate is dead code; that a
+refusal is a refusal, leaving every entrant row untouched rather than deleting some rows before
+raising; that a cleared schedule is allowed and clears seed, lock, tier and waiver; that the counts
+still come back; that a second run is harmless; that one tournament's schedule does not block
+another's and a reset leaves the other untouched; that an unknown tournament and a non-admin are
+both refused; and that the replaced function is still `SECURITY DEFINER` with `search_path` pinned
+and holds no `EXECUTE` for `anon` while `authenticated` keeps it.
+
+### Rolling back
+
+Re-apply the `reset_placement_stage` definition from `20260917050000_placement_stage_reset.sql`. The
+full reset then discards the seeding whatever is on the schedule again, which is the behaviour that
+could strand a live bracket.
 
 ## Applying `20260917060000_placement_desk_move.sql`
 
@@ -948,8 +1031,10 @@ state the client was already refusing to ask for.
 
 The way back from a stage that has matches is unchanged and explicit, and there are now two of them:
 `reset_placement_schedule()` clears the matches and draws and keeps the seeding, and
-`reset_placement_stage()` clears the seeds along with them. Re-locking is available immediately
-after either.
+`reset_placement_stage()` clears the seeds along with them. They are taken in that order — since
+`20260926010000` the stage reset refuses until the schedule reset has run, because the order being
+discarded is what the surviving bracket was paired from. Re-locking is available immediately after
+either.
 
 ### Verify after applying
 
@@ -1516,14 +1601,16 @@ It refuses to run if the placement stage is already under way (any `placement_ma
 seeds), because adding entrants to a category whose round one was already generated from a smaller
 field corrupts the bracket silently.
 
-**To re-run a test rather than remove the field**, use the **Start the placement stage over** button
-in the Reset panel on `/placement` instead of the reset block in that file. It clears the matches,
-draws, results and schedule, and also the seed order and waivers, so the stage is back to "Shuffle &
-lock seeds" and the field itself is left in place — see `20260917050000_placement_stage_reset.sql`
-above. The Reset panel on `/placement-schedule` is the lighter option when the test is only being
-replayed: it clears the same matches and draws but keeps the seed order, so the schedule can be
-rebuilt on the same seeding. The commented reset block in the seed file remains the way to clear it
-from the SQL editor.
+**To re-run a test rather than remove the field**, use the **Reset** button in the header of
+`/placement` instead of the reset block in that file. It clears the seed order and any waivers, so
+the stage is back to "Shuffle & lock seeds" and the field itself is left in place — see
+`20260917050000_placement_stage_reset.sql` above. Since
+`20260926010000_placement_stage_reset_gate.sql` it is available only once the schedule is clear, so a
+played stage is cleared in two steps: **first** the Schedule tab's Reset panel, which discards the
+matches and draws and **keeps** the seed order, **then** this button. That first step is also the
+whole answer when the test is only being replayed, and the schedule is simply rebuilt on the same
+seeding. The commented reset block in the seed file remains the way to clear it from the SQL editor,
+and it is ungated because it runs as the SQL editor's own role rather than through the RPC.
 
 ### Verify after running
 

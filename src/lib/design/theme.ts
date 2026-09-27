@@ -11,8 +11,10 @@
  *
  * An explicit choice is stored; the absence of one is not. There is no stored value
  * meaning "follow the system", because that state is already spelled by having
- * nothing stored - so choosing System is the same operation as choosing nothing, and
- * the operator can always get back to it.
+ * nothing stored. That absence is the only thing that hands the decision to the
+ * system, and nothing in the app creates it again once a choice exists — the
+ * appearance control offers the two themes and no reset — so the system governs a
+ * first visit and the first theme chosen after it is the one that sticks.
  *
  * Kept pure and free of browser APIs so the precedence rule is testable without a
  * DOM, and so the same rule can be shared with the pre-hydration script.

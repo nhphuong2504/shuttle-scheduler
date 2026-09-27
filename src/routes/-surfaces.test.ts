@@ -264,14 +264,68 @@ describe("each reset is scoped to the tab that owns it", () => {
 
   it("puts the stage reset on the tab that owns the seed order", () => {
     expect(placement).toMatch(/resetPlacementStage/);
-    expect(placement).toMatch(/title="Reset"/);
-    // Folded away on first paint, as on the Schedule tab.
-    expect(placement).toMatch(/showReset/);
-    // Admin-only, and the confirmation names the seed order it destroys while pointing at
-    // the reset that would keep it.
+    // Admin-only, and the confirmation names the seed order it destroys while describing
+    // the reset that would keep it — the pair has to be distinguishable from one screen.
     expect(placement).toMatch(/isAdmin \? \(/);
     expect(placement).toMatch(/clears the seed order and any waivers/);
-    expect(placement).toMatch(/Schedule tab instead/);
+    expect(placement).toMatch(/Schedule tab's reset clears the matches/);
+  });
+
+  it("puts the reset in the header, not in a panel and not in the event list", () => {
+    // One action rather than a section. It used to be a folded panel with a title, a
+    // Show/Hide toggle and a paragraph of copy — three affordances around one button,
+    // below the events it discards. It is now the page's own header action, and its label
+    // stays a single word.
+    expect(placement).not.toMatch(/title="Reset"/);
+    expect(placement).not.toMatch(/showReset/);
+    expect(placement).toMatch(/>\s*Reset\s*</);
+
+    // Passed as the `actions` slot, so it renders with the header rather than in the list.
+    const actions = placement.indexOf("actions={resetAction}");
+    const reset = placement.indexOf("const resetAction");
+    const events = placement.indexOf("{live.map(");
+    expect(actions).toBeGreaterThan(-1);
+    expect(reset).toBeGreaterThan(-1);
+    expect(reset).toBeLessThan(actions);
+    expect(actions).toBeLessThan(events);
+  });
+
+  it("no longer offers a Scores link, since the header now carries only the reset", () => {
+    // The Scores button was this page's other header action. Results are still entered
+    // there and the room is still reachable from the nav, so this is a deliberate
+    // reduction of the header to one action rather than a dead end.
+    expect(placement).not.toMatch(/Enter results in Scores/);
+    // With no `Link` in the file, the import has to go too or it is an unused binding.
+    expect(placement).not.toMatch(/import \{ Link/);
+  });
+
+  it("still carries the destructive hue once the surrounding copy is gone", () => {
+    // Stripping the panel removed the paragraph that explained the action, so the variant
+    // is what marks it as destructive now. The design system reserves a saturated slot for
+    // exactly this. §6.3 is satisfied by the confirmation, which is asserted above.
+    expect(placement).toMatch(/variant="destructive"/);
+  });
+
+  it("will not discard the seeding while a bracket still depends on it", () => {
+    // The seed order is what round one was paired from, so clearing it under a live
+    // bracket strands matches that can no longer explain their own pairings. The house
+    // rule is therefore "clear the schedule first", and the same refusal is enforced in
+    // the RPC — see `20260926010000_placement_stage_reset_gate.sql`.
+    expect(placement).toMatch(/stageResetBlockedBy/);
+    // Read from the same three tables the Schedule tab's reset clears, so "the schedule is
+    // clear" means one thing on both sides.
+    expect(placement).toMatch(/useTierDraws/);
+    expect(placement).toMatch(/useTierDrawMatches/);
+    // The action is unavailable while blocked, and the refusal is still reachable without
+    // the panel that used to hold it. It takes two channels because neither works alone:
+    // `aria-description` is what an assistive technology reads, and the wrapper's `title`
+    // is what a mouse gets, since a disabled button cannot show a tooltip of its own
+    // (`Button` sets `disabled:pointer-events-none`). A hidden `sr-only` span would carry
+    // it too, but `sr-only` is still laid out — the layout matrix measures it as clipped
+    // text on every build, so the description lives on the control instead.
+    expect(placement).toMatch(/resetBlocked != null/);
+    expect(placement).toMatch(/aria-description=\{resetBlocked \?\? undefined\}/);
+    expect(placement).toMatch(/title=\{resetBlocked \?\? undefined\}/);
   });
 });
 

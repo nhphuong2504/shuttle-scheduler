@@ -51,65 +51,55 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
  *
  * The honesty rule: the pressed button reflects what is actually rendering,
  * including when that came from the operating system rather than from a choice made
- * here. "System" appears only once a choice exists, because returning to the system
- * has no meaning before then, and its tooltip says which way the system currently
- * points.
+ * here. On a first visit nothing is stored, the system supplies the theme, and the
+ * button for it reads as pressed — which is the state the operator can see, so it is
+ * the state the control reports.
+ *
+ * There are two buttons and no third. The reset that returned to following the
+ * operating system used to sit beside them and is gone, and its cost is real rather
+ * than cosmetic: a chosen theme is now the only reachable state, so an operator who
+ * picks one cannot go back to following the system. What is *not* gone is the
+ * fallback itself — an unset preference still resolves from the operating system, as
+ * `resolveTheme` has always done, which is why the controls work without a choice
+ * having been made. See `useTheme` for why nothing ever writes that preference.
  */
 function ThemeToggle({
   theme,
-  systemPrefersDark,
-  isExplicit,
   onChange,
-  onReset,
 }: {
   theme: Theme;
-  systemPrefersDark: boolean;
-  isExplicit: boolean;
   onChange: (next: Theme) => void;
-  onReset: () => void;
 }) {
   return (
-    <div className="hidden items-center gap-1.5 sm:flex">
-      <div
-        role="group"
-        aria-label="Colour theme"
-        className="flex items-center rounded-full border border-hairline bg-muted/60 p-0.5"
-      >
-        {THEME_OPTIONS.map((option) => {
-          const active = theme === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(option.value)}
-              className={cn(
-                "rounded-full px-2.5 py-1 font-semibold transition-colors",
-                "text-t4",
-                // The ring is the selected-state boundary. Without it the active segment
-                // is `bg-surface` on a `bg-muted` container, which measures 1.09:1 in
-                // light and 1.02:1 in dark - a selected state a low-vision user cannot
-                // see. `ring` draws a box-shadow, so this costs no layout.
-                active
-                  ? "bg-surface text-foreground shadow-panel ring-1 ring-border-selected"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-      {isExplicit ? (
-        <button
-          type="button"
-          onClick={onReset}
-          title={`Follow the system, which is currently ${systemPrefersDark ? "dark" : "light"}`}
-          className="text-t4 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
-          System
-        </button>
-      ) : null}
+    <div
+      role="group"
+      aria-label="Colour theme"
+      className="hidden items-center rounded-full border border-hairline bg-muted/60 p-0.5 sm:flex"
+    >
+      {THEME_OPTIONS.map((option) => {
+        const active = theme === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "rounded-full px-2.5 py-1 font-semibold transition-colors",
+              "text-t4",
+              // The ring is the selected-state boundary. Without it the active segment
+              // is `bg-surface` on a `bg-muted` container, which measures 1.09:1 in
+              // light and 1.02:1 in dark - a selected state a low-vision user cannot
+              // see. `ring` draws a box-shadow, so this costs no layout.
+              active
+                ? "bg-surface text-foreground shadow-panel ring-1 ring-border-selected"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -129,13 +119,7 @@ export function AppShell({
   const navigate = useNavigate();
   // The theme's fallback is the operating system rather than the route, so there is
   // nothing for a route to contribute here. See `resolveTheme`.
-  const {
-    theme,
-    systemPrefersDark,
-    isExplicit: themeIsExplicit,
-    setTheme,
-    clearTheme,
-  } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const nav = [
     ...NAV,
@@ -173,17 +157,19 @@ export function AppShell({
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 text-xs">
-            <ThemeToggle
-              theme={theme}
-              systemPrefersDark={systemPrefersDark}
-              isExplicit={themeIsExplicit}
-              onChange={setTheme}
-              onReset={clearTheme}
-            />
+            <ThemeToggle theme={theme} onChange={setTheme} />
             {signedIn ? (
               <>
                 <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
-                  <span className="size-1.5 rounded-full bg-primary" />
+                  {/*
+                    Presence. The live ink, not the live chip: this is a 6px solid mark, the
+                    same shape the live status pill draws its glyph from, and the chip is a
+                    pale wash (L 0.935 in light) that would be invisible at this size. The
+                    ink is the saturated end of the same hue at both themes, so the dot and
+                    a live match read as one colour. Decorative — the email and role beside
+                    it carry the meaning — so it stays out of the accessibility tree.
+                  */}
+                  <span aria-hidden className="size-1.5 rounded-full bg-state-live-ink" />
                   {session?.userEmail}
                   {role ? ` · ${role}` : ""}
                 </span>

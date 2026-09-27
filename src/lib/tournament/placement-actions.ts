@@ -865,6 +865,34 @@ export async function resetPlacementSchedule(
   };
 }
 
+/**
+ * Why the stage reset cannot run yet, or `null` when it can.
+ *
+ * The stage reset is the one that discards the **seed order**, and that order is not
+ * free-standing: round one is paired *from* it, so a bracket that still exists is a
+ * bracket whose pairings only make sense against the seeding behind it. Clearing the
+ * seeding while those rows survive leaves matches that still play and can no longer
+ * explain why anyone faced anyone — the hazard `20260917090000` closed for a hand
+ * reorder, one step further on.
+ *
+ * So the order goes only once nothing depends on it. The host clears the schedule first,
+ * which keeps the seeding, and this becomes available afterwards. That two-step is the
+ * gate; the same refusal is enforced in the RPC, because the button is not the only
+ * caller — see `20260926010000_placement_stage_reset_gate.sql`.
+ *
+ * It takes the same count shape the resets return, so the reason can name exactly what
+ * is still outstanding rather than saying "the schedule is not empty".
+ */
+export function stageResetBlockedBy(schedule: PlacementScheduleReset): string | null {
+  const parts = resetCountParts(schedule);
+  if (!parts.length) return null;
+  return (
+    `${parts.join(", ")} still on the schedule. The seed order cannot be discarded while a ` +
+    `bracket paired from it is still there, so use the Reset panel on the Schedule tab first ` +
+    `— that clears the schedule and keeps the seeding, and this reset is available once it has.`
+  );
+}
+
 /** One line describing what a schedule reset discarded, for the confirmation toast. */
 export function scheduleResetNote(reset: PlacementScheduleReset): string {
   const parts = resetCountParts(reset);
@@ -881,6 +909,9 @@ export function scheduleResetNote(reset: PlacementScheduleReset): string {
  * "Shuffle & lock seeds". It is the reset the **Placement** tab offers, because that
  * is the tab that owns the seed order. Admin-only and irreversible; the caller is
  * expected to have confirmed with the desk first.
+ *
+ * It refuses while the schedule still holds anything paired from that order — see
+ * `stageResetBlockedBy`, which is the same gate the UI reads before offering the button.
  */
 export async function resetPlacementStage(tournamentId: string): Promise<PlacementStageReset> {
   const { data, error } = await supabase.rpc(
