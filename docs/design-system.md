@@ -247,8 +247,10 @@ and no automatic inversion - each token is chosen for its own theme.
   and native control interiors stay light and a correctly dark layout reads as
   half-finished.
 - **A stored choice always wins.** There is no stored value meaning "follow the
-  system" - that state is spelled by having nothing stored, so choosing System is
-  the same operation as choosing nothing.
+  system" - that state is spelled by having nothing stored. The appearance control
+  shows Light and Dark only and offers no way back to the system, so once a choice
+  exists the system no longer has a say: the system governs a first visit and nothing
+  after it.
 - **Theme takes no pathname.** Its fallback is the operating system, not the route.
   Navigating to the Desk must never change the lighting. The absence of a
   `defaultThemeFor(pathname)` is the design, not an omission.

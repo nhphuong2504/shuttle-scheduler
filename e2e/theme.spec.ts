@@ -27,9 +27,12 @@ import { THEME_STORAGE_KEY, type Theme } from "../src/lib/design/theme";
  * cleared would erase the choice the test had just made the moment it reloaded. That
  * mistake was made here: it cost three tests, and all three failed in the reassuring
  * direction, looking like a persistence bug in `useTheme` rather than a helper wiping
- * the data. The assumption that storage starts empty is guarded rather than assumed,
- * by the "reports the state it is actually rendering" test, which asserts that no
- * reset control is offered when nothing has been chosen.
+ * the data. The assumption that storage starts empty is guarded rather than assumed:
+ * the "reports the state it is actually rendering" test reads the storage key on a
+ * fresh page and asserts it is null. It used to guard it indirectly, by asserting
+ * that no reset control was offered when nothing had been chosen, but that control is
+ * gone - see "offers only the two explicit themes" - so the guard now reads the
+ * storage it actually depends on.
  */
 
 /** Seeds the theme before any page script runs, including the bootstrap. */
@@ -179,24 +182,6 @@ test.describe("a choice persists", () => {
 
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
   });
-
-  test("System returns to following the operating system", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "light" });
-    await seedPreferences(page, "dark");
-    await page.goto("/", { waitUntil: "networkidle" });
-    await awaitHydration(page);
-    await expect(darkClass(page)).toHaveClass(/\bdark\b/);
-
-    // The reset only appears once a choice exists, so this also pins that.
-    await page.getByRole("button", { name: "System" }).click();
-
-    await expect(darkClass(page)).not.toHaveClass(/\bdark\b/);
-    const stored = await page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY);
-    expect(
-      stored,
-      "returning to the system must remove the choice, not store the system's value",
-    ).toBeNull();
-  });
 });
 
 test.describe("the theme actually changes what is painted", () => {
@@ -256,14 +241,35 @@ test.describe("the theme control is operable", () => {
     await page.goto("/", { waitUntil: "networkidle" });
     await awaitHydration(page);
 
-    // Nothing was chosen, but the page is dark, so Dark must read as pressed. A
-    // control that showed "System" instead would be describing a state the operator
-    // cannot see.
+    // Nothing was chosen, but the page is dark, so Dark must read as pressed: the
+    // control reports the theme in effect, not the fact that it was not chosen here.
     const dark = page
       .getByRole("group", { name: "Colour theme" })
       .getByRole("button", { name: "Dark" });
     await expect(dark).toHaveAttribute("aria-pressed", "true");
-    // And no reset, because there is nothing to reset yet.
+
+    // This test also carries the suite's guard that storage starts empty - a context
+    // that inherited a choice would make the premise above false. It reads the key
+    // directly rather than inferring emptiness from a control's absence, now that the
+    // reset control which used to prove it is gone.
+    const stored = await page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY);
+    expect(stored).toBeNull();
+  });
+
+  test("offers only the two explicit themes", async ({ page }) => {
+    // The control used to carry a third option that cleared the choice and returned
+    // to following the operating system. It is gone, and this pins it: the two themes
+    // are the whole vocabulary, even once a choice exists that could be undone. The
+    // seeding is the setup rather than the subject - the assertion is about what the
+    // control offers, which is why it lives here and not with the persistence cases.
+    await seedPreferences(page, "dark");
+    await page.goto("/", { waitUntil: "networkidle" });
+    await awaitHydration(page);
+
+    const group = page.getByRole("group", { name: "Colour theme" });
+    await expect(group.getByRole("button")).toHaveCount(2);
+    await expect(group.getByRole("button", { name: "Light" })).toBeVisible();
+    await expect(group.getByRole("button", { name: "Dark" })).toBeVisible();
     await expect(page.getByRole("button", { name: "System" })).toHaveCount(0);
   });
 

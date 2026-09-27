@@ -17,7 +17,10 @@
  * nothing else writes. In particular, the system preference must never be written to
  * storage - doing so would convert "I have not chosen" into "I chose what the
  * operating system happened to be at the time", and the operator could never get back
- * to following the system.
+ * to following the system. That was already the rule; it is now load-bearing, because
+ * the appearance control no longer offers a way to undo it, so a value written here
+ * by anything other than the operator's own press would outlive every attempt to
+ * change it.
  */
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -96,38 +99,24 @@ function subscribe(listener: () => void) {
 }
 
 /**
- * Three snapshots, all primitives.
+ * One snapshot, a primitive.
  *
  * `useSyncExternalStore` compares snapshots by identity, so returning an object that
- * is rebuilt on every call would re-render forever. Each value the hook exposes is
- * therefore derived from the store separately and stays stable unless it genuinely
+ * is rebuilt on every call would re-render forever. The one value the hook exposes is
+ * therefore derived from the store on demand and stays stable unless it genuinely
  * changed.
  *
- * The system preference is a snapshot in its own right rather than read straight off
- * the module variable during render. Read straight off, it goes stale in exactly one
- * case: while an explicit choice is in effect, a system change does not alter the
- * resolved theme, so React has no reason to re-render and the value shown to the
- * operator would describe a setting the operating system no longer has. That is a
- * small, cosmetic staleness - it feeds a tooltip - but it is the kind of small
- * cosmetic lie that is cheaper to prevent than to remember.
+ * The system preference is deliberately not a snapshot of its own. It used to be one,
+ * so that the reset control could name the direction the system currently pointed even
+ * while an explicit choice was in effect and suppressing re-renders. With no such
+ * control, the only reader is the resolution rule below, and a system change still
+ * reaches it: the media listener emits, `getThemeSnapshot` returns a different string,
+ * and `theme` re-renders. A second subscription would now exist to keep fresh a value
+ * nothing displays.
  */
-function getStoredSnapshot(): Theme | null {
-  ensureHydrated();
-  return stored;
-}
-
 function getThemeSnapshot(): Theme {
   ensureHydrated();
   return resolveTheme(stored, systemPrefersDark);
-}
-
-function getSystemSnapshot(): boolean {
-  ensureHydrated();
-  return systemPrefersDark;
-}
-
-function getServerStoredSnapshot(): Theme | null {
-  return null;
 }
 
 /**
@@ -140,15 +129,10 @@ function getServerThemeSnapshot(): Theme {
   return "light";
 }
 
-function getServerSystemSnapshot(): boolean {
-  return false;
-}
-
-function persist(next: Theme | null) {
+function persist(next: Theme) {
   stored = next;
   try {
-    if (next === null) globalThis.localStorage?.removeItem(THEME_STORAGE_KEY);
-    else globalThis.localStorage?.setItem(THEME_STORAGE_KEY, next);
+    globalThis.localStorage?.setItem(THEME_STORAGE_KEY, next);
   } catch {
     // The in-memory value still applies for this session.
   }
@@ -156,13 +140,7 @@ function persist(next: Theme | null) {
 }
 
 export function useTheme() {
-  const preference = useSyncExternalStore(subscribe, getStoredSnapshot, getServerStoredSnapshot);
   const theme = useSyncExternalStore(subscribe, getThemeSnapshot, getServerThemeSnapshot);
-  const systemPrefersDark = useSyncExternalStore(
-    subscribe,
-    getSystemSnapshot,
-    getServerSystemSnapshot,
-  );
 
   // The class is set here as well as in the bootstrap script, and the duplication is
   // deliberate. The script owns the *first paint*, which is what stops the page
@@ -180,13 +158,7 @@ export function useTheme() {
 
   return {
     theme,
-    /** The system's setting, so a "System" reset can say which way it currently points. */
-    systemPrefersDark,
-    /** True only when the operator chose this, not when the system supplied it. */
-    isExplicit: preference !== null,
     /** Records an explicit choice. The only writer. */
     setTheme: persist,
-    /** Returns to following the system by removing the choice. */
-    clearTheme: () => persist(null),
   };
 }
