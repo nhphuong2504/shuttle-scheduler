@@ -100,16 +100,6 @@ export interface DeskCourtState<TMatch extends DeskMatchModel = DeskMatchModel> 
   varianceMinutes: number | null;
 }
 
-export interface OperationalKpis {
-  activeCourts: number;
-  waitingCourts: number;
-  idleCourts: number;
-  completedMatches: number;
-  remainingMatches: number;
-  overrunCourts: number;
-  projectedFinish: number | null;
-}
-
 function asTime(value: string | null): number | null {
   if (!value) return null;
   const time = new Date(value).getTime();
@@ -288,41 +278,6 @@ export function finishStatusLabel(projectedMs: number | null, targetMs: number |
   if (deltaMinutes === 0) return "On target";
   if (deltaMinutes > 0) return `${deltaMinutes} min behind`;
   return `${Math.abs(deltaMinutes)} min ahead`;
-}
-
-export function getOperationalKpis<TMatch extends DeskMatchModel>(
-  courtStates: DeskCourtState<TMatch>[],
-  matches: TMatch[],
-  slotMinutesFor: (match: TMatch) => number,
-  now: number = Date.now(),
-  /**
-   * The tournament-wide forecast from the finish estimator, when one is available.
-   *
-   * `undefined` keeps the legacy behaviour: the latest end among matches that already have a
-   * time, which is a floor because an unplaced match cannot move it. `null` means the estimator
-   * could not name a finish at all, and is passed through as such rather than falling back to a
-   * floor that would read as "on target" for a tournament that cannot finish.
-   */
-  estimatedFinishMs?: number | null,
-): OperationalKpis {
-  const projectedFinish =
-    estimatedFinishMs === undefined
-      ? projectedFinishFromRemaining(matches, slotMinutesFor, now)
-      : estimatedFinishMs;
-
-  return {
-    activeCourts: courtStates.filter(
-      (court) => court.state === "playing" || court.state === "overrun",
-    ).length,
-    waitingCourts: courtStates.filter((court) => court.state === "free-blocked").length,
-    idleCourts: courtStates.filter((court) => court.state === "idle").length,
-    completedMatches: matches.filter((match) => ["reported", "walkover"].includes(match.status))
-      .length,
-    remainingMatches: matches.filter((match) => ["scheduled", "in-progress"].includes(match.status))
-      .length,
-    overrunCourts: courtStates.filter((court) => court.state === "overrun").length,
-    projectedFinish,
-  };
 }
 
 export function upcomingMatches<TMatch extends DeskMatchModel>(

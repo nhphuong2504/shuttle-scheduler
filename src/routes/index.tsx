@@ -1,9 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { AppShell, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -98,7 +98,6 @@ import {
   deskKindScoringStage,
   deskKindTable,
   getMatchReadiness,
-  getOperationalKpis,
   isPlacementKind,
   type DeskMatchModel,
   type MatchReadiness,
@@ -111,13 +110,18 @@ import {
 } from "@/lib/tournament/court-state";
 import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
+import {
+  COURT_TRANSITION_LABEL,
+  nextCourtTransitions,
+  transitionCountdown,
+  transitionOverdueBy,
+  type CourtTransition,
+} from "@/lib/tournament/desk-transitions";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
   attributeMatchesToDays,
-  awaitingResultMatches,
   dayIdForTime,
   dayOperationalCounts,
-  expectedEndMs,
   resolveSelectedDay,
 } from "@/lib/tournament/day-scope";
 import { courtsForDay, dayWindowBounds } from "@/lib/tournament/scheduling/day-plan";
@@ -277,6 +281,7 @@ function Desk() {
   const allMatches = useMemo<DeskMatch[]>(
     () =>
       buildDeskMatches({
+        format: tournament?.format,
         poolMatches,
         drawMatches,
         draws,
@@ -288,6 +293,7 @@ function Desk() {
         entrantTeam,
       }),
     [
+      tournament?.format,
       poolMatches,
       drawMatches,
       draws,
@@ -406,15 +412,43 @@ function Desk() {
     state: deriveCourtState(court.id, dayMatches, slotMinutesFor, restMinutesFor, now),
   }));
 
-  // No forecast is passed in: the desk reports the day, so the only finish it knows is the
-  // latest end among the day's own scheduled matches.
-  const kpis = getOperationalKpis(
+  /**
+   * What happens next on each court, venue-wide and read-only.
+   *
+   * Derived from the board's own court states and the same slot rule the board measures with,
+   * so the panel cannot disagree with the tiles above it, and so it introduces no second
+   * schedule or readiness rule. The instants come from `expectedEndMs` - the projection the
+   * overdue detection already uses - and from each match's scheduled time.
+   */
+  const transitions = nextCourtTransitions(
     courtStates.map(({ state }) => state),
-    dayMatches,
     slotMinutesFor,
     now,
   );
 
+  /**
+   * How many of those transitions are already late.
+   *
+   * Used for one summary on the panel's header rather than to change any row. Three courts
+   * all showing "6 min overdue" is one fact repeated three times, and a moderator scanning
+   * the hall wants the count first and the court list second - so the aggregate is stated
+   * once where the eye lands on entering the panel, and each row keeps its own figure
+   * because that is the only place the per-court duration exists.
+   *
+   * Below two late rows there is nothing to aggregate, and the single pill already says it.
+   */
+  const overdueTransitions = transitions.filter((transition) => transition.overdue).length;
+
+  /**
+   * Pools past their scheduled finish with results still missing.
+   *
+   * Deliberately left ungated while the row lists are not: this alert names no result, it
+   * chases one that is missing, and it is the only destructive treatment the Act-now panel
+   * defines. Gating it on the format removed the destructive tier from the format this app
+   * runs, which `states.spec.ts` caught by driving that treatment through a pool planted
+   * inside a placement tournament. Whether the placement stage should raise an overdue-result
+   * alert of its own is a design question rather than a rendering one, so the alert stays.
+   */
   const latePools = useMemo(() => {
     return (pools ?? []).filter((pool) => {
       if (!pool.scheduled_end) return false;
@@ -473,14 +507,6 @@ function Desk() {
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
     : null;
 
-  /** The day's undecided matches that are already past their expected end. */
-  const awaitingResults = useMemo(
-    () => awaitingResultMatches(dayMatches, slotMinutesFor, now),
-    // slotMinutesFor reads only the tournament's timings.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayMatches, tournament, now],
-  );
-
   /**
    * Matches with no usable time at all.
    *
@@ -538,31 +564,6 @@ function Desk() {
             {untimedCount === 1 ? " it is" : " they are"} not counted on any day.
           </p>
         ) : null}
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
-          <DeskKpi
-            label="Courts active"
-            value={`${kpis.activeCourts}/${courtsOnSelectedDay.length}`}
-          />
-          <DeskKpi
-            label="Courts waiting"
-            value={kpis.waitingCourts}
-            tone={kpis.waitingCourts ? "warn" : "normal"}
-          />
-          <DeskKpi label="In progress" value={dayCounts.inProgress} />
-          <DeskKpi label="Completed" value={dayCounts.completed} />
-          <DeskKpi label="Matches left" value={dayCounts.remaining} />
-          <DeskKpi
-            label="Ready, no court"
-            value={readyUnassigned.length}
-            tone={readyUnassigned.length ? "warn" : "normal"}
-          />
-          <DeskKpi
-            label="Awaiting results"
-            value={dayCounts.awaitingResults}
-            tone={dayCounts.awaitingResults ? "warn" : "normal"}
-          />
-        </div>
 
         <Panel
           title="Act now"
@@ -783,44 +784,37 @@ function Desk() {
           </div>
         </Panel>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        {/*
+          `items-stretch`, not `items-start`: these two panels are one band, and the shorter
+          one used to end well above the other, leaving a ragged bottom edge across the middle
+          of the page. Stretched, they share a height and the band reads as one unit. The cost
+          is empty space at the foot of whichever panel has fewer rows, which is inherent -
+          Next transitions is capped at one row per court and usually has fewer than the court
+          count - and it is the cheaper of the two costs, since the alternative is padding rows
+          out to fill and losing the density the table was just rebuilt for.
+        */}
+        <div className="grid items-stretch gap-4 lg:grid-cols-2">
           <Panel
-            title="Awaiting results"
+            title="Next transitions"
+            /**
+             * One statement of the late count, in place of reading it off three pills. The
+             * rows keep their own figures: this is the aggregate, not a replacement for the
+             * per-court detail, and it stays away when there is only one late row to count.
+             */
             right={
-              <span className="text-t4 text-muted-foreground">
-                {dayCounts.remaining} still to play today
-              </span>
+              overdueTransitions >= 2 ? (
+                <span className="shrink-0 rounded-md bg-warn-surface px-1.5 py-0.5 font-score text-t4 font-semibold text-warn-foreground">
+                  {overdueTransitions} overdue
+                </span>
+              ) : null
             }
           >
-            {awaitingResults.length ? (
-              <ul className="space-y-1.5 text-sm">
-                {awaitingResults.map((match) => (
-                  <li key={match.id}>
-                    <button
-                      type="button"
-                      className="w-full rounded-md bg-warn-surface px-2.5 py-2 text-left text-warn-foreground hover:brightness-95"
-                      onClick={() => {
-                        setOperationCourtId(match.courtId);
-                        setOpenMatch(match);
-                      }}
-                    >
-                      {label(match.teams[0])} vs {label(match.teams[1])} — expected to finish by{" "}
-                      {timeLabel(
-                        expectedEndMs(match, slotMinutesFor)
-                          ? new Date(expectedEndMs(match, slotMinutesFor)!)
-                          : null,
-                      )}
-                      {match.startedAt
-                        ? ` · ${minutesSince(match.startedAt, now) ?? 0}′ on court`
-                        : " · not started yet"}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {transitions.length ? (
+              <TransitionTable transitions={transitions} courtMap={courtMap} />
             ) : (
               <EmptyState
-                title="Nothing outstanding"
-                hint="Every match on this day is either played or still inside its slot."
+                title="Nothing transitioning"
+                hint="No match on these courts is near its expected finish, and none is due to start."
               />
             )}
           </Panel>
@@ -1473,18 +1467,6 @@ export function MatchOperationsDialog({
   );
 }
 
-function DeskKpi({
-  label,
-  value,
-  tone = "normal",
-}: {
-  label: string;
-  value: string | number;
-  tone?: "normal" | "warn" | "danger";
-}) {
-  return <StatTile label={label} value={value} tone={tone} />;
-}
-
 function CourtStatePill({ state }: { state: CourtState }) {
   // The label, the fill and the ink all come from `court-state.ts`, so the sweep in
   // `e2e/states.spec.ts` and this component read one vocabulary rather than two.
@@ -1494,6 +1476,208 @@ function CourtStatePill({ state }: { state: CourtState }) {
     >
       {COURT_STATE_LABEL[state]}
     </span>
+  );
+}
+
+/**
+ * One court transition, as a row of the panel's table.
+
+ *
+ * Not a button, and that is the requirement rather than an omission: the panel reports the
+ * order things are about to happen in and must not become a way to move a match, reorder a
+ * queue or start something early. The board above is where a court is acted on.
+ *
+ * ## Why the row is a table row at all
+ *
+ * This panel answers one question with five parallel facts - which court, which match, what
+ * kind of change, when, and whether it is late - and that is the shape a table is for. A list
+ * of rows was the wrong one: each row re-declared the same field order in its own flexible
+ * layout, so the reader compared entries by moving their eye down a ragged edge rather than
+ * down an aligned column. Columns put each fact in one place, put the comparanda in a vertical
+ * line, and let the eye do what it is good at.
+ *
+ * Something concrete came with it: `table`, `td` and `th` are given tabular numerals by the
+ * design system already, so the times and durations in the Due and Status columns align on the
+ * digit without a utility being applied for it. That is the reason "09:00" over "12:20" reads
+ * as a column instead of as two strings.
+ *
+ * ## Five weights, and only two of them loud
+ *
+ *   court   `font-score` semibold - an identifier, narrow, aligned on its digits
+ *   match   semibold foreground - the subject, and the row's anchor
+ *   kind    caption size, muted - reference detail
+ *   due     caption size, muted, right-aligned - reference detail
+ *   status  semibold, right-aligned - the one cell that carries a varying state
+ *
+ * Court and Match are the two the eye lands on, which is what makes a row identifiable in a
+ * scan. Kind and Due are deliberately the same size and the same ink as each other, so neither
+ * can be mistaken for the row's subject.
+ *
+ * ## What replaced what
+ *
+ * The court used to be a bare digit in a badge. A digit in a badge reads as a rank or an
+ * ordinal, and this was the only place in the app a court number appeared with no word beside
+ * it - the board draws the same badge and then spells out "Court 1" next to it. Saying "Court"
+ * once, as a column header, over a column of `C4` is the thing a table is for: name it once
+ * rather than once per row.
+ *
+ * The kind used to be a leading pill, the loudest treatment on the row, spent on the panel's
+ * least useful fact - that a start is a start - and it was what made the rows two lines tall.
+ * It is now words in a column, with no fill and no glyph.
+ *
+ * ## The row height is the band's, not the table's
+ *
+ * The rows take `--row-height`, the same token Court progress uses in the panel beside them,
+ * so the two step down the band in one rhythm instead of two. The single line is what made a
+ * table this dense possible in the first place; the token is what stops it drifting away from
+ * its neighbour, which is a thing it had already done once.
+ *
+ * ## Colour: one hue, one cell, and never alone
+ *
+ * The only hue left in the panel is `--warn-foreground` on a late Status, and the redundancy
+ * rule is intact: the status is written out as words - "6h 2m overdue" - so the colour is the
+ * second channel rather than the only one, and nothing here is conveyed by hue alone.
+ *
+ * What was dropped is the per-row warning chip, which put a filled amber surface on every late
+ * row at once. Five identical filled chips down one column is not emphasis, it is wallpaper;
+ * the place that count is genuinely emphatic is the panel header, which states it once.
+ *
+ * The other two chip fills went with it, which is why `COURT_TRANSITION_CHIP` no longer exists:
+ * the kind's fill had no other consumer, and a token kept after its only renderer is deleted is
+ * a standing claim that something still paints it. The estimate marker survives as the `~` on
+ * the Due cell, explained by the footnote under the table.
+ *
+ * The pairings are still absent on purpose - the board is already showing them at a size meant
+ * for reading them.
+ */
+function TransitionRow({
+  transition,
+  courtNumber,
+}: {
+  transition: CourtTransition<DeskMatch>;
+  courtNumber: number | null;
+}) {
+  const { kind, estimated, overdue, minutesAway, minutesOverdue } = transition;
+  const clock = timeLabel(new Date(transition.atMs));
+
+  return (
+    <tr data-transition-row className="h-[var(--row-height)]">
+      <td
+        data-transition-cell="court"
+        className="py-1 pr-3 align-middle font-score text-t3 font-semibold text-foreground"
+      >
+        C{courtNumber ?? "?"}
+      </td>
+      <td
+        data-transition-cell="match"
+        className="py-1 pr-3 align-middle text-t3 font-semibold text-foreground"
+      >
+        {transition.match.tag || "Match"}
+      </td>
+      {/* Supporting detail: the kind of change, and the instant it was read from. These two
+          columns are the ones dropped at narrow widths, since both are secondary to the
+          match and to its status. */}
+      <td
+        data-transition-cell="kind"
+        className="hidden py-1 pr-3 align-middle text-t4 text-muted-foreground sm:table-cell"
+      >
+        {COURT_TRANSITION_LABEL[kind]}
+      </td>
+      <td
+        data-transition-cell="due"
+        className="hidden whitespace-nowrap py-1 pr-3 text-right align-middle font-score text-t4 text-muted-foreground sm:table-cell"
+      >
+        {/* The leading "~" is the marker the panel's footnote explains: this is projected. */}
+        {estimated ? `~${clock}` : clock}
+      </td>
+      <td
+        data-transition-cell="status"
+        className="whitespace-nowrap py-1 pl-3 text-right align-middle font-score text-t3 font-semibold"
+      >
+        {overdue ? (
+          <span className="text-warn-foreground">
+            {transitionOverdueBy(minutesOverdue ?? 0)}
+          </span>
+        ) : (
+          <span className="text-foreground">{transitionCountdown(minutesAway ?? 0)}</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/** The column headers, one weight and one case, so the row of them reads as a rail. */
+const TRANSITION_HEAD = "py-1 pr-3 font-medium text-t4 uppercase tracking-wider text-muted-foreground";
+
+/**
+ * The panel's contents as one table.
+ *
+ * A real `<table>` rather than a grid of divs, for the reason it exists: the header cells are
+ * associated with the data cells, so a screen reader announces "Due, 09:00" rather than
+ * reading five unlabelled strings in sequence. `scope="col"` is what carries that, and it is
+ * the part a div grid cannot reproduce.
+ *
+ * ## The columns step, rather than the table scrolling
+ *
+ * Five columns do not fit the 311px of usable width at 390px, and a horizontally scrolling
+ * operations table is a worse answer than a shorter one - reaching the status would mean
+ * scrolling, and the status is the column the panel exists for. So Kind and Due are dropped
+ * below `sm`, and Court, Match and Status keep the full width. That is also the order of
+ * importance, so the columns that leave are the ones the design already made quietest, and
+ * nothing is hidden that is not simply restated in a cell that stays.
+ */
+function TransitionTable({
+  transitions,
+  courtMap,
+}: {
+  transitions: readonly CourtTransition<DeskMatch>[];
+  courtMap: ReadonlyMap<string, { number: number }>;
+}) {
+  const anyEstimated = transitions.some((transition) => transition.estimated);
+
+  return (
+    <>
+      <table className="w-full border-collapse text-left text-t3">
+        <thead>
+          <tr className="border-b border-hairline">
+            <th scope="col" className={TRANSITION_HEAD}>
+              Court
+            </th>
+            <th scope="col" className={TRANSITION_HEAD}>
+              Match
+            </th>
+            <th scope="col" className={`${TRANSITION_HEAD} hidden sm:table-cell`}>
+              Transition
+            </th>
+            <th scope="col" className={`${TRANSITION_HEAD} hidden text-right sm:table-cell`}>
+              Due
+            </th>
+            {/* The one header that stays at every width: it is the column being scanned. */}
+            <th scope="col" className={`${TRANSITION_HEAD} pl-3 text-right`}>
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-hairline">
+          {transitions.map((transition) => (
+            <TransitionRow
+              key={`${transition.courtId}-${transition.kind}`}
+              transition={transition}
+              courtNumber={courtMap.get(transition.courtId)?.number ?? null}
+            />
+          ))}
+        </tbody>
+      </table>
+      {/*
+        A table footnote rather than a line in the header: it belongs to one column's values,
+        it takes that column's weight, and it leaves the header as the panel's name and its one
+        summary. Shown only when a projection is actually on screen, so no marker is ever
+        explained on a panel that is not showing one.
+      */}
+      {anyEstimated ? (
+        <p className="mt-2 text-t4 text-muted-foreground">~ marks an estimate</p>
+      ) : null}
+    </>
   );
 }
 

@@ -7,7 +7,6 @@ import {
   deskKindTable,
   finishStatusLabel,
   getMatchReadiness,
-  getOperationalKpis,
   isPlacementKind,
   projectedFinishFromRemaining,
   scheduleVarianceMinutes,
@@ -115,47 +114,6 @@ describe("desk court state", () => {
 });
 
 describe("desk operational metrics", () => {
-  it("summarizes court pressure and projected finish", () => {
-    const active = match({
-      id: "active",
-      courtId: "c1",
-      status: "in-progress",
-      startedAt: at(0),
-    });
-    const next = match({
-      id: "next",
-      courtId: "c2",
-      scheduled: at(30),
-      playerIds: ["p3", "p4"],
-    });
-    const states = [
-      deriveCourtState(
-        "c1",
-        [active, next],
-        () => 20,
-        () => 10,
-        base + 21 * 60_000,
-      ),
-      deriveCourtState(
-        "c2",
-        [active, next],
-        () => 20,
-        () => 10,
-        base + 21 * 60_000,
-      ),
-    ];
-
-    expect(getOperationalKpis(states, [active, next], () => 20, base + 21 * 60_000)).toEqual({
-      activeCourts: 1,
-      waitingCourts: 0,
-      idleCourts: 0,
-      completedMatches: 0,
-      remainingMatches: 2,
-      overrunCourts: 1,
-      projectedFinish: base + 50 * 60_000,
-    });
-  });
-
   it("projects finish from in-progress matches using elapsed time", () => {
     const active = match({
       id: "active",

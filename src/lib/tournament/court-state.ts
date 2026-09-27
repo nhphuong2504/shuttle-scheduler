@@ -68,13 +68,22 @@ export const COURT_STATE_CHIP: Record<CourtState, string> = {
  * tile tint is what makes a wall of eight courts scannable without reading any of
  * them. Both derive from the same state, so they cannot disagree.
  *
+ * The tile is a *wash* of the state and the pill is the denser surface, in every
+ * state without exception. `playing` was the exception and it was a defect: its tile
+ * painted the full `--state-live-chip`, which is the same fill the pill paints, so
+ * the "Playing" chip had no edge at all and read as uppercase text on green. Measured
+ * on the rendered board, the pill's fill was byte-identical to its own tile's in both
+ * themes - 1.000:1, against 1.087:1 for the weakest other state. `states.spec.ts`
+ * now sweeps every pill against its own tile, and `court-state.test.ts` asserts the
+ * two fills differ at the vocabulary level so the collision cannot return.
+ *
  * `free-blocked` and `idle` share the resting hairline on purpose. Neither asks for
  * anything, and giving the blocked state its own edge would put two amber surfaces
  * on one tile - the pill already carries that signal, and doubling it would make a
  * waiting court look more urgent than an overrun one.
  */
 export const COURT_STATE_TILE: Record<CourtState, string> = {
-  playing: "border-state-live-ink/35 bg-state-live-chip",
+  playing: "border-state-live-ink/35 bg-state-live-chip/30",
   overrun: "border-danger-border bg-danger-surface/40",
   "free-ready": "border-primary/40 bg-primary/5",
   "free-blocked": "border-hairline bg-surface",

@@ -72,6 +72,7 @@ import {
   dayWindowBounds,
   placementMatchLabel,
   planPlacementSchedule,
+  projectSlotsOntoMatches,
   sliceRowsByDay,
   type PlacementDayFill,
   type PlacementSchedulePlan,
@@ -1053,6 +1054,29 @@ function PlacementSchedulePage() {
     return { outcome, fresh };
   };
 
+  /**
+   * Mirrors a plan that has just been applied into the two match caches.
+   *
+   * The running order is built from those caches, and a refetch is not a guarantee — a
+   * request can be dropped, and `invalidateQueries` resolves whether or not it lands. So
+   * the plan the writer just accepted is written in first: the table shows what was
+   * scheduled the moment the toast says it was, and the refetch that follows is only a
+   * correction from the server rather than the thing the desk is waiting on.
+   */
+  const projectAppliedPlan = (plan: PlacementSchedulePlan) => {
+    if (!tournamentId) return;
+    const placementKey = scopedKey(keys.placementMatches, tournamentId);
+    const placement = qc.getQueryData<PlacementMatch[]>(placementKey);
+    if (placement) {
+      qc.setQueryData(placementKey, projectSlotsOntoMatches(placement, plan.placementSlotPayload));
+    }
+    const tierKey = scopedKey(keys.tierDrawMatches, tournamentId);
+    const tier = qc.getQueryData<TierDrawMatch[]>(tierKey);
+    if (tier) {
+      qc.setQueryData(tierKey, projectSlotsOntoMatches(tier, plan.knockoutSlotPayload));
+    }
+  };
+
   const finishApply = async (
     plan: PlacementSchedulePlan,
     outcome: StageGenerationOutcome | null,
@@ -1076,6 +1100,10 @@ function PlacementSchedulePage() {
       }
     }
     await applyPlacementSchedulePlan(plan);
+    // Show the rows the writer just set before anything is refetched, so a build that
+    // reports success cannot leave the running order on the rows from before it. See
+    // `projectSlotsOntoMatches` for why the plan is safe to project.
+    projectAppliedPlan(plan);
     // The outcome is a parameter rather than state on purpose: a build generates and
     // applies inside one handler, so reading it back from state here would read the
     // value captured at render time and always report "generated nothing".
@@ -1238,7 +1266,7 @@ function PlacementSchedulePage() {
               : busy
                 ? "Planning…"
                 : hasSchedule
-                  ? "Rebuild schedule"
+                  ? "Update schedule"
                   : "Build schedule"}
           </Button>
         </div>

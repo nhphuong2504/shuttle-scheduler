@@ -515,6 +515,51 @@ export async function applyPlacementSchedulePlan(plan: PlacementSchedulePlan): P
   }
 }
 
+/** The columns the schedule writer owns, shared by the two match tables. */
+export interface SchedulableMatchRow {
+  id: string;
+  status: string;
+  scheduled_time: string | null;
+  court_id: string | null;
+  /** A bye is never scheduled, and the writer's clear skips them. */
+  is_bye?: boolean;
+}
+
+/**
+ * The rows an applied plan leaves in the table, projected onto the rows already in hand.
+ *
+ * The running order is read from the query cache, so the page has to be able to show the
+ * plan it just wrote without waiting for a refetch to notice the write. Waiting is not
+ * safe: `invalidateQueries` resolves even when the refetch it triggers fails, so a
+ * dropped request leaves the pre-build rows on screen underneath a success toast — the
+ * build looks like it did nothing until the page is reloaded.
+ *
+ * This invents nothing, because the payload is the writer's own instruction:
+ *
+ *  - `apply_placement_day_schedule` clears `scheduled_time` and `court_id` on every
+ *    scheduled row of its stage (byes excepted) and then re-sets exactly the rows the
+ *    payload names, so a row the payload omits is one the writer has just emptied.
+ *  - It fails the whole transaction if it leaves any scheduled row without a court or a
+ *    time, so a payload that named fewer rows than it cleared was never applied.
+ *
+ * A reported or started match is an anchor — the writer never touches it, so neither does
+ * this.
+ */
+export function projectSlotsOntoMatches<T extends SchedulableMatchRow>(
+  matches: readonly T[],
+  slots: readonly PlacementSlotPayload[],
+): T[] {
+  const byMatchId = new Map(slots.map((slot) => [slot.match_id, slot]));
+  return matches.map((match) => {
+    if (match.status !== "scheduled" || match.is_bye === true) return match;
+    const slot = byMatchId.get(match.id);
+    return Object.assign({}, match, {
+      scheduled_time: slot?.scheduled_time ?? null,
+      court_id: slot?.court_id ?? null,
+    });
+  });
+}
+
 /**
  * A human label for a match id, for the rebuild preview.
  *

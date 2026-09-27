@@ -1,3 +1,4 @@
+import { isSupportedFormat } from "./competition-format";
 import type {
   Category,
   Draw,
@@ -31,6 +32,14 @@ export type DeskMatch = DeskMatchModel & {
 };
 
 export interface DeskMatchSources {
+  /**
+   * The tournament's stored format.
+   *
+   * The four legacy sources below are listed only for a tournament that stored the
+   * round-robin format; see `isSupportedFormat`. Optional so a caller that has no
+   * tournament yet still gets the legacy rows rather than silently nothing.
+   */
+  format?: string | null | undefined;
   poolMatches?: readonly PoolMatch[] | null | undefined;
   drawMatches?: readonly DrawMatch[] | null | undefined;
   draws?: readonly Draw[] | null | undefined;
@@ -63,7 +72,8 @@ function placementTag(match: PlacementMatch, catMap: Map<string, Category | unde
 }
 
 /**
- * Every row the desk and the score desk should see, from every format's tables.
+ * Every row the desk and the score desk should see, from the tables the tournament's
+ * own format uses.
  *
  * The round-robin rows carry team ids directly. The placement rows carry **entrant**
  * ids, so each side is resolved through the entrant before its players can be, and
@@ -74,6 +84,11 @@ function placementTag(match: PlacementMatch, catMap: Map<string, Category | unde
  * Byes are dropped: a bye has nothing to score and no court to sit on, and leaving
  * it in makes the score desk offer a result entry for a match that is already
  * decided.
+ *
+ * The legacy round-robin sources are listed only for a tournament that stored that
+ * format. Both live surfaces read this one list, so the exclusion belongs here rather
+ * than in either page: a page that filtered its own copy is how the score desk ended
+ * up disagreeing with the board in the first place.
  */
 export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
   const teamMap = indexBy(sources.teams ?? []);
@@ -87,46 +102,57 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
   const categoryOfDraw = (drawId: string) =>
     (sources.tierDraws ?? []).find((draw) => draw.id === drawId)?.category_id ?? "";
 
+  /** False for the supported format, whose pools and pooled draws are leftovers. */
+  const roundRobin = !isSupportedFormat(sources.format);
+
+  const poolRows: DeskMatch[] = roundRobin
+    ? (sources.poolMatches ?? []).map((match): DeskMatch => {
+        const teams: [string | null, string | null] = [match.team_a_id, match.team_b_id];
+        return {
+          id: match.id,
+          kind: "pool" as DeskMatchKind,
+          courtId: match.court_id,
+          status: match.status,
+          startedAt: match.started_at,
+          endedAt: match.ended_at,
+          scheduled: match.scheduled_time,
+          teams,
+          playerIds: playersOf(teams),
+          tag: catMap.get(match.category_id)?.code ?? "",
+          categoryId: match.category_id,
+          score: match.status === "reported" ? `${match.score_a}-${match.score_b}` : null,
+          initialGames:
+            match.status === "reported" && match.score_a != null && match.score_b != null
+              ? [{ a: match.score_a, b: match.score_b }]
+              : undefined,
+        };
+      })
+    : [];
+
+  const drawRows: DeskMatch[] = roundRobin
+    ? (sources.drawMatches ?? []).map((match): DeskMatch => {
+        const teams: [string | null, string | null] = [match.team_a_id, match.team_b_id];
+        return {
+          id: match.id,
+          kind: "draw" as DeskMatchKind,
+          courtId: match.court_id,
+          status: match.status,
+          startedAt: match.started_at,
+          endedAt: match.ended_at,
+          scheduled: match.scheduled_time,
+          teams,
+          playerIds: playersOf(teams),
+          tag: `Draw ${tierOf(match.draw_id)}`,
+          categoryId: categoryOfDraw(match.draw_id),
+          score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
+          initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
+        };
+      })
+    : [];
+
   return [
-    ...(sources.poolMatches ?? []).map((match): DeskMatch => {
-      const teams: [string | null, string | null] = [match.team_a_id, match.team_b_id];
-      return {
-        id: match.id,
-        kind: "pool" as DeskMatchKind,
-        courtId: match.court_id,
-        status: match.status,
-        startedAt: match.started_at,
-        endedAt: match.ended_at,
-        scheduled: match.scheduled_time,
-        teams,
-        playerIds: playersOf(teams),
-        tag: catMap.get(match.category_id)?.code ?? "",
-        categoryId: match.category_id,
-        score: match.status === "reported" ? `${match.score_a}-${match.score_b}` : null,
-        initialGames:
-          match.status === "reported" && match.score_a != null && match.score_b != null
-            ? [{ a: match.score_a, b: match.score_b }]
-            : undefined,
-      };
-    }),
-    ...(sources.drawMatches ?? []).map((match): DeskMatch => {
-      const teams: [string | null, string | null] = [match.team_a_id, match.team_b_id];
-      return {
-        id: match.id,
-        kind: "draw" as DeskMatchKind,
-        courtId: match.court_id,
-        status: match.status,
-        startedAt: match.started_at,
-        endedAt: match.ended_at,
-        scheduled: match.scheduled_time,
-        teams,
-        playerIds: playersOf(teams),
-        tag: `Draw ${tierOf(match.draw_id)}`,
-        categoryId: categoryOfDraw(match.draw_id),
-        score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
-        initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
-      };
-    }),
+    ...poolRows,
+    ...drawRows,
     ...(sources.placementMatches ?? []).map((match): DeskMatch => {
       const teams: [string | null, string | null] = [
         entrantTeamOf(match.entrant_a_id),
