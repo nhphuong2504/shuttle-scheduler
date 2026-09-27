@@ -183,7 +183,15 @@ export function AppShell({
             {signedIn ? (
               <>
                 <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
-                  <span className="size-1.5 rounded-full bg-primary" />
+                  {/*
+                    Presence. The live ink, not the live chip: this is a 6px solid mark, the
+                    same shape the live status pill draws its glyph from, and the chip is a
+                    pale wash (L 0.935 in light) that would be invisible at this size. The
+                    ink is the saturated end of the same hue at both themes, so the dot and
+                    a live match read as one colour. Decorative — the email and role beside
+                    it carry the meaning — so it stays out of the accessibility tree.
+                  */}
+                  <span aria-hidden className="size-1.5 rounded-full bg-state-live-ink" />
                   {session?.userEmail}
                   {role ? ` · ${role}` : ""}
                 </span>
