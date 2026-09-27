@@ -350,7 +350,25 @@ describe("the two placement resets keep their scopes", () => {
   const dir = join(__dirname, "../../../supabase/migrations");
   const scheduleFile = "20260926000000_placement_schedule_reset.sql";
   const scheduleSql = readFileSync(join(dir, scheduleFile), "utf8");
-  const stageSql = readFileSync(join(dir, "20260917050000_placement_stage_reset.sql"), "utf8");
+
+  /**
+   * Every migration that defines `reset_placement_stage`, in filename order.
+   *
+   * There are two now — the original and the one that adds the gate — so the assertions
+   * below read the **last** one. That is the definition that actually runs, and reading a
+   * superseded file would let a later migration drop the seed-clearing or the admin guard
+   * while these tests stayed green.
+   */
+  const stageDefiners = readdirSync(dir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .filter((name) =>
+      /FUNCTION public\.reset_placement_stage\(p_tournament_id uuid\)/.test(
+        readFileSync(join(dir, name), "utf8"),
+      ),
+    );
+  const stageFile = stageDefiners.at(-1) as string;
+  const stageSql = readFileSync(join(dir, stageFile), "utf8");
 
   /** The executable SQL with line comments stripped, so prose cannot satisfy a check. */
   const code = (sql: string) => sql.replace(/--.*$/gm, "");
@@ -410,6 +428,58 @@ describe("the two placement resets keep their scopes", () => {
         ),
       );
     expect(definers.at(-1)).toBe(scheduleFile);
+  });
+
+  it("refuses the stage reset until the schedule that depends on the seeding is gone", () => {
+    // The seed order is what round one was paired from, so discarding it under a live
+    // bracket strands matches that can no longer explain their own pairings. The gate is
+    // in the database because the button is not the only caller: any admin session can
+    // reach the RPC directly over PostgREST.
+    const executable = code(stageSql);
+    expect(executable).toMatch(/Clear the schedule first/);
+
+    // The set it refuses on is the set `reset_placement_schedule` clears. If that set
+    // grows, the two functions have to drift together rather than one silently admitting
+    // a state the other still has work for.
+    for (const table of ["placement_matches", "tier_draws", "tier_draw_matches"]) {
+      expect(executable).toMatch(
+        new RegExp(`SELECT 1 FROM public\\.${table} WHERE tournament_id = p_tournament_id`),
+      );
+    }
+  });
+
+  it("takes the build's lock before it checks the gate", () => {
+    // The check and the deletes have to be one decision. A build that slipped a round-one
+    // row in between them would otherwise be deleting rows the gate had just approved.
+    const executable = code(stageSql);
+    const lock = executable.indexOf("pg_advisory_xact_lock");
+    const gate = executable.indexOf("Clear the schedule first");
+    expect(lock).toBeGreaterThan(-1);
+    expect(gate).toBeGreaterThan(lock);
+  });
+
+  it("keeps the stage reset admin-only when it is replaced", () => {
+    // Replacing the function to add the gate must not cost the guard it already had.
+    expect(stageSql).toMatch(/has_staff_role\(ARRAY\['admin'\]\)/);
+  });
+
+  it("re-issues the revoke and grant for the replaced function", () => {
+    // `CREATE OR REPLACE FUNCTION` restores the implicit EXECUTE grant to PUBLIC, so a
+    // replaced function that does not repeat the pair re-opens to `anon`. This is the
+    // failure mode these contract tests exist to catch.
+    expect(stageSql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.reset_placement_stage\(uuid\) FROM anon, PUBLIC/,
+    );
+    expect(stageSql).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.reset_placement_stage\(uuid\) TO authenticated/,
+    );
+  });
+
+  it("is the last word on reset_placement_stage", () => {
+    // Symmetric with the schedule reset above: the gate migration is the definition that
+    // runs, and a later one has to come through this test rather than around it.
+    expect(stageDefiners).toHaveLength(2);
+    expect(stageFile).toBe("20260926010000_placement_stage_reset_gate.sql");
   });
 });
 

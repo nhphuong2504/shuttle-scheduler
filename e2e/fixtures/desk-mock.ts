@@ -458,10 +458,10 @@ const toRows = (specs: MatchSpec[]) =>
   }));
 
 /**
- * The two datasets this fixture can serve.
+ * The datasets this fixture can serve.
  *
- * One mock with two presets rather than two fixtures, because nine tenths of the rows
- * - players, teams, entrants, categories, courts, the tournament, the day - are
+ * One mock with several presets rather than several fixtures, because nine tenths of the
+ * rows - players, teams, entrants, categories, courts, the tournament, the day - are
  * identical and only the match schedule differs. Duplicating the file would put two
  * copies of the tournament rule (best of three to 21) in the repository, and a fixture
  * whose own rules disagree with its own scores is how the widest-score case was wrong
@@ -469,20 +469,34 @@ const toRows = (specs: MatchSpec[]) =>
  *
  * `layout` asks "does it fit"; `states` asks "does every state draw". They are
  * different questions about the same event, so they are two presets, not two events.
+ *
+ * `prebuild` is the seeded field before anything has been built: entrants with a locked
+ * seed order, and no matches or draws at all. It exists for the stage reset's gate, which
+ * has to be shown releasing as well as refusing — a fixture where the schedule is always
+ * present can only ever prove the refusal, so a regression that disabled the reset
+ * permanently would pass every other preset.
  */
-export type DeskMockPreset = "layout" | "states";
+export type DeskMockPreset = "layout" | "states" | "prebuild";
 
-const PRESETS: Record<
-  DeskMockPreset,
-  { specs: MatchSpec[]; pools: unknown[]; entries: unknown[]; poolMatches: unknown[] }
-> = {
-  layout: { specs: LAYOUT_MATCH_SPECS, pools: [], entries: [], poolMatches: [] },
+interface MockPreset {
+  specs: MatchSpec[];
+  /** The A/B/C/D brackets. Empty is "no build has run yet". */
+  tierDraws: unknown[];
+  pools: unknown[];
+  entries: unknown[];
+  poolMatches: unknown[];
+}
+
+const PRESETS: Record<DeskMockPreset, MockPreset> = {
+  layout: { specs: LAYOUT_MATCH_SPECS, tierDraws, pools: [], entries: [], poolMatches: [] },
   states: {
     specs: STATE_MATCH_SPECS,
+    tierDraws,
     pools: STATE_POOLS,
     entries: STATE_POOL_ENTRIES,
     poolMatches: STATE_POOL_MATCHES,
   },
+  prebuild: { specs: [], tierDraws: [], pools: [], entries: [], poolMatches: [] },
 };
 
 /**
@@ -491,6 +505,7 @@ const PRESETS: Record<
  */
 const tables = (
   specs: MatchSpec[],
+  draws: unknown[],
   pools: unknown[],
   entries: unknown[],
   poolMatches: unknown[],
@@ -511,7 +526,7 @@ const tables = (
   pools,
   pool_entries: entries,
   pool_matches: poolMatches,
-  tier_draws: tierDraws,
+  tier_draws: draws,
   tier_draw_matches: toRows(specs),
   staff_roles: [],
 });
@@ -528,5 +543,11 @@ const tables = (
  */
 export function deskTables(preset: DeskMockPreset = "layout"): Record<string, unknown[]> {
   const chosen = PRESETS[preset];
-  return tables(chosen.specs, chosen.pools, chosen.entries, chosen.poolMatches);
+  return tables(
+    chosen.specs,
+    chosen.tierDraws,
+    chosen.pools,
+    chosen.entries,
+    chosen.poolMatches,
+  );
 }

@@ -409,17 +409,21 @@ test.describe("staff surfaces", () => {
 });
 
 /**
- * The two resets, opened rather than scanned in place.
+ * The two resets.
  *
- * Both are the app's only irreversible actions and both sit behind a `Show` toggle, so no
- * route scan reaches either one — the same reason the settings panel and the score dialog
- * are opened here. That matters more for these than for anything else on the page, because
- * the wording is load-bearing: §6.3 requires a destructive action to name what it destroys,
- * and the pair is only correct if each also says what the *other* keeps. A host who cannot
- * tell them apart loses a seed order they set by hand.
+ * Both are the app's only irreversible actions, so no route scan reaches either one
+ * unexplored — the same reason the settings panel and the score dialog are opened here.
+ * That matters more for these than for anything else on the page, because the wording is
+ * load-bearing: §6.3 requires a destructive action to name what it destroys, and the pair
+ * is only correct if each also says what the *other* keeps. A host who cannot tell them
+ * apart loses a seed order they set by hand.
  *
- * Both themes, because the panels paint a destructive button and a body-copy block on the
- * panel surface, which is exactly the pairing a contrast check is for.
+ * The schedule reset still expands from behind its `Show` toggle. The placement one no
+ * longer has a panel at all — it is a single `Reset` button in the header — so its wording
+ * is asserted where it now lives: the confirmation dialog, captured rather than dismissed.
+ *
+ * Both themes, because the button paints the destructive fill and its 50% disabled state
+ * on the header surface, which is exactly the pairing a contrast check is for.
  */
 test.describe("the two resets", () => {
   for (const colorScheme of ["light", "dark"] as const) {
@@ -448,24 +452,94 @@ test.describe("the two resets", () => {
         expect(violationIds(await scan(page))).toEqual([]);
       });
 
-      test("the placement reset says the seed order goes, and points at the other one", async ({
+      test("the placement reset refuses while the schedule depends on the seeding", async ({
+        page,
+      }) => {
+        // The `layout` fixture serves a built tournament, so the gate is closed. This is
+        // the state the gate exists for: a bracket is still paired from the seed order.
+        await openStaffShell(page);
+        await page.goto("/placement", { waitUntil: "load" });
+        await page.waitForLoadState("networkidle");
+
+        // It is a header button now, which is the whole point of the change — one action
+        // rather than a panel with a toggle and a paragraph, and no longer sharing the row
+        // with a Scores link. Scoped to the row that holds the `h1`, which is where the
+        // page's actions live: `getByRole("banner")` is the app's nav, and this header sits
+        // inside `main`, so it carries no `banner` role.
+        const header = page
+          .locator("main > div")
+          .filter({ has: page.getByRole("heading", { name: "Placement", level: 1 }) })
+          .first();
+        // The Scores link that used to share this row is gone; the reset is now the page's
+        // only header action, and results are still reached from the nav.
+        await expect(header.getByRole("link", { name: /enter results in scores/i })).toHaveCount(0);
+        const reset = header.getByRole("button", { name: /^reset$/i });
+        expectPresent((await reset.count()) > 0, "The Reset button in the header of /placement");
+        await expect(reset).toBeDisabled();
+
+        // The refusal is still reachable without the panel: it is the button's accessible
+        // description, so a screen reader is told why before the press rather than after.
+        await expect(reset).toHaveAccessibleDescription(/still on the schedule/i);
+        await expect(reset).toHaveAccessibleDescription(/Schedule tab first/i);
+        // And the same string is on the wrapper, because a disabled button cannot show a
+        // tooltip of its own — `Button` sets `disabled:pointer-events-none`.
+        await expect(page.locator('span[title*="still on the schedule"]')).toHaveCount(1);
+
+        expect(violationIds(await scan(page))).toEqual([]);
+      });
+    });
+  }
+
+  /**
+   * The other side of the gate.
+   *
+   * `layout` can only ever prove the refusal, because it always serves a built schedule.
+   * A regression that disabled the stage reset permanently — the button, the condition
+   * inverted, the hook returning nothing — would pass every assertion above, so the
+   * releasing state needs a fixture of its own. `prebuild` is the seeded field before
+   * anything has been built, which is exactly when the order has nothing depending on it.
+   */
+  for (const colorScheme of ["light", "dark"] as const) {
+    test.describe(`${colorScheme} prebuild`, () => {
+      test.use({ colorScheme, appMock: { preset: "prebuild", role: "admin" } });
+
+      test("the placement reset is offered, and its confirmation names what it destroys", async ({
         page,
       }) => {
         await openStaffShell(page);
         await page.goto("/placement", { waitUntil: "load" });
         await page.waitForLoadState("networkidle");
 
-        const toggle = page.getByRole("button", { name: /^show$/i }).first();
-        expectPresent((await toggle.count()) > 0, "The Reset toggle on /placement");
-        await toggle.click();
+        const header = page
+          .locator("main > div")
+          .filter({ has: page.getByRole("heading", { name: "Placement", level: 1 }) })
+          .first();
+        const reset = header.getByRole("button", { name: /^reset$/i });
+        expectPresent((await reset.count()) > 0, "The Reset button in the header of /placement");
+        await expect(reset).toBeEnabled();
+        await expect(reset).not.toHaveAccessibleDescription(/still on the schedule/i);
+
+        // The panel used to carry the wording. It lives on the confirmation now, so that is
+        // where §6.3 is checked. The dialog is dismissed from inside the listener: nothing
+        // else unblocks the page's own JS while a native confirm is open, so a `click()`
+        // that waits for a handler registered afterwards would hang on the click itself.
+        let dialogType = "";
+        let dialogMessage = "";
+        page.on("dialog", async (dialog) => {
+          dialogType = dialog.type();
+          dialogMessage = dialog.message();
+          await dialog.dismiss();
+        });
+
+        await reset.click();
+        expect(dialogType).toBe("confirm");
+        expect(dialogMessage).toMatch(/clears the seed order and any waivers/i);
+        // And it names the other reset, so the two remain distinguishable from one screen.
+        expect(dialogMessage).toMatch(/Schedule tab's reset clears the matches/i);
         await settleAnimations(page, "main");
 
-        // This is the reset that clears the seeding, so it has to say so — and name the
-        // path that does not, or the host has no way to tell them apart from the label.
-        await expect(
-          page.getByText(/clears the seed order and any waivers/i).first(),
-        ).toBeVisible();
-        await expect(page.getByText(/Schedule tab's reset keeps it/i).first()).toBeVisible();
+        // Dismissing is a refusal: nothing was undone.
+        await expect(reset).toBeEnabled();
 
         expect(violationIds(await scan(page))).toEqual([]);
       });

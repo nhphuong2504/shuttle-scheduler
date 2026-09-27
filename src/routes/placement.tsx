@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import {
   savePlacementSeedOrder,
   setPlacementSkill,
   shuffleSeedFor,
+  stageResetBlockedBy,
   stageResetNote,
   syncPlacementEntrants,
   type CategoryPlacementView,
@@ -28,6 +29,8 @@ import {
   usePlacementMatches,
   usePlayers,
   useTeams,
+  useTierDrawMatches,
+  useTierDraws,
   useTournamentScope,
   type Category,
   type Player,
@@ -76,6 +79,8 @@ function PlacementPage() {
   const { data: players } = usePlayers();
   const { data: entrants } = usePlacementEntrants();
   const { data: matches } = usePlacementMatches();
+  const { data: draws } = useTierDraws();
+  const { data: tierMatches } = useTierDrawMatches();
 
   const playerMap = useMemo(() => indexBy(players), [players]);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
@@ -85,8 +90,20 @@ function PlacementPage() {
   const live = (categories ?? []).filter((category) => category.active);
   const wrongFormat = tournament != null && tournament.format !== "two_round_placement";
 
-  /** The reset panel starts folded: it is the only irreversible action on the page. */
-  const [showReset, setShowReset] = useState(false);
+  /**
+   * Whether the stage reset is available yet, and if not, what is holding it.
+   *
+   * It reads the same three tables the Schedule tab's reset clears, so "the schedule is
+   * clear" means the same thing on both sides. The gate itself is `stageResetBlockedBy`;
+   * the RPC enforces the identical refusal, because a session can call it directly.
+   */
+  const resetBlocked = stageResetBlockedBy({
+    placementMatches: (matches ?? []).length,
+    tierDraws: (draws ?? []).length,
+    tierMatches: (tierMatches ?? []).length,
+  });
+
+  /** Whether the reset is in flight, so the header button cannot be pressed twice. */
   const [resetting, setResetting] = useState(false);
 
   /**
@@ -96,18 +113,23 @@ function PlacementPage() {
    * this is the tab that owns the seed order — "Shuffle & lock seeds" is here. The
    * Schedule tab's reset deliberately does not clear the seeding: it discards the
    * matches, draws and results and leaves the order alone, so rebuilding a schedule
-   * cannot quietly destroy an order set by hand. Admin-only and irreversible, hence
-   * the explicit confirmation that names what it destroys.
+   * cannot quietly destroy an order set by hand.
+   *
+   * It is available only once that schedule is gone, for the reason `stageResetBlockedBy`
+   * states: the seeding is what round one was paired from, so discarding it while the
+   * bracket survives would leave matches that cannot explain their own pairings. The
+   * order is therefore always: clear the schedule, then clear the seeding. Admin-only and
+   * irreversible, hence the explicit confirmation that names what it destroys.
    */
   const resetStage = async () => {
-    if (!tournament) return;
+    if (!tournament || resetBlocked) return;
     const confirmed = window.confirm(
-      "Start the placement stage over?\n\n" +
-        "This deletes every placement and knockout match, every result and every scheduled " +
-        "time, and it also clears the seed order and any waivers. Every event goes back to a " +
-        "registered field, ready to shuffle and lock seeds again. To clear only the schedule " +
-        "and keep the seed order, use the Reset panel on the Schedule tab instead. It cannot " +
-        "be undone.",
+      "Clear the seed order and start the placement stage over?\n\n" +
+        "This clears the seed order and any waivers, so every event goes back to a registered " +
+        "field ready to shuffle and lock seeds again, and every result and scheduled time goes " +
+        "with them. The schedule is already clear: the Schedule tab's reset clears the matches " +
+        "and draws and keeps the seed order, and this is the step after it that drops the order " +
+        "too. It cannot be undone.",
     );
     if (!confirmed) return;
 
@@ -123,15 +145,44 @@ function PlacementPage() {
     }
   };
 
+  /**
+   * The stage reset, as the page's only header action.
+   *
+   * It is one action, not a section, so it is a header button rather than a panel: a card
+   * wrapping a single button spent a title, a toggle and a paragraph of copy on it, and
+   * the panel sat below the events it discards. The confirmation carries the detail now
+   * that the surrounding copy is gone.
+   *
+   * The destructive variant, not the outline the Scores link uses: the design system
+   * reserves a saturated slot for "a destructive action when one is present", and this is
+   * that action on this page. Faded to 50% when the gate is closed, which reads as
+   * unavailable rather than as merely quiet.
+   *
+   * The refusal is carried on the control twice, and it has to be twice. A disabled button
+   * cannot show a `title` of its own — `Button` sets `disabled:pointer-events-none` — so
+   * the wrapper span holds the hover for a mouse; and `sr-only` text is still laid out, so
+   * a hidden span beside it is measured as clipped by the layout matrix, which leaves
+   * `aria-description` as the way to get the same sentence to an assistive technology.
+   */
+  const resetAction = isAdmin ? (
+    <span title={resetBlocked ?? undefined} className="inline-flex">
+      <Button
+        variant="destructive"
+        size="sm"
+        disabled={resetting || !tournament || resetBlocked != null}
+        aria-description={resetBlocked ?? undefined}
+        onClick={() => void resetStage()}
+      >
+        Reset
+      </Button>
+    </span>
+  ) : null;
+
   return (
     <AppShell
       title="Placement"
       subtitle="Every entrant plays two placement matches. The two results sort them into Draw A (WW), B (WL), C (LW) or D (LL)."
-      actions={
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/matches">Enter results in Scores</Link>
-        </Button>
-      }
+      actions={resetAction}
     >
       {wrongFormat ? (
         <div className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-xs font-medium text-warn-foreground">
@@ -163,47 +214,6 @@ function PlacementPage() {
             onRefresh={refresh}
           />
         ))}
-
-        {isAdmin ? (
-          <Panel
-            title="Reset"
-            bodyClassName="p-0"
-            right={
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-expanded={showReset}
-                onClick={() => setShowReset((value) => !value)}
-              >
-                {showReset ? "Hide" : "Show"}
-              </Button>
-            }
-          >
-            {showReset ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <p className="max-w-lg text-xs text-muted-foreground">
-                  Deletes every placement and knockout match, every reported result and every
-                  scheduled time, and also clears the seed order and any waivers, so every event
-                  goes back to a registered field ready to shuffle and lock seeds again. This is
-                  the only reset that clears the seed order — the Schedule tab's reset keeps it.
-                  This cannot be undone.
-                </p>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={resetting || !tournament}
-                  onClick={() => void resetStage()}
-                >
-                  Start the placement stage over
-                </Button>
-              </div>
-            ) : (
-              <p className="p-4 text-xs text-muted-foreground">
-                Start the placement stage over, clearing the seed order and every result.
-              </p>
-            )}
-          </Panel>
-        ) : null}
       </div>
     </AppShell>
   );

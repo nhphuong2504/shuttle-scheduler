@@ -11,7 +11,10 @@ import {
   heldEntrantId,
   planSeeds,
   scheduleImpactNote,
+  scheduleResetNote,
   shuffleSeedFor,
+  stageResetBlockedBy,
+  stageResetNote,
   tierIsDecided,
   tierLabel,
   toEntrantRefs,
@@ -485,5 +488,70 @@ describe("scheduleImpactNote", () => {
     expect(
       scheduleImpactNote({ shiftedMatches: 2, largestShiftMinutes: 10, direction: "mixed" }),
     ).toBe("2 downstream matches moved, by up to 10 min");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The stage reset gate
+// ---------------------------------------------------------------------------
+
+describe("stageResetBlockedBy", () => {
+  const cleared = { placementMatches: 0, tierDraws: 0, tierMatches: 0 };
+
+  it("allows the reset when the schedule is clear", () => {
+    // The state the gate exists to reach: nothing is paired from the seed order any
+    // more, so discarding it cannot strand a bracket.
+    expect(stageResetBlockedBy(cleared)).toBeNull();
+  });
+
+  it("blocks on placement matches and names them", () => {
+    const reason = stageResetBlockedBy({ ...cleared, placementMatches: 31 });
+    expect(reason).toContain("31 placement matches");
+    // The host has to be told where to go, not just that they cannot proceed.
+    expect(reason).toContain("Schedule tab");
+  });
+
+  it("blocks on knockout matches alone", () => {
+    // A build writes the brackets before it schedules them, so this is the state a
+    // half-finished build leaves behind: no placement rows left to name, but a
+    // knockout fixture that was still paired from the seeding.
+    const reason = stageResetBlockedBy({ ...cleared, tierMatches: 6 });
+    expect(reason).toContain("6 knockout matches");
+  });
+
+  it("blocks on draws alone", () => {
+    // The bracket itself, which can outlive its own match rows.
+    const reason = stageResetBlockedBy({ ...cleared, tierDraws: 2 });
+    expect(reason).toContain("2 draws");
+  });
+
+  it("counts every outstanding row in one reason", () => {
+    const reason = stageResetBlockedBy({
+      placementMatches: 31,
+      tierDraws: 2,
+      tierMatches: 6,
+    });
+    expect(reason).toContain("31 placement matches");
+    expect(reason).toContain("6 knockout matches");
+    expect(reason).toContain("2 draws");
+  });
+
+  it("singularises a lone row", () => {
+    expect(stageResetBlockedBy({ ...cleared, placementMatches: 1 })).toContain("1 placement match ");
+  });
+});
+
+describe("the reset notes", () => {
+  it("says the seeding survived a schedule reset", () => {
+    // The distinction the two resets exist for, restated where the host reads it.
+    expect(
+      scheduleResetNote({ placementMatches: 12, tierDraws: 2, tierMatches: 4 }),
+    ).toBe("Removed 12 placement matches, 4 knockout matches, 2 draws. The seed order and waivers are kept.");
+  });
+
+  it("says the seeding went with a stage reset", () => {
+    expect(
+      stageResetNote({ placementMatches: 0, tierDraws: 0, tierMatches: 0, entrants: 8 }),
+    ).toBe("Nothing had been played yet — the seeds were unlocked.");
   });
 });
