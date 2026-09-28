@@ -14,6 +14,7 @@ import {
   normalizeBreaks,
   solve,
   solverIdFor,
+  type BaselineSlot,
   type ParticipantAnchor,
   type ScheduleMatch,
   type ScheduleResource,
@@ -48,6 +49,10 @@ export interface ComposedMatch {
   resourceRequirements?: readonly string[] | undefined;
   groupKey: string;
   completionKey?: string | undefined;
+  /** The milestone this match belongs to, e.g. `"MD:round1"`. Ranking input only. */
+  stageKey?: string | undefined;
+  /** True when finishing this stage is what releases a later stage of the same event. */
+  stageUnlocks?: boolean | undefined;
   phase?: number | undefined;
   sequence?: number | undefined;
   softOrder?: number | undefined;
@@ -85,6 +90,14 @@ export interface DayCompositionInput {
   matches: readonly ComposedMatch[];
   resources: readonly ComposedResource[];
   anchors?: readonly ComposedAnchor[] | undefined;
+  /**
+   * Where the matches the desk is already looking at currently sit, per resource id.
+   *
+   * Passed straight through to `SchedulingProblem.baseline` and read by nothing but the
+   * `disruption` criterion, so it can reorder candidates but never make one infeasible. Absent on a
+   * first build, which is the case with nothing to preserve.
+   */
+  baseline?: readonly BaselineSlot[] | undefined;
   /** Problem horizon: the earliest instant any assignment may occupy. */
   horizonStart: number;
   /** Soft target. Lateness is measured against it, but it never blocks an assignment. */
@@ -139,6 +152,8 @@ function toScheduleMatch(match: ComposedMatch): ScheduleMatch {
       ? {}
       : { resourceRequirements: [...match.resourceRequirements] }),
     ...(match.completionKey === undefined ? {} : { completionKey: match.completionKey }),
+    ...(match.stageKey === undefined ? {} : { stageKey: match.stageKey }),
+    ...(match.stageUnlocks === undefined ? {} : { stageUnlocks: match.stageUnlocks }),
     ...(match.phase === undefined ? {} : { phase: match.phase }),
     ...(match.sequence === undefined ? {} : { sequence: match.sequence }),
     ...(match.softOrder === undefined ? {} : { softOrder: match.softOrder }),
@@ -196,6 +211,7 @@ function toProblem(input: DayCompositionInput, policy: SchedulingPolicy): Schedu
     matches,
     resources,
     ...(anchors.length ? { anchors } : {}),
+    ...(input.baseline && input.baseline.length ? { baseline: input.baseline } : {}),
     horizonStart: input.horizonStart,
     planningEnd: input.planningEnd,
     hardEnd: input.hardEnd ?? null,

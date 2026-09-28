@@ -54,6 +54,8 @@ export interface MatchSpec {
   requirements?: readonly string[];
   groupKey?: string;
   completionKey?: string;
+  stageKey?: string;
+  stageUnlocks?: boolean;
   phase?: number;
   sequence?: number;
   softOrder?: number;
@@ -78,6 +80,8 @@ export function match(spec: MatchSpec): ScheduleMatch {
     ...(spec.resourceCandidates ? { resourceCandidates: spec.resourceCandidates } : {}),
     ...(spec.requirements ? { resourceRequirements: spec.requirements } : {}),
     ...(spec.completionKey == null ? {} : { completionKey: spec.completionKey }),
+    ...(spec.stageKey == null ? {} : { stageKey: spec.stageKey }),
+    ...(spec.stageUnlocks == null ? {} : { stageUnlocks: spec.stageUnlocks }),
     ...(spec.phase == null ? {} : { phase: spec.phase }),
     ...(spec.sequence == null ? {} : { sequence: spec.sequence }),
     ...(spec.softOrder == null ? {} : { softOrder: spec.softOrder }),

@@ -28,18 +28,37 @@ import { mergedOccupancyMinutes } from "./time";
 export const DEFAULT_OBJECTIVE_ORDER: readonly ObjectiveCriterion[] = [
   "unscheduled",
   "afterCutoff",
+  "stageProgression",
   "makespan",
   "resourceIdle",
   "excessWait",
   "fragmentation",
   "softOrderDeviation",
+  "disruption",
 ];
+
+/**
+ * What one court change costs the `disruption` criterion, in the same minutes as a start move.
+ *
+ * One slot by default, which is deliberately the same order as the movement it is being weighed
+ * against: "moved ten minutes on the same court" and "same time on another court" should not be
+ * priced wildly apart, and a court change is a real cost at the desk — a different court means a
+ * different walk for the players and a different board for the moderator.
+ */
+export const DISRUPTION_COURT_CHANGE_MINUTES = 30;
 
 export interface SolutionMetrics {
   /** `Solution.unscheduled.length`. Incompleteness. Separate from both lateness numbers. */
   unscheduled: number;
   /** Optimization lateness: exactly `Solution.decisionAfterCutoff`. Never the reporting lateness. */
   afterCutoff: number;
+  /**
+   * When the pipeline closes, weighted by what closing it releases. See `stageProgressionScore`.
+   *
+   * Above `makespan` deliberately: a stage that closes earlier releases the next stage, whereas a
+   * shorter makespan only shortens the tail, and the two are not the same trade.
+   */
+  stageProgression: number;
   /** `Solution.decisionFinish - horizonStart`, or 0 when the solver placed nothing. */
   makespan: number;
   /** Exactly `Solution.decisionResourceIdle`. */
@@ -62,6 +81,14 @@ export interface SolutionMetrics {
    * `sequence` contributes nothing. The legacy constructive number is not reproduced.
    */
   softOrderDeviation: number;
+  /**
+   * How far the rebuild moved what the desk was already looking at. See `disruptionScore`.
+   *
+   * Ordered last, below `softOrderDeviation`: it is a preference for leaving well enough alone, and
+   * the tail of the schedule should still move whenever moving it materially improves stage
+   * progression or the overall schedule. Zero on a first build and zero on a re-solve that agrees.
+   */
+  disruption: number;
 }
 
 /** -1 when `a` wins, 1 when `b` wins, 0 when every criterion ties. */
@@ -108,6 +135,7 @@ export function metricsOf(
   return {
     unscheduled: solution.unscheduled.length,
     afterCutoff: solution.decisionAfterCutoff,
+    stageProgression: stageProgressionScore(problem, solution.assignments),
     makespan:
       solution.decisionFinish == null
         ? 0
@@ -119,7 +147,45 @@ export function metricsOf(
     ).excessWait,
     fragmentation: groupFragmentation(matchById, solution.assignments, fragmentationGapMinutes),
     softOrderDeviation: softOrderInversions(matchById, solution.assignments),
+    disruption: disruptionScore(problem, solution.assignments),
   };
+}
+
+/**
+ * How far the solver moved what the desk was already looking at:
+ * `Σ over baseline matches ( |Δstart| minutes + court-change penalty )`.
+ *
+ * Zero with no baseline, which is what a first build gets: there is nothing to disturb. Fixed
+ * matches contribute nothing — they are pinned, so a solver that moved one would have failed
+ * validation rather than scored badly.
+ *
+ * A baseline match the solution never places is skipped rather than charged, because no finite
+ * penalty stands in for "it lost its slot entirely". That is safe rather than convenient: the
+ * `unscheduled` criterion outranks this one, so a candidate that drops a match has already lost
+ * before disruption is consulted, and this one can only ever separate candidates that placed the
+ * same amount of work.
+ */
+export function disruptionScore(
+  problem: SchedulingProblem,
+  assignments: readonly Assignment[],
+): number {
+  const baseline = problem.baseline;
+  if (!baseline || !baseline.length) return 0;
+
+  const fixedIds = new Set(problem.matches.filter((match) => match.fixed).map((match) => match.id));
+  const assignedById = new Map(assignments.map((assignment) => [assignment.matchId, assignment]));
+
+  let total = 0;
+  for (const slot of baseline) {
+    if (fixedIds.has(slot.matchId)) continue;
+    const assignment = assignedById.get(slot.matchId);
+    if (!assignment) continue;
+    total += Math.abs(assignment.start - slot.start) / MINUTE_MS;
+    if (assignment.resourceId !== slot.resourceId) {
+      total += DISRUPTION_COURT_CHANGE_MINUTES;
+    }
+  }
+  return round3(total);
 }
 
 /** Solver-created (non-fixed) assignments only: decided history is never the solver's doing. */
@@ -199,6 +265,63 @@ export function participantWaitMetrics(
       ? round3(averageExcessWait / participantsWithPairs)
       : 0,
   };
+}
+
+/**
+ * When the pipeline closes, stage by stage: `Σ over stages ( stageClose − horizonStart ) × weight`,
+ * in minutes, where `stageClose` is the last end among that stage's assignments and the weight is
+ * 2 for a stage that releases a later one and 1 otherwise.
+ *
+ * Lower is better. A stage that nearly finishes but keeps slipping is exactly what this prices: the
+ * current slot is close to a stage boundary, and closing it is worth more than closing a stage that
+ * has hours of work left. The unlock weight is the same boolean the urgency order reads, so ranking
+ * and scoring cannot drift apart — a stage that gates the next one is worth twice as much here as
+ * one that gates nothing.
+ *
+ * Two things it deliberately does *not* do. It reads every assignment, fixed history included,
+ * rather than the solver's own: a stage really does close at an instant, and on a problem where the
+ * history is identical between candidates the fixed contribution is a constant that cancels. And it
+ * never reads `solution.diagnostics`, so a solver cannot inflate its own score.
+ *
+ * A stage the problem defines but the solution never placed closes at `planningEnd` rather than
+ * being left out of the sum. Without that, the cheapest way to improve the score would be to drop a
+ * whole stage — which is the one thing this metric exists to prevent.
+ */
+export function stageProgressionScore(
+  problem: SchedulingProblem,
+  assignments: readonly Assignment[],
+): number {
+  const matchById = new Map(problem.matches.map((match) => [match.id, match]));
+
+  /** Every stage the problem declares, and whether closing it releases a later one. */
+  const declared = new Map<string, boolean>();
+  for (const match of problem.matches) {
+    if (match.stageKey == null) continue;
+    declared.set(
+      match.stageKey,
+      (declared.get(match.stageKey) ?? false) || match.stageUnlocks === true,
+    );
+  }
+
+  /** The last end actually assigned in each stage. */
+  const closeByStage = new Map<string, number>();
+  for (const assignment of assignments) {
+    const match = matchById.get(assignment.matchId);
+    if (!match || match.stageKey == null) continue;
+    const close = closeByStage.get(match.stageKey);
+    if (close == null || assignment.end > close) closeByStage.set(match.stageKey, assignment.end);
+  }
+
+  let total = 0;
+  for (const [stage, unlocks] of declared) {
+    // A declared stage with no assignment never closed, so it is charged the end of the plan rather
+    // than skipped: leaving it out would make dropping a whole stage the cheapest way to improve
+    // the score, which is the one thing this metric exists to prevent.
+    const close = closeByStage.get(stage) ?? problem.planningEnd;
+    const minutes = Math.max(0, (close - problem.horizonStart) / MINUTE_MS);
+    total += minutes * (unlocks ? 2 : 1);
+  }
+  return round3(total);
 }
 
 /**

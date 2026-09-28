@@ -23,6 +23,15 @@ const MINUTE = MINUTE_MS;
  */
 export interface StageItem extends ComposedMatch {
   courtNumber?: number | undefined;
+  /**
+   * Pinned by the planner for near-term stability rather than by a result.
+   *
+   * Distinct from `fixed`, which means the desk has already decided the match. Both are pinned for
+   * the solver, but only a `fixed` item is decided history: a `frozen` one is still `scheduled`, so
+   * the writer must keep writing it at its slot and the rebuild preview must keep showing it. That
+   * difference is why the two are tracked as separate sets — see `frozenMatchIdsFor`.
+   */
+  frozen?: boolean | undefined;
 }
 
 /** A match has a real result, so its time is an anchor rather than a suggestion. */
@@ -149,12 +158,21 @@ export function placementItems(input: {
   playerLookup: PlayerLookup;
   courtNumberById: ReadonlyMap<string, number>;
   categoryOrder: ReadonlyMap<string, number>;
+  /**
+   * Category ids whose field is large enough to run a round two.
+   *
+   * Round two does not exist as a row while round one is closing, so "does finishing round one
+   * release anything?" cannot be read off the match set. It is a property of the field size, and the
+   * caller has the entrant list that decides it.
+   */
+  roundTwoCategories?: ReadonlySet<string> | undefined;
   slotMinutes: number;
   restGap: number;
   floor: number;
   now: number;
 }): StageItem[] {
   const { matches, playerLookup, courtNumberById, categoryOrder, slotMinutes, floor, now } = input;
+  const roundTwoCategories = input.roundTwoCategories ?? new Set<string>();
   // Non-void rows are the schedulable universe, and the set a prerequisite must
   // be a member of to be honoured.
   const inBatch = new Set(
@@ -186,6 +204,10 @@ export function placementItems(input: {
         restAfterMinutes: input.restGap,
         // No pool to complete: a placement category is its own completion unit.
         groupKey: match.category_id,
+        // A placement stage is the category's own round: `MD:round1`, `MD:round2`. The two are one
+        // queue slot but two milestones, and only round one releases anything.
+        stageKey: `${match.category_id}:${match.stage}`,
+        stageUnlocks: match.stage === "round1" && roundTwoCategories.has(match.category_id),
         // Round one ranks before round two, but only as a late tie-break: the solver
         // prioritises the most constrained participant first. That is sufficient here
         // because round two is only generated once every round-one result is in,
@@ -216,6 +238,13 @@ export function placementItems(input: {
 export function tierItems(input: {
   matches: readonly TierDrawMatch[];
   drawCategory: ReadonlyMap<string, string>;
+  /**
+   * Rounds each draw plays, keyed by draw id — `bracketRoundCount(bracket_size)`.
+   *
+   * A bracket round's successor is a property of the draw's depth, and the later rounds may not
+   * exist as rows yet, so the depth has to be handed in rather than re-derived here.
+   */
+  drawRoundCount?: ReadonlyMap<string, number> | undefined;
   playerLookup: PlayerLookup;
   courtNumberById: ReadonlyMap<string, number>;
   categoryOrder: ReadonlyMap<string, number>;
@@ -226,6 +255,7 @@ export function tierItems(input: {
 }): StageItem[] {
   const { matches, drawCategory, playerLookup, courtNumberById, categoryOrder } = input;
   const { slotMinutes, restGap, floor, now } = input;
+  const drawRoundCount = input.drawRoundCount ?? new Map<string, number>();
 
   // Indexed once: the parent lookup below would otherwise rescan `matches` for
   // every match, which is quadratic in a bracket that is already large.
@@ -265,6 +295,10 @@ export function tierItems(input: {
         durationMinutes: slotMinutes,
         restAfterMinutes: restGap,
         groupKey: categoryId,
+        // One draw is one bracket, so a stage is that draw's round: `draw-7:r2`. Reaching the last
+        // round is the end of the event, so a final releases nothing.
+        stageKey: `${match.draw_id}:r${match.round}`,
+        stageUnlocks: match.round < (drawRoundCount.get(match.draw_id) ?? 0),
         sequence: match.round * 100 + match.slot,
         softOrder: categoryOrder.get(categoryId) ?? 0,
         ...(parentEnd ? { eligibleFrom: parentEnd } : {}),

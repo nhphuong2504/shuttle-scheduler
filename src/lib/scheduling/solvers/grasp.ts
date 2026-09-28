@@ -25,7 +25,6 @@ import {
 } from "../constraints";
 import {
   compareIds,
-  completionKeyOf,
   MINUTE_MS,
   requiredRestBetween,
   type Assignment,
@@ -61,28 +60,17 @@ import {
   type Solver,
   type SolverRunOptions,
 } from "./types";
-
-interface PlayerConstraint {
-  playerId: string;
-  remainingMatches: number;
-  remainingGroupCount: number;
-  futureConflictDegree: number;
-  fixedWindowPressure: number;
-}
-
-interface MatchPriority {
-  constrainedPlayer: PlayerConstraint;
-  waitingTimeMinutes: number;
-  phase: number;
-  completionPressure: number;
-  softOrder: number;
-  sequence: number;
-  matchId: string;
-}
+import {
+  buildUrgencyBoard,
+  compareUrgency,
+  urgencyKeysOf,
+  type UrgencyBoard,
+  type UrgencyKeys,
+} from "./urgency";
 
 interface Ranked {
   match: ScheduleMatch;
-  priority: MatchPriority;
+  keys: UrgencyKeys;
 }
 
 interface RunOutcome {
@@ -93,117 +81,23 @@ interface RunOutcome {
   trace: SolverTraceEntry[];
 }
 
-/** Descending constraint: the most constrained participant first. */
-function comparePlayerConstraint(a: PlayerConstraint, b: PlayerConstraint): number {
-  return (
-    b.remainingMatches - a.remainingMatches ||
-    b.remainingGroupCount - a.remainingGroupCount ||
-    b.futureConflictDegree - a.futureConflictDegree ||
-    b.fixedWindowPressure - a.fixedWindowPressure ||
-    compareIds(a.playerId, b.playerId)
-  );
-}
-
-function compareRanked(a: Ranked, b: Ranked): number {
-  const ap = a.priority;
-  const bp = b.priority;
-  return (
-    comparePlayerConstraint(ap.constrainedPlayer, bp.constrainedPlayer) ||
-    bp.waitingTimeMinutes - ap.waitingTimeMinutes ||
-    ap.phase - bp.phase ||
-    ap.completionPressure - bp.completionPressure ||
-    ap.softOrder - bp.softOrder ||
-    ap.sequence - bp.sequence ||
-    compareIds(ap.matchId, bp.matchId)
-  );
-}
-
-function playerConstraint(
-  playerId: string,
-  currentTime: number,
-  remaining: ReadonlySet<string>,
-  remainingByParticipant: ReadonlyMap<string, number>,
-  indexes: SchedulingIndexes,
-  problem: SchedulingProblem,
-): PlayerConstraint {
-  const remainingIds = (indexes.matchesByPlayer.get(playerId) ?? []).filter((id) =>
-    remaining.has(id),
-  );
-  const groups = new Set<string>();
-  let futureConflictDegree = 0;
-  let requiredMs = 0;
-
-  for (const matchId of remainingIds) {
-    const match = indexes.matchById.get(matchId);
-    if (!match) continue;
-    groups.add(match.groupKey);
-    const participants = uniqueParticipants(match);
-    for (const otherPlayerId of participants) {
-      if (otherPlayerId === playerId) continue;
-      const otherRemaining = remainingByParticipant.get(otherPlayerId) ?? 0;
-      if (otherRemaining > 1) futureConflictDegree += otherRemaining - 1;
-    }
-    requiredMs += durationMsOf(match) + (match.restAfterMinutes ?? 0) * MINUTE_MS;
-  }
-
-  const availableMinutes = Math.max(0, problem.planningEnd - currentTime) / MINUTE_MS;
-  const requiredMinutes = requiredMs / MINUTE_MS;
-  return {
-    playerId,
-    remainingMatches: remainingIds.length,
-    remainingGroupCount: groups.size,
-    futureConflictDegree,
-    fixedWindowPressure: Math.max(0, requiredMinutes - availableMinutes),
-  };
-}
-
-function priorityFor(
+/**
+ * Ranking one candidate at one instant is entirely `urgency.ts`'s job now.
+ *
+ * GRASP's contribution is the *input*: it sweeps a clock, so its window pressure shrinks and its
+ * waiting time grows, and its "still unplaced" set is the live one. Greedy has no clock and supplies
+ * the problem floor instead. One comparator over one tuple is what stops "the solver prefers X" from
+ * meaning two different things depending on which strategy happens to win the fold.
+ */
+function rankKeysFor(
   match: ScheduleMatch,
-  currentTime: number,
-  remaining: ReadonlySet<string>,
-  remainingByParticipant: ReadonlyMap<string, number>,
-  remainingByCompletionKey: ReadonlyMap<string, number>,
-  constraintCache: Map<string, PlayerConstraint>,
+  board: UrgencyBoard,
   indexes: SchedulingIndexes,
-  problem: SchedulingProblem,
   scheduledEnd: ReadonlyMap<string, number>,
-): MatchPriority {
-  const participants = uniqueParticipants(match);
-  let constrainedPlayer: PlayerConstraint | null = null;
-  for (const playerId of participants) {
-    let constraint = constraintCache.get(playerId);
-    if (!constraint) {
-      constraint = playerConstraint(
-        playerId,
-        currentTime,
-        remaining,
-        remainingByParticipant,
-        indexes,
-        problem,
-      );
-      constraintCache.set(playerId, constraint);
-    }
-    if (constrainedPlayer == null || comparePlayerConstraint(constraint, constrainedPlayer) < 0) {
-      constrainedPlayer = constraint;
-    }
-  }
-  const fallback: PlayerConstraint = {
-    playerId: "",
-    remainingMatches: 0,
-    remainingGroupCount: 0,
-    futureConflictDegree: 0,
-    fixedWindowPressure: 0,
-  };
+  currentTime: number,
+): UrgencyKeys {
   const earliest = lowerBoundOf(match, indexes, scheduledEnd);
-  return {
-    constrainedPlayer: constrainedPlayer ?? fallback,
-    waitingTimeMinutes: Math.max(0, (currentTime - earliest) / MINUTE_MS),
-    phase: match.phase ?? 0,
-    completionPressure: remainingByCompletionKey.get(completionKeyOf(match)) ?? 0,
-    softOrder: match.softOrder ?? 0,
-    sequence: match.sequence ?? 0,
-    matchId: match.id,
-  };
+  return urgencyKeysOf(match, board, Math.max(0, (currentTime - earliest) / MINUTE_MS));
 }
 
 /** Everything that makes a match placeable on one resource at one instant. */
@@ -339,8 +233,6 @@ function runOnce(
 
   const unscheduled: string[] = [];
   const remaining = new Set<string>();
-  const remainingByParticipant = new Map<string, number>();
-  const remainingByCompletionKey = new Map<string, number>();
 
   for (const match of problem.matches) {
     if (match.fixed) continue;
@@ -349,18 +241,12 @@ function runOnce(
       continue;
     }
     remaining.add(match.id);
-    for (const participantId of uniqueParticipants(match)) {
-      remainingByParticipant.set(participantId, (remainingByParticipant.get(participantId) ?? 0) + 1);
-    }
-    const key = completionKeyOf(match);
-    remainingByCompletionKey.set(key, (remainingByCompletionKey.get(key) ?? 0) + 1);
   }
 
   const trace: SolverTraceEntry[] = [];
   let currentTime = problem.floor;
   let iterations = 0;
   let deadlockReason: string | null = null;
-  const constraintCache = new Map<string, PlayerConstraint>();
 
   while (remaining.size > 0) {
     iterations++;
@@ -368,6 +254,24 @@ function runOnce(
       deadlockReason = `Iteration cap ${maxIterations} reached at ${new Date(currentTime).toISOString()}.`;
       break;
     }
+
+    /**
+     * The urgency board for this instant, rebuilt from the live unplaced set.
+     *
+     * Once per timestamp rather than once per sweep: `currentTime` is fixed while the sweep runs to
+     * quiescence, so a board built here is the right input for every ranking at this instant, and
+     * rebuilding per assignment would pay the whole participant scan again for nothing. That it is
+     * rebuilt at all is the point — `stageRemaining` and `completionPressure` have to fall as the run
+     * drains a stage, or the stage tier would keep voting for a stage that is already finished.
+     */
+    const board = buildUrgencyBoard({
+      remaining: [...remaining]
+        .sort(compareIds)
+        .map((matchId) => indexes.matchById.get(matchId))
+        .filter((match): match is ScheduleMatch => match != null),
+      planningEnd: problem.planningEnd,
+      referenceTime: currentTime,
+    });
 
     // ---- sweep the current timestamp to quiescence: at most one match per resource per sweep ----
     let assignedThisSweep = 0;
@@ -396,22 +300,12 @@ function runOnce(
           }
           ranked.push({
             match,
-            priority: priorityFor(
-              match,
-              currentTime,
-              remaining,
-              remainingByParticipant,
-              remainingByCompletionKey,
-              constraintCache,
-              indexes,
-              problem,
-              scheduledEnd,
-            ),
+            keys: rankKeysFor(match, board, indexes, scheduledEnd, currentTime),
           });
         }
         if (!ranked.length) continue;
 
-        ranked.sort(compareRanked);
+        ranked.sort((a, b) => compareUrgency(a.keys, b.keys));
         const rcl = ranked.slice(0, Math.min(rclSize, ranked.length));
         const selected = rcl[Math.floor(random() * rcl.length)] ?? rcl[0]!;
 
@@ -436,15 +330,6 @@ function runOnce(
         );
         scheduledEnd.set(match.id, end);
         remaining.delete(match.id);
-        for (const participantId of uniqueParticipants(match)) {
-          remainingByParticipant.set(
-            participantId,
-            Math.max(0, (remainingByParticipant.get(participantId) ?? 1) - 1),
-          );
-        }
-        const key = completionKeyOf(match);
-        remainingByCompletionKey.set(key, Math.max(0, (remainingByCompletionKey.get(key) ?? 1) - 1));
-        constraintCache.clear();
         assignedThisSweep++;
 
         if (captureTrace) {
