@@ -676,6 +676,72 @@ for (const cell of MATRIX_CELLS) {
       expect(ids).toEqual([]);
     });
 
+    test("the stage progress panel walks one pipeline, in matches", async ({ page }) => {
+      /**
+       * The panel this replaces changed units with its own state: before round two existed it
+       * counted pending round-one matches, and once round two existed it counted entrants still
+       * short of a result. The same line therefore meant two different things depending on which
+       * stage an event had reached.
+       *
+       * The rows look the same as they always have; what changed is what they say. Only the
+       * browser can confirm the panel the desk is actually shown is the one that was designed.
+       *
+       * The fixture is exactly the combination the old wording got wrong: a seeded field with no
+       * placement matches, and two brackets already running. So the panel is asked to draw a
+       * waiting round, a round waiting on that one, and a live bracket at once.
+       */
+      await installAppMock(page, { preset: "layout" });
+      await openCell(page, "/placement-schedule", cell);
+
+      const panel = page.locator("section", {
+        has: page.getByRole("heading", { name: "Stage progress" }),
+      });
+
+      const lines = await panel.locator("li").allTextContents();
+      expect(lines.length, "no stage rows rendered").toBeGreaterThan(0);
+
+      // One unit for the whole panel, and the gate's entrant shortfall is not it.
+      expect(lines.join("\n")).not.toMatch(/entrant/i);
+
+      const counted = lines.filter((line) => line.includes("matches completed"));
+      expect(counted.length, "no stage reported a match count").toBeGreaterThan(0);
+      for (const line of counted) {
+        expect(line, `not a match count: ${line}`).toMatch(/\d+ \/ \d+ matches completed/);
+      }
+
+      // The bracket's size comes from the draw rather than from the rows that exist. Each of the
+      // fixture's two brackets holds twelve entrants, which plays eleven matches — a count taken
+      // from the generated rows would read far lower while the bracket is still opening.
+      for (const line of counted.filter((entry) => entry.includes("Knockout"))) {
+        expect(line, `knockout is not sized from its draw: ${line}`).toContain(
+          "/ 11 matches completed",
+        );
+      }
+
+      // Every event runs the same pipeline in the same order, which is the point of it. The
+      // fixture holds two events, and the knockout is last in both.
+      const stages = lines.map(
+        (line) =>
+          line.match(/^(?:MD|XD) (Round 1|Round 2|Knockout|Tournament Complete)/)?.[1] ??
+          `not a stage: ${line.slice(0, 40)}`,
+      );
+      expect(stages).toEqual([
+        "Round 1",
+        "Round 2",
+        "Knockout",
+        "Round 1",
+        "Round 2",
+        "Knockout",
+      ]);
+
+      // The next step is named where the readiness text used to sit: a stage that can be created
+      // says so, and the running bracket says how much of it is left rather than how many
+      // entrants are short.
+      await expect(panel.getByText("Generate Round 1").first()).toBeVisible();
+      await expect(panel.getByText("Waiting on Round 1").first()).toBeVisible();
+      await expect(panel.getByText("9 matches remaining").first()).toBeVisible();
+    });
+
     test("a court tile takes a visible focus ring", async ({ page }) => {
       // The focus sweep in `matrix.spec.ts` walks every route in every cell, but it
       // walks them empty. A ring can be clipped by the tile that contains it, so the
