@@ -20,7 +20,9 @@
  */
 
 import { validateSolution } from "../constraints";
-import type { SchedulingProblem, Solution } from "../domain";
+import { compareIds } from "../domain";
+import type { ScheduleMatch, SchedulingProblem, Solution } from "../domain";
+import { metricsOf } from "../metrics";
 import { solve } from "../solvers";
 import { hybridSolver } from "../solvers/hybrid";
 import type { SolverRunOptions } from "../solvers/types";
@@ -67,9 +69,105 @@ export interface QualityRow {
   makespan: number;
   resourceIdle: number;
   knownOverrunMinutes: number;
+  /**
+   * The weighted sum of stage closes, from `metricsOf`. Reporting it here is what lets the ladder
+   * answer "did the change close stages earlier" without re-deriving the metric.
+   */
+  stageProgression: number;
+  /** How far this run moved a baseline, from `metricsOf`. Zero when the problem has no baseline. */
+  disruption: number;
   /** The lexicographic objective tuple, in `DEFAULT_OBJECTIVE_ORDER`. Lower is better. */
   objective: number[];
   valid: boolean;
+  /** Per-stage close, in minutes from `horizonStart`. Reporting only; see `stageCloseTimes`. */
+  stageCloses: Record<string, number>;
+}
+
+/** The stage identity the benchmark measures with: a match's own stage, else its group and phase. */
+export function stageKeyOf(match: ScheduleMatch): string {
+  return match.stageKey ?? `${match.groupKey}#${match.phase ?? 0}`;
+}
+
+/**
+ * Reporting-only stage close times, keyed by stage and measured in minutes from `horizonStart`.
+ *
+ * Deliberately reporting rather than a core metric. It answers *when* each stage finishes, which the
+ * `unscheduled` / `afterCutoff` / `makespan` columns cannot, and it reads `groupKey` and `phase` —
+ * both of which the shapes already set — so it needs nothing new on `ScheduleMatch`. That is what
+ * keeps this step behaviour-neutral while still measuring the postponement before anything changes.
+ *
+ * Decided history is excluded, for the same reason `decisionFinish` excludes it: a stage on a shape
+ * whose opening round is nearly played has a close floored by that history whatever the solver does,
+ * so including it would measure the fixtures rather than the ordering. What is left is the last
+ * instant the solver itself put something on court in this stage — the postponement, in one number.
+ */
+export function stageCloseTimes(
+  problem: SchedulingProblem,
+  solution: Solution,
+): Record<string, number> {
+  const byId = new Map(problem.matches.map((match) => [match.id, match]));
+  const closes: Record<string, number> = {};
+  for (const assignment of solution.assignments) {
+    const match = byId.get(assignment.matchId);
+    if (!match || match.fixed) continue;
+    const key = stageKeyOf(match);
+    const minutes = Math.round((assignment.end - problem.horizonStart) / 60_000);
+    if (closes[key] == null || minutes > closes[key]!) closes[key] = minutes;
+  }
+  return closes;
+}
+
+/** The earliest and latest stage closes in a row, each with the stage that produced it. */
+export function stageCloseSpan(row: QualityRow): {
+  first: { key: string; minutes: number } | null;
+  last: { key: string; minutes: number } | null;
+} {
+  let first: { key: string; minutes: number } | null = null;
+  let last: { key: string; minutes: number } | null = null;
+  for (const [key, minutes] of Object.entries(row.stageCloses)) {
+    if (first == null || minutes < first.minutes) first = { key, minutes };
+    if (last == null || minutes > last.minutes) last = { key, minutes };
+  }
+  return { first, last };
+}
+
+/**
+ * Median close across seeds for every stage a configuration produced.
+ *
+ * A stage missing from one seed's row is simply skipped for that seed, so an unscheduled stage does
+ * not poison the median with a `NaN`.
+ */
+export function medianStageCloses(measurement: ConfigMeasurement): Record<string, number> {
+  const keys = new Set<string>();
+  for (const row of measurement.quality) {
+    for (const key of Object.keys(row.stageCloses)) keys.add(key);
+  }
+  const medians: Record<string, number> = {};
+  for (const key of [...keys].sort(compareIds)) {
+    const values = measurement.quality
+      .map((row) => row.stageCloses[key])
+      .filter((value): value is number => value != null);
+    if (values.length) medians[key] = median(values);
+  }
+  return medians;
+}
+
+/** The earliest and latest entry of a stage-close record. */
+export function spanOfCloses(closes: Record<string, number>): {
+  first: { key: string; minutes: number } | null;
+  last: { key: string; minutes: number } | null;
+} {
+  let first: { key: string; minutes: number } | null = null;
+  let last: { key: string; minutes: number } | null = null;
+  for (const [key, minutes] of Object.entries(closes)) {
+    if (first == null || minutes < first.minutes || (minutes === first.minutes && compareIds(key, first.key) < 0)) {
+      first = { key, minutes };
+    }
+    if (last == null || minutes > last.minutes || (minutes === last.minutes && compareIds(key, last.key) < 0)) {
+      last = { key, minutes };
+    }
+  }
+  return { first, last };
 }
 
 export interface ConfigMeasurement {
@@ -102,14 +200,18 @@ function maybeCollect(): void {
 }
 
 function qualityOf(problem: SchedulingProblem, solution: Solution): QualityRow {
+  const metrics = metricsOf(problem, solution);
   return {
     unscheduled: solution.unscheduled.length,
     afterCutoff: solution.decisionAfterCutoff,
     makespan: solution.diagnostics.makespanMinutes,
     resourceIdle: solution.decisionResourceIdle,
     knownOverrunMinutes: solution.knownOverrunMinutes,
+    stageProgression: metrics.stageProgression,
+    disruption: metrics.disruption,
     objective: [...solution.diagnostics.winningScore],
     valid: validateSolution(problem, solution).length === 0,
+    stageCloses: stageCloseTimes(problem, solution),
   };
 }
 
@@ -433,7 +535,11 @@ export function formatReport(
   lines.push(
     "Median change in each metric, and the runtime cost of going from one configuration to the next. " +
       "`unsched` and `afterCutoff` are the two highest-priority criteria, so a `=` there means the " +
-      "extra search changed nothing that the objective actually cares about.",
+      "extra search changed nothing that the objective actually cares about.\n" +
+      "`progression` is the stage-close term and `churn` is the disruption term, both ordered below " +
+      "`afterCutoff`. They are the two the change added, so this is the table that shows what they " +
+      "cost: a `-` progression against a `+` makespan is the trade the objective ranks progression " +
+      "above, and a non-`=` churn at the same quality means the search is moving work it need not.",
   );
   lines.push("");
   const pairs: Array<[string, string]> = [
@@ -443,9 +549,9 @@ export function formatReport(
     [measured[0]!.id, measured[measured.length - 1]!.id],
   ];
   lines.push(
-    "| instance | change | unsched | afterCutoff | makespan | idle | ms median | ms p95 |",
+    "| instance | change | unsched | afterCutoff | progression | makespan | idle | churn | ms median | ms p95 |",
   );
-  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- |");
+  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const instance of instances) {
     for (const [fromId, toId] of pairs) {
       const from = measurementOf(measurements, instance.id, fromId);
@@ -456,11 +562,65 @@ export function formatReport(
           `| ${from.label} → ${to.label}`,
           `| ${delta(medianMetric(from, "unscheduled"), medianMetric(to, "unscheduled"))}`,
           `| ${delta(medianMetric(from, "afterCutoff"), medianMetric(to, "afterCutoff"))}`,
+          `| ${delta(medianMetric(from, "stageProgression"), medianMetric(to, "stageProgression"))}`,
           `| ${delta(medianMetric(from, "makespan"), medianMetric(to, "makespan"))}`,
           `| ${delta(medianMetric(from, "resourceIdle"), medianMetric(to, "resourceIdle"))}`,
+          `| ${delta(medianMetric(from, "disruption"), medianMetric(to, "disruption"))}`,
           `| ${delta(median(from.timings), median(to.timings))}`,
           `| ${delta(percentile(from.timings, 0.95), percentile(to.timings, 0.95))} |`,
         ].join(" "),
+      );
+    }
+  }
+
+  lines.push("");
+  lines.push("## Stage progression");
+  lines.push("");
+  lines.push(
+    "When each stage finishes, in minutes from the horizon, medians across the base seeds. A stage " +
+      "here is one group's own round. The question these columns answer is whether a stage with almost " +
+      "nothing left closes early — which is what releases the next round — or is postponed behind the " +
+      "events that still have work, which is the reported bug.\n" +
+      "These closes are the raw material of the `stageProgression` criterion, which is what the " +
+      "objective now ranks above `makespan`. `progression` is that criterion itself — the weighted sum " +
+      "of the closes below, with an unlocking stage counted twice — so the closes explain the score " +
+      "rather than the other way round. Both are measured over the solver's own assignments: decided " +
+      "history would floor every stage at the same instant whatever the solver did.",
+  );
+  lines.push("");
+  lines.push(
+    "| instance | solver | progression | first to close | min | last to close | min | spread |",
+  );
+  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- |");
+  for (const instance of instances) {
+    for (const config of measured) {
+      const measurement = measurementOf(measurements, instance.id, config.id);
+      const closes = medianStageCloses(measurement);
+      const span = spanOfCloses(closes);
+      lines.push(
+        `| ${instance.id} | ${measurement.label} | ` +
+          `${fixed(medianMetric(measurement, "stageProgression"))} | ` +
+          `${span.first?.key ?? "—"} | ` +
+          `${span.first ? fixed(span.first.minutes) : "—"} | ${span.last?.key ?? "—"} | ` +
+          `${span.last ? fixed(span.last.minutes) : "—"} | ` +
+          `${span.first && span.last ? fixed(span.last.minutes - span.first.minutes) : "—"} |`,
+      );
+    }
+  }
+
+  lines.push("");
+  lines.push("Every stage close, ascending, so the one that closes first is readable rather than implied.");
+  lines.push("");
+  lines.push("| instance | solver | stage closes (min, ascending) |");
+  lines.push("| --- | --- | --- |");
+  for (const instance of instances) {
+    for (const config of measured) {
+      const closes = medianStageCloses(measurementOf(measurements, instance.id, config.id));
+      const entries = Object.entries(closes)
+        .sort((a, b) => a[1] - b[1] || compareIds(a[0], b[0]))
+        .map(([key, minutes]) => `${key}=${fixed(minutes, 0)}`);
+      lines.push(
+        `| ${instance.id} | ${config.label} | ${entries.length ? entries.join(", ") : "—"} |`,
       );
     }
   }

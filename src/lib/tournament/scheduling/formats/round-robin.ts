@@ -48,6 +48,10 @@ export function buildRoundRobin(input: RoundRobinInput): FormatMatch[] {
         ...(input.timingKey == null ? {} : { timingKey: input.timingKey }),
         groupKey: input.groupKey,
         completionKey: input.groupKey,
+        // One pool runs its own rounds, so a stage is the pool's round. The last round of a pool
+        // releases nothing; every earlier one releases the next.
+        stageKey: `${input.groupKey}:r${round + 1}`,
+        stageUnlocks: round + 1 < rounds,
         phase: input.phase ?? 0,
         sequence: round * 1000 + pairing,
         softOrder: input.softOrder ?? 0,

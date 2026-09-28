@@ -5,8 +5,11 @@
  * still passes and a quality regression still fails.
  */
 
+import { expect } from "vitest";
+
 import type { ParticipantAnchor, ScheduleMatch, SchedulingProblem } from "./domain";
 import {
+  assignmentOf,
   at,
   match,
   pinnedWave,
@@ -434,6 +437,112 @@ const F15: HarnessFixture = {
   },
 };
 
+// ---------------------------------------------------------------------------------------------
+// F16 — a straggler stage is not postponed behind events with a full round still to play.
+//
+// The reported bug, in its smallest form. `pc` is the straggler: one match left in `C:r1`, and it
+// unlocks `C:r2`, which does not exist as a row until `C:r1` closes. `pa` still has three matches
+// in `A:r1`. Every participant is disjoint, so bottleneck pressure ties at zero for all of them and
+// the only key that can separate the matches is stage-closing urgency.
+//
+// Closed form: with both resources busy until 30 and every match 30 minutes, the earliest any
+// movable match can end is 60. The straggler must end exactly there. Ranking by raw remaining work
+// first — the pre-change behaviour — would drain `A:r1` ahead of it, ending `c-last` at 150 and
+// closing `C:r1` only after the full round has been played out.
+// ---------------------------------------------------------------------------------------------
+const F16_FREE = at(60);
+
+const F16: HarnessFixture = {
+  id: "F16",
+  description: "straggler stage closes at the first free instant, not after the full rounds",
+  solver: "greedy",
+  problem: problem({
+    matches: [
+      // Declared history: both resources busy for the first wave.
+      match({
+        id: "h1",
+        participants: ["h1p"],
+        duration: 30,
+        fixed: true,
+        start: at(0),
+        end: at(30),
+        resourceId: "r1",
+        groupKey: "H",
+        stageKey: "H:r0",
+      }),
+      match({
+        id: "h2",
+        participants: ["h2p"],
+        duration: 30,
+        fixed: true,
+        start: at(0),
+        end: at(30),
+        resourceId: "r2",
+        groupKey: "H",
+        stageKey: "H:r0",
+      }),
+      // A: a full round still to play, and one participant who plays all of it.
+      ...["a0", "a1", "a2"].map((id, index) =>
+        match({
+          id,
+          participants: ["pa"],
+          duration: 30,
+          groupKey: "A",
+          stageKey: "A:r1",
+          sequence: index,
+        }),
+      ),
+      // B: a full round with independent participants.
+      ...["b0", "b1"].map((id, index) =>
+        match({ id, participants: [`pb${index}`], duration: 30, groupKey: "B", stageKey: "B:r1" }),
+      ),
+      // C: the straggler. One match left, and closing it releases the next round.
+      match({
+        id: "c-last",
+        participants: ["pc"],
+        duration: 30,
+        groupKey: "C",
+        stageKey: "C:r1",
+        stageUnlocks: true,
+      }),
+      match({
+        id: "c-r2",
+        participants: ["pc2"],
+        duration: 30,
+        deps: ["c-last"],
+        groupKey: "C",
+        stageKey: "C:r2",
+      }),
+    ],
+    resources: [resource("r1", 1), resource("r2", 2)],
+  }),
+  expected: { unscheduled: 0, decisionFinish: at(180), makespanMinutes: 180 },
+  assertExtra: (solution, problem) => {
+    const stageKeyOf = new Map(problem.matches.map((m) => [m.id, m.stageKey]));
+    const closeOfStage = (stageKey: string) =>
+      Math.max(
+        ...solution.assignments
+          .filter((a) => stageKeyOf.get(a.matchId) === stageKey)
+          .map((a) => a.end),
+      );
+
+    const straggler = assignmentOf(solution, "c-last");
+    expect(straggler, "c-last must be placed").toBeDefined();
+    // The earliest a resource can take it: history ends at 30, plus its own 30 minutes.
+    expect(straggler!.end, "straggler closes at the first free instant").toBe(F16_FREE);
+    // The stage is closed there, before the events that still had a full round to play.
+    expect(closeOfStage("C:r1"), "C:r1 closes at the first free instant").toBe(F16_FREE);
+    expect(closeOfStage("C:r1"), "C:r1 closes before A:r1").toBeLessThan(closeOfStage("A:r1"));
+    expect(closeOfStage("C:r1"), "C:r1 closes before B:r1").toBeLessThan(closeOfStage("B:r1"));
+    // And the round it releases is played immediately, not left waiting behind the full rounds.
+    const released = assignmentOf(solution, "c-r2");
+    expect(released, "c-r2 must be placed").toBeDefined();
+    expect(released!.start, "the released round starts as soon as the dependency clears").toBe(
+      F16_FREE,
+    );
+  },
+};
+
 export const FIXTURES: HarnessFixture[] = [
   F1,
   F2,
@@ -452,6 +561,7 @@ export const FIXTURES: HarnessFixture[] = [
   F13,
   F14,
   F15,
+  F16,
 ];
 
 export function fixtureById(id: string): HarnessFixture {

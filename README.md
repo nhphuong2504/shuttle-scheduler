@@ -44,7 +44,7 @@ fails without them.
 | `npm run test:e2e` | Playwright — rendered app, hermetic (no network to Supabase) |
 | `npm run test:e2e:final` | The phase-close gate: fails on any skip, then asserts zero skips |
 | `npm run test:e2e:record-auth` | Optional. Records a real staff session for manual checks against a live backend |
-| `npm run bench:scheduling` | Scheduler benchmark; writes a report to `.benchmark/` |
+| `npm run bench:scheduling` | Scheduler benchmark; prints its report to stdout. Compares greedy against the hybrid at 1/5/10/25 runs across six shapes — `small`, `medium`, `large`, `contended`, `multi-event` and `straggler`. The report adds stage-close times and the median change in progression and churn per run-count step, so it answers "did the change close stages earlier, and at what cost to finish time" rather than only `unscheduled` / `afterCutoff` / `makespan`. Overrides: `BENCH_ONLY`, `BENCH_REPS`, `BENCH_SEEDS`, and `BENCH_OUT` to also write the markdown to a file (e.g. `BENCH_OUT=.benchmark/hybrid-core.md`, git-ignored) |
 | `npm run lint` | ESLint. **Not a gate** — see below |
 | `npm run format` | Prettier write |
 

@@ -105,6 +105,22 @@ export interface ScheduleMatch extends RestConstraint {
   groupKey: string;
   /** Completion unit for pressure. Falls back to groupKey. */
   completionKey?: string | undefined;
+  /**
+   * The milestone this match belongs to, e.g. `"MD:round1"`.
+   *
+   * A *stage* is a round or phase of one event — the unit that closes as a whole and whose closure
+   * releases the next one. It is a ranking input only: nothing in `constraints.ts` reads it, so a
+   * stage can never relax a hard rule, only reorder two otherwise-legal placements.
+   */
+  stageKey?: string | undefined;
+  /**
+   * True when finishing this stage is what releases a later stage of the same event.
+   *
+   * Round two does not exist as a row while round one is closing, so "will this unlock something"
+   * cannot be read off the match set; it comes from the format's own pipeline knowledge. Absent
+   * means false, which is the pre-stage-identity behaviour.
+   */
+  stageUnlocks?: boolean | undefined;
   /** Soft phase. */
   phase?: number | undefined;
   /** Intra-group ordering. */
@@ -117,11 +133,26 @@ export interface ScheduleMatch extends RestConstraint {
 export type ObjectiveCriterion =
   | "unscheduled"
   | "afterCutoff"
+  | "stageProgression"
   | "makespan"
   | "resourceIdle"
   | "excessWait"
   | "fragmentation"
-  | "softOrderDeviation";
+  | "softOrderDeviation"
+  | "disruption";
+
+/**
+ * Where a still-movable match already sits, so a rebuild can be scored on how little it disturbs.
+ *
+ * `resourceId` is the resource the current rows name. A rebuild onto a different resource counts as
+ * a court change even when that resource is not in the problem's own list, which is the honest
+ * reading: the desk is being shown a different court either way.
+ */
+export interface BaselineSlot {
+  matchId: string;
+  start: number;
+  resourceId: string;
+}
 
 export interface SchedulingProblem {
   matches: readonly ScheduleMatch[];
@@ -132,6 +163,14 @@ export interface SchedulingProblem {
    * `assignments` or `unscheduled`.
    */
   anchors?: readonly ParticipantAnchor[] | undefined;
+  /**
+   * The schedule the desk is currently looking at, for the `disruption` criterion only.
+   *
+   * Absent on a first build, and read by nothing but `metricsOf`: a problem's constraints never
+   * consult it, so it cannot make a candidate infeasible, only less attractive. A match named here
+   * that the problem marks `fixed` contributes nothing.
+   */
+  baseline?: readonly BaselineSlot[] | undefined;
   horizonStart: number;
   /**
    * Soft target. `planningEnd` is what both lateness numbers measure against: finishing after it

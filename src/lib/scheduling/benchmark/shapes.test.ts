@@ -13,6 +13,8 @@ import { describe, expect, it } from "vitest";
 import { assertValidProblem } from "../preflight";
 import { BENCH_INSTANCES, SHAPES, buildInstance, instanceById } from "./shapes";
 import type { ScheduleMatch, SchedulingProblem } from "../domain";
+import { solve } from "../solvers";
+import { stageCloseTimes } from "./harness";
 
 /** Groups each participant appears in, keyed by participant id. */
 function groupsByParticipant(problem: SchedulingProblem): Map<string, Set<string>> {
@@ -105,4 +107,58 @@ describe("benchmark shapes", () => {
     // recovery rule adds on top has to show up as lateness, which is the criterion under test.
     expect(instance.planningMinutes).toBe(Math.ceil(demandMinutes / problem.resources.length));
   });
+});
+
+/**
+ * The straggler shape, in the terms the reported bug is stated in.
+ *
+ * The pre-change baseline is a recorded number, not a formula: with raw remaining work leading the
+ * order, group 0's two surviving round-one matches were scheduled behind every other match, so its
+ * stage closed at 240 minutes. The assertion below is therefore an upstream bound plus an ordering
+ * property — the straggler's stage must close before every other event's stage, not merely at some
+ * smaller number.
+ */
+describe("straggler shape", () => {
+  const PRE_CHANGE_STAGE_CLOSE_MINUTES = 240;
+
+  it("leaves the straggler group with only its last round-one matches on the board", () => {
+    const spec = SHAPES.find((candidate) => candidate.id === "straggler")!;
+    const instance = instanceById("straggler");
+    const stragglerKey = `g${spec.straggler!.group}:r0`;
+    const opening = instance.problem.matches.filter((match) => match.stageKey === stragglerKey);
+
+    expect(opening.length).toBeGreaterThan(spec.straggler!.remaining);
+    expect(opening.filter((match) => !match.fixed).length).toBe(spec.straggler!.remaining);
+    // The other groups are untouched and still hold a full opening round.
+    for (let group = 0; group < spec.groups; group++) {
+      if (group === spec.straggler!.group) continue;
+      const stage = `g${group}:r0`;
+      expect(
+        instance.problem.matches.filter((match) => match.stageKey === stage && !match.fixed).length,
+        `${stage} movable`,
+      ).toBe(spec.entrantsPerGroup / 2);
+    }
+  });
+
+  for (const solver of ["greedy", "grasp-hybrid"] as const) {
+    it(`closes the straggler stage before every other stage (${solver})`, () => {
+      const spec = SHAPES.find((candidate) => candidate.id === "straggler")!;
+      const instance = instanceById("straggler");
+      const solution = solve(instance.problem, solver, solver === "greedy" ? {} : { runs: 1 });
+      // The harness's own reporting measure, so this asserts on the number the benchmark reports:
+      // per-stage close in minutes, decided history excluded.
+      const closes = stageCloseTimes(instance.problem, solution);
+      const stragglerKey = `g${spec.straggler!.group}:r0`;
+      const stragglerClose = closes[stragglerKey];
+
+      expect(stragglerClose, `${stragglerKey} must close`).toBeDefined();
+      expect(stragglerClose!, "no later than the recorded pre-change baseline").toBeLessThanOrEqual(
+        PRE_CHANGE_STAGE_CLOSE_MINUTES,
+      );
+      for (const [stageKey, minutes] of Object.entries(closes)) {
+        if (stageKey === stragglerKey) continue;
+        expect(stragglerClose!, `${stragglerKey} before ${stageKey}`).toBeLessThan(minutes);
+      }
+    });
+  }
 });

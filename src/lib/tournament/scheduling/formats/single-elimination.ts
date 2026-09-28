@@ -74,6 +74,12 @@ export function buildSingleElimination(input: SingleEliminationInput): FormatMat
       ...(input.timingKey == null ? {} : { timingKey: input.timingKey }),
       groupKey: input.groupKey,
       completionKey: input.groupKey,
+      // A bracket round is the stage. Whether round one unlocks anything is a property of the
+      // bracket's depth, not of whether the caller asked to emit the later rounds: with
+      // `roundOneOnly` the rest of the bracket is created as results arrive, but it is still what
+      // finishing round one releases.
+      stageKey: `${input.groupKey}:r1`,
+      stageUnlocks: bracketSize / 2 > 1,
       phase: input.phase ?? 0,
       sequence: i,
       softOrder: input.softOrder ?? 0,
@@ -88,6 +94,9 @@ export function buildSingleElimination(input: SingleEliminationInput): FormatMat
   let round = 2;
   while (previous.length > 1) {
     const next: Slot[] = [];
+    // This round's own size decides whether it unlocks another: a round that halves down to a single
+    // match is the final, and a final releases nothing.
+    const roundSize = Math.floor(previous.length / 2);
     for (let i = 0; i + 1 < previous.length; i += 2) {
       const first = previous[i]!;
       const second = previous[i + 1]!;
@@ -101,6 +110,8 @@ export function buildSingleElimination(input: SingleEliminationInput): FormatMat
         ...(input.timingKey == null ? {} : { timingKey: input.timingKey }),
         groupKey: input.groupKey,
         completionKey: input.groupKey,
+        stageKey: `${input.groupKey}:r${round}`,
+        stageUnlocks: roundSize > 1,
         phase: input.phase ?? 0,
         sequence: i / 2,
         softOrder: input.softOrder ?? 0,

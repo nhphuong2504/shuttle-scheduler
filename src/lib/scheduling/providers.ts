@@ -24,6 +24,13 @@ export interface FormatMatch {
   timingKey?: string | undefined;
   groupKey: string;
   completionKey?: string | undefined;
+  /**
+   * The stage — a round or phase of one event — this match belongs to, e.g. `"draw-7:r1"`.
+   * Mirrors onto `ScheduleMatch.stageKey`; ranking input only.
+   */
+  stageKey?: string | undefined;
+  /** True when finishing this stage is what releases a later stage of the same event. */
+  stageUnlocks?: boolean | undefined;
   phase?: number | undefined;
   sequence?: number | undefined;
   softOrder?: number | undefined;
