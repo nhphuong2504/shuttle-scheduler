@@ -36,9 +36,10 @@ const MINUTE = 60_000;
  *
  * A court on court yields its finish and *not* also the start of the match queued behind it.
  * The queued match cannot begin before the current one ends, so offering both would put a
- * countdown on an event that cannot happen on schedule - and it would spend two of five slots
- * on one court, which is the opposite of a venue-wide view. A court therefore contributes at
- * most its single next transition, and the list is ordered by when those fall due.
+ * countdown on an event that cannot happen on schedule - and it would spend two of the list's
+ * rows on one court, which is the opposite of a venue-wide view. A court therefore contributes
+ * at most its single next transition, and the list is ordered by when those fall due. That
+ * bound is also what makes the default cap below exactly "one row per court".
  *
  * ## What is left out, on purpose
  *
@@ -78,9 +79,6 @@ export const COURT_TRANSITION_LABEL: Record<CourtTransitionKind, string> = {
   start: "Scheduled start",
 };
 
-/** The default cap: enough to cover a busy hall, few enough to read without scanning. */
-export const TRANSITION_LIMIT = 5;
-
 export interface CourtTransition<TMatch extends DeskMatchModel = DeskMatchModel> {
   courtId: string;
   kind: CourtTransitionKind;
@@ -113,12 +111,27 @@ function minutesUntil(at: number, now: number): number {
  *
  * Read-only and pure: it returns the list and nothing else. Nothing here writes, dispatches or
  * reorders anything, and the caller renders it as information.
+ *
+ * ## The cap defaults to one row per court, not to a fixed number
+ *
+ * It was a constant five, which was a guess dressed as a limit: it truncated the list at a
+ * count that had no relationship to the panel drawing it. The panel is stretched to share a
+ * height with Court progress, which renders one row per court at the same `--row-height`, so
+ * the list that fills it is exactly one row per court - and a smaller cap left unexplained
+ * empty space at the panel's foot while the data to fill it was already in hand.
+ *
+ * Because a court contributes at most one transition (see above), `courtStates.length` is both
+ * the maximum this function can return and the "show everything" case. So the default cannot
+ * truncate in practice, and it cannot be wrong about the height either: the number of rows is
+ * derived from the same court list the neighbouring panel is built from, so the two cannot
+ * disagree. The parameter stays for a caller that has a real capacity other than one per
+ * court, and for tests that need a shorter list.
  */
 export function nextCourtTransitions<TMatch extends DeskMatchModel>(
   courtStates: readonly DeskCourtState<TMatch>[],
   slotMinutesFor: (match: TMatch) => number,
   now: number,
-  limit: number = TRANSITION_LIMIT,
+  limit: number = courtStates.length,
 ): CourtTransition<TMatch>[] {
   const transitions: CourtTransition<TMatch>[] = [];
 

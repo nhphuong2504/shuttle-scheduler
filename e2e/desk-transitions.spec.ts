@@ -1,13 +1,9 @@
 import { type Page } from "@playwright/test";
 
-import {
-  COURT_TRANSITION_KINDS,
-  COURT_TRANSITION_LABEL,
-  TRANSITION_LIMIT,
-} from "../src/lib/tournament/desk-transitions";
+import { COURT_TRANSITION_KINDS, COURT_TRANSITION_LABEL } from "../src/lib/tournament/desk-transitions";
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
-import { REFERENCE } from "./fixtures/desk-mock";
+import { COURT_COUNT, REFERENCE } from "./fixtures/desk-mock";
 import { cellLabel, MATRIX_CELLS, openCell } from "./fixtures/matrix";
 
 /**
@@ -81,7 +77,10 @@ for (const cell of MATRIX_CELLS) {
 
       const rows = await readRows(page);
       expect(rows.length, "no transitions rendered").toBeGreaterThan(0);
-      expect(rows.length).toBeLessThanOrEqual(TRANSITION_LIMIT);
+      // One row per court at most, which is the cap now: a court yields its finish or the start
+      // queued behind it, never both, so the bound is the venue's court count rather than a
+      // fixed number. Asserted against the fixture's own count, so it moves with the fixture.
+      expect(rows.length).toBeLessThanOrEqual(COURT_COUNT);
 
       // Every row names a court, and the fixture's courts are numbered 1..8. This reads the
       // Court cell, so it is the court rather than any digit that happens to appear in a clock
@@ -133,15 +132,20 @@ for (const cell of MATRIX_CELLS) {
       }
 
       // The estimate is marked as one in the panel's own words, not only by the tilde: the
-      // kind reads "Expected finish", the Due cell carries a `~`, and a footnote says what
-      // the `~` means. A projection presented as a fact is the thing requirement 4 forbids.
+      // kind reads "Expected finish", which names the projection, and the Due cell carries a
+      // `~`. A projection presented as a fact is the thing requirement 4 forbids.
+      //
+      // The footnote that used to gloss the `~` was removed, so the Kind column's wording is
+      // what has to carry the distinction - which is why the label assertion above is now doing
+      // more work than it was, and why the `~` against "Expected finish" is the pair to check.
       const estimated = rows.filter((r) => r.cells.kind.includes(COURT_TRANSITION_LABEL.finish));
       expect(estimated.length, "no estimated finish to check").toBeGreaterThan(0);
       for (const row of estimated) {
         expect(row.cells.due, `an estimated finish with no qualifier: ${row.text}`).toMatch(/~\d/);
       }
-      // The tilde is only honest if the panel says what it means.
-      await expect(panel(page).getByText(/~ marks an estimate/)).toBeVisible();
+      // The footnote is gone, and pinned as gone so it cannot return without this failing. The
+      // words that name the projection now live only in the Kind cell.
+      await expect(panel(page).getByText(/~ marks an estimate/)).toHaveCount(0);
 
       // And the scheduled start carries neither marker - not in its Due cell, and not in its
       // kind, which must not be named as an estimate either.
@@ -285,8 +289,9 @@ for (const cell of MATRIX_CELLS) {
 
       expect(await page.locator(ROWS).count(), "an empty board still rendered rows").toBe(0);
       await expect(panel(page).getByText("Nothing transitioning")).toBeVisible();
-      // The empty state must not carry a stale countdown into the panel's header either, and
-      // the `~` footnote must go with the rows it explains rather than outliving them.
+      // The empty state must not carry a stale countdown into the panel's header either, nor
+      // any line of explanation beneath a table that is not there. Nothing renders below the
+      // table at all now, which this pins from the other direction.
       await expect(panel(page).getByText(/~ marks an estimate/)).toHaveCount(0);
       // Nor should the table's own column headers survive a body with no rows in it.
       expect(

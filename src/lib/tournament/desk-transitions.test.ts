@@ -4,7 +4,6 @@ import {
   COURT_TRANSITION_KINDS,
   COURT_TRANSITION_LABEL,
   nextCourtTransitions,
-  TRANSITION_LIMIT,
   transitionCountdown,
   transitionOverdueBy,
 } from "./desk-transitions";
@@ -142,7 +141,8 @@ describe("next court transitions", () => {
 
   it("gives a court one transition - the soonest - rather than two", () => {
     // The queued match cannot start before the current one ends, so offering both would spend
-    // two of the five slots on one court and count down an event that cannot happen on schedule.
+    // two rows on one court and count down an event that cannot happen on schedule. It is also
+    // what lets the default cap be the court count rather than a guess.
     const playing = match({
       id: "playing",
       courtId: "c2",
@@ -198,14 +198,31 @@ describe("next court transitions", () => {
     ]);
   });
 
-  it("caps the list, defaulting to five", () => {
+  it("defaults its cap to one row per court, so no court is truncated", () => {
+    // Eight courts, one transition each. The old default of a fixed five cut three of them
+    // off; the panel is stretched to share a height with Court progress, which draws one row
+    // per court, so five rows left it short while the data to fill it was already derived.
     const many = Array.from({ length: 8 }, (_, i) =>
       match({ id: `m${i}`, courtId: `c${i}`, status: "scheduled", scheduled: at(i + 1) }),
     );
 
-    expect(transitionsOf(many)).toHaveLength(TRANSITION_LIMIT);
+    expect(transitionsOf(many)).toHaveLength(many.length);
+    expect(
+      transitionsOf(many),
+      "the default cap is the court count, not the match count",
+    ).toHaveLength(new Set(many.map((m) => m.courtId)).size);
+  });
+
+  it("still accepts an explicit cap, and applies it after the sort", () => {
+    const many = Array.from({ length: 8 }, (_, i) =>
+      match({ id: `m${i}`, courtId: `c${i}`, status: "scheduled", scheduled: at(i + 1) }),
+    );
+
     expect(transitionsOf(many, BASE, 3)).toHaveLength(3);
+    // The soonest three, not the first three encountered - the cap narrows an ordered list.
     expect(transitionsOf(many, BASE, 3).map((t) => t.match.id)).toEqual(["m0", "m1", "m2"]);
+    // A trailing start must not survive a cap that trims it.
+    expect(transitionsOf(many, BASE, 3).map((t) => t.match.id)).not.toContain("m7");
   });
 
   it("is empty when no court is playing and nothing is queued", () => {

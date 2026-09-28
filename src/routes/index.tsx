@@ -787,11 +787,16 @@ function Desk() {
         {/*
           `items-stretch`, not `items-start`: these two panels are one band, and the shorter
           one used to end well above the other, leaving a ragged bottom edge across the middle
-          of the page. Stretched, they share a height and the band reads as one unit. The cost
-          is empty space at the foot of whichever panel has fewer rows, which is inherent -
-          Next transitions is capped at one row per court and usually has fewer than the court
-          count - and it is the cheaper of the two costs, since the alternative is padding rows
-          out to fill and losing the density the table was just rebuilt for.
+          of the page. Stretched, they share a height and the band reads as one unit.
+
+          The two are the same list length by construction. Court progress draws one row per
+          court, and Next transitions draws at most one row per court - a court yields its
+          finish or the start queued behind it, never both - at the same `--row-height`. So
+          the rows line up and only the courts that are neither playing nor followed by a
+          queued match leave a gap, which is the residual empty space and not a cap. That is
+          why the list is not truncated to a smaller number: a fixed cap smaller than the
+          court count spent the panel's height on nothing while the rows to fill it were
+          already derived.
         */}
         <div className="grid items-stretch gap-4 lg:grid-cols-2">
           <Panel
@@ -1545,7 +1550,9 @@ function CourtStatePill({ state }: { state: CourtState }) {
  * The other two chip fills went with it, which is why `COURT_TRANSITION_CHIP` no longer exists:
  * the kind's fill had no other consumer, and a token kept after its only renderer is deleted is
  * a standing claim that something still paints it. The estimate marker survives as the `~` on
- * the Due cell, explained by the footnote under the table.
+ * the Due cell. The footnote that used to gloss that `~` is gone as well, which leaves the Kind
+ * column's words as the channel that names a projection - and leaves the panel's header as the
+ * panel's name and its one summary, with nothing beneath the table.
  *
  * The pairings are still absent on purpose - the board is already showing them at a size meant
  * for reading them.
@@ -1587,7 +1594,9 @@ function TransitionRow({
         data-transition-cell="due"
         className="hidden whitespace-nowrap py-1 pr-3 text-right align-middle font-score text-t4 text-muted-foreground sm:table-cell"
       >
-        {/* The leading "~" is the marker the panel's footnote explains: this is projected. */}
+        {/* The leading "~" is the marker for a projected value. It carries this cell alone -
+            there is no footnote under the table explaining it, so the Kind column's own words
+            ("Expected finish" against "Scheduled start") are what state the distinction. */}
         {estimated ? `~${clock}` : clock}
       </td>
       <td
@@ -1633,8 +1642,6 @@ function TransitionTable({
   transitions: readonly CourtTransition<DeskMatch>[];
   courtMap: ReadonlyMap<string, { number: number }>;
 }) {
-  const anyEstimated = transitions.some((transition) => transition.estimated);
-
   return (
     <>
       <table className="w-full border-collapse text-left text-t3">
@@ -1668,15 +1675,6 @@ function TransitionTable({
           ))}
         </tbody>
       </table>
-      {/*
-        A table footnote rather than a line in the header: it belongs to one column's values,
-        it takes that column's weight, and it leaves the header as the panel's name and its one
-        summary. Shown only when a projection is actually on screen, so no marker is ever
-        explained on a panel that is not showing one.
-      */}
-      {anyEstimated ? (
-        <p className="mt-2 text-t4 text-muted-foreground">~ marks an estimate</p>
-      ) : null}
     </>
   );
 }
