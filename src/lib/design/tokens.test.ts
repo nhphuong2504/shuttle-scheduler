@@ -440,23 +440,6 @@ describe("every colour utility resolves to a theme key", () => {
     "text-t4",
   ]);
 
-  /**
-   * Colour *literals* that are deliberately outside the token system.
-   *
-   * Separate from `NON_COLOUR` because these are real colours: putting one there
-   * would make its name a lie and hide the exemption among geometric utilities.
-   * The design system rule is that every colour resolves to a `--color-*` key, so
-   * an entry here is a decision to break that rule knowingly, and each needs a
-   * reason written beside it. This set exists so the break is visible in the
-   * suite rather than arriving as a silent allowance for the whole palette.
-   *
-   * - `bg-emerald-500` - the session presence dot in `app-shell.tsx`. Owner's
-   *   decision (2026-09-28): the shipped `--state-live-ink` reads too muted for a
-   *   6px mark, so the literal replaces it. It is *not* theme-aware, unlike the
-   *   token it replaced, so it keeps one value in both themes.
-   */
-  const COLOUR_LITERALS = new Set(["bg-emerald-500"]);
-
   /** Namespaces that take a colour, matching Tailwind's own utility families. */
   const NAMESPACES = ["bg", "text", "border", "ring", "fill", "stroke", "divide"] as const;
   const NAMESPACE_PATTERN = new RegExp(
@@ -473,7 +456,6 @@ describe("every colour utility resolves to a theme key", () => {
         const full = match[0]!;
         const name = match[2]!;
         if (NON_COLOUR.has(full)) continue;
-        if (COLOUR_LITERALS.has(full)) continue;
         // Full name first: `ring-offset-background` maps to --color-ring-offset-background,
         // so splitting on the first hyphen would look for the wrong key.
         if (colorMap.has(full)) continue;
@@ -494,20 +476,6 @@ describe("every colour utility resolves to a theme key", () => {
         new RegExp(`^(${NAMESPACES.join("|")})-[a-z0-9][a-z0-9-]*$`),
       );
     }
-    // Same shape check for the deliberate literals, so a mistyped entry is a failure
-    // rather than an exemption that exempts nothing while looking like it does.
-    for (const name of COLOUR_LITERALS) {
-      expect(name, `"${name}" is not a utility in an inspected namespace`).toMatch(
-        new RegExp(`^(${NAMESPACES.join("|")})-[a-z0-9][a-z0-9-]*$`),
-      );
-    }
-  });
-
-  it("names a reason for every colour literal it exempts", () => {
-    // The literals set is the one place the token rule is allowed to be broken, so
-    // each member has to be accounted for. Pinned as a list rather than a length so
-    // growth is a deliberate edit to the test, not a silent allowance.
-    expect([...COLOUR_LITERALS].sort()).toEqual(["bg-emerald-500"]);
   });
 });
 

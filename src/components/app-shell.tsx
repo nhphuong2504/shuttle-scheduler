@@ -161,7 +161,14 @@ export function AppShell({
             {signedIn ? (
               <>
                 <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
-                  <span aria-hidden className="size-[6px] shrink-0 rounded-full bg-emerald-500" />
+                  {/*
+                    Presence. Its own token rather than the match-state ink, so the
+                    mark reads as "someone is signed in" and not as "a match is live",
+                    and so tuning it cannot move the state palette. The email and role
+                    beside it carry the meaning, so the mark is decorative and stays
+                    out of the accessibility tree.
+                  */}
+                  <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
                   {session?.userEmail}
                   {role ? ` · ${role}` : ""}
                 </span>
