@@ -59,6 +59,26 @@ export interface ShapeSpec {
   restMinutes: number;
   /** When set, `hardEnd` equals `planningEnd`, so work that does not fit is unscheduled. */
   hardEnd: boolean;
+  /**
+   * One group is a straggler: it plays only round zero, and all but `remaining` of those matches
+   * are already decided.
+   *
+   * This is the shape that isolates the reported bug. One event is down to its last round-one
+   * match while every other event still has a full round to play, so the completion pressure the
+   * solver reads for the straggler is small and for its rivals is large. Giving the group only its
+   * opening round is also what makes it faithful: a real round two does not exist yet, because it
+   * is generated only once round one is fully decided.
+   */
+  straggler?: { group: number; remaining: number } | undefined;
+  /**
+   * When true, each group's opening round declares that finishing it releases a later stage.
+   *
+   * A shape that models the round-one moment emits only that round, because round two is generated
+   * only once every round-one result is in. The unlock is still real, so it is declared rather than
+   * inferred from a round the generator has deliberately not emitted — the same reading as
+   * `roundOneOnly` in the bracket builders.
+   */
+  openingRoundUnlocks?: boolean | undefined;
 }
 
 export interface BenchInstance {
@@ -129,10 +149,15 @@ export function buildInstance(spec: ShapeSpec): BenchInstance {
   const matches: ScheduleMatch[] = [];
   /** Round-zero ids across all groups, which is the pool the fixed matches are drawn from. */
   const firstRoundIds: string[] = [];
+  /** The same ids kept per group, so a straggler's own opening round can be picked out. */
+  const firstRoundIdsByGroup: string[][] = [];
 
   for (let group = 0; group < spec.groups; group++) {
     let previousIds: string[] = [];
-    for (let round = 0; round < spec.rounds; round++) {
+    // A straggler group plays only its opening round. Its later rounds do not exist yet, which is
+    // the real shape of the bug: round two is generated only once every round-one result is in.
+    const groupRounds = group === spec.straggler?.group ? 1 : spec.rounds;
+    for (let round = 0; round < groupRounds; round++) {
       const roundIds: string[] = [];
       circlePairings(spec.entrantsPerGroup, round).forEach(([left, right], slot) => {
         const id = `g${group}-r${round}-m${slot}`;
@@ -154,6 +179,9 @@ export function buildInstance(spec: ShapeSpec): BenchInstance {
             duration: spec.durationMinutes,
             groupKey: `g${group}`,
             completionKey: `g${group}`,
+            stageKey: `g${group}:r${round}`,
+            stageUnlocks:
+              round < groupRounds - 1 || (spec.openingRoundUnlocks === true && round === 0),
             phase: round,
             sequence: round * 1000 + slot,
             softOrder: group,
@@ -163,14 +191,32 @@ export function buildInstance(spec: ShapeSpec): BenchInstance {
         );
         roundIds.push(id);
       });
-      if (round === 0) firstRoundIds.push(...roundIds);
+      if (round === 0) {
+        firstRoundIds.push(...roundIds);
+        firstRoundIdsByGroup[group] = roundIds;
+      }
       previousIds = roundIds;
     }
   }
 
   // Fixed matches: history the solver must route around rather than move.
   const byId = new Map(matches.map((m) => [m.id, m]));
-  firstRoundIds.slice(0, spec.fixedMatches).forEach((id, index) => {
+
+  /**
+   * A straggler's already-played opening round: every round-zero match but the last `remaining`.
+   *
+   * They all belong to one group's opening round, so they are participant-disjoint by construction,
+   * and they join the same staggered fixed block below instead of one of their own — which keeps the
+   * "no two fixed matches share a resource or a participant" invariant a property of one loop.
+   */
+  const stragglerIds = spec.straggler
+    ? (firstRoundIdsByGroup[spec.straggler.group] ?? []).slice(0, -spec.straggler.remaining)
+    : [];
+
+  // One ordered pool, so the stagger spaces every fixed match against every other one, including a
+  // straggler's history against the general fixed set.
+  const fixedIds = [...new Set([...firstRoundIds.slice(0, spec.fixedMatches), ...stragglerIds])];
+  fixedIds.forEach((id, index) => {
     const existing = byId.get(id)!;
     const start = at(index * 60);
     byId.set(id, {
@@ -182,7 +228,9 @@ export function buildInstance(spec: ShapeSpec): BenchInstance {
     });
   });
 
-  const anchorBase = spec.fixedMatches * 60 + 30;
+  // Anchors start after the whole fixed block, whichever size it ended up, and are staggered 60
+  // minutes apart, so an anchor can never overlap a fixed match or another anchor.
+  const anchorBase = fixedIds.length * 60 + 30;
   const anchors: ParticipantAnchor[] = Array.from({ length: spec.anchors }, (_, index) => {
     const start = at(anchorBase + index * 60);
     const participants =
@@ -336,6 +384,34 @@ export const SHAPES: readonly ShapeSpec[] = [
     targetUtilization: 1,
     durationMinutes: 25,
     restMinutes: 30,
+    hardEnd: false,
+  },
+  {
+    id: "straggler",
+    description:
+      "5 events at the round-one moment: one down to its last two matches, four with a full round",
+    groups: 5,
+    entrantsPerGroup: 12,
+    teamSize: 2,
+    // One round only, which is what the round-one moment actually looks like: round two is generated
+    // only once every round-one result is in, so no group has a later round on the board yet. That is
+    // also what keeps the shape honest about the bug — with no later rows to count, the straggler can
+    // only be recognised by its stage, which is exactly the signal the change adds.
+    rounds: 1,
+    resources: 4,
+    crossEntrants: 2,
+    straggler: { group: 0, remaining: 2 },
+    fixedMatches: 0,
+    // Every one of these opening rounds releases a round two; the generator has simply not emitted
+    // it yet, exactly as a live bracket builds its later rounds as results arrive.
+    openingRoundUnlocks: true,
+    anchors: 2,
+    anchorsHoldResource: false,
+    // The window is exactly the court time the remaining work needs, so there is nowhere to hide a
+    // straggler that keeps losing the contest for an early court.
+    targetUtilization: 1,
+    durationMinutes: 30,
+    restMinutes: 5,
     hardEnd: false,
   },
 ];

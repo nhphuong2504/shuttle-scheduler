@@ -11,7 +11,7 @@
  * cross-day carry logic. Production passes real items only, so its behavior is unchanged.
  */
 
-import type { SolverDiagnostics, TimeWindow } from "@/lib/scheduling";
+import type { BaselineSlot, SolverDiagnostics, TimeWindow } from "@/lib/scheduling";
 
 import type { Court, TournamentDay, TournamentDayBreak } from "../data";
 import { composeDayPlan } from "./composition";
@@ -255,11 +255,27 @@ function runStageForDay(input: {
   slotMinutes: number;
   restGapMinutes: number;
   options?: DayOneSchedulerOptions | undefined;
+  baselineByMatchId?: ReadonlyMap<string, BaselineSlot> | undefined;
 }): StageRun {
   const { dayStart, planningEnd, hardEnd, schedulingFloor, courts, breaks, items } = input;
-  const { restGapMinutes, options, slotMinutes } = input;
+  const { restGapMinutes, options, slotMinutes, baselineByMatchId } = input;
 
   const resolved = resolveStageItems(items, courts, restGapMinutes);
+
+  /**
+   * This run's baseline: where the matches it is about to place currently sit.
+   *
+   * Fixed and frozen items are left out because both are already pinned — the solver cannot move
+   * one, so it can never be disturbed, and counting it would just add the same constant to every
+   * candidate.
+   */
+  const baseline = baselineByMatchId?.size
+    ? resolved.flatMap((item) => {
+        if (item.fixed) return [];
+        const slot = baselineByMatchId.get(item.id);
+        return slot ? [slot] : [];
+      })
+    : [];
 
   const composed = composeDayPlan({
     matches: resolved,
@@ -274,6 +290,7 @@ function runStageForDay(input: {
     floor: schedulingFloor.getTime(),
     breaks,
     ...(options ? { options } : {}),
+    ...(baseline.length ? { baseline } : {}),
   });
 
   const solution = composed.solution;
@@ -304,6 +321,13 @@ export interface PlanDaysInput {
   isRebuild: boolean;
   nextWholeMinute: number;
   options?: DayOneSchedulerOptions | undefined;
+  /**
+   * Where the still-movable matches currently sit, keyed by match id, for the `disruption` score.
+   *
+   * Optional and read by no constraint: a day with no baseline scores zero disruption, which is
+   * exactly right for a first build and for a day that has nothing on it yet.
+   */
+  baselineByMatchId?: ReadonlyMap<string, BaselineSlot> | undefined;
   /**
    * Treat the other stage's fixed items as anchors in this stage too.
    *
@@ -360,6 +384,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     isRebuild,
     nextWholeMinute,
     options,
+    baselineByMatchId,
     sharedAnchors,
   } = input;
 
@@ -385,6 +410,20 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
   /** This day's anchors, so a fixed match is counted on exactly one day. */
   const anchorsOn = (items: readonly StageItem[], dayKey: string) =>
     items.filter((item) => item.fixed && item.start != null && localDateKey(item.start) === dayKey);
+
+  /**
+   * This day's planner-pinned items.
+   *
+   * They arrive as fixed anchors — the solver must route around them — but they are still
+   * `scheduled` rows as far as the desk is concerned, so their slot has to come back out of the run
+   * and into the payload. A day whose only work is a frozen match therefore still has to run, which
+   * is what makes this a condition of its own rather than a member of the todo set: it is never
+   * waiting for a slot, and counting it as newly placed would misreport the day.
+   */
+  const frozenOn = (items: readonly StageItem[], dayKey: string) =>
+    items.filter(
+      (item) => item.frozen === true && item.start != null && localDateKey(item.start) === dayKey,
+    );
 
   const daysWithCourts = orderedDays.filter(
     (day) => courtsForDay(allCourts, dayCourtIds?.get(day.id) ?? new Set()).length > 0,
@@ -425,6 +464,10 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
       // The rest gap crosses midnight even though the court does not, so it is carried.
       restAfterMinutes: item?.restAfterMinutes,
       groupKey: item?.groupKey ?? slot.categoryId,
+      // Carried as well as the group: a later day's run must still know which milestone this
+      // decided occupancy belongs to, or the stage it closes would read as missing its tail.
+      ...(item?.stageKey == null ? {} : { stageKey: item.stageKey }),
+      ...(item?.stageUnlocks == null ? {} : { stageUnlocks: item.stageUnlocks }),
       sequence: item?.sequence,
       softOrder: item?.softOrder,
       // No court on purpose: an earlier day's court has no bearing on a later day's,
@@ -494,6 +537,8 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
       start?: number | undefined;
       end?: number | undefined;
       courtNumber?: number | undefined;
+      stageKey?: string | undefined;
+      stageUnlocks?: boolean | undefined;
     }): StageItem | null =>
       item.start == null || item.end == null
         ? null
@@ -505,6 +550,8 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
             durationMinutes: placementSlotMinutes,
             restAfterMinutes: placementRestGapMinutes,
             groupKey: item.categoryId,
+            ...(item.stageKey == null ? {} : { stageKey: item.stageKey }),
+            ...(item.stageUnlocks == null ? {} : { stageUnlocks: item.stageUnlocks }),
             sequence: 0,
             fixed: true,
             start: item.start,
@@ -517,7 +564,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     }
 
     // Pass A — the placement stage.
-    if (placementTodo.size) {
+    if (placementTodo.size || frozenOn(placementAll, dayKey).length) {
       const items = [
         ...anchorsOn(placementAll, dayKey),
         // The other stage's fixed work, when the caller is forecasting a partly
@@ -538,6 +585,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
         slotMinutes: placementSlotMinutes,
         restGapMinutes: placementRestGapMinutes,
         options,
+        baselineByMatchId,
       });
       for (const slot of run.slots) {
         if (!placementTodo.has(slot.matchId)) continue;
@@ -557,13 +605,16 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     }
     for (const slot of daySlots) {
       if (placementShape.has(slot.matchId)) continue;
+      const source = everything.find((item) => item.id === slot.matchId);
       const anchor = placementAnchor({
         id: slot.matchId,
         categoryId: slot.categoryId,
-        participantIds: everything.find((item) => item.id === slot.matchId)?.participantIds ?? [],
+        participantIds: source?.participantIds ?? [],
         start: slot.start.getTime(),
         end: slot.end.getTime(),
         courtNumber: slot.courtNumber,
+        ...(source?.stageKey == null ? {} : { stageKey: source.stageKey }),
+        ...(source?.stageUnlocks == null ? {} : { stageUnlocks: source.stageUnlocks }),
       });
       if (anchor) placementShape.set(slot.matchId, anchor);
     }
@@ -571,7 +622,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     // Pass B — the knockouts. This is the barrier: they are only attempted once the
     // placement queue has drained, and every one of this day's placement slots is an
     // anchor, so the two stages cannot be double-booked onto one court or one participant.
-    if (!placementTodo.size && knockoutTodo.size) {
+    if (!placementTodo.size && (knockoutTodo.size || frozenOn(knockoutAll, dayKey).length)) {
       const anchors = [...placementShape.values()];
       const items: StageItem[] = [
         ...anchorsOn(knockoutAll, dayKey),
@@ -590,6 +641,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
         items,
         slotMinutes: knockoutSlotMinutes,
         restGapMinutes: knockoutRestGapMinutes,
+        baselineByMatchId,
       });
       for (const slot of run.slots) {
         if (!knockoutTodo.has(slot.matchId)) continue;

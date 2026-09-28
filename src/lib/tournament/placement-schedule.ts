@@ -26,6 +26,8 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+import type { BaselineSlot } from "@/lib/scheduling";
+
 import type { ScheduleSummary } from "./actions";
 import type {
   Court,
@@ -40,6 +42,8 @@ import type {
   TournamentDayBreak,
 } from "./data";
 import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
+import { MIN_ENTRANTS_FOR_ROUND_TWO } from "./placement-actions";
+import { bracketRoundCount } from "./tier-draw";
 import {
   breakWindowsFor,
   courtsAddedToDays,
@@ -60,6 +64,80 @@ import {
 import type { ScheduledSlot } from "./scheduling/types";
 
 const MINUTE = 60_000;
+
+/** A still-`scheduled` row, reduced to what the freeze decision needs. */
+export interface CommittedMatch {
+  id: string;
+  /** The court the desk currently has it on, as a court number; null when none is recorded. */
+  courtNumber: number | null;
+  /** When the desk currently expects it, in epoch ms; null when none is recorded. */
+  start: number | null;
+}
+
+/**
+ * The still-`scheduled` rows a rebuild must not move: the next committed match on each court.
+ *
+ * A rebuild that reconsiders everything can move a match that is about to be played, and the
+ * further down the running order the desk has read, the worse that is. The guarantee here is
+ * deliberately the smallest useful one: whatever is next on each court stays exactly where it is,
+ * and nothing else is promised. `horizonMinutes` extends it to a window measured from `now`, and
+ * defaults to zero because a longer freeze is only ever justified by a measured need.
+ *
+ * A row with no court or no time cannot be protected — there is nothing to hold — so it is left
+ * out rather than guessed at.
+ */
+export function frozenMatchIdsFor(input: {
+  committed: readonly CommittedMatch[];
+  now: number;
+  horizonMinutes?: number | undefined;
+}): string[] {
+  const horizonMinutes = Math.max(0, input.horizonMinutes ?? 0);
+  const horizonEnd = input.now + horizonMinutes * MINUTE;
+
+  /** The earliest committed row on each court, which is the one the desk is about to reach. */
+  const nextByCourt = new Map<number, CommittedMatch>();
+  for (const match of input.committed) {
+    if (match.courtNumber == null || match.start == null) continue;
+    const current = nextByCourt.get(match.courtNumber);
+    if (
+      current == null ||
+      match.start < current.start! ||
+      (match.start === current.start && match.id < current.id)
+    ) {
+      nextByCourt.set(match.courtNumber, match);
+    }
+  }
+
+  const frozen = new Set([...nextByCourt.values()].map((match) => match.id));
+  if (horizonMinutes > 0) {
+    for (const match of input.committed) {
+      if (match.start != null && match.start <= horizonEnd) frozen.add(match.id);
+    }
+  }
+  return [...frozen].sort();
+}
+
+/**
+ * The day a `scheduled_time` falls into, by the rule `sliceRowsByDay` uses: the last day whose
+ * window had already opened when it did.
+ *
+ * Duplicated in miniature here rather than reused, because this runs before any items exist and
+ * only ever needs the day's id. The two must agree; `planPlacementSchedule` passing a frozen match
+ * to the wrong day would pin it where no day plays it, which the court check below then catches.
+ */
+function dayOwning(start: number, orderedDays: readonly TournamentDay[]): number {
+  const byWindow = [...orderedDays].sort((a, b) => {
+    const startA = dayWindowBounds(a).start;
+    const startB = dayWindowBounds(b).start;
+    if (startA !== startB) return startA - startB;
+    return a.day_number - b.day_number;
+  });
+  let index = 0;
+  for (let candidate = 0; candidate < byWindow.length; candidate += 1) {
+    if (dayWindowBounds(byWindow[candidate]!).start <= start) index = candidate;
+  }
+  return index;
+}
 
 export {
   breakWindowsFor,
@@ -89,7 +167,18 @@ export interface PlacementSchedulePlan {
   tournamentId: string;
   /** Every slot in the plan, across every day and both stages. */
   slots: ScheduledSlot[];
+  /** Rows the desk has already decided: reported, in progress or a walkover. */
   fixedMatchIds: string[];
+  /**
+   * Rows the planner pinned only to keep the near term still, still `scheduled` as far as the desk
+   * is concerned.
+   *
+   * Kept apart from `fixedMatchIds` on purpose. Both are immovable for the solver, but a frozen row
+   * is still the writer's to place and still the desk's to see: `payloadFor` must name it, or
+   * `uncoveredScheduledMatches` would report it as dropped, and the diff must report it as
+   * unchanged, or a rebuild would look as though it had touched it.
+   */
+  frozenMatchIds: string[];
   blocked: string[];
   awaitingTeams: string[];
   diff: SchedulePlanDiff;
@@ -137,6 +226,14 @@ export interface PlanPlacementScheduleInput {
   options?: DayOneSchedulerOptions;
   /** Injectable clock, so a rebuild's floor is testable rather than wall-clock. */
   now?: number;
+  /**
+   * Minutes of near-term work to pin, measured from `now`, on top of the next committed match on
+   * each court.
+   *
+   * Defaults to 0. The per-court freeze is the guarantee; this is the knob for a measured need
+   * rather than the starting point.
+   */
+  freezeHorizonMinutes?: number | undefined;
 }
 
 /**
@@ -173,6 +270,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     categoryOrder,
     options,
     now = Date.now(),
+    freezeHorizonMinutes = 0,
   } = input;
 
   if (!days.length) {
@@ -204,21 +302,49 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   const firstDayStart = new Date(`${orderedDays[0]!.date}T${orderedDays[0]!.start_time}`).getTime();
   const itemFloor = isRebuild ? Math.max(firstDayStart, nextWholeMinute) : firstDayStart;
 
+  /**
+   * The stage-closing signal, both halves, from the format's own pipeline knowledge.
+   *
+   * A stage's successor usually does not exist as a row yet — round two is generated only once every
+   * round-one result is in — so "what does finishing this stage release?" cannot be read off the
+   * matches. It is derived from the same predicates the generators use: the field size decides
+   * whether a placement category has a round two, and the bracket size decides a draw's depth.
+   * Nothing here re-implements a pairing rule; it only asks the existing ones.
+   */
+  const activeEntrantsPerCategory = new Map<string, number>();
+  for (const entrant of entrants) {
+    if (entrant.excluded) continue;
+    activeEntrantsPerCategory.set(
+      entrant.category_id,
+      (activeEntrantsPerCategory.get(entrant.category_id) ?? 0) + 1,
+    );
+  }
+  const roundTwoCategories = new Set(
+    [...activeEntrantsPerCategory]
+      .filter(([, count]) => count >= MIN_ENTRANTS_FOR_ROUND_TWO)
+      .map(([categoryId]) => categoryId),
+  );
+  const drawRoundCount = new Map(
+    draws.map((draw) => [draw.id, bracketRoundCount(draw.bracket_size)]),
+  );
+
   // Round one and round two are one stage, so they share a duration and a queue
   // slot; the queue has two printers, not three.
-  const placementAll = placementItems({
+  const placementRaw = placementItems({
     matches: placementMatches,
     playerLookup,
     courtNumberById,
     categoryOrder,
+    roundTwoCategories,
     slotMinutes: placementSlot,
     restGap: placementRest,
     floor: itemFloor,
     now,
   });
-  const knockoutAll = tierItems({
+  const knockoutRaw = tierItems({
     matches: tierMatches,
     drawCategory,
+    drawRoundCount,
     playerLookup,
     courtNumberById,
     categoryOrder,
@@ -227,6 +353,69 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     floor: itemFloor,
     now,
   });
+
+  /**
+   * The near-term freeze, resolved here rather than by the day runner.
+   *
+   * A `scheduled` row is already on a court, and the writer's completeness guard demands that every
+   * such row still be named by the payload. Pinning one onto a court its own day does not play would
+   * turn it into a participant anchor with no slot of its own, so the row would vanish from the
+   * payload and `applyPlacementSchedulePlan` would refuse the build. The day that owns the row and
+   * its courts are both known here, so the two questions are answered together and a row that cannot
+   * be honoured on its own court is simply left movable instead.
+   *
+   * The same guard applies to the court's decided history: a match that has since overrun into this
+   * window cannot be pinned against it, because two fixed matches overlapping on one resource is a
+   * physical impossibility the problem validator rejects outright.
+   */
+  const committedById = new Map<string, BaselineSlot>();
+  for (const match of existing) {
+    if (match.status !== "scheduled" || !match.court_id || !match.scheduled_time) continue;
+    committedById.set(match.id, {
+      matchId: match.id,
+      start: new Date(match.scheduled_time).getTime(),
+      resourceId: match.court_id,
+    });
+  }
+  const freezeIds = new Set(
+    frozenMatchIdsFor({
+      committed: [...committedById.values()].map((slot) => ({
+        id: slot.matchId,
+        courtNumber: courtNumberById.get(slot.resourceId) ?? null,
+        start: slot.start,
+      })),
+      now,
+      horizonMinutes: freezeHorizonMinutes,
+    }),
+  );
+
+  /** The windows already decided on each court *number*, for the pinned-match legality check. */
+  const decidedWindowsByCourt = new Map<number, { start: number; end: number }[]>();
+  for (const item of [...placementRaw, ...knockoutRaw]) {
+    if (!item.fixed || item.courtNumber == null || item.start == null || item.end == null) continue;
+    const list = decidedWindowsByCourt.get(item.courtNumber) ?? [];
+    list.push({ start: item.start, end: item.end });
+    decidedWindowsByCourt.set(item.courtNumber, list);
+  }
+
+  const applyFreeze = (item: StageItem): StageItem => {
+    if (item.fixed || !freezeIds.has(item.id)) return item;
+    const committed = committedById.get(item.id);
+    if (!committed) return item;
+    const owningDay = orderedDays[dayOwning(committed.start, orderedDays)];
+    const dayCourts = owningDay
+      ? courtsForDay(allCourts, dayCourtIds?.get(owningDay.id) ?? new Set())
+      : [];
+    if (!dayCourts.some((court) => court.id === committed.resourceId)) return item;
+    const start = committed.start;
+    const end = start + item.durationMinutes * MINUTE;
+    const busy = decidedWindowsByCourt.get(item.courtNumber ?? -1) ?? [];
+    if (busy.some((window) => start < window.end && window.start < end)) return item;
+    return { ...item, frozen: true, fixed: true, start, end };
+  };
+
+  const placementAll = placementRaw.map(applyFreeze);
+  const knockoutAll = knockoutRaw.map(applyFreeze);
 
   const run = runPlanDays({
     orderedDays,
@@ -242,10 +431,19 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     isRebuild,
     nextWholeMinute,
     ...(options ? { options } : {}),
+    ...(committedById.size ? { baselineByMatchId: committedById } : {}),
   });
 
   const everything = [...placementAll, ...knockoutAll];
-  const fixedSet = new Set(everything.filter((item) => item.fixed).map((item) => item.id));
+  /**
+   * Two sets, not one. `frozenMatchIds` is the planner's own pin, `fixedMatchIds` is decided
+   * history; only the second may be excluded from the payload and from the diff. See
+   * `PlacementSchedulePlan.frozenMatchIds`.
+   */
+  const frozenSet = new Set(everything.filter((item) => item.frozen === true).map((item) => item.id));
+  const fixedSet = new Set(
+    everything.filter((item) => item.fixed && item.frozen !== true).map((item) => item.id),
+  );
   const { blocked, awaitingTeams } = partitionUnscheduled(
     [...run.placementUnscheduled, ...run.knockoutUnscheduled],
     everything,
@@ -313,6 +511,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     tournamentId: tournament.id,
     slots: run.allSlots,
     fixedMatchIds: [...fixedSet],
+    frozenMatchIds: [...frozenSet].sort(),
     blocked,
     awaitingTeams,
     diff,
