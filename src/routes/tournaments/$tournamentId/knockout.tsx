@@ -1,4 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Trophy } from "lucide-react";
 import { useMemo } from "react";
 
 import { Page, ByeMarker, EmptyState, Panel, StatusPill } from "@/components/app-shell";
@@ -250,8 +251,24 @@ function BracketSection({
                     <p className="text-t4 text-muted-foreground">{bracketNote(draw)}</p>
 
                     {draw.champion_id ? (
-                      <p className="rounded-md border border-hairline bg-success/10 px-3 py-2 text-xs font-semibold">
-                        Champion: {label(draw.champion_id)}
+                      // A decided bracket is a state, and the system's rule is that a state
+                      // carries a colour, a glyph and a word - never colour alone. The tint was
+                      // here; the glyph was not, so finding which of the four brackets had been
+                      // decided meant reading all four. `draws.tsx` already marks the same award
+                      // with a `Trophy`, and the other arm of this ternary is already `text-t4`,
+                      // so the size follows the branch it is chosen against rather than `text-xs`.
+                      //
+                      // The glyph inherits the row's ink rather than taking `text-success`.
+                      // `--success` is a fill token: `styles.css` states it is not text-safe in
+                      // dark mode at 2.95:1 and that a text use must add an ink twin. No such
+                      // twin exists, and no sweep would catch the mistake - axe reads text nodes,
+                      // and the 1.4.11 sweep measures selected markers and control edges, not
+                      // icons. The measured ink is the one already on the surface.
+                      <p className="flex items-center gap-1.5 rounded-md border border-hairline bg-success/10 px-3 py-2 text-t4">
+                        <Trophy className="size-3.5 shrink-0" aria-hidden />
+                        <span>
+                          <span className="font-semibold">Champion:</span> {label(draw.champion_id)}
+                        </span>
                       </p>
                     ) : (
                       <p className="text-t4 text-muted-foreground">No champion yet.</p>
