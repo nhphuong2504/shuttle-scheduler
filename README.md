@@ -97,10 +97,11 @@ filename order. See
 verify them, and for what each one changes. Never edit an applied migration — add a
 new one.
 
-Exactly one tournament is the **public default** at a time — the `is_active` pointer an
-unpointed visitor resolves to. That is presentation, not lifecycle: many tournaments may be
-`upcoming` or `in_progress` at once. Separately, each signed-in user has their own working
-tournament (`profiles.current_tournament_id`). The `players` table is global rather than
+Many tournaments may be `upcoming` or `in_progress` at once; there is no global active
+tournament. Each signed-in user has their own working tournament
+(`profiles.current_tournament_id`, written by `set_current_tournament`), and a caller with
+no pointer browses `/explore`. The Phase 1 `is_active` pointer and its
+`set_active_tournament` verb were retired. The `players` table is global rather than
 tournament-scoped. See [`docs/authorization.md`](docs/authorization.md).
 
 ### Operator scripts

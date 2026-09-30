@@ -1637,3 +1637,70 @@ describe("registration entries and the identity bridge", () => {
     expect(sql.replace(/--.*$/gm, "")).not.toMatch(/raise warning/i);
   });
 });
+
+/**
+ * Retiring `is_active`.
+ *
+ * Phase 2 moved global navigation state onto the per-user pointer, so the Phase 1 boolean
+ * is reader-less by the time this migration lands. The repository-side contract is that
+ * the reader was re-scoped before the writer went, and that the column, its index and the
+ * global verb are all gone without a cascade that could hide an unexpected dependency. The
+ * migration asks the catalogue the same questions itself; these assertions are what stop
+ * the file from drifting from that claim.
+ */
+describe("retire is_active migration", () => {
+  const RETIRE_FILE = "20260929010000_retire_is_active.sql";
+  const sql = readFileSync(
+    join(__dirname, "../../../supabase/migrations", RETIRE_FILE),
+    "utf8",
+  );
+  const executable = sql.replace(/--.*$/gm, "");
+
+  const fnBody = (signature: string): string => {
+    const start = executable.search(
+      new RegExp(`create (or replace )?function public\\.${signature}`, "i"),
+    );
+    expect(start, `${signature} is not defined`).toBeGreaterThan(-1);
+    const opener = executable.slice(start).match(/as \$([a-z_]*)\$/i);
+    const tag = opener?.[1] ?? "";
+    const close = executable.indexOf(`$${tag}$;`, start);
+    expect(close, `${signature} has no closing dollar-quote`).toBeGreaterThan(start);
+    return executable.slice(start, close + tag.length + 4);
+  };
+
+  it("re-scopes current_tournament_id() to the caller's pointer alone", () => {
+    const fn = fnBody("current_tournament_id\\(\\)");
+    // The fallback read a global row; the replacement reads only the caller's profile.
+    expect(fn).not.toMatch(/is_active/);
+    expect(fn).not.toMatch(/from public\.tournaments/);
+    expect(fn).toMatch(/from public\.profiles p\s+where p\.user_id = auth\.uid\(\)/);
+    // An anonymous caller - which is also the server-rendering request - gets NULL, so a
+    // server-side call can never redirect a bookmark to somebody's live desk.
+    expect(fn).toMatch(/if auth\.uid\(\) is null then\s+return null;/);
+  });
+
+  it("drops the writer, then the index, then the column", () => {
+    const dropFn = executable.indexOf(
+      "drop function if exists public.set_active_tournament(uuid);",
+    );
+    const dropIndex = executable.indexOf(
+      "drop index if exists public.tournaments_single_active;",
+    );
+    const dropColumn = executable.indexOf("drop column if exists is_active");
+    expect(dropFn, "set_active_tournament is not dropped").toBeGreaterThan(-1);
+    expect(dropIndex, "tournaments_single_active is not dropped").toBeGreaterThan(dropFn);
+    expect(dropColumn, "is_active is not dropped").toBeGreaterThan(dropIndex);
+  });
+
+  it("drops the column without a cascade", () => {
+    // A cascade would silently take a view or constraint nobody meant to remove. There is
+    // no dependent left by design, so the drop must be able to say so.
+    expect(executable).not.toMatch(/drop column if exists is_active\s+cascade/i);
+  });
+
+  it("verifies the retirement against the catalogue before it commits", () => {
+    expect(sql).toMatch(/do \$verify\$/);
+    expect(sql).toMatch(/raise exception 'retire is_active:/);
+    expect(executable).not.toMatch(/raise warning/i);
+  });
+});

@@ -478,11 +478,12 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
       await rpc(role);
       return;
     }
-    // The caller's own working tournament. A signed-in session is pointed at the fixture;
-    // an anonymous one falls back to the public default, which is the same row here.
-    // A spec that asks for `pointer: null` gets the state a brand-new account is in.
+    // The caller's own working tournament. A signed-in session is pointed at the fixture; a
+    // signed-out one has no pointer at all, which is what the database answers too - there
+    // is no public default to fall back to any more. A spec that asks for `pointer: null`
+    // gets the state a brand-new signed-in account is in.
     if (target === "rpc/current_tournament_id") {
-      await rpc(pointer === undefined ? TOURNAMENT_ID : pointer);
+      await rpc(pointer !== undefined ? pointer : role === null ? null : TOURNAMENT_ID);
       return;
     }
     if (target === "rpc/tournament_access") {

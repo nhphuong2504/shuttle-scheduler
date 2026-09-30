@@ -122,17 +122,17 @@ describe("a tournament can be created and run end to end", () => {
     });
     expect(tournamentId).toBeTruthy();
 
-    // Creation no longer activates anything. The 3-state machine starts, and stays, upcoming
-    // until `start_tournament` is called on it - so this is the real "nothing happened yet"
-    // assertion, not a check that a side effect was skipped.
+    // Creation starts nothing. The 3-state machine stays `upcoming` until
+    // `start_tournament` is called on it - so this is the real "nothing happened yet"
+    // assertion. There is no global active pointer any more, so the status is the whole
+    // claim: a freshly created tournament is not live and is nobody's default.
     const { data: created, error: createdError } = await admin.client
       .from("tournaments")
-      .select("status, is_active")
+      .select("status")
       .eq("id", tournamentId)
       .single();
     if (createdError) throw new Error(createdError.message);
     expect(created?.status).toBe("upcoming");
-    expect(created?.is_active).toBe(false);
 
     // --- Configuration, while upcoming ------------------------------------------
     // A past date, so `start_tournament`'s derived-start floor is already satisfied and this

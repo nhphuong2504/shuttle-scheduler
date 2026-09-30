@@ -55,9 +55,9 @@ type ScheduleSnapshot = Map<string, number>;
 /**
  * The working tournament, unless a caller already knows which one it means.
  *
- * Resolved through `current_tournament_id()` rather than `is_active`. `is_active` is a
- * single global pointer, so a mutation that fell back to it would write into whichever
- * tournament the desk happened to be showing rather than the caller's own scope.
+ * Resolved through `current_tournament_id()`, which is the caller's own pointer. A
+ * mutation must write into the caller's scope, never into whichever tournament some
+ * other session happens to be showing.
  */
 async function resolveTournamentId(explicit?: string | null): Promise<string | null> {
   if (explicit) return explicit;
@@ -1240,27 +1240,10 @@ export async function completeTournament(tournamentId: string): Promise<void> {
  * Points *this user* at a tournament. Nothing global changes.
  *
  * This is what an ordinary user does when they want to work somewhere else, and it is
- * available to anyone signed in: choosing your own view is not a privilege. It replaced
- * `is_active` as the source of the working-tournament pointer precisely because the old
- * verb moved everybody at once.
+ * available to anyone signed in: choosing your own view is not a privilege.
  */
 export async function setCurrentTournament(tournamentId: string): Promise<void> {
   const { error } = await supabase.rpc("set_current_tournament", {
-    p_tournament_id: tournamentId,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/**
- * Sets the *public default* tournament: what a signed-out visitor or a user who has not
- * chosen one sees.
- *
- * Platform admin only, and deliberately not presented as an ordinary owner action. It is
- * one of the two things `is_active` still means after the split; the per-user pointer is
- * the other, and they are different verbs because they affect different people.
- */
-export async function setDefaultTournament(tournamentId: string): Promise<void> {
-  const { error } = await supabase.rpc("set_active_tournament", {
     p_tournament_id: tournamentId,
   });
   if (error) throw new Error(error.message);

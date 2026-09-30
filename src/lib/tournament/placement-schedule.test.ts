@@ -41,7 +41,6 @@ function tournament(overrides: Partial<Tournament> = {}): Tournament {
     format: "two_round_placement",
     group_rest_gap_minutes: 20,
     group_slot_minutes: 30,
-    is_active: true,
     knockout_best_of: 3,
     knockout_games_to: 21,
     knockout_rest_gap_minutes: 30,

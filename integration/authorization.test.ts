@@ -354,8 +354,7 @@ describe("nobody can promote themselves", () => {
 
 describe("the working tournament is per user", () => {
   it("switching it changes nobody else's pointer", async () => {
-    // The point of `current_tournament_id` replacing `is_active` as the working context:
-    // one person's choice is not a global setting.
+    // The point of the per-user pointer: one person's choice is not a global setting.
     const before = (await editor.client.rpc("current_tournament_id")).data;
 
     const { error: switchError } = await owner.client.rpc("set_current_tournament", {
@@ -376,6 +375,29 @@ describe("the working tournament is per user", () => {
       p_tournament_id: tournamentId,
     } as never);
     expect(error).toBeNull();
+  });
+});
+
+describe("the global active-tournament pointer is retired", () => {
+  it("has no set_active_tournament RPC", async () => {
+    const { error } = await owner.client.rpc(
+      "set_active_tournament" as never,
+      { p_tournament_id: tournamentId } as never,
+    );
+    expect(error).not.toBeNull();
+  });
+
+  it("has no is_active column to read or write", async () => {
+    const { error } = await owner.client.from("tournaments").select("is_active" as never).limit(1);
+    expect(error).not.toBeNull();
+  });
+
+  it("answers an anonymous caller with no tournament, not a global default", async () => {
+    // The fallback is gone, so an unpointed caller resolves to nothing - which is what
+    // sends them to /explore instead of into somebody else's live desk.
+    const { data, error } = await anonClient().rpc("current_tournament_id");
+    expect(error).toBeNull();
+    expect(data).toBeNull();
   });
 });
 

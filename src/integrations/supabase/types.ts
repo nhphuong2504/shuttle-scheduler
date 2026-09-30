@@ -1305,7 +1305,6 @@ export type Database = {
           group_rest_gap_minutes: number
           group_slot_minutes: number
           id: string
-          is_active: boolean
           knockout_best_of: number
           knockout_games_to: number
           knockout_rest_gap_minutes: number
@@ -1337,7 +1336,6 @@ export type Database = {
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
-          is_active?: boolean
           knockout_best_of?: number
           knockout_games_to?: number
           knockout_rest_gap_minutes?: number
@@ -1369,7 +1367,6 @@ export type Database = {
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
-          is_active?: boolean
           knockout_best_of?: number
           knockout_games_to?: number
           knockout_rest_gap_minutes?: number
@@ -1730,10 +1727,6 @@ export type Database = {
       }
       save_tournament_days: {
         Args: { p_days: Json; p_tournament_id: string }
-        Returns: undefined
-      }
-      set_active_tournament: {
-        Args: { p_tournament_id: string }
         Returns: undefined
       }
       set_current_tournament: {

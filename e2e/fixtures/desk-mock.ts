@@ -288,7 +288,6 @@ const tournament = {
   knockout_rest_gap_minutes: 30,
   court_count: COURT_COUNT,
   day_count: 1,
-  is_active: true,
   status: "in_progress",
   format: "two_round_placement",
   max_categories_per_player: 3,
