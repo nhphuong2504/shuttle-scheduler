@@ -726,8 +726,10 @@ describe("player identity and the contact read", () => {
   it("makes a rejected request re-appliable, and keeps one live request per person", async () => {
     // The Phase 1 key was unconditional, which made a rejection permanent: the row stayed,
     // the key kept it, and the person could never apply again.
+    const entries = [{ category_id: categoryId, partner_name: null, partner_email: null }];
     const first = await outsider.client.rpc("submit_tournament_registration", {
       p_tournament_id: contactTournamentId,
+      p_entries: entries,
     } as never);
     expect(first.error).toBeNull();
     const firstId = first.data as unknown as string;
@@ -737,6 +739,7 @@ describe("player identity and the contact read", () => {
     // rather than a missing one.
     const again = await outsider.client.rpc("submit_tournament_registration", {
       p_tournament_id: contactTournamentId,
+      p_entries: entries,
     } as never);
     expect(again.error).toBeNull();
     expect(again.data).toBe(firstId);
@@ -752,6 +755,7 @@ describe("player identity and the contact read", () => {
     // Now a new request is a new row, not the rejected one handed back.
     const resubmitted = await outsider.client.rpc("submit_tournament_registration", {
       p_tournament_id: contactTournamentId,
+      p_entries: entries,
     } as never);
     expect(resubmitted.error).toBeNull();
     const secondId = resubmitted.data as unknown as string;
@@ -759,15 +763,16 @@ describe("player identity and the contact read", () => {
 
     // And the owner's queue shows two requests for that person: the rejected one and the new
     // live one. A single unconditional key would have returned the rejected row above and
-    // this read would show one row, forever.
+    // this read would show one row, forever. The read is per-entry now, so each request
+    // contributes exactly the one entry it was filed with.
     const review = await contactOwner.client.rpc("review_tournament_registrations", {
       p_tournament_id: contactTournamentId,
     } as never);
     expect(review.error).toBeNull();
-    const mine = (review.data as unknown as { id: string; profile_id: string; status: string }[]).filter(
-      (row) => row.profile_id === outsider.profileId,
-    );
+    const mine = (
+      review.data as unknown as { registration_id: string; profile_id: string; status: string }[]
+    ).filter((row) => row.profile_id === outsider.profileId);
     expect(mine.map((row) => row.status).sort()).toEqual(["pending", "rejected"]);
-    expect(mine.map((row) => row.id)).toEqual(expect.arrayContaining([firstId, secondId]));
+    expect(mine.map((row) => row.registration_id)).toEqual(expect.arrayContaining([firstId, secondId]));
   }, 120_000);
 });

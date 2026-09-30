@@ -1381,7 +1381,11 @@ describe("registration entries and the identity bridge", () => {
     // longer resolves raises at run time rather than at apply time - so it has to move in
     // the same file as the index it infers, and both reads have to carry the predicate or a
     // rejected row and a live row can coexist and the read could return either.
-    const fn = fnBody("submit_tournament_registration\\(p_tournament_id uuid\\)");
+    //
+    // Read from the *two-argument* body Step 9 leaves in place, not from the one-argument
+    // form it drops: the S8 body still carries the clause, so a signature that matched the
+    // first definition would pass here while the shipped function had lost the predicate.
+    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
     expect(fn).toMatch(/on conflict \(tournament_id, profile_id\) where status <> 'rejected' do nothing/);
     expect(fn.match(/status <> 'rejected'/g)).toHaveLength(2);
   });
@@ -1415,6 +1419,213 @@ describe("registration entries and the identity bridge", () => {
     // The projection anon reads must not gain the link, and a `create or replace view` here
     // is the one-line change that would publish who is who.
     expect(withoutVerify).not.toMatch(/create or replace view public\.public_players/);
+  });
+
+  it("replaces the one-argument submission rather than shadowing it", () => {
+    // A leftover one-argument function wins for a client that sends only the tournament id,
+    // and that client would file the entry-less request this step exists to make
+    // impossible. Dropped, not merely superseded - and the default keeps the refusal
+    // reachable, so the same client reads the sentence about choosing an event instead of
+    // PostgREST's "function does not exist".
+    const drop = executable.indexOf("drop function if exists public.submit_tournament_registration(uuid);");
+    expect(drop, "the Phase 1 one-argument submission is not dropped").toBeGreaterThan(-1);
+    const create = executable.indexOf(
+      "create or replace function public.submit_tournament_registration(",
+      drop,
+    );
+    expect(create).toBeGreaterThan(drop);
+    const header = executable.slice(create, executable.indexOf("returns uuid", create));
+    expect(header).toMatch(/p_tournament_id uuid/);
+    expect(header).toMatch(/p_entries jsonb default '\[\]'::jsonb/);
+
+    // The two reads grow entry columns, and Postgres refuses to change an OUT parameter
+    // name in place - so they are dropped too, and the drop has to precede the create.
+    for (const name of ["review_tournament_registrations", "my_tournament_registration"]) {
+      const droppedAt = executable.indexOf(`drop function if exists public.${name}(uuid);`);
+      const created = executable.indexOf(`create function public.${name}(`, droppedAt);
+      expect(droppedAt, name).toBeGreaterThan(-1);
+      expect(created, name).toBeGreaterThan(droppedAt);
+    }
+  });
+
+  it("files the entries, and replaces them rather than accumulating on a retry", () => {
+    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
+    // The refusal is on the payload *shape* first, so a client that sends an object where an
+    // array belongs reads a sentence rather than a cast error.
+    expect(fn).toMatch(/jsonb_typeof\(p_entries\) <> 'array'/);
+    expect(fn).toMatch(/jsonb_array_length\(p_entries\) = 0/);
+    expect(fn).toMatch(/raise exception 'Choose at least one event to enter'/);
+    // Delete-then-insert, in that order: a retry has to replace the set, and the delete is
+    // only safe because the whole function is one transaction that rolls it back on refusal.
+    const del = fn.indexOf("delete from public.tournament_registration_entries");
+    const ins = fn.indexOf("insert into public.tournament_registration_entries");
+    expect(del).toBeGreaterThan(-1);
+    expect(ins).toBeGreaterThan(del);
+    // A decided request is an approved entrant's row, and replacing its entries would rewrite
+    // what they were approved for - so a live non-pending request is refused, not updated.
+    expect(fn).toMatch(/v_status <> 'pending'/);
+    expect(fn).toMatch(/raise exception 'Your registration has already been decided'/);
+    // The one insert into the entries table carries the partner as supplied, never a player.
+    expect(fn).toMatch(
+      /insert into public\.tournament_registration_entries\s+\(registration_id, category_id, partner_name, partner_email\)/,
+    );
+  });
+
+  it("refuses each entry mistake with the sentence that names it", () => {
+    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
+    // "not in this tournament", "not open" and "unknown" are three different mistakes, and a
+    // single generic refusal would leave the person guessing which one they made.
+    expect(fn).toMatch(/if v_cat_tournament <> p_tournament_id/);
+    expect(fn).toMatch(/raise exception 'That event belongs to another tournament'/);
+    expect(fn).toMatch(/if not v_cat_active/);
+    expect(fn).toMatch(/raise exception 'That event is not open for registration'/);
+    expect(fn).toMatch(/raise exception 'Unknown event'/);
+    // One event per entry, or the same category can be filed twice and approved twice.
+    expect(fn).toMatch(/v_category = any \(v_seen\)/);
+    expect(fn).toMatch(/raise exception 'Each event may only be chosen once'/);
+    // Per-player cap, then the doubles rules. Singles discards the partner fields rather than
+    // refusing them - a form that always sends them is not an error - which is what keeps a
+    // singles entry from leaving a row claiming a partner.
+    expect(fn).toMatch(/v_cap is not null and jsonb_array_length\(p_entries\) > v_cap/);
+    expect(fn).toMatch(
+      /if v_cat_entry_type = 'pair' then[\s\S]*?raise exception 'A doubles event needs a partner name and email'/,
+    );
+    // The self-partner comparison is by *normalized* address, the same normalization the
+    // approval deduplicates by, so the two agree about who counts as the same person.
+    expect(fn).toMatch(
+      /normalize_email\(v_partner_email\) = v_caller_email[\s\S]*?raise exception 'You cannot enter a doubles event with yourself as your partner'/,
+    );
+    expect(fn).toMatch(/v_partner_name := null;/);
+    expect(fn).toMatch(/v_partner_email := null;/);
+  });
+
+  it("withdraws the requester's own pending request, and deletes nothing else", () => {
+    const fn = fnBody("withdraw_tournament_registration\\(p_registration_id uuid\\)");
+    expect(fn).toMatch(/if not found then\s*raise exception 'Unknown registration request'/);
+    // `is distinct from`, not `<>`: an anonymous caller's profile is NULL, and `<> NULL` is
+    // never true, which would let through exactly the caller this refuses.
+    expect(fn).toMatch(/v_profile is distinct from public\.current_profile_id\(\)/);
+    expect(fn).toMatch(/v_status <> 'pending'/);
+    expect(fn).toMatch(/raise exception 'This request has already been decided'/);
+    // One delete, and it targets the request table only. The entries follow by cascade; no
+    // player, team or entrant is touched, which is what keeps withdrawal from being a quiet
+    // deletion of competition data.
+    const deletes = [...fn.matchAll(/delete from public\.(\w+)/g)].map((m) => m[1]);
+    expect(deletes).toEqual(["tournament_registrations"]);
+    expect(fn).not.toMatch(/can_edit_tournament/);
+  });
+
+  it("keeps the requester's link the approval's only writer, and the partner an unlinked row", () => {
+    const fn = fnBody("decide_tournament_registration\\(\\s*p_registration_id uuid,\\s*p_decision text,\\s*p_note text",
+    );
+    // The transaction-local flag (`true`) is what the guard reads as the sanction, so it
+    // cannot ride a later statement on a pooled connection.
+    expect(fn).toMatch(/set_config\('tournova\.allow_profile_link', 'on', true\)/);
+    // The requester's row: reused by `profile_id`, created only when there is none.
+    expect(fn).toMatch(/where pl\.profile_id = v_requester_profile/);
+    // The partner match is restricted to unlinked rows *and* to the normalized address: a
+    // linked row is not a candidate and is never touched, because email deduplicates and
+    // never identifies. A single candidate is reused; zero or several create a fresh row.
+    expect(fn).toMatch(/where pl\.profile_id is null/);
+    expect(fn).toMatch(
+      /public\.normalize_email\(pl\.email\) = public\.normalize_email\(v_entry\.partner_email\)/,
+    );
+    expect(fn).toMatch(/if array_length\(v_candidates, 1\) = 1 then/);
+    // The partner's insert says NULL explicitly, which is what makes "this branch never
+    // links" visible where it is read rather than inferred from a default.
+    expect(fn).toMatch(
+      /insert into public\.players \(name, email, profile_id\)\s+values \(coalesce\(v_entry\.partner_name, 'Partner'\), v_entry\.partner_email, null\)/,
+    );
+    // Two kinds of player insert only, and the team insert is the entry.
+    expect((fn.match(/insert into public\.players/g) ?? []).length).toBe(2);
+    expect(fn).toMatch(/insert into public\.teams \(category_id, player_1_id, player_2_id\)/);
+    // The caps are checked before the insert so the refusal can name the category, and the
+    // player count mirrors the trigger's - including entries this approval already inserted.
+    expect(fn).toMatch(/raise exception 'Category % \(%\) is full: % of % entries'/);
+    expect(fn).toMatch(/this tournament allows %/);
+    expect(fn).toMatch(/and t\.category_id <> v_entry\.category_id/);
+    // Rejection creates nothing: the reject branch returns before the bridge is reached.
+    const reject = fn.indexOf("if p_decision = 'rejected' then");
+    const bridge = fn.indexOf("select r.profile_id into v_requester_profile");
+    expect(reject).toBeGreaterThan(-1);
+    expect(bridge).toBeGreaterThan(reject);
+    // And the decision still cannot be made once the event is completed - the writable guard,
+    // not the configurable one, because a request may legitimately be decided after the
+    // window closes.
+    expect(fn).toMatch(/perform public\.assert_tournament_writable\(v_tournament\)/);
+    expect(fn).not.toMatch(/assert_tournament_configurable/);
+  });
+
+  it("gives both reads one row per entry, with the reviewer's the only player-resolution", () => {
+    const review = fnBody("review_tournament_registrations\\(p_tournament_id uuid\\)");
+    for (const column of [
+      "registration_id uuid",
+      "entry_id uuid",
+      "category_code text",
+      "entry_type text",
+      "partner_name text",
+      "partner_email text",
+      "player_id uuid",
+      "partner_player_id uuid",
+    ]) {
+      expect(review, column).toMatch(new RegExp(column.replace(/ /g, "\\s+")));
+    }
+    // Editor-gated: the queue is the reviewer's, and a policy's subquery runs as the caller,
+    // which is why this is a definer RPC rather than a table read.
+    expect(review).toMatch(
+      /if not public\.can_edit_tournament\(p_tournament_id\) then\s*raise exception 'Not authorized'/,
+    );
+    // The count and the row cannot disagree, and player_id comes from the partial unique
+    // index so it needs no ordering. A request with no entries still appears, once, with null
+    // entry columns - which is what a Phase 1 row decided under the old form looks like.
+    expect(review).toMatch(/left join public\.tournament_registration_entries e/);
+    expect(review).toMatch(
+      /\(select pl\.id from public\.players pl where pl\.profile_id = r\.profile_id\) as player_id/,
+    );
+    // The partner is found by elimination - they are never the linked row - and only once the
+    // request has been approved, so a pending one reports what happened rather than a preview.
+    expect(review).toMatch(/when t\.player_1_id = r\.player_id then t\.player_2_id/);
+    expect(review).toMatch(/and r\.player_id is not null/);
+
+    const mine = fnBody("my_tournament_registration\\(p_tournament_id uuid\\)");
+    for (const column of ["entry_id uuid", "category_code text", "decision_note text"]) {
+      expect(mine, column).toMatch(new RegExp(column.replace(/ /g, "\\s+")));
+    }
+    // The caller's own row only, and the live request outranks a rejected older one - `false`
+    // sorts after `true`, so the predicate is `desc` on purpose.
+    expect(mine).toMatch(/r\.profile_id = public\.current_profile_id\(\)/);
+    expect(mine).toMatch(/order by \(r\.status <> 'rejected'\) desc, r\.created_at desc\s*limit 1/);
+    expect(mine).toMatch(/left join public\.tournament_registration_entries e/);
+  });
+
+  it("closes the five names it adds, and leaves them callable by a session", () => {
+    // `create function` grants EXECUTE to PUBLIC, so each name is an API until it is closed.
+    // The REVOKE is repeated for the replaced functions because that is this repository's
+    // shape, not because a replacement loses its grant.
+    const lowered = executable.toLowerCase();
+    const signatures = [
+      "submit_tournament_registration(uuid, jsonb)",
+      "withdraw_tournament_registration(uuid)",
+      "review_tournament_registrations(uuid)",
+      "my_tournament_registration(uuid)",
+      "decide_tournament_registration(uuid, text, text)",
+    ];
+    for (const sig of signatures) {
+      expect(lowered, sig).toContain(`revoke all on function public.${sig} from public, anon;`);
+      expect(lowered, sig).toContain(`grant execute on function public.${sig} to authenticated;`);
+    }
+  });
+
+  it("asserts its own Step 9 gates before it commits", () => {
+    // Same shape as the Step 8 block, and the same reason: a warning in a CI log is not a
+    // failure, and the two failures a later edit is most likely to introduce here are the
+    // one-argument submission reappearing and a second function opening the link flag.
+    expect(sql).toMatch(/do \$verify_rpcs\$/);
+    expect(sql).toMatch(/raise exception 'registration rpcs:/);
+    expect(sql).toMatch(
+      /if to_regprocedure\('public\.submit_tournament_registration\(uuid\)'\) is not null then/,
+    );
+    expect(sql).toMatch(/and p\.proname <> 'decide_tournament_registration'/);
   });
 
   it("asserts its own gates before it commits", () => {

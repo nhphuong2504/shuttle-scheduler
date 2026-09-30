@@ -1579,10 +1579,17 @@ export type Database = {
       my_tournament_registration: {
         Args: { p_tournament_id: string }
         Returns: {
+          category_code: string
+          category_id: string
+          category_name: string
           created_at: string
           decided_at: string
           decision_note: string
-          id: string
+          entry_id: string
+          entry_type: string
+          partner_email: string
+          partner_name: string
+          registration_id: string
           status: string
         }[]
       }
@@ -1695,12 +1702,21 @@ export type Database = {
       review_tournament_registrations: {
         Args: { p_tournament_id: string }
         Returns: {
+          category_code: string
+          category_id: string
+          category_name: string
           created_at: string
           decided_at: string
           decision_note: string
           email: string
-          id: string
+          entry_id: string
+          entry_type: string
+          partner_email: string
+          partner_name: string
+          partner_player_id: string
+          player_id: string
           profile_id: string
+          registration_id: string
           status: string
         }[]
       }
@@ -1762,7 +1778,7 @@ export type Database = {
         Returns: undefined
       }
       submit_tournament_registration: {
-        Args: { p_tournament_id: string }
+        Args: { p_entries?: Json; p_tournament_id: string }
         Returns: string
       }
       sync_placement_entrants: {
@@ -1828,6 +1844,10 @@ export type Database = {
           status: string
           venue_name: string
         }[]
+      }
+      withdraw_tournament_registration: {
+        Args: { p_registration_id: string }
+        Returns: undefined
       }
     }
     Enums: {
