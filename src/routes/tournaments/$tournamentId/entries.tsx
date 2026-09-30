@@ -28,21 +28,21 @@ import {
 export const Route = createFileRoute("/tournaments/$tournamentId/entries")({
   head: () => ({
     meta: [
-      { title: "Registration | Tournova Tournament Ops" },
+      { title: "Entries | Tournova Tournament Ops" },
       {
         name: "description",
         content:
-          "Register players and doubles pairs across the tournament's active badminton categories, up to the per-player limit the tournament is configured with.",
+          "Enter players and doubles pairs into a tournament's categories, up to the per-player limit the tournament is configured with.",
       },
-      { property: "og:title", content: "Registration | Tournova Tournament Ops" },
+      { property: "og:title", content: "Entries | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Register players and doubles pairs across the tournament's active badminton categories, up to the per-player limit the tournament is configured with.",
+          "Enter players and doubles pairs into a tournament's categories, up to the per-player limit the tournament is configured with.",
       },
     ],
   }),
-  component: RegistrationPage,
+  component: EntriesPage,
 });
 
 /** The column default, used only before the active tournament has loaded. */
@@ -90,7 +90,26 @@ function capPickerNote(cap: number): string {
  */
 const CAP_LEVELS = [2, 3] as const;
 
-function RegistrationPage() {
+/**
+ * The operator's entry desk: who is already in the tournament, and the two forms that put
+ * someone there.
+ *
+ * ## Why this page is not called "Registration"
+ *
+ * It was, and the name was the loose end of S11's rename rather than a decision. That phase
+ * added a *different* surface at `/registrations` - the queue of requests awaiting a decision
+ * - and the nav entry, the `/registration` redirect and the section comment were all moved to
+ * "Entries"; only the page's own title, its `head` and its description were left behind, still
+ * promising to "register players and doubles pairs". So three pages answered to one name:
+ * this one, the queue at `/registrations`, and `index.tsx`, which is the participant's own
+ * "Your registration" and is the one the word actually belongs to.
+ *
+ * The page lists who is in, which is what "Entries" says. Its `head` now describes the
+ * operator's job rather than the participant's, because a description promising a
+ * self-service sign-up on a page that is a desk form is wrong for the person who finds it in
+ * a search result as well as for the person reading the tab.
+ */
+function EntriesPage() {
   const qc = useQueryClient();
   const { data: categories } = useCategories();
   const { data: players } = usePlayers();
@@ -99,9 +118,10 @@ function RegistrationPage() {
   /**
    * The former `canRegister` flag, now the tournament edit right.
    *
-   * There is no separate self-serve registration surface in Phase 1, so entering
-   * players and teams at the desk is exactly an edit, and the same predicate governs
-   * both. The RPCs still refuse a viewer; this only decides whether the form renders.
+   * Entering players and teams at the desk is an edit to the tournament, and it stays an edit
+   * now that participants can file their own requests: those arrive at `/registrations` and
+   * are decided there, so the self-service path never writes a team row itself. The RPCs still
+   * refuse a viewer; this only decides whether the form renders.
    */
   const access = useScopedAccess();
   const canEdit = access.can_edit;
@@ -149,7 +169,14 @@ function RegistrationPage() {
     return set.size >= categoryCap && !set.has(categoryId);
   };
 
-  /** Registration is only open for categories this tournament switched on. */
+  /**
+   * A category the tournament runs.
+   *
+   * `active` on a category is whether it is run at all, which is a different question from
+   * whether registration is open - since S11 that word is the participant window's, computed
+   * from the lifecycle and the window config and drawn by `RegistrationStatePill`. A category
+   * being switched off is a fact about the tournament, not about a window.
+   */
   const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.active), [categories]);
 
   const activeEntryCount = (id: string) =>
@@ -164,8 +191,8 @@ function RegistrationPage() {
   const openCategories = activeCategories.filter((c) => !isFull(c.id));
   const selectedIsFull = !!categoryId && isFull(categoryId);
 
-  // Inactive categories are hidden from registration, but any that already hold
-  // entries stay visible so existing entries can never disappear from the desk.
+  // A category the tournament does not run is hidden from the entry forms, but any that
+  // already hold entries stay visible so existing entries can never disappear from the desk.
   const listedCategories = useMemo(
     () =>
       (categories ?? []).filter(
@@ -233,7 +260,7 @@ function RegistrationPage() {
   }, [teams, players, categoryCount]);
 
   return (
-    <Page title="Registration" subtitle={capSubtitle(categoryCap)}>
+    <Page title="Entries" subtitle={capSubtitle(categoryCap)}>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile
           label="Players"
@@ -324,7 +351,7 @@ function RegistrationPage() {
                 </Select>
                 {!openCategories.length ? (
                   <p className="text-xs text-warn-foreground">
-                    Every active category is either full or switched off for this tournament.
+                    Every category this tournament runs is either full or switched off.
                   </p>
                 ) : null}
                 {selectedIsFull ? (
