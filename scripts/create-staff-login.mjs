@@ -1,8 +1,9 @@
-// Creates a staff login on a Supabase project, then proves the role actually resolves.
+// Creates a platform-role login on a Supabase project, then proves the role actually confers
+// its privilege.
 //
 // WHY THIS IS NEEDED AT ALL
 //
-// The migrations seed `staff_roles` by email, so the authorization row for the first admin
+// The migrations seed `profiles` by email, so the authorization row for the first admin
 // exists as soon as the schema is applied. What they cannot create is the identity in
 // `auth.users`, because that is GoTrue's table and seeding it by hand would mean writing a
 // password hash directly.
@@ -10,11 +11,16 @@
 // There is no backfill to do, and this script deliberately does not attempt one. Email is
 // the durable key:
 //
-//   - `on_auth_user_created_link_staff` is an AFTER INSERT trigger on `auth.users` that sets
-//     `staff_roles.user_id` from a matching email, so creating the identity IS the linking
-//     step - there is no second mapping to maintain.
-//   - `current_staff_role()` matches on `user_id = auth.uid()` OR the JWT email, so it
+//   - `on_auth_user_created_link_profile` is an AFTER INSERT trigger on `auth.users` that sets
+//     `profiles.user_id` from a matching email, so creating the identity IS the linking
+//     step - there is no second mapping to maintain. Its delete twin, `unlink_profile()`,
+//     clears the link instead of deleting the row, which is what makes a recreate re-link.
+//   - `current_system_role()` matches on `user_id = auth.uid()` OR the JWT email, so it
 //     resolves even before the trigger has run.
+//
+// `profiles.system_role` is the platform axis only: `admin` or `user`. It is deliberately not
+// per-tournament access, which is a row in `tournament_editors` or ownership of a tournament,
+// and therefore not something this script can seed.
 //
 // Old UUIDs, password hashes and sessions are not carried across, and do not need to be.
 //
@@ -95,24 +101,27 @@ const { url: projectUrl, publishable, secret } = await (async () => {
 
 const normalize = (value) => value.trim().toLowerCase();
 
-/** The staff row the migrations seed. Stated up front, because without it nothing else matters. */
-const staffRows = await sql(
-  `select email, role, user_id from public.staff_roles where email = '${normalize(email).replace(/'/g, "''")}'`,
+/**
+ * The profiles row the migrations seed. Stated up front, because without it nothing else
+ * matters: the trigger links an identity to a row, it never creates a privileged one.
+ */
+const profileRows = await sql(
+  `select email, system_role, user_id from public.profiles where email = '${normalize(email).replace(/'/g, "''")}'`,
 );
 
-if (staffRows.length === 0) {
+if (profileRows.length === 0) {
   console.error(
-    `No staff_roles row for ${normalize(email)} on ${projectRef}.\n` +
+    `No profiles row for ${normalize(email)} on ${projectRef}.\n` +
       "The migrations seed the first admin; if this is a different address, insert it first:\n" +
-      `  INSERT INTO public.staff_roles (email, role) VALUES ('${normalize(email)}', 'admin');`,
+      `  INSERT INTO public.profiles (email, system_role) VALUES ('${normalize(email)}', 'admin');`,
   );
   process.exit(1);
 }
 
-const role = staffRows[0].role;
+const role = profileRows[0].system_role;
 console.log(`project      ${projectRef}`);
-console.log(`staff row    ${normalize(email)} -> role ${role}`);
-console.log(`linked       ${staffRows[0].user_id ? "yes" : "no (the auth identity does not exist yet)"}`);
+console.log(`profile      ${normalize(email)} -> system_role ${role}`);
+console.log(`linked       ${profileRows[0].user_id ? "yes" : "no (the auth identity does not exist yet)"}`);
 
 if (dryRun) {
   console.log("\nDry run: no identity created.");
@@ -149,19 +158,19 @@ if (createResponse.ok) {
 }
 
 const linked = await sql(
-  `select user_id from public.staff_roles where email = '${normalize(email).replace(/'/g, "''")}'`,
+  `select user_id from public.profiles where email = '${normalize(email).replace(/'/g, "''")}'`,
 );
 if (linked[0]?.user_id !== userId) {
-  // Not fatal - `current_staff_role()` also matches the JWT email - but it means the trigger
+  // Not fatal - `current_system_role()` also matches the JWT email - but it means the trigger
   // did not do its job, and that is worth failing loudly on rather than discovering later.
   console.error(
-    `\nstaff_roles.user_id is ${linked[0]?.user_id ?? "NULL"}, expected ${userId}.\n` +
-      "The on_auth_user_created_link_staff trigger did not link the row. Check that it exists:\n" +
+    `\nprofiles.user_id is ${linked[0]?.user_id ?? "NULL"}, expected ${userId}.\n` +
+      "The on_auth_user_created_link_profile trigger did not link the row. Check that it exists:\n" +
       "  select tgname from pg_trigger where tgrelid = 'auth.users'::regclass;",
   );
   process.exit(1);
 }
-console.log("linked       yes (trigger set staff_roles.user_id)");
+console.log("linked       yes (trigger set profiles.user_id)");
 
 // ---------------------------------------------------------------------------
 // Verification. Everything above is setup; this is the part that can fail quietly later.
@@ -176,7 +185,7 @@ const identityIsNew = createResponse.ok;
 // the identity already present, and silently replacing its password would lock out whoever
 // had set their own - a destructive side effect from a script whose stated job is to verify.
 // So the reset is opt-in, and without it the run falls back to checking the same predicate
-// `current_staff_role()` uses rather than skipping verification entirely.
+// `current_system_role()` uses rather than skipping verification entirely.
 let sessionPassword;
 if (identityIsNew) {
   sessionPassword = password;
@@ -197,11 +206,11 @@ if (identityIsNew) {
 if (!sessionPassword) {
   console.log("\nverification");
   const predicate = await sql(
-    `select role from public.staff_roles where user_id = '${userId}' or email = '${normalize(email).replace(/'/g, "''")}'`,
+    `select system_role from public.profiles where user_id = '${userId}' or email = '${normalize(email).replace(/'/g, "''")}'`,
   );
-  const matches = predicate[0]?.role === role;
+  const matches = predicate[0]?.system_role === role;
   console.log(
-    `  ${matches ? "PASS" : "FAIL"}  the predicate current_staff_role() uses resolves to ${role}`,
+    `  ${matches ? "PASS" : "FAIL"}  the predicate current_system_role() uses resolves to ${role}`,
   );
   console.log(
     "  SKIP  end-to-end sign-in: this identity already existed, and its password is\n" +
@@ -241,26 +250,30 @@ const check = (label, passed, detail) => {
 
 console.log("\nverification");
 
-const resolved = await rpc("current_staff_role", {});
+const resolved = await rpc("current_system_role", {});
 const resolvedRole = resolved.body.replace(/"/g, "").trim();
-check("current_staff_role() resolves", resolvedRole === role, `${JSON.stringify(resolved.body.trim())}`);
+check(
+  "current_system_role() resolves",
+  resolvedRole === role,
+  `${JSON.stringify(resolved.body.trim())}`,
+);
 
-// An admin-only write. This is the assertion that matters: a resolved role that cannot
-// actually write would look correct and be useless.
-const draft = await rpc("create_tournament_draft", {
-  p_payload: { name: "staff-login probe", venue_name: "staff-login probe" },
-});
-check("an admin-only RPC is allowed", draft.ok, draft.ok ? `created ${draft.body.trim()}` : draft.body.trim());
+// The discriminating probe, and the reason it is a separate check from the one above. A
+// resolved role string that confers nothing would look correct and be useless, so this calls
+// the predicate the RLS policies and the RPC guards actually branch on - and asserts it in
+// both directions. A session that resolved `user` while `is_platform_admin()` answered true
+// fails here rather than passing unnoticed.
+const platform = await rpc("is_platform_admin", {});
+const isPlatformAdmin = platform.ok && platform.body.replace(/"/g, "").trim() === "true";
+check(
+  `is_platform_admin() is ${role === "admin"}`,
+  isPlatformAdmin === (role === "admin"),
+  platform.body.trim(),
+);
 
-if (draft.ok) {
-  const tournamentId = draft.body.replace(/"/g, "").trim();
-  const removed = await rpc("delete_tournament_draft", { p_tournament_id: tournamentId });
-  check("the probe tournament was cleaned up", removed.ok, removed.ok ? "deleted" : removed.body.trim());
-}
-
-// Contrast: an anonymous caller must be refused, so the check above is not passing for a
-// reason unrelated to the role.
-const anon = await rpc("create_tournament_draft", { p_payload: { name: "should not exist" } }, publishable);
+// Contrast: an anonymous caller has no profile at all, so the role cannot resolve for it.
+// Without this the checks above could be passing for a reason unrelated to the session.
+const anon = await rpc("current_system_role", {}, publishable);
 check("an anonymous caller is refused", !anon.ok, `status ${anon.status}`);
 
 console.log(

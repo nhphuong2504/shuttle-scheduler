@@ -3,6 +3,7 @@ import { type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
 import { COURT_COUNT, LONGEST_PAIRING, WIDEST_SCORE } from "./fixtures/desk-mock";
+import { routes } from "./fixtures/routes";
 
 /**
  * P2 layout validation: does the type scale actually fit real content?
@@ -167,7 +168,7 @@ for (const vp of VIEWPORTS) {
     });
 
     test("the court board fits a long doubles pairing without clipping", async ({ page }) => {
-      await page.goto("/", { waitUntil: "networkidle" });
+      await page.goto(routes.desk, { waitUntil: "networkidle" });
       await awaitFonts(page);
 
       const r = await page.evaluate(PROBE, { pairing: LONGEST_PAIRING, score: WIDEST_SCORE });
@@ -203,7 +204,7 @@ for (const vp of VIEWPORTS) {
     });
 
     test("the score list keeps a three-game 30-29 score on one line", async ({ page }) => {
-      await page.goto("/matches", { waitUntil: "networkidle" });
+      await page.goto(routes.scores, { waitUntil: "networkidle" });
       await awaitFonts(page);
 
       // The knockout tab is unmounted until selected, and that is where the fixtures put

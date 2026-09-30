@@ -3,6 +3,7 @@ import { type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/app";
 
 import { THEME_STORAGE_KEY, type Theme } from "../src/lib/design/theme";
+import { routes } from "./fixtures/routes";
 
 /**
  * Theme switching, in a real browser.
@@ -60,14 +61,14 @@ const darkClass = (page: Page) => page.locator("html");
 test.describe("the system preference is the default", () => {
   test("follows a dark system setting when nothing has been chosen", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
 
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
   });
 
   test("follows a light system setting when nothing has been chosen", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" });
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
 
     await expect(darkClass(page)).not.toHaveClass(/\bdark\b/);
   });
@@ -79,13 +80,13 @@ test.describe("the system preference is the default", () => {
     // correct for the dark case.
     await page.emulateMedia({ colorScheme: "dark" });
     await seedPreferences(page, "light");
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await expect(darkClass(page)).not.toHaveClass(/\bdark\b/);
 
     // Dark chosen while the system is light.
     await page.emulateMedia({ colorScheme: "light" });
     await seedPreferences(page, "dark");
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
   });
 });
@@ -98,7 +99,7 @@ test.describe("the theme is applied before React runs", () => {
     // between a first paint in the chosen theme and a flash of the wrong one.
     await seedPreferences(page, "dark");
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto(routes.desk, { waitUntil: "domcontentloaded" });
 
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
     // Hydration never happens, so this also proves the class did not come from React.
@@ -111,7 +112,7 @@ test.describe("the theme is applied before React runs", () => {
     await page.emulateMedia({ colorScheme: "light" });
     await seedPreferences(page, "light");
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto(routes.desk, { waitUntil: "domcontentloaded" });
 
     await expect(darkClass(page)).not.toHaveClass(/\bdark\b/);
   });
@@ -127,7 +128,7 @@ test.describe("the theme is applied before React runs", () => {
     page.on("pageerror", (error) => problems.push(error.message));
 
     await seedPreferences(page, "dark");
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await awaitHydration(page);
 
     const hydration = problems.filter((text) => /hydrat/i.test(text));
@@ -137,7 +138,7 @@ test.describe("the theme is applied before React runs", () => {
 
 test.describe("a choice persists", () => {
   test("survives a reload", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await awaitHydration(page);
 
     await page
@@ -154,31 +155,31 @@ test.describe("a choice persists", () => {
   });
 
   test("survives a full navigation to another route", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await awaitHydration(page);
 
     await page
       .getByRole("group", { name: "Colour theme" })
       .getByRole("button", { name: "Dark" })
       .click();
-    await page.goto("/registration", { waitUntil: "networkidle" });
+    await page.goto(routes.entries, { waitUntil: "networkidle" });
 
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
   });
 
   test("survives a client-side route change", async ({ page }) => {
     // Distinct from the reload case: nothing re-reads storage here, so this is really
-    // asserting that the module-scope store in `useTheme` survives a remount of
-    // `AppShell` rather than resetting with the component.
-    await page.goto("/", { waitUntil: "networkidle" });
+    // asserting that the module-scope store in `useTheme` survives the header remounting
+    // rather than resetting with the component.
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await awaitHydration(page);
 
     await page
       .getByRole("group", { name: "Colour theme" })
       .getByRole("button", { name: "Dark" })
       .click();
-    await page.getByRole("link", { name: "Registration", exact: true }).click();
-    await expect(page).toHaveURL(/\/registration$/);
+    await page.getByRole("link", { name: "Entries", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${routes.entries}$`));
 
     await expect(darkClass(page)).toHaveClass(/\bdark\b/);
   });
@@ -187,7 +188,7 @@ test.describe("a choice persists", () => {
 test.describe("the theme actually changes what is painted", () => {
   test("resolves different background tokens in each theme", async ({ page }) => {
     await seedPreferences(page, "light");
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     const light = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
       return {
@@ -224,7 +225,7 @@ test.describe("the theme actually changes what is painted", () => {
     // Guards against the class being applied while the tokens that depend on it are
     // not, which a property read alone would not catch.
     await seedPreferences(page, "light");
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     const light = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 
     await seedPreferences(page, "dark");
@@ -238,7 +239,7 @@ test.describe("the theme actually changes what is painted", () => {
 test.describe("the theme control is operable", () => {
   test("reports the state it is actually rendering", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await awaitHydration(page);
 
     // Nothing was chosen, but the page is dark, so Dark must read as pressed: the
@@ -263,7 +264,7 @@ test.describe("the theme control is operable", () => {
     // seeding is the setup rather than the subject - the assertion is about what the
     // control offers, which is why it lives here and not with the persistence cases.
     await seedPreferences(page, "dark");
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await awaitHydration(page);
 
     const group = page.getByRole("group", { name: "Colour theme" });
@@ -274,7 +275,7 @@ test.describe("the theme control is operable", () => {
   });
 
   test("survives being driven from the keyboard", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto(routes.desk, { waitUntil: "networkidle" });
     await awaitHydration(page);
 
     const dark = page

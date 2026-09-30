@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -11,10 +11,20 @@ import { describe, expect, it } from "vitest";
  * creeps back onto the desk, or if the removed capacity analysis reappears in the preview.
  */
 
-const read = (relative: string) => readFileSync(join(__dirname, relative), "utf8");
+const read = (relativePath: string) => readFileSync(join(__dirname, relativePath), "utf8");
+
+/**
+ * Every operational surface moved under the workspace layout, so almost every path in this
+ * file gained a prefix. Two helpers rather than one, because the two scheduling views are
+ * components now - they share one format-aware route and therefore live outside `routes/`.
+ */
+const workspacePath = (file: string) => join("tournaments", "$tournamentId", file);
+const readWorkspace = (file: string) => read(workspacePath(file));
+const readScheduleView = (file: string) =>
+  readFileSync(join(__dirname, "..", "components", "schedule", file), "utf8");
 
 describe("control desk is strictly day-scoped", () => {
-  const desk = read("index.tsx");
+  const desk = readWorkspace("desk.tsx");
 
   it("never invokes a forecast solver", () => {
     expect(desk).not.toMatch(/estimateFinish|forecastTournament/);
@@ -48,7 +58,7 @@ describe("control desk is strictly day-scoped", () => {
 });
 
 describe("schedule tab owns tournament-wide planning", () => {
-  const schedule = read("placement-schedule.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
 
   it("measures the scheduled finish against the official close", () => {
     expect(schedule).toMatch(/officialCloseMs/);
@@ -106,7 +116,15 @@ describe("schedule tab owns tournament-wide planning", () => {
 
 describe("the setup wizard asks only for what activation needs", () => {
   const types = readFileSync(join(__dirname, "../components/tournament-setup/types.ts"), "utf8");
-  const setup = read("setup.tsx");
+  // The steps themselves moved into the shared wizard when creating and configuring became
+  // two addresses for one flow, so what the steps ask for is asserted against the wizard and
+  // the settings page is asserted as its host. Reading the page for step contents would now
+  // assert the absence of everything, which is how a guard quietly stops measuring.
+  const wizard = readFileSync(
+    join(__dirname, "../components/tournament-setup/TournamentWizard.tsx"),
+    "utf8",
+  );
+  const setup = readWorkspace("settings.tsx");
   const review = readFileSync(
     join(__dirname, "../components/tournament-setup/ReviewStep.tsx"),
     "utf8",
@@ -116,8 +134,23 @@ describe("the setup wizard asks only for what activation needs", () => {
     const ids = [...types.matchAll(/\{ id: "([a-z]+)"/g)].map((match) => match[1]);
     expect(ids).toEqual(["details", "events", "structure", "review"]);
     expect(types).not.toMatch(/"rules"/);
-    expect(setup).not.toMatch(/RulesStep/);
+    expect(wizard).not.toMatch(/RulesStep/);
     expect(review).not.toMatch(/form\.rules/);
+  });
+
+  it("is one wizard with two hosts, neither of them owning the steps", () => {
+    // Creating and configuring are the same four steps against the same row, so a second
+    // copy of them is the drift this asserts against - and the reason the old page's
+    // `?draft=` search param is gone: the address names the subject now.
+    expect(setup).toMatch(/<TournamentWizard tournamentId=\{tournamentId\}/);
+    expect(setup).not.toMatch(/DetailsStep|EventsStep|StructureStep|ReviewStep/);
+    const create = read("tournaments/new.tsx");
+    expect(create).toMatch(/<TournamentWizard[\s\S]{0,80}tournamentId=\{null\}/);
+    expect(create).not.toMatch(/DetailsStep|EventsStep|StructureStep|ReviewStep/);
+    // The create flow writes the row and then moves the address to it, which is what makes
+    // a refresh resume rather than start a second tournament.
+    expect(create).toMatch(/onCreated=\{\(tournamentId, nextStep\)/);
+    expect(create).toMatch(/to: "\/tournaments\/\$tournamentId\/settings"/);
   });
 
   it("describes the days step as a date range", () => {
@@ -138,16 +171,16 @@ describe("the setup wizard asks only for what activation needs", () => {
       "groupRestGapMinutes",
       "knockoutRestGapMinutes",
     ]) {
-      expect(setup).not.toMatch(new RegExp(`${field}:`));
+      expect(wizard).not.toMatch(new RegExp(`${field}:`));
     }
-    const schedule = read("placement-schedule.tsx");
+    const schedule = readScheduleView("placement-scheduler.tsx");
     expect(schedule).toMatch(/<MatchFormatCard/);
     expect(schedule).toMatch(/setTournamentCourts/);
   });
 
   it("still persists the basics it does own", () => {
-    expect(setup).toMatch(/maxCategoriesPerPlayer: form\.maxCategoriesPerPlayer/);
-    expect(setup).toMatch(/saveTournamentDays\(id, form\.days\)/);
+    expect(wizard).toMatch(/maxCategoriesPerPlayer: form\.maxCategoriesPerPlayer/);
+    expect(wizard).toMatch(/saveTournamentDays\(id, form\.days\)/);
   });
 });
 
@@ -162,7 +195,7 @@ describe("the setup wizard asks only for what activation needs", () => {
  * its own with each day narrowing it, and the reset stands on its own.
  */
 describe("the schedule settings are grouped by what a match is", () => {
-  const schedule = read("placement-schedule.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
   const format = readFileSync(join(__dirname, "../components/match-format.tsx"), "utf8");
 
   it("edits scoring, match length and rest in one card per stage", () => {
@@ -250,8 +283,8 @@ describe("the schedule settings are grouped by what a match is", () => {
  * the one that clears the seed order — lives where the seed order is set.
  */
 describe("each reset is scoped to the tab that owns it", () => {
-  const schedule = read("placement-schedule.tsx");
-  const placement = read("placement.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
+  const placement = readWorkspace("placement.tsx");
 
   it("keeps the schedule reset off the seed order", () => {
     expect(schedule).toMatch(/resetPlacementSchedule/);
@@ -264,9 +297,10 @@ describe("each reset is scoped to the tab that owns it", () => {
 
   it("puts the stage reset on the tab that owns the seed order", () => {
     expect(placement).toMatch(/resetPlacementStage/);
-    // Admin-only, and the confirmation names the seed order it destroys while describing
-    // the reset that would keep it — the pair has to be distinguishable from one screen.
-    expect(placement).toMatch(/isAdmin \? \(/);
+    // Edit-rights only, and the confirmation names the seed order it destroys while
+    // describing the reset that would keep it — the pair has to be distinguishable from
+    // one screen.
+    expect(placement).toMatch(/const resetAction = canEdit \? \(/);
     expect(placement).toMatch(/clears the seed order and any waivers/);
     expect(placement).toMatch(/Schedule tab's reset clears the matches/);
   });
@@ -335,7 +369,7 @@ describe("each reset is scoped to the tab that owns it", () => {
  * Schedule page now adds and removes days, guarded so that neither can strand a match.
  */
 describe("playing days can be managed after activation", () => {
-  const schedule = read("placement-schedule.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
 
   it("offers an add-day control that stops at the seven-day cap", () => {
     expect(schedule).toMatch(/addTournamentDay/);
@@ -379,7 +413,7 @@ describe("the schedule writer refuses a plan that would strand a match", () => {
 });
 
 describe("a build reads its rows from the network, not the query cache", () => {
-  const schedule = read("placement-schedule.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
   const data = readFileSync(join(__dirname, "../lib/tournament/data.ts"), "utf8");
   const snapshot = schedule.slice(
     schedule.indexOf("const freshSchedulingData"),
@@ -424,7 +458,7 @@ describe("a build reads its rows from the network, not the query cache", () => {
 });
 
 describe("a build shows the plan it just applied", () => {
-  const schedule = read("placement-schedule.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
   // Both the projection and the apply that calls it, so the order between them is visible.
   const applyPath = schedule.slice(
     schedule.indexOf("const projectAppliedPlan"),
@@ -459,9 +493,9 @@ describe("a build shows the plan it just applied", () => {
  * tests cannot see a call site.
  */
 describe("byes are drawn as draw conditions, not as statuses", () => {
-  const scores = read("matches.tsx");
-  const bracket = read("knockout.tsx");
-  const draws = read("draws.tsx");
+  const scores = readWorkspace("scores.tsx");
+  const bracket = readWorkspace("knockout.tsx");
+  const draws = readWorkspace("draws.tsx");
 
   it("never coerces a bye onto a status the schema does have", () => {
     // The original workaround, in the exact form it shipped.
@@ -507,8 +541,8 @@ describe("byes are drawn as draw conditions, not as statuses", () => {
  * for the counts and the panels, which the builder's filter cannot reach.
  */
 describe("the live surfaces list only the format the tournament runs", () => {
-  const desk = read("index.tsx");
-  const scores = read("matches.tsx");
+  const desk = readWorkspace("desk.tsx");
+  const scores = readWorkspace("scores.tsx");
 
   it("hands the stored format to the shared row builder", () => {
     for (const source of [desk, scores]) {
@@ -533,5 +567,279 @@ describe("the live surfaces list only the format the tournament runs", () => {
     // runs. It is asserted here because the gate is the obvious "consistency" edit.
     expect(desk).not.toMatch(/if \(isSupportedFormat\(tournament\?\.format\)\) return \[\]/);
     expect(desk).toMatch(/const latePools = useMemo/);
+  });
+});
+
+/**
+ * Every file under `src`, so a guard can ask a question about the tree rather than about
+ * one file it already knows the name of.
+ *
+ * Two exclusions, both of which would make the "this name appears once" assertions below
+ * vacuous by matching their own subject: `routeTree.gen.ts`, which is generated from the
+ * route files and mentions every one of them by path, and the test files themselves, which
+ * name the helpers and route paths they are checking.
+ */
+function sourceFiles(dir: string, root: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const child = join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...sourceFiles(child, root));
+    else if (!/\.tsx?$/.test(entry.name)) continue;
+    else if (entry.name === "routeTree.gen.ts" || /\.test\.tsx?$/.test(entry.name)) continue;
+    else found.push(relative(root, child));
+  }
+  return found;
+}
+
+/**
+ * The workspace move is a claim about *files*, not only about URLs.
+ *
+ * The point of moving the Desk rather than copying it is that the desk can only exist in
+ * one place; a copy left behind at the old address would keep rendering, keep passing its
+ * own tests, and quietly become a second definition of the same page. Asserting the URLs
+ * cannot see that, because both copies would answer to different URLs and each URL would
+ * work. So this asks the tree directly: which files mention the desk's own day-scoping
+ * helpers, and what is left at `/`.
+ */
+describe("the desk lives in one file, and `/` is only a redirect", () => {
+  // Walked from `src`, not from `routes`: a copy of the desk left in `components/` would
+  // still render and still pass its own tests, and a walk of `routes` alone could not see it.
+  const src = join(__dirname, "..");
+  const files = sourceFiles(src, src);
+  /** The one file allowed to define the desk. */
+  const deskFile = join("routes", "tournaments", "$tournamentId", "desk.tsx");
+
+  it("keeps every day-scoping helper to the one desk file", () => {
+    // `resolveSelectedDay` and `dayOperationalCounts` are the desk's own day scoping - the
+    // thing that makes it a desk rather than a tournament page. Their *library* is shared
+    // and asserted elsewhere; what must not multiply is the call site. Non-route files are
+    // out of scope because they are the library.
+    const callers = files.filter(
+      (file) =>
+        file.startsWith(`routes${sep}`) &&
+        /resolveSelectedDay|dayOperationalCounts/.test(
+          readFileSync(join(__dirname, "..", file), "utf8"),
+        ),
+    );
+    expect(callers).toEqual([deskFile]);
+  });
+
+  it("defines the desk's route in exactly one file", () => {
+    // The *definition*, not the path: half a dozen files point at the desk by address (the
+    // workspace nav, the tournament card, the layout's own redirect map and My Tournaments'
+    // "work in this one"), and those are the tree agreeing on one address - the opposite of a
+    // duplicate. What must not multiply is the `createFileRoute` call.
+    const definers = files.filter((file) =>
+      readFileSync(join(src, file), "utf8").includes(
+        'createFileRoute("/tournaments/$tournamentId/desk")',
+      ),
+    );
+    expect(definers).toEqual([deskFile]);
+  });
+
+  it("leaves `/` a shim with no markup to reconcile", () => {
+    const shim = read("index.tsx");
+    // It redirects to the Desk on the caller's pointer: the page `/` served before the
+    // move, so behaviour is preserved rather than merely preserved from 404ing.
+    expect(shim).toMatch(/component: \(\) => <WorkspaceRedirect section="desk" \/>/);
+    // And it renders no surface: no shell, no panel, no wrapper element of any kind. A
+    // shim that grew a surface would be a second definition of `/` for the real route to
+    // displace, and S6's check would have to tell "replaced" from "shadowed".
+    expect(shim).not.toMatch(/WorkspaceShell|PublicShell/);
+    expect(shim).not.toMatch(/<(div|section|main|Panel|EmptyState)\b/);
+  });
+
+  it("resolves every flat legacy path on the caller's own pointer", () => {
+    // The old addresses are kept because they were shipped, and each resolves on the
+    // caller's pointer rather than a fixed tournament - a bookmark must open the
+    // referee's own event.
+    const sections: [string, string][] = [
+      ["setup.tsx", "settings"],
+      ["staff.tsx", "access"],
+      ["registration.tsx", "entries"],
+      ["placement.tsx", "placement"],
+      ["knockout.tsx", "knockout"],
+      ["placement-schedule.tsx", "schedule"],
+      ["matches.tsx", "scores"],
+      ["schedule.tsx", "schedule"],
+    ];
+    for (const [path, section] of sections) {
+      const source = read(path);
+      expect(source).toMatch(
+        new RegExp(`component: \\(\\) => <WorkspaceRedirect section="${section}" />`),
+      );
+      // No hand-written fallback: a literal `/auth` in one file is how the shared fallback
+      // becomes two answers, and S5's single-line flip to `/explore` would then miss it.
+      expect(source).not.toMatch(/"\/auth"/);
+      // And not a `beforeLoad`. That runs during server rendering too, where there is no
+      // session to read the pointer from - the server would answer with the *public*
+      // default and redirect a bookmark to somebody else's tournament. It would also make
+      // a real Supabase request from the rendering process, which no browser-level
+      // interception can see and which the hermetic suite is built to avoid.
+      expect(source).not.toMatch(/beforeLoad/);
+    }
+  });
+
+  it("routes both scheduling surfaces through one format-aware route", () => {
+    // One address, chosen by the stored format, so a link to "the schedule" never has to
+    // know which engine the tournament runs. Two scoped route files would mean two nav
+    // targets and two places to change when the nav moves.
+    const route = readWorkspace("schedule.tsx");
+    expect(route).toMatch(/isSupportedFormat\(tournament\.format\)/);
+    expect(route).toMatch(/<PlacementScheduler \/>/);
+    expect(route).toMatch(/<DayPlanner \/>/);
+
+    const definers = files.filter((file) =>
+      readFileSync(join(__dirname, "..", file), "utf8").includes(
+        'createFileRoute("/tournaments/$tournamentId/schedule")',
+      ),
+    );
+    expect(definers).toEqual([join("routes", "tournaments", "$tournamentId", "schedule.tsx")]);
+
+    // And both old addresses still reach it, neither of them knowing the format.
+    for (const legacy of ["schedule.tsx", "placement-schedule.tsx"]) {
+      expect(read(legacy)).toMatch(/<WorkspaceRedirect section="schedule" \/>/);
+    }
+  });
+});
+
+/**
+ * The chrome is mounted once, by the layout, and a page owns only its own header.
+ *
+ * While every page rendered its own shell, the header could only state what a page chose
+ * to pass it, so nothing in the chrome could name the tournament - a page told the shell
+ * its own title and nothing else. Hoisting it to the layout is what makes the name, the
+ * lifecycle status and the section nav possible at all, and it is also what stops them
+ * being rebuilt on every navigation.
+ *
+ * These guards are about *where* the shell is rendered, which is the part a component
+ * test cannot see: a page that kept its own shell would still render, and the header
+ * would then appear twice on that page.
+ */
+describe("the workspace chrome is mounted once, by the layout", () => {
+  // Walked from `src` rather than from `routes`, because the two halves of this claim
+  // live in different trees: the shell is a component, and the pages that must not render
+  // one are both routes and the two schedule views.
+  const src = join(__dirname, "..");
+  const files = sourceFiles(src, src);
+  // Under the workspace layout, not everywhere below `routes/tournaments`: `new.tsx` is a
+  // sibling of `$tournamentId` and inherits no layout, because creating a tournament happens
+  // before there is one to be inside.
+  const workspaceRoutes = files.filter((file) =>
+    file.startsWith(join("routes", "tournaments", "$tournamentId")),
+  );
+  const views = [
+    join("components", "schedule", "day-planner.tsx"),
+    join("components", "schedule", "placement-scheduler.tsx"),
+  ];
+  /** Every workspace file that draws a page's contents, and so owns that page's title row. */
+  const workspacePages = workspaceRoutes.filter(
+    (file) => !file.endsWith(join("$tournamentId", "route.tsx")),
+  );
+  /**
+   * Every surface outside a tournament workspace, listed rather than derived.
+   *
+   * These are the pages that are not about one tournament, so no layout above them can know
+   * what to put in a header and each one draws the public shell itself. Enumerating them
+   * rather than matching "not under the workspace" is what makes a new surface have to be
+   * added here - which is the moment the question "which shell does this draw" gets asked.
+   *
+   * `routes/index.tsx` is deliberately absent while it is S3's shim; S6 replaces it with the
+   * real Landing/Home, which belongs in this list.
+   */
+  const publicRoutes = [
+    join("routes", "auth.tsx"),
+    join("routes", "explore.tsx"),
+    join("routes", "me", "tournaments.tsx"),
+    join("routes", "tournaments", "new.tsx"),
+  ];
+
+  it("renders WorkspaceShell in the layout route and nowhere else", () => {
+    const renderers = files.filter((file) => readFileSync(join(src, file), "utf8").includes("<WorkspaceShell"));
+    expect(renderers).toEqual([join("routes", "tournaments", "$tournamentId", "route.tsx")]);
+  });
+
+  it("renders PageHeader nowhere but the shell file", () => {
+    // A page composes `Page`, which is the header over the page's own content. A page
+    // reaching for the bare header would render two titles, which is the shape this guard
+    // is here to keep out of the tree.
+    const headerUsers = files.filter((file) => readFileSync(join(src, file), "utf8").includes("<PageHeader"));
+    expect(headerUsers).toEqual([join("components", "app-shell.tsx")]);
+  });
+
+  it("leaves no workspace page rendering a shell of its own", () => {
+    for (const file of [...workspacePages, ...views]) {
+      const source = readFileSync(join(src, file), "utf8");
+      expect(source, file).not.toMatch(/<WorkspaceShell|<PublicShell/);
+      // `schedule.tsx` is the one exception and it is a delegation: it chooses between
+      // the two format views and renders neither a header nor any content of its own.
+      if (file === join("routes", "tournaments", "$tournamentId", "schedule.tsx")) continue;
+      expect(source, file).toMatch(/<Page\b/);
+    }
+  });
+
+  it("gives every surface outside a workspace the public shell", () => {
+    // The other half of the claim above: outside a workspace there is no layout to draw the
+    // chrome, so a page that rendered no shell would be content with no masthead at all.
+    const renderers = files.filter((file) =>
+      readFileSync(join(src, file), "utf8").includes("<PublicShell"),
+    );
+    expect(renderers).toEqual(publicRoutes);
+  });
+});
+
+/**
+ * Every shipped link has to resolve at the step that ships it.
+ *
+ * A `Link` to an address with no route definition compiles, builds and passes every other
+ * test - a router only fails at the moment somebody clicks it - so "no shipped link points at
+ * a route that does not resolve" is a claim about the *tree*, and this is the file that reads
+ * the tree. The addresses come from `routeTree.gen.ts`, which the router generates from the
+ * route files: using it rather than a hand-kept list means this cannot disagree with what the
+ * router itself believes, and a route that stops existing takes its links down with it here
+ * rather than in a browser.
+ */
+describe("no shipped link points at a route that does not resolve", () => {
+  const src = join(__dirname, "..");
+  const files = sourceFiles(src, src);
+  const tree = readFileSync(join(src, "routeTree.gen.ts"), "utf8");
+
+  /** Every id the router generated, which is every address that resolves. */
+  const defined = new Set([...tree.matchAll(/\bid: '([^']*)'/g)].map((match) => match[1]));
+
+  /** Literal link targets - `to="/x"` and `to: "/x"` - with any search or hash stripped. */
+  const targets = (source: string): string[] =>
+    [...source.matchAll(/\bto:?\s*"(\/[^"]*)"/g)]
+      .map((match) => match[1] ?? "")
+      .map((path) => path.split(/[?#]/)[0] ?? "");
+
+  it("knows the addresses it is checking against", () => {
+    // A vacuous pass is the failure mode of a guard like this - an empty set would make the
+    // check below trivially true - so the set itself is asserted first.
+    expect(defined.size).toBeGreaterThan(15);
+    for (const id of ["/explore", "/me/tournaments", "/tournaments/new", "/auth"]) {
+      expect(defined, id).toContain(id);
+    }
+  });
+
+  it("resolves every literal link target", () => {
+    const broken: string[] = [];
+    for (const file of files) {
+      for (const target of targets(readFileSync(join(src, file), "utf8"))) {
+        // `/` is the app's own front door and always exists, shim or Landing.
+        if (target === "/") continue;
+        if (!defined.has(target)) broken.push(`${file} -> ${target}`);
+      }
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it("sends a caller with no working tournament to Explore, not to sign-in", () => {
+    // S3 shipped the shared fallback as `/auth` because `/explore` did not exist yet, and
+    // flipped it in the commit that created the route - one constant, so neither caller (the
+    // flat paths and the `/` shim) was edited when the destination changed.
+    const routing = readFileSync(join(src, "lib", "routing", "workspace-redirect.ts"), "utf8");
+    expect(routing).toMatch(/NO_POINTER_FALLBACK = "\/explore"/);
+    expect(routing).not.toMatch(/"\/auth"/);
   });
 });

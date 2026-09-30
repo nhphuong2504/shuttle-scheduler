@@ -202,25 +202,21 @@ const deadTokens = [...colorMap.keys()].filter((token) => !live.has(token)).sort
  * and `sidebar.tsx`, so their `--color-*` keys and both theme declarations went
  * with them rather than being left as dead debt.
  *
+ * Shrank from 6 to 3 when S5's surfaces shipped: `info-*` gained its first reader,
+ * the wizard's "this tournament has started, so its configuration is fixed" notice,
+ * which is the tone changing from debt to vocabulary rather than the token moving.
+ *
  * What remains is deliberate rather than forgotten:
  *
  * - `card` / `card-foreground` are the third step of the chassis ramp
  *   (`--background` -> `--surface` -> `--card`) named in docs/design-system.md.
  *   No component renders `bg-card` today, but the surface is part of the shipped
  *   vocabulary, so the token stays.
- * - `info-*` is defined but no surface uses the info tone.
  * - `ring-offset-background` is a shadcn default whose utility does appear on the
  *   live `dialog`, `select` and `tabs` primitives; the scanner cannot see it
  *   because the class reads `ring-offset-background` rather than `ring-<token>`.
  */
-const KNOWN_DEAD = [
-  "card",
-  "card-foreground",
-  "info-border",
-  "info-foreground",
-  "info-surface",
-  "ring-offset-background",
-];
+const KNOWN_DEAD = ["card", "card-foreground", "ring-offset-background"];
 
 describe("token references all resolve", () => {
   it("defines every custom property that styles.css reads", () => {
@@ -564,5 +560,103 @@ describe("type sizes declared in the stylesheet", () => {
     const value = shipped.match(/font-size:\s*([^;]+);/)?.[1]?.trim() ?? "";
     expect(value).toBe("0.625rem");
     expect(Number.parseFloat(value) * 16).toBeLessThan(12);
+  });
+});
+
+/**
+ * The crash document carries a faithful copy of the palette.
+ *
+ * `src/lib/error-page.ts` is the last-resort response, served when the application
+ * itself failed to render, so it cannot link `src/styles.css` - the stylesheet is a
+ * build artifact that response does not include. It therefore carries its own copy
+ * of the palette under the same `--color-*` names.
+ *
+ * A copy is a drift risk, and in this repository drift is always silent: a token
+ * changed in the stylesheet would leave the crash page painting last year's colours,
+ * and nothing would report it because the two files never load together. These
+ * assertions are what make the copy honest rather than a second source of truth -
+ * they read the *values*, so moving a token in `styles.css` fails here until the
+ * copy moves with it.
+ *
+ * What this deliberately does not do: require the copy to be generated, or to cover
+ * every token. Only the seven colours the document actually paints are copied, so
+ * there is nothing here that exists for the test's benefit.
+ */
+describe("the crash document copies the palette faithfully", () => {
+  const CRASH = readFileSync(join(ROOT, "src/lib/error-page.ts"), "utf8");
+
+  /** The declarations inside the first `{ ... }` that follows an anchor. */
+  function blockAfter(source: string, anchor: string): string {
+    const start = source.indexOf(anchor);
+    if (start === -1) return "";
+    const open = source.indexOf("{", start);
+    return open === -1 ? "" : source.slice(open + 1, source.indexOf("}", open));
+  }
+
+  /** `--name: value;` declarations, whitespace-normalised on the value. */
+  function declarations(block: string): Map<string, string> {
+    const found = new Map<string, string>();
+    for (const match of block.matchAll(/(--[a-zA-Z0-9-]+)\s*:\s*([^;]+);/g)) {
+      found.set(match[1]!, match[2]!.replace(/\s+/g, " ").trim());
+    }
+    return found;
+  }
+
+  const crashLight = declarations(blockAfter(CRASH, ":root {"));
+  const crashDark = declarations(blockAfter(CRASH, "@media (prefers-color-scheme: dark)"));
+
+  const paletteLight = declarations(lightBlock);
+  const paletteDark = declarations(darkBlock);
+
+  /** `--color-background` is the palette's `--background`; the name is the mapping. */
+  const paletteName = (copyName: string) => copyName.replace(/^--color-/, "--");
+
+  it("defines both themes", () => {
+    // Structural, and first, because every assertion below is per-theme: an empty
+    // map would make them pass vacuously.
+    expect(crashLight.size).toBeGreaterThan(0);
+    expect(crashDark.size).toBeGreaterThan(0);
+  });
+
+  it("declares no colour the palette does not define", () => {
+    const unknown = [...new Set([...crashLight.keys(), ...crashDark.keys()])]
+      .filter((name) => name.startsWith("--color-"))
+      .map(paletteName)
+      .filter((name) => !paletteLight.has(name) || !paletteDark.has(name))
+      .sort();
+    expect(unknown).toEqual([]);
+  });
+
+  it("keeps every copied value identical to the palette's", () => {
+    const drift: string[] = [];
+    const compare = (copy: Map<string, string>, palette: Map<string, string>, theme: string) => {
+      for (const [name, value] of copy) {
+        if (!name.startsWith("--color-")) continue;
+        const target = paletteName(name);
+        const expected = palette.get(target);
+        if (expected === undefined) {
+          drift.push(`${theme}: ${name} has no ${target} to copy`);
+        } else if (value !== expected) {
+          drift.push(`${theme}: ${name} is "${value}", but ${target} is "${expected}"`);
+        }
+      }
+    };
+    compare(crashLight, paletteLight, "light");
+    compare(crashDark, paletteDark, "dark");
+    expect(drift).toEqual([]);
+  });
+
+  it("defines in both themes every colour the document paints with", () => {
+    // A name defined only in the light block would not fail to render - it would
+    // keep its light value in a dark room, which is the exact failure the copy's
+    // media query exists to prevent.
+    const painted = [...CRASH.matchAll(/var\(\s*(--color-[a-zA-Z0-9-]+)\s*\)/g)].map(
+      (match) => match[1]!,
+    );
+    expect(painted.length).toBeGreaterThan(0);
+    const undefinedInBoth = [...new Set(painted)]
+      .filter((name) => !crashLight.has(name) || !crashDark.has(name))
+      .sort();
+    expect(undefinedInBoth).toEqual([]);
   });
 });

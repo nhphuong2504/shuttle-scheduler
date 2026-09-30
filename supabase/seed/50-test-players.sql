@@ -25,8 +25,8 @@
 -- Names are plain and realistic, as asked for. The handle is the EMAIL instead:
 -- every test player gets `<name>@tournova.test`. `.test` is reserved by
 -- RFC 2606 and can never resolve, so it cannot collide with a real person, and
--- the app never renders a player's email — only `staff_roles.email` is shown, on
--- the staff page. So the roster and every court screen look like a genuine
+-- the app never renders a player's email — only `profiles.email` is shown, on
+-- the access page. So the roster and every court screen look like a genuine
 -- field, while `WHERE email LIKE '%@tournova.test'` stays an exact handle for
 -- both the reset and the cleanup.
 --
@@ -313,7 +313,7 @@ BEGIN
   -- 6. Entrants, for the test teams only.
   --
   -- This mirrors `sync_placement_entrants`, which cannot be called from here:
-  -- it is guarded by `has_staff_role`, and the SQL editor has no JWT, so
+  -- it is guarded by `can_edit_tournament`, and the SQL editor has no JWT, so
   -- `auth.uid()` is NULL and the guard would reject it. The upsert is the same
   -- one the RPC performs.
   --

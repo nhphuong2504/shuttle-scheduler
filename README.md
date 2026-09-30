@@ -80,6 +80,7 @@ review the diff.
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | Working rules: design system, security, workflow, gates, review tiering |
 | [`docs/design-system.md`](docs/design-system.md) | Tokens, typography, states, components, do/don't |
+| [`docs/authorization.md`](docs/authorization.md) | Who may do what: platform role vs per-tournament access, the lifecycle guards, registration, and the column privileges |
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
 | [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md) | The manual checks no automated gate covers |
@@ -96,8 +97,11 @@ filename order. See
 verify them, and for what each one changes. Never edit an applied migration — add a
 new one.
 
-Exactly one tournament is active at a time. The `players` table is global rather than
-tournament-scoped.
+Exactly one tournament is the **public default** at a time — the `is_active` pointer an
+unpointed visitor resolves to. That is presentation, not lifecycle: many tournaments may be
+`upcoming` or `in_progress` at once. Separately, each signed-in user has their own working
+tournament (`profiles.current_tournament_id`). The `players` table is global rather than
+tournament-scoped. See [`docs/authorization.md`](docs/authorization.md).
 
 ### Operator scripts
 
@@ -107,11 +111,11 @@ Each refuses to act on an unknown target rather than defaulting to one.
 | Script | What it does |
 | --- | --- |
 | `scripts/apply-migrations.mjs` | Applies `supabase/migrations/*.sql` in filename order, recording each in `supabase_migrations.schema_migrations` in the same transaction. Use `supabase db push` instead when a database password exists; this exists for a personal access token, which `db push` cannot use. Refuses the production ref without `--allow-production`. |
-| `scripts/create-staff-login.mjs` | Creates the `auth.users` identity for an email the migrations already seeded into `staff_roles`, and verifies the role resolves. Email is the durable key — the `on_auth_user_created_link_staff` trigger fills in `staff_roles.user_id`, so there is no UUID or password to migrate. |
+| `scripts/create-staff-login.mjs` | Creates the `auth.users` identity for an email the migrations already seeded into `profiles`, and verifies the role actually confers its privilege. Email is the durable key — the `on_auth_user_created_link_profile` trigger fills in `profiles.user_id`, so there is no UUID or password to migrate. |
 | `scripts/compare-api-surface.mjs` | Diffs the tables, columns and RPC signatures of two backends using their keys. A narrower check than `parity-dump.sql`: function bodies and policies are not visible over HTTP. |
 | `scripts/run-sql.mjs` | Runs one read-only `.sql` file against a project, either over a Postgres connection string or, with `--project-ref`, through the Management API. Refuses anything that is not a single read-only statement. |
 | `scripts/verify-build-target.mjs` | Asserts a build was compiled against the backend currently in `.env`, that a production build targets the production project, and that the generated Worker is `tournova-ops`. See "Deploying the Worker" below. |
-| `scripts/reset-tournament-data.mjs` | Clears tournament data while keeping `staff_roles`. Requires `SUPABASE_URL` and a key; it has no hardcoded project. |
+| `scripts/reset-tournament-data.mjs` | Clears tournament data while keeping `profiles`. Requires `SUPABASE_URL` and a key; it has no hardcoded project. |
 | `scripts/restore-backup.mjs` | Restores a `pg_dump` backup into the local stack, or into a named project with `--project-ref`. Refuses the production ref without `--allow-production`. See "Backups" below. |
 
 The database-side counterparts — `parity-dump.sql` and `migration-drift-check.sql` — are

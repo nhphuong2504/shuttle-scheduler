@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -701,29 +721,40 @@ export type Database = {
           },
         ]
       }
-      staff_roles: {
+      profiles: {
         Row: {
           created_at: string
+          current_tournament_id: string | null
           email: string
           id: string
-          role: string
+          system_role: string
           user_id: string | null
         }
         Insert: {
           created_at?: string
+          current_tournament_id?: string | null
           email: string
           id?: string
-          role: string
+          system_role?: string
           user_id?: string | null
         }
         Update: {
           created_at?: string
+          current_tournament_id?: string | null
           email?: string
           id?: string
-          role?: string
+          system_role?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_current_tournament_id_fkey"
+            columns: ["current_tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teams: {
         Row: {
@@ -768,21 +799,14 @@ export type Database = {
             foreignKeyName: "teams_player_1_id_fkey"
             columns: ["player_1_id"]
             isOneToOne: false
-            referencedRelation: "player_roster"
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "teams_player_1_id_fkey"
             columns: ["player_1_id"]
             isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "teams_player_2_id_fkey"
-            columns: ["player_2_id"]
-            isOneToOne: false
-            referencedRelation: "player_roster"
+            referencedRelation: "public_players"
             referencedColumns: ["id"]
           },
           {
@@ -790,6 +814,13 @@ export type Database = {
             columns: ["player_2_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_player_2_id_fkey"
+            columns: ["player_2_id"]
+            isOneToOne: false
+            referencedRelation: "public_players"
             referencedColumns: ["id"]
           },
           {
@@ -1111,6 +1142,107 @@ export type Database = {
           },
         ]
       }
+      tournament_editors: {
+        Row: {
+          added_by_profile_id: string | null
+          created_at: string
+          profile_id: string
+          tournament_id: string
+        }
+        Insert: {
+          added_by_profile_id?: string | null
+          created_at?: string
+          profile_id: string
+          tournament_id: string
+        }
+        Update: {
+          added_by_profile_id?: string | null
+          created_at?: string
+          profile_id?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_editors_added_by_profile_id_fkey"
+            columns: ["added_by_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_editors_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_editors_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournament_registrations: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by_profile_id: string | null
+          decision_note: string | null
+          id: string
+          profile_id: string
+          status: string
+          tournament_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by_profile_id?: string | null
+          decision_note?: string | null
+          id?: string
+          profile_id: string
+          status?: string
+          tournament_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by_profile_id?: string | null
+          decision_note?: string | null
+          id?: string
+          profile_id?: string
+          status?: string
+          tournament_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_registrations_decided_by_profile_id_fkey"
+            columns: ["decided_by_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_registrations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_registrations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           court_count: number
@@ -1132,9 +1264,12 @@ export type Database = {
           organizer_email: string | null
           organizer_name: string | null
           organizer_phone: string | null
+          owner_profile_id: string
           placement_best_of: number
           placement_games_to: number
           placement_win_by: number
+          registration_closes_at: string | null
+          registration_opens_at: string | null
           rest_gap_minutes: number
           status: string
           venue_address: string | null
@@ -1161,9 +1296,12 @@ export type Database = {
           organizer_email?: string | null
           organizer_name?: string | null
           organizer_phone?: string | null
+          owner_profile_id: string
           placement_best_of?: number
           placement_games_to?: number
           placement_win_by?: number
+          registration_closes_at?: string | null
+          registration_opens_at?: string | null
           rest_gap_minutes?: number
           status?: string
           venue_address?: string | null
@@ -1190,20 +1328,31 @@ export type Database = {
           organizer_email?: string | null
           organizer_name?: string | null
           organizer_phone?: string | null
+          owner_profile_id?: string
           placement_best_of?: number
           placement_games_to?: number
           placement_win_by?: number
+          registration_closes_at?: string | null
+          registration_opens_at?: string | null
           rest_gap_minutes?: number
           status?: string
           venue_address?: string | null
           venue_name?: string | null
           venue_timezone?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tournaments_owner_profile_id_fkey"
+            columns: ["owner_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
-      player_roster: {
+      public_players: {
         Row: {
           created_at: string | null
           gender: string | null
@@ -1226,11 +1375,6 @@ export type Database = {
       }
     }
     Functions: {
-      activate_tournament: {
-        Args: { p_tournament_id: string }
-        Returns: undefined
-      }
-      active_tournament_id: { Args: never; Returns: string }
       add_tournament_day: {
         Args: {
           p_date: string
@@ -1238,6 +1382,10 @@ export type Database = {
           p_start_time?: string
           p_tournament_id: string
         }
+        Returns: string
+      }
+      add_tournament_editor: {
+        Args: { p_email: string; p_tournament_id: string }
         Returns: string
       }
       advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
@@ -1295,31 +1443,94 @@ export type Database = {
         }
         Returns: undefined
       }
-      create_tournament: {
-        Args: {
-          p_categories: Json
-          p_court_count: number
-          p_day_count: number
-          p_name: string
-          p_start_date: string
-        }
-        Returns: string
+      assert_registration_not_shut: {
+        Args: { p_now: string; p_tournament_id: string }
+        Returns: undefined
       }
-      create_tournament_draft: { Args: { p_payload: Json }; Returns: string }
-      current_staff_role: { Args: never; Returns: string }
+      assert_registration_window: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      assert_tournament_configurable: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      assert_tournament_live: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      assert_tournament_writable: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      can_edit_tournament: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
+      }
+      can_manage_tournament_access: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
+      }
+      complete_tournament: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      create_tournament: { Args: { p_payload: Json }; Returns: string }
+      current_profile_id: { Args: never; Returns: string }
+      current_system_role: { Args: never; Returns: string }
+      current_tournament_id: { Args: never; Returns: string }
+      decide_tournament_registration: {
+        Args: { p_decision: string; p_note?: string; p_registration_id: string }
+        Returns: undefined
+      }
       delete_tournament: {
         Args: { p_tournament_id: string }
         Returns: undefined
       }
-      delete_tournament_draft: {
+      desk_activity_tournament: {
+        Args: { p_match_id: string; p_table: string }
+        Returns: string
+      }
+      discard_tournament: {
         Args: { p_tournament_id: string }
         Returns: undefined
       }
-      has_staff_role: { Args: { needed: string[] }; Returns: boolean }
-      is_invited_email: { Args: { value: string }; Returns: boolean }
+      has_any_tournament_edit: { Args: never; Returns: boolean }
+      is_platform_admin: { Args: never; Returns: boolean }
+      is_tournament_editor: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
+      }
+      is_tournament_owner: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
+      }
+      list_tournament_editors: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          created_at: string
+          email: string
+          is_owner: boolean
+          profile_id: string
+        }[]
+      }
       lock_placement_seeds: {
         Args: { p_category_id: string; p_seeds: Json }
         Returns: undefined
+      }
+      match_tournament: {
+        Args: { p_match_id: string; p_table: string }
+        Returns: string
+      }
+      my_tournament_registration: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          created_at: string
+          decided_at: string
+          decision_note: string
+          id: string
+          status: string
+        }[]
       }
       normalize_email: { Args: { value: string }; Returns: string }
       notes_trim: { Args: { p_value: string }; Returns: string }
@@ -1353,6 +1564,10 @@ export type Database = {
       }
       remove_tournament_day: {
         Args: { p_day_id: string; p_tournament_id: string }
+        Returns: undefined
+      }
+      remove_tournament_editor: {
+        Args: { p_profile_id: string; p_tournament_id: string }
         Returns: undefined
       }
       report_draw_result: {
@@ -1423,19 +1638,35 @@ export type Database = {
         }
         Returns: undefined
       }
+      review_tournament_registrations: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          created_at: string
+          decided_at: string
+          decision_note: string
+          email: string
+          id: string
+          profile_id: string
+          status: string
+        }[]
+      }
       save_tournament_categories: {
         Args: { p_categories: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      save_tournament_config: {
+        Args: { p_payload: Json; p_tournament_id: string }
         Returns: undefined
       }
       save_tournament_days: {
         Args: { p_days: Json; p_tournament_id: string }
         Returns: undefined
       }
-      save_tournament_draft: {
-        Args: { p_payload: Json; p_tournament_id: string }
+      set_active_tournament: {
+        Args: { p_tournament_id: string }
         Returns: undefined
       }
-      set_active_tournament: {
+      set_current_tournament: {
         Args: { p_tournament_id: string }
         Returns: undefined
       }
@@ -1472,11 +1703,78 @@ export type Database = {
         Args: { p_court_id?: string; p_match_id: string }
         Returns: undefined
       }
+      start_tournament: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      submit_tournament_registration: {
+        Args: { p_tournament_id: string }
+        Returns: string
+      }
       sync_placement_entrants: {
         Args: { p_category_id: string }
         Returns: number
       }
+      tournament_access: { Args: { p_tournament_id: string }; Returns: Json }
+      tournament_ends_at: { Args: { p_tournament_id: string }; Returns: string }
+      tournament_is_ready: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
+      }
+      tournament_lifecycle_state: {
+        Args: { p_tournament_id: string }
+        Returns: string
+      }
+      tournament_of_category: {
+        Args: { p_category_id: string }
+        Returns: string
+      }
+      tournament_of_placement_match: {
+        Args: { p_match_id: string }
+        Returns: string
+      }
+      tournament_of_registration: {
+        Args: { p_registration_id: string }
+        Returns: string
+      }
+      tournament_of_tier_draw_match: {
+        Args: { p_match_id: string }
+        Returns: string
+      }
       tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
+      tournament_readiness_checks: {
+        Args: { p_tournament_id: string }
+        Returns: Json
+      }
+      tournament_registration_state: {
+        Args: { p_tournament_id: string }
+        Returns: string
+      }
+      tournament_starts_at: {
+        Args: { p_tournament_id: string }
+        Returns: string
+      }
+      tournament_summary: {
+        Args: {
+          p_ids?: string[]
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_status?: string
+        }
+        Returns: {
+          access_level: string
+          category_count: number
+          ends_at: string
+          entry_count: number
+          id: string
+          name: string
+          registration_state: string
+          starts_at: string
+          status: string
+          venue_name: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -1605,7 +1903,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+

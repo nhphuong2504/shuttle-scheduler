@@ -28,6 +28,7 @@ recommending them, it is stale.
 | Theme resolution | [`src/lib/design/theme.ts`](../src/lib/design/theme.ts) |
 | Shared components | [`src/components/app-shell.tsx`](../src/components/app-shell.tsx) |
 | Pre-hydration appearance bootstrap | [`src/routes/__root.tsx`](../src/routes/__root.tsx) |
+| The last-resort document | [`src/lib/error-page.ts`](../src/lib/error-page.ts) — carries its own copy of the palette; see [below](#the-last-resort-document) |
 
 ## Chassis
 
@@ -295,6 +296,33 @@ Sizes in px; each tier emits font-size and line-height together as `text-tN`.
 - The elevation tint source and the body text colour are separate tokens. They happen
   to share a value, but the roles differ.
 
+## The last-resort document
+
+[`src/lib/error-page.ts`](../src/lib/error-page.ts) is the response served when the application
+itself failed to render. It is the **one place in `src/` that is not written against
+`src/styles.css`**, and it is worth understanding why rather than rediscovering it.
+
+It cannot link the stylesheet: that is a build artifact the response does not include, and a crash
+page that depends on the thing that just crashed is not a crash page. So it is a standalone
+document with its own `<style>`, and it carries **its own copy of the palette**, under the same
+`--color-*` names. Three properties keep that copy from becoming a second source of truth:
+
+- **It is a copy, not a palette.** It declares no colour the design system has not solved, and
+  `tokens.test.ts` asserts that every value it declares is byte-identical to the corresponding
+  token in `styles.css` for the theme it belongs to. Moving a token in the stylesheet therefore
+  fails the suite until the copy moves with it, which is the only thing that makes a duplicated
+  value safe here.
+- **It follows the operating system, not a stored choice.** The stored choice lives in the
+  application's own storage and is unreachable from a document that failed before the application
+  ran. `prefers-color-scheme` is the documented fallback for a caller with nothing stored, so a
+  dark venue gets a dark crash page rather than a white flash.
+- **It uses the shipped type tiers** — T3 for prose, T1 for the heading — and a `system-ui` font
+  stack, because a crash page must not wait on a network font to decide whether it has a layout.
+
+Seven colours are copied: `background`, `foreground`, `surface`, `muted-foreground`,
+`border-control`, `primary` and `primary-foreground`. Nothing is copied that the document does not
+paint with.
+
 ## Components
 
 Shared components and what they are for. All are exported from
@@ -302,7 +330,11 @@ Shared components and what they are for. All are exported from
 
 | Component | Purpose |
 | --- | --- |
-| `AppShell` | Page chrome: sticky header, nav, appearance toggles, session block, title and subtitle |
+| `WorkspaceShell` | One tournament's chrome, rendered once by [`tournaments/$tournamentId/route.tsx`](../src/routes/tournaments/$tournamentId/route.tsx): tournament name, lifecycle pill, section nav, appearance control, session block, and the shared read-only notice |
+| `PublicShell` | The chrome for pages that are not about one tournament (sign-in today; Explore and the landing page next): brand, flat nav, appearance control, session block, title and subtitle |
+| `Page` | One page inside a shell: its title row, then its content. `PageHeader` is the row it renders |
+| `TournamentStatusPill` | A tournament's lifecycle word drawn through the match tiers: upcoming → tier 3 neutral chip, in progress → tier 1 live chip, completed → tier 4 ink only |
+| `ReadOnlyNotice` | The one read-only treatment, shared by a signed-out visitor and a signed-in viewer |
 | `Panel` | The standard bordered surface with an optional title bar |
 | `StatTile` | One labelled number, with `normal` / `good` / `warn` / `danger` tones |
 | `EmptyState` | Dashed-border placeholder for "nothing here yet" |
@@ -311,6 +343,15 @@ Shared components and what they are for. All are exported from
 | `MatchFormatCard` ([`match-format.tsx`](../src/components/match-format.tsx)) | Scoring, match length and rest gap per stage, in one card |
 | `StageProgressList` ([`stage-progress.tsx`](../src/components/stage-progress.tsx)) | Format-agnostic stage progress rows |
 | `ScheduledFinish` / `DayScheduleStatus` ([`schedule-status.tsx`](../src/components/schedule-status.tsx)) | Scheduled finish measured against the official close, and per-day status |
+
+**The shell is split by audience, not by page.** `WorkspaceShell` mounts once per tournament
+from the layout route, so the header and the nav survive a move between the pages under it,
+and the tournament's own identity is stated by the chrome rather than by whichever page
+happened to pass a title. `PublicShell` is for the pages that have no tournament to name.
+A page renders `Page`, never a shell; `src/routes/-surfaces.test.ts` fails the suite if a
+page starts drawing chrome of its own again. Match tiers and lifecycle tiers are one
+vocabulary, which is why `TournamentStatusPill` reuses `--state-*` rather than minting a
+second set of lifecycle colours.
 
 `StatTile` carries a rule worth knowing: **a toned tile's label takes the tone's own
 ink**, not `text-muted-foreground`. The neutral ink is solved against neutral
@@ -333,7 +374,10 @@ and `--danger-foreground` are.
 
 **Don't**
 
-- Don't hardcode a colour, a hex, an `rgb()`, or an arbitrary `text-[13px]`.
+- Don't hardcode a colour, a hex, an `rgb()`, or an arbitrary `text-[13px]`. The single documented
+  exception is the last-resort document, which cannot link the stylesheet and copies values that
+  `tokens.test.ts` holds in lockstep with the palette — see
+  [The last-resort document](#the-last-resort-document).
 - Don't render text below 12px, and don't introduce a size off the tier scale.
 - Don't convey status with colour alone.
 - Don't give a tier-4 state a chip; tier 4 is ink only.
@@ -349,7 +393,7 @@ and `--danger-foreground` are.
 
 | Gate | Covers |
 | --- | --- |
-| [`tokens.test.ts`](../src/lib/design/tokens.test.ts) | Token references resolve; theme parity; tier-4 ink sharing; the 12px floor; the type scale is complete; dead tokens; every colour utility has a theme key |
+| [`tokens.test.ts`](../src/lib/design/tokens.test.ts) | Token references resolve; theme parity; tier-4 ink sharing; the 12px floor; the type scale is complete; dead tokens; every colour utility has a theme key; the crash document's palette copy stays identical to `styles.css` |
 | [`status-pill.test.tsx`](../src/components/status-pill.test.tsx), [`stat-tile.test.tsx`](../src/components/stat-tile.test.tsx) | Component rendering per tier and per tone |
 | [`-surfaces.test.ts`](../src/routes/-surfaces.test.ts) | Source-level guards on UI decisions that components cannot see |
 | [`e2e/a11y.spec.ts`](../e2e/a11y.spec.ts) | Axe across every route in both themes, as a pinned baseline |

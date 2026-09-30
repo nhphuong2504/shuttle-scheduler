@@ -139,9 +139,10 @@ WITH lines AS (
     AND c.relkind = 'r'
 
   -- Triggers -----------------------------------------------------------------
-  -- Includes `auth`. The `on_auth_user_created_link_staff` trigger is the only thing that
-  -- links a new auth user to its staff role, and it lives on a schema the application
-  -- migrations do not own, so it is easy to lose and hard to notice.
+  -- Includes `auth`. The `on_auth_user_created_link_profile` trigger is the only thing that
+  -- links a new auth user to its profile, and it lives on a schema the application
+  -- migrations do not own, so it is easy to lose and hard to notice. Its delete twin,
+  -- `on_auth_user_deleted_unlink_profile`, matters for the same reason.
   UNION ALL
   SELECT 'trigger',
          n.nspname || '.' || c.relname || '.' || t.tgname,
@@ -153,9 +154,10 @@ WITH lines AS (
     AND n.nspname IN ('public', 'auth')
 
   -- Views --------------------------------------------------------------------
-  -- Includes reloptions, because `player_roster` is set to `security_invoker = on`. A view
-  -- without it runs with the definer's rights, which turns a read-only convenience view
-  -- into an RLS bypass.
+  -- Includes reloptions, because a view's security mode is a property of the view, not of its
+  -- definition. `public_players` is deliberately an ordinary (definer) view so it reads
+  -- through the `players` RLS policy, and a `security_invoker = on` added by hand would
+  -- silently empty the anonymous roster instead.
   UNION ALL
   SELECT 'view',
          n.nspname || '.' || c.relname,
@@ -183,8 +185,10 @@ WITH lines AS (
     AND c.relkind IN ('r', 'v', 'S')
 
   -- Function grants ----------------------------------------------------------
-  -- The REVOKEs on `current_staff_role`, `has_staff_role` and the generation RPCs, and the
-  -- later re-grant of `is_invited_email` to `anon`, must land in the same final state.
+  -- The REVOKEs on the dropped helpers (`current_staff_role`, `has_staff_role`,
+  -- `is_invited_email`) and on the generation RPCs, and the `PUBLIC`-to-`authenticated`
+  -- narrowing on the three legacy match RPCs, must land in the same final state. A
+  -- surviving `PUBLIC` grant is exactly the drift this catches.
   UNION ALL
   SELECT 'grant_routine',
          n.nspname || '.' || p.proname

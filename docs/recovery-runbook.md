@@ -185,13 +185,19 @@ something to attempt during an incident. So after restoring data:
 node scripts/create-staff-login.mjs <email>
 ```
 
-Email is the durable key: the migrations seed `staff_roles` with the email, and the
-`on_auth_user_created_link_staff` trigger fills in `staff_roles.user_id` when the account is
+Email is the durable key: the migrations seed `profiles` with the email, and the
+`on_auth_user_created_link_profile` trigger fills in `profiles.user_id` when the account is
 created. There is no UUID or password to migrate.
 
-**What this means in practice:** after a recovery, **staff cannot sign in until their login
+Deleting an identity does not delete its profile: `on_auth_user_deleted_unlink_profile`
+clears `profiles.user_id` and leaves the row — with its `system_role` — in place, so an
+account recreated at the same address re-links to the same profile. That is what lets a
+tournament keep its owner across an admin login being recreated. `tournaments.owner_user_id`
+points at the *profile*, not at the identity, for exactly this reason.
+
+**What this means in practice:** after a recovery, **nobody can sign in until their login
 is recreated.** Their role, and therefore their authorization, is already correct — the
-restored `staff_roles` row carries it — but there is no account to authenticate as. Plan for
+restored `profiles` row carries it — but there is no account to authenticate as. Plan for
 this: it is the step that turns a completed restore into a usable application.
 
 ## Limits

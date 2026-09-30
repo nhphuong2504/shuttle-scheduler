@@ -1,6 +1,7 @@
 import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
+import { routes } from "./fixtures/routes";
 
 /**
  * The 12px floor, measured on rendered output.
@@ -20,15 +21,20 @@ import { expect, test } from "./fixtures/app";
  */
 
 const ROUTES = [
-  "/",
-  "/matches",
-  "/placement-schedule",
-  "/placement",
-  "/draws",
-  "/knockout",
-  "/registration",
-  "/setup",
-  "/staff",
+  routes.desk,
+  routes.scores,
+  routes.schedule,
+  routes.placement,
+  routes.draws,
+  routes.knockout,
+  routes.entries,
+  routes.settings,
+  routes.access,
+  // The non-scoped surfaces, for the same reason the shared matrix lists them: the 12px
+  // floor is a property of every page the app renders, not of the pages in the nav.
+  routes.explore,
+  routes.myTournaments,
+  routes.newTournament,
 ];
 
 /** Every painted text run, with the size the browser resolved for it. */
@@ -92,7 +98,7 @@ test.describe("the type scale renders at its approved values", () => {
   test("the identify tier is 14px", async ({ page }) => {
     // Pins the actual value from the approved scale. If someone edits the token value,
     // this fails rather than the change going unnoticed.
-    await atRoute(page, "/");
+    await atRoute(page, routes.desk);
     expect(
       await page.evaluate(() => {
         const el = document.querySelector(".text-t2");
@@ -105,7 +111,7 @@ test.describe("the type scale renders at its approved values", () => {
     // Row height is the other half of the scale, and it is shared rather than restated
     // per table: the schedule and the score list must not drift apart. Read from the
     // computed custom property, which is the value every cell inherits.
-    await atRoute(page, "/");
+    await atRoute(page, routes.desk);
     const rowHeight = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--row-height").trim(),
     );

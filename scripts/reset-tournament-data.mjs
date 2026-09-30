@@ -2,8 +2,8 @@
  * Wipe the desk back to a blank slate so a tournament can be created from scratch.
  *
  * Removes every result (pool + knockout), every entry, every player, and the
- * tournament itself with its days, courts and categories. `staff_roles` is kept
- * so nobody loses desk access. Safe to re-run.
+ * tournament itself with its days, courts and categories. `profiles` is kept so
+ * nobody loses their login or its platform role. Safe to re-run.
  *
  * Usage (pick one auth method):
  *   SUPABASE_SERVICE_ROLE_KEY=sb_secret_... node scripts/reset-tournament-data.mjs --yes
@@ -134,8 +134,8 @@ async function confirm(client) {
     }
     console.log(
       keepTournament
-        ? "\nstaff_roles and the tournament structure are kept."
-        : "\nstaff_roles is kept; everything else goes.",
+        ? "\nprofiles and the tournament structure are kept."
+        : "\nprofiles is kept; everything else goes.",
     );
     const answer = await rl.question("\nType 'reset' to continue: ");
     return answer.trim().toLowerCase() === "reset";
@@ -161,7 +161,7 @@ async function main() {
     console.log(`  ${table.padEnd(16)} deleted ${count}`);
   }
 
-  console.log(`\nDeleted ${removed} row(s). staff_roles was left untouched.`);
+  console.log(`\nDeleted ${removed} row(s). profiles was left untouched.`);
 
   const leftovers = [];
   for (const table of CONFIRM_TABLES) {

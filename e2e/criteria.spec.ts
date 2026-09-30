@@ -3,6 +3,7 @@ import { type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/app";
 
 import { openCell, ROUTES, THEMES } from "./fixtures/matrix";
+import { routes } from "./fixtures/routes";
 
 /**
  * The WCAG 2.2 AA criteria that no axe rule reaches, measured rather than asserted.
@@ -486,7 +487,7 @@ test.describe("2.3.3 reduced motion", () => {
   for (const theme of THEMES) {
     test(`a reduced-motion preference actually reduces motion (${theme})`, async ({ page }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await openCell(page, "/", { theme });
+      await openCell(page, routes.desk, { theme });
 
       const durations = await page.evaluate(() => {
         const out: number[] = [];
@@ -537,7 +538,7 @@ test.describe("2.5.7 dragging movements, new in WCAG 2.2", () => {
   test.use({ appMock: { preset: "layout", role: "admin" } });
 
   test("every draggable row keeps a non-drag alternative", async ({ page }) => {
-    await openCell(page, "/placement", { theme: "light" });
+    await openCell(page, routes.placement, { theme: "light" });
 
     const result = await page.evaluate(() => {
       const rows = [...document.querySelectorAll('tr[draggable="true"]')];

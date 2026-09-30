@@ -48,16 +48,18 @@ export interface ScheduleImpact {
 
 type ScheduleSnapshot = Map<string, number>;
 
-/** The active tournament, unless a caller already knows which one it means. */
+/**
+ * The working tournament, unless a caller already knows which one it means.
+ *
+ * Resolved through `current_tournament_id()` rather than `is_active`. `is_active` is a
+ * single global pointer, so a mutation that fell back to it would write into whichever
+ * tournament the desk happened to be showing rather than the caller's own scope.
+ */
 async function resolveTournamentId(explicit?: string | null): Promise<string | null> {
   if (explicit) return explicit;
-  const { data, error } = await supabase
-    .from("tournaments")
-    .select("id")
-    .eq("is_active", true)
-    .limit(1);
+  const { data, error } = await supabase.rpc("current_tournament_id");
   if (error) throw new Error(error.message);
-  return data?.[0]?.id ?? null;
+  return data ?? null;
 }
 
 async function scheduleSnapshot(tournamentId: string | null): Promise<ScheduleSnapshot> {
@@ -745,13 +747,13 @@ export interface TournamentTimingsInput {
 /**
  * Overrides the durations and rest gaps the schedule is built from.
  *
- * A direct table update rather than `save_tournament_draft`, which deliberately
- * refuses anything that is not a DRAFT row. Overriding mid-event is the point:
+ * A direct table update rather than `save_tournament_config`, which deliberately
+ * refuses anything that is not an UPCOMING row. Overriding mid-event is the point:
  * the desk finds out on the day that matches are running long, or that players
  * need longer between them, and must be able to replan without a new tournament.
  *
  * The bounds are enforced here rather than at the readiness gate. Readiness runs when
- * a draft is activated, before any of this is editable, so it can never see a live
+ * a tournament is started, before any of this is editable, so it can never see a live
  * override — these guards are the only thing standing between one and a schedule
  * built from a zero-minute match.
  */
@@ -980,12 +982,17 @@ export async function setTournamentDayBreaks(
 }
 
 // ---------------------------------------------------------------------------
-// Tournament creation: a persisted, resumable draft
+// Tournament creation: a persisted, resumable tournament
 //
-// The wizard writes a Draft tournament on its first step and saves each later
-// step into the same row, so an unfinished creation survives a refresh. Only
-// `activateTournament` moves a draft to In Progress and makes it the active
-// scope. Every one of these calls is admin-only at the database level.
+// The wizard writes an Upcoming tournament on its first step and saves each later
+// step into the same row, so an unfinished creation survives a refresh.
+// `startTournament` is the only thing that moves it to In Progress.
+//
+// There is no Draft. `upcoming` is the state that means "not started yet", and the
+// old `draft`/`published` split was a second axis that never earned its keep: a
+// tournament was either started or it was not. Every mutating RPC re-checks that the
+// tournament is still upcoming before writing, so a wizard left open across a start
+// is refused by the database rather than silently writing to a live event.
 // ---------------------------------------------------------------------------
 
 /** The identity, venue, organizer and rules captured by the basics and rules steps. */
@@ -1011,6 +1018,14 @@ export interface TournamentDraftInput {
   knockoutSlotMinutes?: number;
   groupRestGapMinutes?: number;
   knockoutRestGapMinutes?: number;
+  /**
+   * The registration window, as ISO instants or null. Absent leaves the stored value
+   * alone; an empty string clears it. Registration is optional in Phase 1 and there is
+   * no UI for it, but the config payload carries it so Phase 2 does not need a new
+   * write path.
+   */
+  registrationOpensAt?: string | null;
+  registrationClosesAt?: string | null;
 }
 
 /** The JSON keys are the database column names, so they are declared explicitly. */
@@ -1035,6 +1050,8 @@ interface DraftPayload {
   knockout_slot_minutes?: number;
   group_rest_gap_minutes?: number;
   knockout_rest_gap_minutes?: number;
+  registration_opens_at?: string;
+  registration_closes_at?: string;
 }
 
 function draftBasicsPayload(input: TournamentDraftInput): DraftPayload {
@@ -1063,12 +1080,24 @@ function draftBasicsPayload(input: TournamentDraftInput): DraftPayload {
     payload.group_rest_gap_minutes = input.groupRestGapMinutes;
   if (input.knockoutRestGapMinutes !== undefined)
     payload.knockout_rest_gap_minutes = input.knockoutRestGapMinutes;
+  // Sent as an empty string rather than omitted when explicitly cleared: the RPC reads
+  // a present key as an instruction and an absent key as "leave it alone", so null has
+  // to survive the JSON round-trip as something other than absence.
+  if (input.registrationOpensAt !== undefined)
+    payload.registration_opens_at = input.registrationOpensAt ?? "";
+  if (input.registrationClosesAt !== undefined)
+    payload.registration_closes_at = input.registrationClosesAt ?? "";
   return payload;
 }
 
-/** Creates an empty draft and returns its id. */
-export async function createTournamentDraft(input: TournamentDraftInput): Promise<string> {
-  const { data, error } = await supabase.rpc("create_tournament_draft", {
+/**
+ * Creates an upcoming tournament owned by the caller and makes it their working scope.
+ *
+ * No role check beyond being signed in: anyone who signs up may run a tournament, and
+ * the database is where that is enforced. The creator becomes the owner.
+ */
+export async function createTournament(input: TournamentDraftInput): Promise<string> {
+  const { data, error } = await supabase.rpc("create_tournament", {
     p_payload: {
       name: input.name.trim(),
       format: input.format ?? "two_round_placement",
@@ -1085,17 +1114,23 @@ export async function createTournamentDraft(input: TournamentDraftInput): Promis
   return data as string;
 }
 
-/** Saves basics, the tournament-wide cap and the per-stage match rules. */
-export async function saveTournamentDraft(
+/**
+ * Saves basics, the tournament-wide cap and the per-stage match rules.
+ *
+ * Upcoming only. The database refuses this from In Progress, and the refusal is the
+ * point: a live tournament's rules must not change under matches already played.
+ */
+export async function saveTournamentConfig(
   tournamentId: string,
   input: TournamentDraftInput,
 ): Promise<void> {
-  const { error } = await supabase.rpc("save_tournament_draft", {
+  const { error } = await supabase.rpc("save_tournament_config", {
     p_tournament_id: tournamentId,
     p_payload: draftBasicsPayload(input) as never,
   });
   if (error) throw new Error(error.message);
 }
+
 
 export interface TournamentDayInput {
   date: string;
@@ -1161,46 +1196,80 @@ export async function saveTournamentEvents(
   if (error) throw new Error(error.message);
 }
 
-/** Draft -> In Progress. Re-checks readiness and makes it the active scope. */
-export async function activateTournament(tournamentId: string): Promise<void> {
-  const { error } = await supabase.rpc("activate_tournament", {
+/**
+ * Upcoming -> In Progress.
+ *
+ * The RPC re-checks readiness itself and refuses if the tournament's own start time has
+ * not arrived yet, in the venue's timezone. No gate is pre-applied here on purpose: the
+ * refusal carries the reason ("the tournament starts at 09:00 on 3 October"), and a
+ * client-side pre-check could only replace that with a vaguer one, or disagree with it.
+ */
+export async function startTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("start_tournament", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** In Progress -> Completed. Terminal, except for a platform admin's repair path. */
+export async function completeTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("complete_tournament", {
     p_tournament_id: tournamentId,
   });
   if (error) throw new Error(error.message);
 }
 
 /**
- * Points the active scope at a tournament that already exists.
+ * Points *this user* at a tournament. Nothing global changes.
  *
- * `activateTournament` is the wizard's Draft -> In Progress step, and a draft is the
- * only thing it accepts. That left activation one-way: activating one tournament
- * deactivates the previous one, and nothing could set it back, so a tournament
- * deactivated that way was stuck `in_progress` with an empty desk and no way out.
- * This is that missing verb. The readiness gate still applies to a draft; a
- * tournament that has already run is made active as it stands.
+ * This is what an ordinary user does when they want to work somewhere else, and it is
+ * available to anyone signed in: choosing your own view is not a privilege. It replaced
+ * `is_active` as the source of the working-tournament pointer precisely because the old
+ * verb moved everybody at once.
  */
-export async function setActiveTournament(tournamentId: string): Promise<void> {
+export async function setCurrentTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("set_current_tournament", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Sets the *public default* tournament: what a signed-out visitor or a user who has not
+ * chosen one sees.
+ *
+ * Platform admin only, and deliberately not presented as an ordinary owner action. It is
+ * one of the two things `is_active` still means after the split; the per-user pointer is
+ * the other, and they are different verbs because they affect different people.
+ */
+export async function setDefaultTournament(tournamentId: string): Promise<void> {
   const { error } = await supabase.rpc("set_active_tournament", {
     p_tournament_id: tournamentId,
   });
   if (error) throw new Error(error.message);
 }
 
-/** Discards a draft and everything it owns. */
-export async function deleteTournamentDraft(tournamentId: string): Promise<void> {
-  const { error } = await supabase.rpc("delete_tournament_draft", {
+/**
+ * Discards an upcoming tournament and everything it owns.
+ *
+ * Refuses anything that is not upcoming, which is exactly what protects a start-line
+ * mistake: an event that has been started cannot be discarded, only completed or
+ * deleted outright. The refusal is the database's, not this function's.
+ */
+export async function discardTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc("discard_tournament", {
     p_tournament_id: tournamentId,
   });
   if (error) throw new Error(error.message);
 }
 
 /**
- * Removes a tournament of any status, including an active one, along with
- * everything it owns. Permanent and not reversible.
+ * Removes a tournament of any status, including the one in progress, along with
+ * everything it owns. Permanent and not reversible. Owner or platform admin only.
  *
- * Kept separate from `deleteTournamentDraft`, which deliberately refuses to touch
- * anything that is not a Draft: that refusal is what protects the wizard's
- * "Discard draft" button. This is the explicitly destructive path.
+ * Kept separate from `discardTournament`, which refuses to touch anything that has
+ * started: that refusal is what keeps the wizard's "Discard" button safe. This is the
+ * explicitly destructive path.
  */
 export async function deleteTournament(tournamentId: string): Promise<void> {
   const { error } = await supabase.rpc("delete_tournament", {
@@ -1209,17 +1278,42 @@ export async function deleteTournament(tournamentId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export async function inviteStaff(
-  email: string,
-  role: "admin" | "registrar" | "scorer" | "scheduler",
-) {
-  const { error } = await supabase
-    .from("staff_roles")
-    .insert({ email: email.trim().toLowerCase(), role });
+/**
+ * Grants one person edit rights on one tournament.
+ *
+ * By email rather than by user id, because the thing the host has is a list of
+ * colleagues' addresses. The database resolves it to a profile and refuses an address
+ * that has never signed in - an unlinked membership would sit inert and then activate
+ * the day somebody else signed up with that address.
+ *
+ * Owner or platform admin only.
+ */
+export async function addTournamentEditor(tournamentId: string, email: string): Promise<string> {
+  const { data, error } = await supabase.rpc("add_tournament_editor", {
+    p_tournament_id: tournamentId,
+    p_email: email.trim().toLowerCase(),
+  });
   if (error) throw new Error(error.message);
+  return data as string;
 }
 
-export async function removeStaff(id: string) {
-  const { error } = await supabase.from("staff_roles").delete().eq("id", id);
+/**
+ * Revokes one person's edit rights. Owner or platform admin only.
+ *
+ * Takes a *profile* id, because membership is held by a person rather than an auth
+ * identity - the roster returns profile ids, and passing anything else would delete
+ * nothing and look like it had.
+ *
+ * The database refuses to remove the owner through this path: ownership transfer is
+ * Phase 2, and allowing it here would leave a tournament nobody owns.
+ */
+export async function removeTournamentEditor(
+  tournamentId: string,
+  profileId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc("remove_tournament_editor", {
+    p_tournament_id: tournamentId,
+    p_profile_id: profileId,
+  });
   if (error) throw new Error(error.message);
 }

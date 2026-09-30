@@ -11,6 +11,7 @@ import {
   WCAG_TAGS,
   type MatrixCell,
 } from "./fixtures/matrix";
+import { routes } from "./fixtures/routes";
 
 /**
  * P4: the infrastructure matrix, validated.
@@ -402,7 +403,7 @@ test.describe("the matrix is what it claims to be", () => {
   test("each cell renders at its own theme", async ({ page }) => {
     const seen = new Set<string>();
     for (const cell of MATRIX_CELLS) {
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
       const resolved = await page.evaluate(() =>
         document.documentElement.classList.contains("dark") ? "dark" : "light",
       );

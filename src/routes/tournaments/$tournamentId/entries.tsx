@@ -1,0 +1,477 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+import { Page, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { createPlayer, createTeam, deleteTeam, setTeamWithdrawn } from "@/lib/tournament/actions";
+import {
+  indexBy,
+  teamLabel,
+  useScopedAccess,
+  useScopedTournament,
+  useCategories,
+  usePlayers,
+  useTeams,
+} from "@/lib/tournament/data";
+
+export const Route = createFileRoute("/tournaments/$tournamentId/entries")({
+  head: () => ({
+    meta: [
+      { title: "Registration | Tournova Tournament Ops" },
+      {
+        name: "description",
+        content:
+          "Register players and doubles pairs across the tournament's active badminton categories, up to the per-player limit the tournament is configured with.",
+      },
+      { property: "og:title", content: "Registration | Tournova Tournament Ops" },
+      {
+        property: "og:description",
+        content:
+          "Register players and doubles pairs across the tournament's active badminton categories, up to the per-player limit the tournament is configured with.",
+      },
+    ],
+  }),
+  component: RegistrationPage,
+});
+
+/** The column default, used only before the active tournament has loaded. */
+const DEFAULT_CATEGORY_CAP = 2;
+
+/**
+ * The per-player category cap is tournament configuration (1–5), so every piece
+ * of copy has to read it. These live outside the component because the page's
+ * meta strings are built before any hook runs.
+ */
+const CAP_WORDS: Record<number, string> = {
+  1: "single",
+  2: "two",
+  3: "three",
+  4: "four",
+  5: "five",
+};
+
+function capWord(cap: number): string {
+  return CAP_WORDS[cap] ?? String(cap);
+}
+
+function capLabel(cap: number): string {
+  return `At ${capWord(cap)}-category cap`;
+}
+
+function capSubtitle(cap: number): string {
+  const limit =
+    cap === 1
+      ? "Each player may enter a single category."
+      : `Each player may enter up to ${cap} categories.`;
+  return `${limit} Anything beyond that is rejected outright.`;
+}
+
+function capPickerNote(cap: number): string {
+  const other = cap === 1 ? "another category" : `${capWord(cap)} other categories`;
+  return `Players already in ${other} are hidden from these lists.`;
+}
+
+/**
+ * The cap levels the desk watches, as their own tiles rather than one tile for
+ * the configured cap. Keeping both visible is the point: with a cap of three,
+ * the two-category tile is the queue that can still enter and the three-category
+ * tile is who is locked out.
+ */
+const CAP_LEVELS = [2, 3] as const;
+
+function RegistrationPage() {
+  const qc = useQueryClient();
+  const { data: categories } = useCategories();
+  const { data: players } = usePlayers();
+  const { data: teams } = useTeams();
+  const tournament = useScopedTournament();
+  /**
+   * The former `canRegister` flag, now the tournament edit right.
+   *
+   * There is no separate self-serve registration surface in Phase 1, so entering
+   * players and teams at the desk is exactly an edit, and the same predicate governs
+   * both. The RPCs still refuse a viewer; this only decides whether the form renders.
+   */
+  const access = useScopedAccess();
+  const canEdit = access.can_edit;
+
+  /**
+   * The desk's cap check must agree with the `enforce_two_category_cap` trigger,
+   * which reads this same column. Before the tournament loads, fall back to the
+   * column default so the page never claims an unlimited cap.
+   */
+  const categoryCap = tournament?.max_categories_per_player ?? DEFAULT_CATEGORY_CAP;
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [gender, setGender] = useState<string>("");
+
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [p1, setP1] = useState<string>("");
+  const [p2, setP2] = useState<string>("");
+
+  const playerMap = useMemo(() => indexBy(players), [players]);
+  const category = (categories ?? []).find((c) => c.id === categoryId);
+  const isPair = category?.entry_type === "pair";
+
+  const categoryCount = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    // Withdrawn entries must not count: the database trigger only counts
+    // `withdrawn = false` rows, so including them here would hide a player from
+    // the eligible list even though the database would happily accept the entry.
+    for (const t of teams ?? []) {
+      if (t.withdrawn) continue;
+      for (const pid of [t.player_1_id, t.player_2_id]) {
+        if (!pid) continue;
+        const set = map.get(pid) ?? new Set<string>();
+        set.add(t.category_id);
+        map.set(pid, set);
+      }
+    }
+    return map;
+  }, [teams]);
+
+  const atCap = (playerId: string) => {
+    const set = categoryCount.get(playerId);
+    if (!set) return false;
+    return set.size >= categoryCap && !set.has(categoryId);
+  };
+
+  /** Registration is only open for categories this tournament switched on. */
+  const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.active), [categories]);
+
+  const activeEntryCount = (id: string) =>
+    (teams ?? []).filter((t) => t.category_id === id && !t.withdrawn).length;
+
+  const isFull = (id: string) => {
+    const cat = (categories ?? []).find((c) => c.id === id);
+    if (!cat || cat.max_entries == null) return false;
+    return activeEntryCount(id) >= cat.max_entries;
+  };
+
+  const openCategories = activeCategories.filter((c) => !isFull(c.id));
+  const selectedIsFull = !!categoryId && isFull(categoryId);
+
+  // Inactive categories are hidden from registration, but any that already hold
+  // entries stay visible so existing entries can never disappear from the desk.
+  const listedCategories = useMemo(
+    () =>
+      (categories ?? []).filter(
+        (c) => c.active || (teams ?? []).some((t) => t.category_id === c.id),
+      ),
+    [categories, teams],
+  );
+
+  const refresh = () => {
+    qc.invalidateQueries();
+  };
+
+  const addPlayer = async () => {
+    try {
+      await createPlayer({ name, email, phone, gender });
+      setName("");
+      setEmail("");
+      setPhone("");
+      setGender("");
+      toast.success("Player added");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add player");
+    }
+  };
+
+  const addEntry = async () => {
+    try {
+      if (!categoryId || !p1) return;
+      if (isPair && !p2) throw new Error("This category needs a pair — pick both players.");
+      if (isPair && p1 === p2) throw new Error("A pair needs two different players.");
+      await createTeam({ categoryId, player1: p1, player2: isPair ? p2 : null });
+      setP1("");
+      setP2("");
+      toast.success("Entry added");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add entry");
+    }
+  };
+
+  const eligible = (players ?? []).filter((p) => !atCap(p.id));
+
+  const stats = useMemo(() => {
+    const all = teams ?? [];
+    const active = all.filter((t) => !t.withdrawn);
+    const withdrawn = all.length - active.length;
+    const entered = new Set<string>();
+    // How many players sit at each number of categories. `categoryCount` already
+    // excludes withdrawn entries, so this agrees with the database trigger.
+    const byCount = new Map<number, number>();
+    for (const [pid, set] of categoryCount) {
+      entered.add(pid);
+      byCount.set(set.size, (byCount.get(set.size) ?? 0) + 1);
+    }
+    const totalPlayers = (players ?? []).length;
+    return {
+      totalPlayers,
+      entries: all.length,
+      active: active.length,
+      withdrawn,
+      unassigned: Math.max(0, totalPlayers - entered.size),
+      byCount,
+    };
+  }, [teams, players, categoryCount]);
+
+  return (
+    <Page title="Registration" subtitle={capSubtitle(categoryCap)}>
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <StatTile
+          label="Players"
+          value={stats.totalPlayers}
+          hint={`${stats.unassigned} with no entry`}
+        />
+        <StatTile label="Entries" value={stats.entries} hint="Across all categories" />
+        <StatTile label="Active" value={stats.active} tone="good" hint="Still in the draw" />
+        <StatTile
+          label="Withdrawn"
+          value={stats.withdrawn}
+          tone={stats.withdrawn > 0 ? "warn" : "normal"}
+          hint="Pulled out"
+        />
+        {CAP_LEVELS.map((level) => {
+          const count = stats.byCount.get(level) ?? 0;
+          // At or past the configured cap this level cannot enter again; below
+          // it, the entry is still open, so the tiles say different things.
+          const locked = level >= categoryCap;
+          return (
+            <StatTile
+              key={level}
+              label={capLabel(level)}
+              value={count}
+              tone={locked && count > 0 ? "warn" : "normal"}
+              hint={locked ? "Cannot enter more" : "Can enter another"}
+            />
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
+        <div className="space-y-4">
+          <Panel title="Add player">
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="pname">Name</Label>
+                <Input id="pname" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pemail">Email</Label>
+                <Input id="pemail" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pphone">Phone</Label>
+                <Input id="pphone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pgender">Gender</Label>
+                <Select value={gender} onValueChange={setGender}>
+                  <SelectTrigger id="pgender">
+                    <SelectValue placeholder="Required for category checks" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="M">Male</SelectItem>
+                    <SelectItem value="F">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                className="w-full"
+                disabled={!canEdit || !name.trim()}
+                onClick={addPlayer}
+              >
+                Add player
+              </Button>
+            </div>
+          </Panel>
+
+          <Panel title="Add entry">
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="pcategory">Category</Label>
+                <Select value={categoryId} onValueChange={setCategoryId}>
+                  <SelectTrigger id="pcategory">
+                    <SelectValue placeholder="Choose category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {openCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.code} — {c.name}
+                        {c.max_entries != null
+                          ? ` (${activeEntryCount(c.id)}/${c.max_entries})`
+                          : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!openCategories.length ? (
+                  <p className="text-xs text-warn-foreground">
+                    Every active category is either full or switched off for this tournament.
+                  </p>
+                ) : null}
+                {selectedIsFull ? (
+                  <p className="text-xs text-danger-foreground">
+                    That category is full — withdraw an entry to make room.
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="p1">{isPair ? "Player 1" : "Player"}</Label>
+                <PlayerSelect id="p1" value={p1} onChange={setP1} options={eligible} />
+              </div>
+              {isPair ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="p2">Player 2</Label>
+                  <PlayerSelect
+                    id="p2"
+                    value={p2}
+                    onChange={setP2}
+                    options={eligible.filter((p) => p.id !== p1)}
+                  />
+                </div>
+              ) : null}
+              <Button
+                className="w-full"
+                disabled={!canEdit || !categoryId || !p1 || selectedIsFull}
+                onClick={addEntry}
+              >
+                Add entry
+              </Button>
+              <p className="text-xs text-muted-foreground">{capPickerNote(categoryCap)}</p>
+            </div>
+          </Panel>
+        </div>
+
+        <div className="space-y-4">
+          {listedCategories.map((c) => {
+            const list = (teams ?? []).filter((t) => t.category_id === c.id);
+            const activeCount = list.filter((t) => !t.withdrawn).length;
+            const full = isFull(c.id);
+            return (
+              <Panel
+                key={c.id}
+                title={`${c.code} — ${c.name}`}
+                right={
+                  <span className="flex items-center gap-2">
+                    {!c.active ? (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-muted-foreground">
+                        Closed
+                      </span>
+                    ) : full ? (
+                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-danger-foreground">
+                        Full
+                      </span>
+                    ) : null}
+                    <span className="font-score text-xs text-muted-foreground">
+                      {activeCount}
+                      {c.max_entries != null ? ` / ${c.max_entries}` : ""} entries
+                    </span>
+                  </span>
+                }
+              >
+                {list.length === 0 ? (
+                  <EmptyState
+                    title="No entries yet"
+                    hint="Add players on the left, then create an entry."
+                  />
+                ) : (
+                  <ul className="divide-y divide-hairline">
+                    {list.map((t) => (
+                      <li
+                        key={t.id}
+                        className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
+                      >
+                        <span
+                          className={`min-w-0 break-words ${t.withdrawn ? "text-muted-foreground line-through" : ""}`}
+                        >
+                          {teamLabel(t, playerMap)}
+                        </span>
+                        <span className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!canEdit}
+                            onClick={async () => {
+                              await setTeamWithdrawn(t.id, !t.withdrawn);
+                              refresh();
+                            }}
+                          >
+                            {t.withdrawn ? "Reinstate" : "Withdraw"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!canEdit}
+                            onClick={async () => {
+                              try {
+                                await deleteTeam(t.id);
+                                refresh();
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error ? error.message : "Could not remove entry",
+                                );
+                              }
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+            );
+          })}
+        </div>
+      </div>
+    </Page>
+  );
+}
+
+function PlayerSelect({
+  value,
+  onChange,
+  options,
+  id,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; name: string }[];
+  // Required, not optional: a combobox with no accessible name is the defect this
+  // prop exists to prevent, so making it optional would let the next caller omit it.
+  id: string;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger id={id}>
+        <SelectValue placeholder="Choose player" />
+      </SelectTrigger>
+      <SelectContent className="max-h-72">
+        {options.map((p) => (
+          <SelectItem key={p.id} value={p.id}>
+            {p.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}

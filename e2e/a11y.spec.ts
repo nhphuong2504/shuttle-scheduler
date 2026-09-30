@@ -7,6 +7,7 @@ import { type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/app";
 
 import { cellKey, cellLabel, MATRIX_CELLS, openCell, ROUTES, WCAG_TAGS } from "./fixtures/matrix";
+import { routes } from "./fixtures/routes";
 /**
  * Rendered accessibility and keyboard reachability, as a regression gate.
  *
@@ -92,7 +93,7 @@ test.describe("keyboard reachability", () => {
   // confusing failures in the bigger spec.
   for (const cell of MATRIX_CELLS) {
     test(`the desk is operable from the keyboard alone (${cellLabel(cell)})`, async ({ page }) => {
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       await page.keyboard.press("Tab");
       const reached = await page.evaluate(() => {

@@ -24,7 +24,10 @@ an organiser should not be shown desk-level operational noise.
 2. Read [`docs/tournament-format.md`](docs/tournament-format.md) before any change to
    tournament rules, and [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md)
    before touching the scheduler.
-3. Check the repository state and do not discard existing work.
+3. Read [`docs/authorization.md`](docs/authorization.md) before any change to access
+   control: who may edit a tournament, who may manage its editors, or what a platform
+   admin may override.
+4. Check the repository state and do not discard existing work.
 
 ## Design system rules
 
@@ -166,7 +169,7 @@ docs, copy and token-only CSS changes.
 | --- | --- |
 | Scheduling | `src/lib/scheduling/**`, `src/lib/tournament/scheduling/**` |
 | Scoring | `src/lib/tournament/**` scoring paths |
-| Authorization | [`src/hooks/useSession.ts`](src/hooks/useSession.ts), `staff_roles`, RLS policies |
+| Authorization | [`src/lib/auth/authorization.ts`](src/lib/auth/authorization.ts), [`src/hooks/useSession.ts`](src/hooks/useSession.ts), `profiles` / `tournament_editors`, RLS policies |
 | Database | `supabase/migrations/**` |
 | RPC | SQL functions in `supabase/migrations/**`, called from `src/lib/tournament/**` |
 

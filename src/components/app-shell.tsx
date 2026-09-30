@@ -1,11 +1,22 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  normalizeTournamentStatus,
+  tournamentStatusLabel,
+  type TournamentStatus,
+} from "@/lib/auth/authorization";
 import type { Theme } from "@/lib/design/theme";
+import {
+  registrationStateHint,
+  registrationStateLabel,
+  type RegistrationState,
+} from "@/lib/tournament/registration-state";
+import { useTournamentContext } from "@/lib/tournament/data";
 import {
   BYE_NOTE,
   displayStateFor,
@@ -15,30 +26,91 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * The desk navigation.
+ * Page chrome, split by audience.
+ *
+ * There are two shells, because there are two audiences and the header is where they
+ * differ:
+ *
+ *  - **`WorkspaceShell`** wraps one tournament. It is rendered by the layout route
+ *    (`/tournaments/$tournamentId/route.tsx`), so it mounts once for the whole workspace
+ *    rather than once per page, and it carries the tournament's own identity: name,
+ *    lifecycle status, and the section nav for the pages under it. Its read-only
+ *    treatment is one component shared by a signed-out visitor and a signed-in viewer,
+ *    because the two are the same fact - this caller may not change anything here.
+ *  - **`PublicShell`** wraps the pages that are not about one tournament: sign-in today,
+ *    Explore and the landing page next. It has no tournament to name and no section nav,
+ *    because there is nothing scoped for it to navigate to.
+ *
+ * The split is what lets the workspace header hold the tournament's name at all. While
+ * every page rendered its own shell, the header could only show what a page passed it,
+ * so a visitor had no way to tell which tournament a page was about beyond reading its
+ * title.
+ *
+ * ## The primitives stay here
+ *
+ * `Panel`, `StatTile`, `EmptyState`, `StatusPill` and `ByeMarker` are exported from this
+ * file and used by both shells' pages. They are deliberately not split alongside the
+ * shells: the vocabulary they render is one vocabulary, and the status tiers come from
+ * [`match-status.ts`](../lib/tournament/match-status.ts) rather than from a component.
+ */
+
+/**
+ * The workspace navigation.
  *
  * Pools and Draws are deliberately absent: the tournament creation flow replaced
- * the round-robin engine with the two-round placement format, and `/schedule` is
- * wired to the round-robin tables. Those route files and every library they depend
- * on are untouched, so the pages still exist for a direct URL; only the nav entries
- * are gone.
+ * the round-robin engine with the two-round placement format, and the round-robin
+ * route files and every library they depend on are untouched, so those pages still
+ * exist for a direct URL; only the nav entries are gone.
  *
  * `Placement` and `Schedule` are the format that *is* built, so they are the two
  * entries that lead to its own engine.
+ *
+ * **Every section is a child of the workspace layout, so a nav link carries an id.**
+ * `flat` is the legacy address each section used to live at, and it is kept for the one
+ * place a shell renders *outside* a workspace: `PublicShell`'s nav. There the id is not
+ * known, so those entries go through the flat redirects, which resolve on the caller's
+ * own pointer - exactly as they did before the workspace move. S6 replaces that nav with
+ * the public one (Explore, the caller's tournaments) and this pair collapses to one path.
+ *
+ * `Registration` became `Entries` in the same commit that moved the file to
+ * `entries.tsx`. That is deliberate rather than cosmetic: S11 adds a *different*
+ * surface at `/registrations` - the queue of requests awaiting a decision - and one
+ * of the two names had to give. The operator page lists who is already in the
+ * tournament, which is what "Entries" says and "Registration" no longer does.
  */
-const NAV = [
-  { to: "/", label: "Desk" },
-  { to: "/registration", label: "Registration" },
-  { to: "/placement", label: "Placement" },
-  { to: "/knockout", label: "Knockout" },
-  { to: "/placement-schedule", label: "Schedule" },
-  { to: "/matches", label: "Scores" },
+const SECTIONS = [
+  { label: "Desk", scoped: "/tournaments/$tournamentId/desk", flat: "/" },
+  { label: "Entries", scoped: "/tournaments/$tournamentId/entries", flat: "/registration" },
+  { label: "Placement", scoped: "/tournaments/$tournamentId/placement", flat: "/placement" },
+  { label: "Knockout", scoped: "/tournaments/$tournamentId/knockout", flat: "/knockout" },
+  { label: "Schedule", scoped: "/tournaments/$tournamentId/schedule", flat: "/schedule" },
+  { label: "Scores", scoped: "/tournaments/$tournamentId/scores", flat: "/matches" },
+] as const;
+
+/**
+ * The two entries that belong to the people who run the tournament.
+ *
+ * Both are gated on `can_edit` rather than on being signed in, because both are about
+ * changing this tournament: Setup is where its configuration and lifecycle live, and
+ * Access is who else may operate it. A viewer is offered neither entry - the pages
+ * themselves say plainly that they cannot be used, but a nav entry that leads to a page
+ * telling you no is a worse answer than not offering the trip.
+ */
+const EDITOR_SECTIONS = [
+  { label: "Setup", scoped: "/tournaments/$tournamentId/settings", flat: "/setup" },
+  { label: "Access", scoped: "/tournaments/$tournamentId/access", flat: "/staff" },
 ] as const;
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ];
+
+/** Shared so the two nav branches cannot drift into two different-looking navs. */
+const NAV_ITEM_CLASS =
+  "rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+const NAV_ACTIVE_CLASS =
+  "bg-primary text-primary-foreground shadow-panel hover:bg-primary hover:text-primary-foreground";
 
 /**
  * Theme switch.
@@ -104,114 +176,404 @@ function ThemeToggle({
   );
 }
 
-export function AppShell({
+/** The mark, shared by both shells so the two headers cannot drift apart. */
+function BrandMark() {
+  return (
+    <>
+      <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-t2 font-bold text-primary-foreground shadow-panel">
+        T
+      </span>
+      <span className="font-display text-sm font-bold tracking-tight text-primary">
+        TOURNOVA<span className="text-muted-foreground"> / ops</span>
+      </span>
+    </>
+  );
+}
+
+/**
+ * Who is signed in, and how to stop being signed in.
+ *
+ * The presence dot is the live ink, not the live chip: it is a 6px solid mark, the same
+ * shape the live status pill draws its glyph from, and the chip is a pale wash (L 0.935
+ * in light) that would be invisible at this size. The ink is the saturated end of the
+ * same hue at both themes, so the dot and a live match read as one colour. Decorative —
+ * the email and role beside it carry the meaning — so it stays out of the accessibility
+ * tree.
+ */
+function SessionBlock() {
+  const { session, signedIn, systemRole } = useSession();
+  const navigate = useNavigate();
+
+  if (!signedIn) {
+    return (
+      <Button size="sm" onClick={() => navigate({ to: "/auth" })}>
+        Sign in
+      </Button>
+    );
+  }
+
+  return (
+    <>
+      <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
+        <span aria-hidden className="size-1.5 rounded-full bg-state-live-ink" />
+        {session?.userEmail}
+        {systemRole ? ` · ${systemRole}` : ""}
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={async () => {
+          await supabase.auth.signOut();
+          navigate({ to: "/auth", replace: true });
+        }}
+      >
+        Sign out
+      </Button>
+    </>
+  );
+}
+
+/**
+ * The lifecycle status, drawn through the same tiers the match vocabulary uses.
+ *
+ * A tournament's state is not a match's state, and this is not a second status system:
+ * it is the same three treatments applied to the same three meanings, so a host learns
+ * one vocabulary.
+ *
+ *   upcoming     -> tier 3, a neutral chip    (nothing has started)
+ *   in_progress  -> tier 1, the saturated live chip, reusing the match `live` tokens
+ *   completed    -> tier 4, ink only, no container (an archive state recedes by losing
+ *                   its chip rather than by lightening its ink)
+ *
+ * Every one of the three also carries its own glyph and its own word, so the state
+ * survives grayscale. The word comes from `tournamentStatusLabel` rather than a local
+ * switch, because a local default is what once labelled every not-yet-started
+ * tournament with a lifecycle state the database can no longer produce.
+ *
+ * Exported because Explore and My Tournaments draw the same pill: it is the tournament's
+ * identity, not the workspace header's private drawing of it.
+ */
+export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
+  const label = tournamentStatusLabel(status);
+
+  if (status === "completed") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 font-score text-t4 uppercase tracking-wider text-state-completed-ink">
+        {STATE_GLYPH["completed"]}
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        status === "in_progress"
+          ? "bg-state-live-chip text-state-live-ink ring-state-live-ink/25"
+          : "bg-muted text-muted-foreground ring-hairline",
+      )}
+    >
+      {status === "in_progress" ? STATE_GLYPH["live"] : STATE_GLYPH["scheduled"]}
+      {label}
+    </span>
+  );
+}
+
+/**
+ * The read-only treatment, shared by a visitor and a viewer.
+ *
+ * One component because it is one fact - this caller may not change anything here - and
+ * two sentences because the two callers have different next steps: a visitor can sign in
+ * and a viewer cannot buy the right by signing in again, so telling the second one to
+ * sign in would be wrong. The treatment itself is identical, which is what stops the
+ * workspace from looking like two different products depending on who opened it.
+ *
+ * It renders only once the access read has settled. Rendering it while the answer is in
+ * flight would flash "read-only" at every editor on every navigation, and an editor who
+ * sees that banner on load learns to ignore it.
+ */
+function ReadOnlyNotice({ signedIn }: { signedIn: boolean }) {
+  return (
+    <div
+      className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-t4 font-medium text-warn-foreground"
+      data-read-only
+    >
+      {signedIn
+        ? "Read-only view. You can see this tournament but not change it — ask its owner for edit access."
+        : "Read-only view. Sign in to start, score and schedule matches."}
+    </div>
+  );
+}
+
+/**
+ * The registration window, as the database decided it.
+ *
+ * This is the pill a card draws to answer "can I enter this", and it is deliberately a
+ * *read*: the state comes from `tournament_registration_state`, which is computed from the
+ * same predicates `submit_tournament_registration` consults. A card that derived the
+ * answer from the two timestamps and the lifecycle would disagree with the RPC that
+ * refuses the submission, and the person it disagrees with is standing at a desk with a
+ * participant in front of them.
+ *
+ * ## Why one state carries a hue and six do not
+ *
+ * Green is this system's "something is happening right now" - a live match, a tournament
+ * in progress - and an open window is exactly that: a thing accepting input as the page
+ * renders. So `open` takes the live treatment rather than a new hue, which is the same
+ * reuse `TournamentStatusPill` makes for `in_progress`.
+ *
+ * The other six are all "nothing is being accepted, and here is why", which is a receding
+ * fact rather than an urgent one. They take the neutral tier-3 chip, and they are told
+ * apart by their glyph and their word - never by their colour, which they do not vary at
+ * all. `completed` is the one exception to the chip: like every other archive state in
+ * this system it loses its container and renders as ink, because the tournament is over
+ * and the window is no longer a live question.
+ */
+export function RegistrationStatePill({ state }: { state: RegistrationState }) {
+  const label = registrationStateLabel(state);
+
+  if (state === "completed") {
+    return (
+      <span
+        className="inline-flex shrink-0 items-center gap-1 font-score text-t4 uppercase tracking-wider text-state-completed-ink"
+        title={registrationStateHint(state)}
+      >
+        {REGISTRATION_GLYPH[state]}
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        state === "open"
+          ? "bg-state-live-chip text-state-live-ink ring-state-live-ink/25"
+          : "bg-muted text-muted-foreground ring-hairline",
+      )}
+      title={registrationStateHint(state)}
+    >
+      {REGISTRATION_GLYPH[state]}
+      {label}
+    </span>
+  );
+}
+
+/**
+ * The pages under one tournament.
+ *
+ * Rendered by the layout route, so it mounts once per workspace rather than once per
+ * navigation: the header, the nav and the session block survive a move between pages
+ * instead of being rebuilt. The tournament and the caller's access both come from the
+ * layout's context, which is the same answer the page below it reads.
+ */
+export function WorkspaceShell({ children }: { children: ReactNode }) {
+  const { tournament, tournamentId, access, accessLoading } = useTournamentContext();
+  const { signedIn } = useSession();
+  const { theme, setTheme } = useTheme();
+
+  const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : SECTIONS;
+  const readOnly = !accessLoading && !access.can_edit;
+
+  return (
+    <div className="min-h-screen bg-background font-body text-foreground">
+      <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 pt-2.5">
+          {/*
+            The brand goes to the tournament you are looking at, never to `/`. It used to
+            point at `/` always, which after the workspace move would send an operator
+            working in tournament B to whatever their pointer happened to name - possibly
+            A. A logo that moves you to a different event than the one on screen is worse
+            than one that does nothing.
+          */}
+          {tournamentId ? (
+            <Link
+              to="/tournaments/$tournamentId/desk"
+              params={{ tournamentId }}
+              className="flex items-center gap-2"
+            >
+              <BrandMark />
+            </Link>
+          ) : (
+            <span className="flex items-center gap-2">
+              <BrandMark />
+            </span>
+          )}
+
+          {/*
+            Which tournament this is. The name is truncated rather than wrapped, because a
+            long name must not push the nav onto a third line, and the status beside it is
+            the one fact a host needs before touching anything.
+          */}
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-display text-sm font-semibold">
+              {tournament?.name ?? "Loading…"}
+            </span>
+            {tournament ? (
+              <TournamentStatusPill status={normalizeTournamentStatus(tournament.status)} />
+            ) : null}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle theme={theme} onChange={setTheme} />
+            <SessionBlock />
+          </div>
+        </div>
+
+        <nav
+          aria-label="Tournament sections"
+          className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-1 px-4 py-2"
+        >
+          {tournamentId
+            ? sections.map((item) => (
+                <Link
+                  key={item.scoped}
+                  to={item.scoped}
+                  params={{ tournamentId }}
+                  className={NAV_ITEM_CLASS}
+                  activeProps={{ className: NAV_ACTIVE_CLASS }}
+                >
+                  {item.label}
+                </Link>
+              ))
+            : null}
+        </nav>
+      </header>
+
+      <main className="mx-auto min-h-[calc(100vh-5.5rem)] max-w-[1400px] px-4 py-6">
+        {readOnly ? <ReadOnlyNotice signedIn={signedIn} /> : null}
+        {children}
+      </main>
+    </div>
+  );
+}
+
+/**
+ * The pages that are not about one tournament.
+ *
+ * Sign-in today, Explore and the landing page next. It has no tournament to name and no
+ * section nav, and it keeps the flat nav the old shell used outside a workspace: those
+ * addresses resolve on the caller's own pointer, so a signed-in reader can still reach
+ * their own tournament from here. S6 replaces that nav with the public one, which is
+ * when the flat addresses stop being the only thing there is to link to.
+ */
+export function PublicShell({
   title,
   subtitle,
   actions,
   children,
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: string | undefined;
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { session, signedIn, role, isAdmin } = useSession();
-  const navigate = useNavigate();
-  // The theme's fallback is the operating system rather than the route, so there is
-  // nothing for a route to contribute here. See `resolveTheme`.
   const { theme, setTheme } = useTheme();
-
-  const nav = [
-    ...NAV,
-    // Creating a tournament is admin-only.
-    ...(isAdmin ? [{ to: "/setup" as const, label: "Tournament setup" }] : []),
-    ...(isAdmin ? [{ to: "/staff" as const, label: "Staff" }] : []),
-  ];
 
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
       <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
           <Link to="/" className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-t2 font-bold text-primary-foreground shadow-panel">
-              T
-            </span>
-            <span className="font-display text-sm font-bold tracking-tight text-primary">
-              TOURNOVA<span className="text-muted-foreground"> / ops</span>
-            </span>
+            <BrandMark />
           </Link>
-          <nav className="flex flex-wrap items-center gap-1">
-            {nav.map((item) => (
+          <nav aria-label="Tournament sections" className="flex flex-wrap items-center gap-1">
+            {SECTIONS.map((item) => (
               <Link
-                key={item.to}
-                to={item.to}
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                activeProps={{
-                  className:
-                    "bg-primary text-primary-foreground shadow-panel hover:bg-primary hover:text-primary-foreground",
-                }}
-                activeOptions={{ exact: item.to === "/" }}
+                key={item.flat}
+                to={item.flat}
+                className={NAV_ITEM_CLASS}
+                activeProps={{ className: NAV_ACTIVE_CLASS }}
+                activeOptions={{ exact: item.flat === "/" }}
+              >
+                {item.label}
+              </Link>
+            ))}
+            {EDITOR_SECTIONS.map((item) => (
+              <Link
+                key={item.flat}
+                to={item.flat}
+                className={NAV_ITEM_CLASS}
+                activeProps={{ className: NAV_ACTIVE_CLASS }}
               >
                 {item.label}
               </Link>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-2 text-xs">
+          <div className="ml-auto flex items-center gap-2">
             <ThemeToggle theme={theme} onChange={setTheme} />
-            {signedIn ? (
-              <>
-                <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
-                  {/*
-                    Presence. The live ink, not the live chip: this is a 6px solid mark, the
-                    same shape the live status pill draws its glyph from, and the chip is a
-                    pale wash (L 0.935 in light) that would be invisible at this size. The
-                    ink is the saturated end of the same hue at both themes, so the dot and
-                    a live match read as one colour. Decorative — the email and role beside
-                    it carry the meaning — so it stays out of the accessibility tree.
-                  */}
-                  <span aria-hidden className="size-1.5 rounded-full bg-state-live-ink" />
-                  {session?.userEmail}
-                  {role ? ` · ${role}` : ""}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    navigate({ to: "/auth", replace: true });
-                  }}
-                >
-                  Sign out
-                </Button>
-              </>
-            ) : (
-              <Button size="sm" onClick={() => navigate({ to: "/auth" })}>
-                Desk sign in
-              </Button>
-            )}
+            <SessionBlock />
           </div>
         </div>
       </header>
 
       <main className="mx-auto min-h-[calc(100vh-3.5rem)] max-w-[1400px] px-4 py-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>
-            {subtitle ? (
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{subtitle}</p>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">{actions}</div>
-        </div>
-        {!signedIn ? (
-          <div className="mb-5 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-xs font-medium text-warn-foreground">
-            Read-only view. Sign in at the desk to enter scores or generate pools, draws and
-            schedules.
-          </div>
-        ) : null}
+        <PageHeader title={title} subtitle={subtitle} actions={actions} />
         {children}
       </main>
     </div>
+  );
+}
+
+/**
+ * A page's own title, subtitle and actions.
+ *
+ * The workspace header names the *tournament*; this names the page inside it. Both cannot
+ * be the h1, so the split is: the shell owns the identity that persists across pages, and
+ * every page owns the one line that says what it is showing.
+ *
+ * Not a `<header>` element. It sits inside `main`, where a banner landmark would be a
+ * second one nested in the page's own content, and the shape a page's actions live in is
+ * the row this renders.
+ */
+function PageHeader({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: string;
+  subtitle?: string | undefined;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>
+        {subtitle ? <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{subtitle}</p> : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">{actions}</div>
+    </div>
+  );
+}
+
+/**
+ * One page inside a shell: its title row, then its content.
+ *
+ * It exists so the split between the shell and the page is a change of *wrapper* rather
+ * than a change of shape at every call site. A page used to render `AppShell` around its
+ * content and to be the thing that drew the header; it now renders `Page`, and the shell
+ * it is drawn inside comes from the layout route above it. The markup a page owns is
+ * therefore unchanged - title, subtitle, actions, content - and the thirty pages under
+ * the workspace did not have to be re-indented to say so.
+ */
+export function Page({
+  title,
+  subtitle,
+  actions,
+  children,
+}: {
+  title: string;
+  subtitle?: string | undefined;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <PageHeader title={title} subtitle={subtitle} actions={actions} />
+      {children}
+    </>
   );
 }
 
@@ -424,6 +786,50 @@ const STATE_GLYPH: Record<string, ReactNode> = {
 const STATE_FALLBACK_GLYPH = glyph(
   <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />,
 );
+
+/**
+ * One glyph per registration state, and a distinct one for each.
+ *
+ * Three of these are borrowed from the match vocabulary because the meaning is the same
+ * one rather than a resemblance: `live` for a window taking requests now, `scheduled` for
+ * one that has not opened, `void` for a tournament that never offered registration at all
+ * (a condition that does not apply, which is what the struck ring says). The other four are
+ * drawn here: an hourglass for a window still to open, sliders for one held back by the
+ * host's own configuration, a lock for one that has closed, and a play mark for one whose
+ * event has started.
+ */
+const REGISTRATION_GLYPH: Record<RegistrationState, ReactNode> = {
+  open: STATE_GLYPH["live"],
+  not_offered: STATE_GLYPH["void"],
+  completed: STATE_GLYPH["completed"],
+  // An hourglass: waiting on the clock rather than on anybody's decision.
+  opens_soon: glyph(
+    <>
+      <path d="M6 3.5h6" />
+      <path d="M6 14.5h6" />
+      <path d="M6.75 3.5v2.4L9 9l2.25-3.1V3.5" />
+      <path d="M6.75 14.5v-2.4L9 9l2.25 3.1v2.4" />
+    </>,
+  ),
+  // Sliders: the window exists but the tournament is not configured to accept yet.
+  not_ready: glyph(
+    <>
+      <path d="M3.5 6.25h11" />
+      <path d="M3.5 11.75h11" />
+      <circle cx="7" cy="6.25" r="1.6" />
+      <circle cx="11.5" cy="11.75" r="1.6" />
+    </>,
+  ),
+  // A closed padlock.
+  closed: glyph(
+    <>
+      <rect x="4.25" y="8" width="9.5" height="6.75" rx="1.5" />
+      <path d="M6.5 8V6.4a2.5 2.5 0 0 1 5 0V8" />
+    </>,
+  ),
+  // A play mark: the event has begun, so the question is closed by the lifecycle.
+  started: glyph(<path d="M6.75 4.9 13.5 9l-6.75 4.1z" />),
+};
 
 /** Rightwards arrow — the entrant advances without playing. */
 const BYE_GLYPH = glyph(

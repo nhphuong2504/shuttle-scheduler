@@ -1,3 +1,31 @@
+/**
+ * The last-resort document.
+ *
+ * Served when the application itself failed to render - a worker threw before
+ * hydration, or an unhandled error reached the edge - so it **cannot reference
+ * `src/styles.css`**: the stylesheet is a build artifact that this response does
+ * not include, and a crash page that depends on the thing that just crashed is
+ * not a crash page.
+ *
+ * It therefore carries its own copy of the palette, under the same `--color-*`
+ * names, so a reader moving between this file and the stylesheet is not
+ * re-learning the vocabulary. Three properties make that copy safe rather than a
+ * second source of truth:
+ *
+ *  - it is a *copy of the palette*, not a fresh set of colours, and
+ *    `tokens.test.ts` asserts every value here is byte-identical to the
+ *    corresponding token in `styles.css` for the theme it belongs to;
+ *  - it declares no colour the palette does not, so it cannot introduce a hue the
+ *    design system has not solved;
+ *  - it follows the **operating system** rather than a stored choice, because the
+ *    stored choice is unreachable from here - which is exactly the fallback the
+ *    design system documents for a caller that has nothing stored.
+ *
+ * Type is on the shipped tiers (T3 for prose, T1 for the heading) rather than the
+ * ad-hoc sizes this document used to carry, and the font stack is `system-ui`
+ * rather than the app's webfonts: a crash page must not wait on a network font to
+ * decide whether it has a layout.
+ */
 export function renderErrorPage(): string {
   return `<!doctype html>
 <html lang="en">
@@ -6,14 +34,46 @@ export function renderErrorPage(): string {
     <title>This page didn't load</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      body { font: 15px/1.5 system-ui, -apple-system, sans-serif; background: #fafafa; color: #111; display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 1.5rem; }
+      :root {
+        color-scheme: light dark;
+        --color-background: oklch(0.975 0.004 250);
+        --color-foreground: oklch(0.255 0.010 255);
+        --color-surface: oklch(1 0 0);
+        --color-muted-foreground: oklch(0.505 0.009 252);
+        --color-border-control: oklch(0.643 0.008 250);
+        --color-primary: oklch(0.52 0.16 255);
+        --color-primary-foreground: oklch(1 0 0);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --color-background: oklch(0.17 0.008 260);
+          --color-foreground: oklch(0.95 0.005 255);
+          --color-surface: oklch(0.215 0.008 262);
+          --color-muted-foreground: oklch(0.633 0.009 252);
+          --color-border-control: oklch(0.513 0.008 250);
+          --color-primary: oklch(0.635 0.16 255);
+          --color-primary-foreground: oklch(0.17 0.02 255);
+        }
+      }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        background: var(--color-background);
+        color: var(--color-foreground);
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 1.5rem;
+      }
       .card { max-width: 28rem; width: 100%; text-align: center; padding: 2rem; }
-      h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
-      p { color: #4b5563; margin: 0 0 1.5rem; }
+      h1 { font-size: 1.5rem; line-height: 1.75rem; margin: 0 0 0.5rem; }
+      p { color: var(--color-muted-foreground); margin: 0 0 1.5rem; }
       .actions { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
       a, button { padding: 0.5rem 1rem; border-radius: 0.375rem; font: inherit; cursor: pointer; text-decoration: none; border: 1px solid transparent; }
-      .primary { background: #111; color: #fff; }
-      .secondary { background: #fff; color: #111; border-color: #d1d5db; }
+      .primary { background: var(--color-primary); color: var(--color-primary-foreground); }
+      .secondary { background: var(--color-surface); color: var(--color-foreground); border-color: var(--color-border-control); }
     </style>
   </head>
   <body>

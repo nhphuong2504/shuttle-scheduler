@@ -1,7 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  normalizeTournamentStatus,
+  type TournamentAccess,
+  type TournamentStatus,
+} from "@/lib/auth/authorization";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  normalizeRegistrationState,
+  type RegistrationState,
+} from "@/lib/tournament/registration-state";
 
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -23,8 +33,23 @@ export type Tournament = Database["public"]["Tables"]["tournaments"]["Row"];
 export type TournamentDay = Database["public"]["Tables"]["tournament_days"]["Row"];
 export type TournamentDayCourt = Database["public"]["Tables"]["tournament_day_courts"]["Row"];
 export type TournamentDayBreak = Database["public"]["Tables"]["tournament_day_breaks"]["Row"];
-export type StaffRole = Database["public"]["Tables"]["staff_roles"]["Row"];
-export type StaffRoleName = "admin" | "registrar" | "scorer" | "scheduler";
+export type TournamentEditor = Database["public"]["Tables"]["tournament_editors"]["Row"];
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+
+/**
+ * The editor roster as the access panel receives it: membership joined to the person,
+ * plus the owner flagged in the same list because "who can edit this" is one question.
+ *
+ * `profile_id` is a person, never an identity, and it is present for every row - the
+ * owner's profile exists before their identity does, so unlike the Phase 1 shape there
+ * is no "has not signed in yet" row that cannot be acted on.
+ */
+export interface TournamentEditorRow {
+  profile_id: string;
+  email: string;
+  is_owner: boolean;
+  created_at: string;
+}
 
 /**
  * The two-round placement format's own tables. These are deliberately separate
@@ -72,46 +97,142 @@ export const keys = {
   poolMatches: ["pool_matches"] as const,
   draws: ["draws"] as const,
   drawMatches: ["draw_matches"] as const,
-  activeTournament: ["active_tournament"] as const,
+  myProfile: ["my_profile"] as const,
+  editorTournaments: ["editor_tournaments"] as const,
+  /** The ids of the tournaments the caller owns. The other half is `editorTournaments`. */
+  ownedTournaments: ["owned_tournaments"] as const,
+  /**
+   * The summary read behind Explore, My Tournaments and the create flow's list.
+   *
+   * One base key with a discriminator appended, so a filter change is a new cache entry
+   * rather than a shared one: Explore's search term and My Tournaments' id set are
+   * different questions about the same rows.
+   */
+  tournamentSummaries: ["tournament_summaries"] as const,
   tournamentDays: ["tournament_days"] as const,
   tournamentById: ["tournament_by_id"] as const,
-  allTournaments: ["all_tournaments"] as const,
   tournamentReadiness: ["tournament_readiness"] as const,
   dayCourts: ["tournament_day_courts"] as const,
   dayBreaks: ["tournament_day_breaks"] as const,
-  staffRole: ["staff_role"] as const,
-  staffRoles: ["staff_roles"] as const,
+  tournamentEditors: ["tournament_editors"] as const,
   placementEntrants: ["placement_entrants"] as const,
   placementMatches: ["placement_matches"] as const,
   tierDraws: ["tier_draws"] as const,
   tierDrawMatches: ["tier_draw_matches"] as const,
+  currentTournamentPointer: ["current_tournament_pointer"] as const,
 };
 
-/** The tournament the desk is currently operating on. */
-export function useActiveTournament() {
-  return useQuery({
-    queryKey: keys.activeTournament,
-    staleTime: 60_000,
+/**
+ * The caller's working tournament, as `current_tournament_id()` resolves it.
+ *
+ * Read for redirects rather than for rendering. Since S3 the route's `$tournamentId`
+ * decides what a page shows; the pointer only decides where a *flat* address, or `/`,
+ * sends a caller who asked for a page without naming a tournament. Routing has no hook
+ * to hang a query on, so this is exposed as a plain query for `beforeLoad` to
+ * `ensureQueryData`, and the key lives here so nothing invents a second cache entry for
+ * the same answer.
+ *
+ * Deliberately not cached in React state and deliberately short-lived at the call site:
+ * a stale pointer would send a caller to the tournament they just switched away from.
+ */
+export function currentTournamentPointerQueryOptions() {
+  return {
+    queryKey: keys.currentTournamentPointer,
+    staleTime: 0,
     queryFn: async () => {
-      const rows = await must<Tournament[]>(
-        supabase.from("tournaments").select("*").eq("is_active", true).limit(1),
-      );
-      return rows[0] ?? null;
+      const { data, error } = await supabase.rpc("current_tournament_id");
+      if (error) throw new Error(error.message);
+      return (data as string | null) ?? null;
     },
-  });
+  };
 }
 
 /**
- * Shared scope handle. Every scoped hook subscribes to the same query, so this
- * costs one request regardless of how many hooks call it.
+ * The pointer as a hook, for the surfaces that are *about* the caller rather than about
+ * one tournament.
+ *
+ * Pages under the workspace never need this: their route names the tournament and the
+ * layout publishes it, which is why `useScopedTournament` exists. This is the other
+ * direction - "which tournament is this person working in" - and its callers are the
+ * settings list's marker and (S7) the switcher, both of which talk about the caller's
+ * choice rather than about the page they are on.
  */
-export function useActiveTournamentId(): string | null {
-  const { data } = useActiveTournament();
-  return data?.id ?? null;
+export function useCurrentTournamentPointer() {
+  return useQuery(currentTournamentPointerQueryOptions());
+}
+
+/**
+ * The tournament a workspace is scoped to, and the caller's access to it.
+ *
+ * This used to be a *global* read - `current_tournament_id()` resolved the caller's
+ * pointer and every scoped hook keyed off that one answer. The pointer is still how a
+ * user's working tournament is chosen, but it is no longer how a page finds out which
+ * tournament it is showing: the route owns that
+ * (`/tournaments/$tournamentId/...`), and it publishes the answer here, so the scoped
+ * hooks below keep their shape while resolving from the URL instead of from a global.
+ *
+ * Two consequences worth stating, because they are the point of the change:
+ *
+ *  - **The same URL is the same tournament for everyone.** A link opened by the owner
+ *    and by a viewer resolves to one tournament, not to each reader's own pointer.
+ *    That is what makes a workspace linkable at all, and it is why the pointer is no
+ *    longer consulted to decide what to render.
+ *  - **The pointer is now only a navigation convenience.** `set_current_tournament`
+ *    (S7) lets the switcher move it; it is a distinct concern from what a page shows.
+ */
+export interface TournamentScopeValue {
+  /** The tournament the route names, or null while it is still loading. */
+  tournament: Tournament | null;
+  /** Its id, or null while loading. The scoped hooks key on this. */
+  tournamentId: string | null;
+  /** The caller's access to it. All-false for a viewer and for a visitor. */
+  access: TournamentAccess;
+  /** True until the access read resolves, so a caller can tell "no" from "not yet". */
+  accessLoading: boolean;
+}
+
+export const TournamentScopeContext = createContext<TournamentScopeValue | null>(null);
+
+/**
+ * The scope, or an error.
+ *
+ * Throwing rather than returning a null-ish default is deliberate: a scoped hook used
+ * outside the layout would otherwise silently query nothing and render an empty screen,
+ * which is the failure mode the context exists to remove. A missing provider is a
+ * routing mistake, and it should be loud.
+ */
+export function useTournamentContext(): TournamentScopeValue {
+  const value = useContext(TournamentScopeContext);
+  if (!value) {
+    throw new Error(
+      "useTournamentContext: no TournamentScopeContext. Scoped reads belong under " +
+        "src/routes/tournaments/$tournamentId/route.tsx, which provides it.",
+    );
+  }
+  return value;
+}
+
+/** The tournament the route names. Replaces the global `useActiveTournament()`. */
+export function useScopedTournament(): Tournament | null {
+  return useTournamentContext().tournament;
+}
+
+/** Its id. Replaces the global `useTournamentId()`. */
+export function useTournamentId(): string | null {
+  return useTournamentContext().tournamentId;
+}
+
+/** The caller's access, resolved once by the layout rather than once per page. */
+export function useScopedAccess(): TournamentAccess {
+  return useTournamentContext().access;
+}
+
+export function useScopedAccessLoading(): boolean {
+  return useTournamentContext().accessLoading;
 }
 
 export function useTournamentDays() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.tournamentDays, tournamentId),
     enabled: !!tournamentId,
@@ -126,21 +247,86 @@ export function useTournamentDays() {
   });
 }
 
-/** The active tournament plus its ordered days, which is what the UI mostly wants. */
+/**
+ * The scoped tournament plus its ordered days, which is what the UI mostly wants.
+ *
+ * Named `useTournamentScope` before the route context existed; it is kept because
+ * callers read it as "the tournament and its days", which is still what it returns.
+ */
 export function useTournamentScope() {
-  const tournamentQuery = useActiveTournament();
+  const scope = useTournamentContext();
   const daysQuery = useTournamentDays();
   return {
-    tournament: tournamentQuery.data ?? null,
+    tournament: scope.tournament,
     days: daysQuery.data ?? [],
-    loading: tournamentQuery.isLoading || daysQuery.isLoading,
+    loading: daysQuery.isLoading,
   };
 }
 
 /**
- * A single tournament by id, so the creation wizard can resume a draft that is
- * not the active scope. Drafts are never active, so the active-tournament hook
- * cannot be used for them.
+ * The caller's own profile.
+ *
+ * Needed because ownership is stored as a *profile* id - `tournaments.owner_profile_id` -
+ * and the session only knows the auth user id. Comparing the two directly would be
+ * wrong rather than merely awkward: a profile outlives its identity, which is what lets
+ * ownership survive a staging re-import, so the two ids are genuinely different things.
+ *
+ * One read, and the `profiles` policy returns only the caller's own row.
+ */
+export function useMyProfile() {
+  const { session } = useSession();
+  const userId = session?.userId ?? null;
+  return useQuery({
+    queryKey: [...keys.myProfile, userId],
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const rows = await must<Profile[]>(
+        supabase.from("profiles").select("*").eq("user_id", userId as string).limit(1),
+      );
+      return rows[0] ?? null;
+    },
+  });
+}
+
+/**
+ * The ids of tournaments the caller is explicitly an editor of - not the ones they own.
+ *
+ * One read for the whole list, so a page that lists tournaments does not have to call
+ * `tournament_access` once per row. The `tournament_editors` policy lets anyone signed in
+ * read their own membership, which is exactly this query.
+ *
+ * The key is the caller's *profile*, not their auth identity: membership is held by a
+ * person now, so this waits on `useMyProfile` and asks nothing until it has one. The two
+ * ids are genuinely different values, and comparing them would silently return nothing.
+ *
+ * This mirrors `can_edit_tournament` for rendering; it is not the gate. Every write still
+ * re-checks on the server.
+ */
+export function useEditorTournamentIds() {
+  const { data: profile } = useMyProfile();
+  const profileId = profile?.id ?? null;
+  return useQuery({
+    queryKey: [...keys.editorTournaments, profileId],
+    enabled: !!profileId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tournament_editors")
+        .select("tournament_id")
+        .eq("profile_id", profileId as string);
+      if (error) throw new Error(error.message);
+      return new Set((data ?? []).map((row) => row.tournament_id));
+    },
+  });
+}
+
+/**
+ * A single tournament by id.
+ *
+ * This is the layout route's loader: unlike the scoped hooks it cannot read the scope,
+ * because resolving the scope is what it is for. The creation wizard uses it too, to
+ * open a tournament that is not the one in the URL.
  */
 export function useTournamentById(tournamentId: string | null | undefined) {
   return useQuery({
@@ -160,20 +346,175 @@ export function useTournamentById(tournamentId: string | null | undefined) {
 }
 
 /**
- * Every tournament, newest first, whatever its status.
+ * A tournament as a list or a card needs it, from one read.
  *
- * The setup page lists these so a tournament can be managed — and deleted — after
- * it leaves Draft, which a drafts-only list cannot show.
+ * `tournament_summary` returns this shape for every row, so Explore, My Tournaments and the
+ * create flow's list cannot disagree about a status word, a start time, a count or whether
+ * the caller may edit it. The alternative - which this replaced - was the client reading
+ * the whole `tournaments` table and deriving all four, which is four places for the answer
+ * to drift from the database.
  */
-export function useAllTournaments() {
+export type TournamentSummaryAccess = "admin" | "owner" | "editor" | "viewer";
+
+export interface TournamentSummary {
+  id: string;
+  name: string;
+  venue_name: string | null;
+  status: TournamentStatus;
+  /** Derived from the days and the venue's timezone, null while there are no days. */
+  starts_at: string | null;
+  ends_at: string | null;
+  /** The window as one word, decided by the database rather than by the browser's clock. */
+  registration_state: RegistrationState;
+  /** Entries (`teams`), which is the entry per I3 - never a derived projection. */
+  entry_count: number;
+  category_count: number;
+  access_level: TournamentSummaryAccess;
+}
+
+export interface TournamentSummaryParams {
+  /** Matches the name, the venue or one of the tournament's events. */
+  query?: string | null;
+  status?: TournamentStatus | null;
+  /** Restrict to a set. An empty array is "nothing to show", not "everything". */
+  ids?: readonly string[] | null;
+  limit?: number | null;
+  offset?: number | null;
+}
+
+/**
+ * The summary read, with the vocabulary narrowed on the way in.
+ *
+ * `tournament_summary` is a `text`-returning read, so PostgREST cannot promise the status
+ * word is one of three or the registration state one of seven. Narrowing here means the
+ * pages below can switch exhaustively on both, and an unrecognised value renders as the
+ * safe member rather than as whatever string arrived.
+ */
+export async function fetchTournamentSummaries(
+  params: TournamentSummaryParams = {},
+): Promise<TournamentSummary[]> {
+  // Every filter is *omitted* rather than sent as `null`: PostgREST drops a key it is not
+  // given, so the function's own defaults apply, and an absent filter cannot be confused
+  // with a filter whose value is null. Built by assignment because the generated Args type
+  // is `exactOptionalPropertyTypes`, where an explicit `undefined` is not an omission.
+  const args: Database["public"]["Functions"]["tournament_summary"]["Args"] = {};
+  if (params.query) args.p_query = params.query;
+  if (params.status) args.p_status = params.status;
+  if (params.ids) args.p_ids = [...params.ids];
+  if (params.limit != null) args.p_limit = params.limit;
+  if (params.offset != null) args.p_offset = params.offset;
+
+  const { data, error } = await supabase.rpc("tournament_summary", args);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    venue_name: row.venue_name,
+    status: normalizeTournamentStatus(row.status),
+    starts_at: row.starts_at,
+    ends_at: row.ends_at,
+    registration_state: normalizeRegistrationState(row.registration_state),
+    entry_count: row.entry_count ?? 0,
+    category_count: row.category_count ?? 0,
+    access_level:
+      row.access_level === "admin" ||
+      row.access_level === "owner" ||
+      row.access_level === "editor"
+        ? row.access_level
+        : "viewer",
+  }));
+}
+
+/**
+ * The caller's own tournaments, in the two groups My Tournaments draws.
+ *
+ * "Owned by me" is `owner_profile_id = my profile` and "shared with me" is a
+ * `tournament_editors` row for my profile. The two are asked separately and then unioned
+ * into *one* summary read, rather than one read per group, because a page that asked
+ * twice could render the same tournament twice and a page that asked per row would issue
+ * a request per card.
+ *
+ * Which group a row belongs to is decided by those two id sets and not by
+ * `access_level`: an `access_level` of `admin` means the caller is a platform admin, and
+ * a platform admin who neither owns nor edits a tournament is not in this list at all -
+ * so a group derived from the access word would silently drop an admin's own tournaments.
+ */
+export function useMyTournaments() {
+  const profileQuery = useMyProfile();
+  const profileId = profileQuery.data?.id ?? null;
+  const editorIdsQuery = useEditorTournamentIds();
+
+  const ownedIds = useQuery({
+    queryKey: [...keys.ownedTournaments, profileId],
+    enabled: !!profileId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tournaments")
+        .select("id")
+        .eq("owner_profile_id", profileId as string)
+        .order("created_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((row) => row.id);
+    },
+  });
+
+  const editorIds = useMemo(
+    () => (editorIdsQuery.data ? [...editorIdsQuery.data].sort() : []),
+    [editorIdsQuery.data],
+  );
+  const owned = useMemo(() => ownedIds.data ?? [], [ownedIds.data]);
+
+  const ids = useMemo(() => [...new Set([...owned, ...editorIds])].sort(), [owned, editorIds]);
+
+  const summaries = useQuery({
+    queryKey: [...keys.tournamentSummaries, "mine", ids.join(",")],
+    enabled: !!profileId && ownedIds.isSuccess && editorIdsQuery.isSuccess,
+    // An empty id set would be read by the database as "everything" if it were sent as
+    // null, and as "nothing" if sent as an empty array. Neither is wanted here: the
+    // question is "which tournaments are mine", and with none the answer is no rows.
+    queryFn: () => (ids.length === 0 ? Promise.resolve([]) : fetchTournamentSummaries({ ids })),
+  });
+
+  return {
+    summaries: summaries.data ?? [],
+    /** The ids the caller owns. The other half of the grouping is `editorIds`. */
+    ownedIds: useMemo(() => new Set(owned), [owned]),
+    /** The ids the caller is an editor of, excluding their own. */
+    editorIds: useMemo(() => new Set(editorIds), [editorIds]),
+    /** True until both halves of the answer are known, so a page can wait rather than flash. */
+    isLoading:
+      profileQuery.isLoading ||
+      editorIdsQuery.isLoading ||
+      ownedIds.isLoading ||
+      summaries.isLoading,
+    isError: summaries.isError || editorIdsQuery.isError || ownedIds.isError,
+    error: summaries.error ?? editorIdsQuery.error ?? ownedIds.error,
+  };
+}
+
+/**
+ * Explore: every tournament, filtered by a search term and a lifecycle word.
+ *
+ * `query` is matched by the database over the name, the venue and the events, so this is
+ * one read whatever the term. The status filter is validated by the function rather than
+ * ignored, so a page cannot render an unfiltered list under a filter label.
+ */
+export function useExploreTournaments(params: {
+  query?: string | null;
+  status?: TournamentStatus | null;
+}) {
+  const query = params.query?.trim() ?? "";
+  const status = params.status ?? null;
+
   return useQuery({
-    queryKey: keys.allTournaments,
-    queryFn: () =>
-      must<Tournament[]>(
-        supabase.from("tournaments").select("*").order("created_at", { ascending: false }),
-      ),
+    queryKey: [...keys.tournamentSummaries, "explore", query, status],
+    queryFn: () => fetchTournamentSummaries({ query, status }),
+    // Keeps the previous page's rows on screen while the next answer arrives, which is
+    // what stops the card grid blinking its way through every keystroke.
+    placeholderData: (previous) => previous,
   });
 }
+
 
 export interface ReadinessCheck {
   id: string;
@@ -365,7 +706,7 @@ export function placementStagesForDay(dayNumber: number, dayCount: number): Plac
 }
 
 export function useCategories() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.categories, tournamentId),
     enabled: !!tournamentId,
@@ -381,7 +722,7 @@ export function useCategories() {
 }
 
 export function useCourts() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.courts, tournamentId),
     enabled: !!tournamentId,
@@ -389,31 +730,35 @@ export function useCourts() {
   });
 }
 
+/**
+ * The global player roster.
+ *
+ * Reads the `public_players` projection, which is a definer view over the three
+ * columns the roster shows. It is deliberately not `players`: that table's policy
+ * keys on tournament edit access, which an entrant by definition does not have, so
+ * reading it here would blank the list for exactly the people who need it.
+ */
 export function usePlayers() {
   return useQuery({
     queryKey: keys.players,
     queryFn: async () => {
-      const full = await supabase.from("players").select("*").order("name");
-      if (!full.error && full.data) return full.data as Player[];
-      const { data, error } = await supabase.from("player_roster").select("*").order("name");
+      const { data, error } = await supabase.from("public_players").select("*").order("name");
       if (error) throw new Error(error.message);
-      const rows: Player[] = [];
-      for (const p of data ?? []) {
-        if (!p.id || !p.name) continue;
-        rows.push({
-          id: p.id,
-          name: p.name,
-          gender: p.gender,
-          created_at: p.created_at ?? undefined,
-        });
+      // The view's columns are all nullable as far as PostgREST can tell, so the rows
+      // are narrowed here rather than asserted. A row without an id or a name is not a
+      // player the roster can render, and dropping it is better than a blank line.
+      const players: Player[] = [];
+      for (const row of data ?? []) {
+        if (!row.id || !row.name) continue;
+        players.push({ id: row.id, name: row.name, gender: row.gender });
       }
-      return rows;
+      return players;
     },
   });
 }
 
 export function useTeams() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.teams, tournamentId),
     enabled: !!tournamentId,
@@ -429,7 +774,7 @@ export function useTeams() {
 }
 
 export function usePools() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.pools, tournamentId),
     enabled: !!tournamentId,
@@ -445,7 +790,7 @@ export function usePools() {
 }
 
 export function usePoolEntries() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.poolEntries, tournamentId),
     enabled: !!tournamentId,
@@ -461,7 +806,7 @@ export function usePoolEntries() {
 }
 
 export function usePoolMatches() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.poolMatches, tournamentId),
     enabled: !!tournamentId,
@@ -478,7 +823,7 @@ export function usePoolMatches() {
 }
 
 export function useDraws() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.draws, tournamentId),
     enabled: !!tournamentId,
@@ -494,7 +839,7 @@ export function useDraws() {
 }
 
 export function useDrawMatches() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.drawMatches, tournamentId),
     enabled: !!tournamentId,
@@ -510,10 +855,25 @@ export function useDrawMatches() {
   });
 }
 
-export function useStaffRoles() {
+/**
+ * Everyone who can edit a tournament: the owner, and the editors they appointed.
+ *
+ * Read through the RPC rather than the table because the owner is a column on
+ * `tournaments`, not a row in `tournament_editors`, and the panel must not have to
+ * stitch those two sources together on the client. The RPC also enforces
+ * `can_edit_tournament`, so a viewer gets an error rather than a roster.
+ */
+export function useTournamentEditors(tournamentId: string | null | undefined) {
   return useQuery({
-    queryKey: keys.staffRoles,
-    queryFn: () => must<StaffRole[]>(supabase.from("staff_roles").select("*").order("email")),
+    queryKey: scopedKey(keys.tournamentEditors, tournamentId),
+    enabled: !!tournamentId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_tournament_editors", {
+        p_tournament_id: tournamentId as string,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as TournamentEditorRow[];
+    },
   });
 }
 
@@ -633,7 +993,7 @@ export function fetchTierDrawMatches(tournamentId: string): Promise<TierDrawMatc
 }
 
 export function usePlacementEntrants() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.placementEntrants, tournamentId),
     enabled: !!tournamentId,
@@ -643,7 +1003,7 @@ export function usePlacementEntrants() {
 }
 
 export function usePlacementMatches() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.placementMatches, tournamentId),
     enabled: !!tournamentId,
@@ -653,7 +1013,7 @@ export function usePlacementMatches() {
 }
 
 export function useTierDraws() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.tierDraws, tournamentId),
     enabled: !!tournamentId,
@@ -663,7 +1023,7 @@ export function useTierDraws() {
 }
 
 export function useTierDrawMatches() {
-  const tournamentId = useActiveTournamentId();
+  const tournamentId = useTournamentId();
   return useQuery({
     queryKey: scopedKey(keys.tierDrawMatches, tournamentId),
     enabled: !!tournamentId,

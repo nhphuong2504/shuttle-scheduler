@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
+import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
 
 /**
@@ -30,8 +31,8 @@ import { settleAnimations } from "./fixtures/settle";
  *
  * Now the session is synthetic and network-free: the shared mock in
  * `./fixtures/app-mock.ts` seeds the `localStorage` entry that `supabase.auth.getSession()`
- * reads and answers the `current_staff_role` RPC. Nothing is recorded, nothing is
- * committed, and no credentials are needed here or in CI.
+ * reads and answers `current_system_role`, `current_tournament_id` and `tournament_access`.
+ * Nothing is recorded, nothing is committed, and no credentials are needed here or in CI.
  *
  * `npm run test:e2e:record-auth` still exists for manual checks against a live backend.
  * It is not part of this file.
@@ -92,7 +93,7 @@ const violationIds = (results: { violations: { id: string }[] }): string[] =>
 
 /** Navigates to the Desk and confirms the authenticated shell rendered. */
 async function openStaffShell(page: Page): Promise<void> {
-  await page.goto("/", { waitUntil: "load" });
+  await page.goto(routes.desk, { waitUntil: "load" });
   await page.waitForLoadState("networkidle");
   const signOut = await page.getByRole("button", { name: /sign out/i }).count();
   requirePrerequisite(signOut > 0, "The authenticated shell did not render");
@@ -111,7 +112,7 @@ test.describe("staff surfaces", () => {
 
   test("role-gated controls are enabled, not merely read", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     /**
@@ -135,7 +136,7 @@ test.describe("staff surfaces", () => {
 
   test("the tournament settings panel opens by interaction and is accessible", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     /**
@@ -167,7 +168,7 @@ test.describe("staff surfaces", () => {
 
   test("a replaced picker glyph is a real control that takes the focus ring", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: /settings/i }).first().click();
 
@@ -303,7 +304,7 @@ test.describe("staff surfaces", () => {
     page,
   }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await page.getByRole("button", { name: /settings/i }).first().click();
@@ -346,7 +347,7 @@ test.describe("staff surfaces", () => {
 
   test("the score dialog opens by interaction and is accessible", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/matches", { waitUntil: "load" });
+    await page.goto(routes.scores, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     /**
@@ -432,7 +433,7 @@ test.describe("the two resets", () => {
 
       test("the schedule reset says the seed order survives", async ({ page }) => {
         await openStaffShell(page);
-        await page.goto("/placement-schedule", { waitUntil: "load" });
+        await page.goto(routes.schedule, { waitUntil: "load" });
         await page.waitForLoadState("networkidle");
 
         const toggle = page.getByRole("button", { name: /^show$/i }).first();
@@ -458,7 +459,7 @@ test.describe("the two resets", () => {
         // The `layout` fixture serves a built tournament, so the gate is closed. This is
         // the state the gate exists for: a bracket is still paired from the seed order.
         await openStaffShell(page);
-        await page.goto("/placement", { waitUntil: "load" });
+        await page.goto(routes.placement, { waitUntil: "load" });
         await page.waitForLoadState("networkidle");
 
         // It is a header button now, which is the whole point of the change — one action
@@ -507,7 +508,7 @@ test.describe("the two resets", () => {
         page,
       }) => {
         await openStaffShell(page);
-        await page.goto("/placement", { waitUntil: "load" });
+        await page.goto(routes.placement, { waitUntil: "load" });
         await page.waitForLoadState("networkidle");
 
         const header = page
