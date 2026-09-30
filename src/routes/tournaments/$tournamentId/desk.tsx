@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel } from "@/components/app-shell";
+import { ConnectionBadge } from "@/components/connection-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -533,7 +534,7 @@ function Desk() {
       subtitle="Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing."
       actions={
         <>
-          <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} now={now} />
+          <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
           <Button size="sm" variant="outline" onClick={() => void qc.invalidateQueries()}>
             Refresh
           </Button>
@@ -1749,40 +1750,4 @@ function localDateTimeValue(value: string | null): string {
   const date = value ? new Date(value) : new Date();
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
-function ConnectionBadge({
-  status,
-  lastUpdatedAt,
-  now,
-}: {
-  status: "connecting" | "live" | "offline" | "error";
-  lastUpdatedAt: number;
-  now: number;
-}) {
-  const ageMinutes = Math.max(0, Math.floor((now - lastUpdatedAt) / 60_000));
-  const label =
-    status === "live"
-      ? ageMinutes > 1
-        ? `Live · last change ${ageMinutes}m ago`
-        : "Live"
-      : status === "offline"
-        ? "Offline · changes unavailable"
-        : status === "error"
-          ? "Connection error"
-          : "Connecting";
-  return (
-    <span
-      role="status"
-      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-        status === "live"
-          ? "bg-state-live-chip text-state-live-ink"
-          : status === "offline" || status === "error"
-            ? "bg-danger-surface text-danger-foreground"
-            : "bg-warn-surface text-warn-foreground"
-      }`}
-    >
-      {label}
-    </span>
-  );
 }

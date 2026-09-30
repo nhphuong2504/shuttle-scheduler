@@ -602,7 +602,15 @@ export function DayPlanner() {
                         </span>
                       </td>
                       <td className="font-score text-xs">{r.categoryCode}</td>
-                      <td className="text-xs capitalize text-muted-foreground">{r.kind}</td>
+                      {/*
+                       * `stageLabel` owns these two words, so the cell reads them from there
+                       * rather than from the row's own key. `capitalize` is then doing what it
+                       * says - lifting a mid-sentence word to the head of a cell - instead of
+                       * standing in for a vocabulary that already exists one function up.
+                       */}
+                      <td className="text-xs capitalize text-muted-foreground">
+                        {stageLabel(r.kind)}
+                      </td>
                       <td>
                         <StatusPill status={r.status} />
                       </td>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatusPill } from "@/components/app-shell";
+import { ConnectionBadge } from "@/components/connection-badge";
 import { MatchFormatCard } from "@/components/match-format";
 import { ScheduledFinish } from "@/components/schedule-status";
 import { Button } from "@/components/ui/button";
@@ -1278,11 +1279,7 @@ export function PlacementScheduler() {
             </span>
           ) : null}
           <span className="ml-auto">
-            {realtime.status === "live"
-              ? "Live"
-              : realtime.status === "connecting"
-                ? "Connecting…"
-                : "Offline"}
+            <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
           </span>
         </div>
 

@@ -343,6 +343,7 @@ Shared components and what they are for. All are exported from
 | `MatchFormatCard` ([`match-format.tsx`](../src/components/match-format.tsx)) | Scoring, match length and rest gap per stage, in one card |
 | `StageProgressList` ([`stage-progress.tsx`](../src/components/stage-progress.tsx)) | Format-agnostic stage progress rows |
 | `ScheduledFinish` / `DayScheduleStatus` ([`schedule-status.tsx`](../src/components/schedule-status.tsx)) | Scheduled finish measured against the official close, and per-day status |
+| `ConnectionBadge` ([`connection-badge.tsx`](../src/components/connection-badge.tsx)) | The live-connection readout, shared by the Desk and the Schedule page: four states, each with its own word, as a `role="status"` live region. It owns the clock that ages its own "last change" copy |
 
 **The shell is split by audience, not by page.** `WorkspaceShell` mounts once per tournament
 from the layout route, so the header and the nav survive a move between the pages under it,
