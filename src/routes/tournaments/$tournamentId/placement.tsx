@@ -19,7 +19,12 @@ import {
   syncPlacementEntrants,
   type CategoryPlacementView,
 } from "@/lib/tournament/placement-actions";
-import { followsSkillBlocks } from "@/lib/tournament/placement-seed";
+import {
+  SKILL_LABELS,
+  SKILL_LEVELS,
+  followsSkillBlocks,
+  isSkillLevel,
+} from "@/lib/tournament/placement-seed";
 import {
   indexBy,
   teamLabel,
@@ -594,8 +599,13 @@ function SeedingPanel({
                     </td>
                     <td {...dropProps}>
                       {canEdit && !view.seedsLocked ? (
+                        // The options and their labels come from `SKILL_LEVELS`/`SKILL_LABELS`,
+                        // the same vocabulary the seed order is built from, so the control
+                        // cannot offer a word the seeding does not know. `border-input` rather
+                        // than the hairline: this boundary is what tells the reader a control
+                        // is here, and the hairline is decorative and exempt from 1.4.11.
                         <select
-                          className="h-7 rounded-md border border-hairline bg-surface px-2 text-xs"
+                          className="h-7 rounded-md border border-input bg-background px-2 text-xs"
                           value={entrant.skill_level}
                           onChange={async (event) => {
                             try {
@@ -612,12 +622,18 @@ function SeedingPanel({
                             }
                           }}
                         >
-                          <option value="advanced">Advanced</option>
-                          <option value="intermediate">Intermediate</option>
-                          <option value="beginner">Beginner</option>
+                          {SKILL_LEVELS.map((level) => (
+                            <option key={level} value={level}>
+                              {SKILL_LABELS[level]}
+                            </option>
+                          ))}
                         </select>
                       ) : (
-                        <span className="text-xs capitalize">{entrant.skill_level}</span>
+                        <span className="text-xs">
+                          {isSkillLevel(entrant.skill_level)
+                            ? SKILL_LABELS[entrant.skill_level]
+                            : entrant.skill_level}
+                        </span>
                       )}
                     </td>
                     <td className="text-right font-score text-xs" {...dropProps}>
