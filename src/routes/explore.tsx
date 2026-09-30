@@ -186,7 +186,7 @@ function ExplorePage() {
                   className={
                     selected
                       ? "rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-panel"
-                      : "rounded-full border border-hairline bg-surface px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      : "rounded-full border border-input bg-surface px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   }
                 >
                   {option.label}

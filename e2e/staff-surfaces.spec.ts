@@ -384,6 +384,35 @@ test.describe("staff surfaces", () => {
     expect(violationIds(await scan(page))).toEqual([]);
   });
 
+  test("the score filters are a named group of pressed buttons", async ({ page }) => {
+    /**
+     * The two filter rows on the score desk were a flat set of buttons whose selected one was
+     * distinguishable only by its fill, and only to a sighted reader.
+     *
+     * Asserted here rather than in a unit test because it is the *wiring* that regressed: the
+     * chip component now sets `aria-pressed`, but a group is only announced as one filter when
+     * the container names it, and the two facts live in different elements. There is a second
+     * reason this is worth a case of its own - `criteria.spec.ts` selects the nodes for the
+     * WCAG 1.4.11 sweep by `aria-pressed`, so a group that loses the attribute does not fail
+     * that sweep, it silently leaves it. This is the assertion that fails instead.
+     */
+    await openStaffShell(page);
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    for (const name of ["Filter by event", "Filter by status"]) {
+      const group = page.getByRole("group", { name });
+      await expect(group, `${name} is not a named group`).toBeVisible();
+
+      expect(await group.getByRole("button").count(), `${name} has no chips`).toBeGreaterThan(1);
+
+      // Exactly one option is the current one. Zero means the state is not exposed at all;
+      // more than one means the group is not exclusive.
+      const pressed = await group.locator('button[aria-pressed="true"]').count();
+      expect(pressed, `${name} does not mark exactly one chip as pressed`).toBe(1);
+    }
+  });
+
   test("focus is visible on an authenticated surface", async ({ page }) => {
     await openStaffShell(page);
 

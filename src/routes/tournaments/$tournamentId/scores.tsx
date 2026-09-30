@@ -76,6 +76,25 @@ function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
   return status !== "reported" && status !== "walkover" && status !== "in-progress";
 }
 
+/**
+ * One filter in a group of them.
+ *
+ * Three things about the group are asserted rather than assumed, because the same control
+ * is drawn one route over on Explore and that copy already does all three:
+ *
+ *  - `role="group"` with a name, so the row of chips is announced as one filter rather
+ *    than as five unrelated buttons.
+ *  - `aria-pressed`, which is what makes "this is the filter you are looking at" a fact
+ *    the reader can perceive. Without it the two states differ only in fill, and the
+ *    only thing that said so was colour. It also brings the chip into the WCAG 1.4.11
+ *    sweep, which selects its nodes by exactly this attribute - so an unlabelled group of
+ *    pressed buttons is not merely unannounced, it is unmeasured.
+ *  - `border-input` rather than the hairline. The boundary is what tells a reader there is
+ *    a control here, and `--border` is the decorative weight the design system explicitly
+ *    exempts from 1.4.11; `--border-control` is the functional one. It matters more here
+ *    than on Explore: an unselected chip is a surface fill inside a surface-fill panel, so
+ *    the hairline is the only thing drawing it at all.
+ */
 function FilterChip({
   active,
   onClick,
@@ -88,12 +107,13 @@ function FilterChip({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground"
-          : "border-hairline bg-surface text-muted-foreground hover:bg-muted/60",
+          : "border-input bg-surface text-muted-foreground hover:bg-muted/60",
       )}
     >
       {children}
@@ -399,35 +419,47 @@ function MatchesPage() {
             className="h-9 sm:max-w-xs"
           />
           <div className="flex flex-wrap items-center gap-1.5">
-            <FilterChip active={categoryId === "all"} onClick={() => setCategoryId("all")}>
-              All events
-            </FilterChip>
-            {(categories ?? []).map((c) => (
-              <FilterChip
-                key={c.id}
-                active={categoryId === c.id}
-                onClick={() => setCategoryId(c.id)}
-              >
-                {c.code}
+            <div
+              role="group"
+              aria-label="Filter by event"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              <FilterChip active={categoryId === "all"} onClick={() => setCategoryId("all")}>
+                All events
               </FilterChip>
-            ))}
+              {(categories ?? []).map((c) => (
+                <FilterChip
+                  key={c.id}
+                  active={categoryId === c.id}
+                  onClick={() => setCategoryId(c.id)}
+                >
+                  {c.code}
+                </FilterChip>
+              ))}
+            </div>
             <span className="mx-1 hidden h-5 w-px bg-hairline sm:block" />
-            {(
-              [
-                ["all", "All"],
-                ["pending", "To play"],
-                ["live", "On court"],
-                ["done", "Done"],
-              ] as [StatusFilter, string][]
-            ).map(([value, text]) => (
-              <FilterChip
-                key={value}
-                active={statusFilter === value}
-                onClick={() => setStatusFilter(value)}
-              >
-                {text}
-              </FilterChip>
-            ))}
+            <div
+              role="group"
+              aria-label="Filter by status"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {(
+                [
+                  ["all", "All"],
+                  ["pending", "To play"],
+                  ["live", "On court"],
+                  ["done", "Done"],
+                ] as [StatusFilter, string][]
+              ).map(([value, text]) => (
+                <FilterChip
+                  key={value}
+                  active={statusFilter === value}
+                  onClick={() => setStatusFilter(value)}
+                >
+                  {text}
+                </FilterChip>
+              ))}
+            </div>
           </div>
         </Panel>
 
