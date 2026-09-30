@@ -162,10 +162,20 @@ const MEASURE_CONTROLS = `
      * the exemption 1.4.11 carries. What is in scope is a control drawn the same as its
      * neighbour and distinguished only by a fill - a segmented control, a tab, a filter.
      * Those are the places where losing the boundary loses the state.
+     *
+     * aria-current joins the list because it is how this app marks the other state of that
+     * kind: an active section link, which TanStack's Link gives aria-current="page" without
+     * us writing it. It was outside the sweep for the structural reason below rather than
+     * because anyone judged it exempt - a link is not a button, and the selector named tags.
+     * The setup wizard's current step (aria-current="step") is the third marker; it is in
+     * the node set now, but the wizard is editor-gated so this sweep, which runs signed out,
+     * still does not render it. That gap is named in the S13 (6 of 7) record row rather than
+     * papered over here: the fix for the wizard was found by driving it, not by this.
      */
     const selected = (el) =>
       el.getAttribute("aria-pressed") === "true" ||
       el.getAttribute("aria-selected") === "true" ||
+      (el.hasAttribute("aria-current") && el.getAttribute("aria-current") !== "false") ||
       el.getAttribute("data-state") === "active" ||
       el.getAttribute("data-active") === "true";
     /** A control that must have a perceivable boundary: inputs, selects, switches. */
@@ -180,7 +190,7 @@ const MEASURE_CONTROLS = `
     const out = { selected: [], edged: [], controlCount: 0 };
 
     for (const el of document.querySelectorAll(
-      'button, [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], input, select, textarea',
+      'button, [role="tab"], [role="switch"], [role="checkbox"], [role="radio"], input, select, textarea, [aria-current]',
     )) {
       if (!visible(el)) continue;
 

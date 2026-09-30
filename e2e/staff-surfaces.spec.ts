@@ -4,6 +4,7 @@ import { type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/app";
 import type { MockRegistrationRow } from "./fixtures/app-mock";
 import { CATEGORY_MD, CATEGORY_XD } from "./fixtures/desk-mock";
+import { seedAppearance } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
 
@@ -439,6 +440,151 @@ test.describe("staff surfaces", () => {
     await expect(page.getByText(/read-only view/i)).toHaveCount(0);
   });
 });
+
+/**
+ * The setup wizard, which no route sweep renders.
+ *
+ * It is editor-gated, so every route-driven sweep in the suite sees the read-only notice
+ * instead: `criteria.spec.ts` and `a11y.spec.ts` both walk `ROUTES` signed out, and the
+ * `a11y-baseline.json` they pin was produced that way. Two things follow, and both are
+ * fixed here rather than recorded as debt.
+ *
+ * **WCAG 2.4.11.** `criteria.spec.ts` puts this question to `document.querySelector
+ * ("header")` and excludes controls inside it, so the question has only ever been asked of
+ * the sticky *header*. The wizard has a sticky *footer*, and that left a real failure with
+ * no gate on it: tabbing to the venue phone field parked it at 728..764px inside the bar's
+ * 706..768px band, entirely hidden, in both themes, because the browser's scroll-into-view
+ * judged the field visible and never scrolled. `scroll-margin-bottom` on the wizard's
+ * fields reserves the bar's height, and the first case below keeps that rule honest.
+ *
+ * **Axe.** The step navigation, the problems callout and the review checklist have shipped
+ * un-scanned, so the second case walks all four steps in both themes. There is no route
+ * sweep to carry the second theme, which is why both are walked here.
+ *
+ * The tournament is pinned `upcoming` because a started tournament's configuration is
+ * frozen: the wizard then renders the read-only notice instead of the steps, so there is
+ * no action bar and nothing to scan.
+ */
+test.describe("the setup wizard, which no route sweep renders", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
+
+  test("never leaves a focused field under its sticky action bar", async ({ page }) => {
+    const obscured: string[] = [];
+    let stops = 0;
+
+    for (const theme of ["light", "dark"] as const) {
+      await seedAppearance(page, { theme });
+      await openStaffShell(page);
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+
+      // The mechanism, asserted directly: the clearance must cover the bar it clears.
+      const clearance = await page.evaluate(() => {
+        const field = document.querySelector<HTMLElement>("#t-org-phone");
+        const bars = [...document.querySelectorAll<HTMLElement>("*")].filter((n) => {
+          const s = getComputedStyle(n);
+          return s.position === "sticky" && s.bottom === "0px";
+        });
+        return {
+          field: field ? parseFloat(getComputedStyle(field).scrollMarginBottom) : 0,
+          bar: bars[0]?.getBoundingClientRect().height ?? 0,
+        };
+      });
+      expectPresent(clearance.bar > 0, "The wizard's action bar is not sticky, so nothing clears it");
+      expectPresent(
+        clearance.field >= clearance.bar,
+        `The wizard's fields reserve ${clearance.field}px for a ${clearance.bar}px bar`,
+      );
+
+      const walked = await walkFocusAndFindObscured(page);
+      stops += walked.stops;
+      obscured.push(...walked.obscured.map((who) => `${theme}: ${who}`));
+    }
+
+    expectPresent(stops >= 40, "The wizard walked fewer focus stops than the form it renders");
+    expect(obscured, "Focused controls left entirely inside a sticky element").toEqual([]);
+  });
+
+  /**
+   * Axe over all four steps, in both themes.
+   *
+   * The wizard is editor-gated, so `a11y.spec.ts` - which sweeps `ROUTES` signed out, and
+   * `a11y-baseline.json` with it - has never once rendered it. That is the same gap the
+   * 2.4.11 case above exists to close, and it means the step navigation, the problems
+   * callout and the review checklist have shipped un-scanned. Both themes are walked here
+   * rather than one because there is no route sweep to carry the second.
+   */
+  for (const theme of ["light", "dark"] as const) {
+    test(`introduces no accessibility violation on any step (${theme})`, async ({ page }) => {
+      await seedAppearance(page, { theme });
+      await openStaffShell(page);
+
+      for (const step of ["details", "events", "structure", "review"]) {
+        await page.goto(`${routes.settings}?step=${step}`, { waitUntil: "load" });
+        await page.waitForLoadState("networkidle");
+        expectPresent(
+          (await page.locator("ol button").count()) === 4,
+          `The wizard's step navigation on the ${step} step`,
+        );
+        expect(violationIds(await scan(page)), `Accessibility violations on the ${step} step`).toEqual(
+          [],
+        );
+      }
+    });
+  }
+});
+
+/**
+ * Walks the focus order once and reports any stop that lands entirely inside a sticky
+ * element it does not belong to.
+ *
+ * The exclusion is the same one `criteria.spec.ts` makes for the header: a sticky element
+ * cannot obscure its own contents, and counting them turns every header link into a false
+ * failure.
+ */
+async function walkFocusAndFindObscured(
+  page: Page,
+): Promise<{ stops: number; obscured: string[] }> {
+  const probe = `(() => {
+    const el = document.activeElement;
+    if (!el || el === document.body || el === document.documentElement) return null;
+    const stickies = [...document.querySelectorAll("*")].filter((n) => {
+      const s = getComputedStyle(n);
+      return s.position === "sticky" && (s.bottom === "0px" || s.top === "0px");
+    });
+    const r = el.getBoundingClientRect();
+    const who =
+      el.id || el.getAttribute("aria-label") || (el.textContent || "").trim().slice(0, 24) ||
+      el.tagName.toLowerCase();
+    let obscured = false;
+    for (const s of stickies) {
+      if (s.contains(el)) continue;
+      const b = s.getBoundingClientRect();
+      if (
+        r.width > 0 && r.height > 0 &&
+        r.top >= b.top - 1 && r.bottom <= b.bottom + 1 &&
+        r.left >= b.left - 1 && r.right <= b.right + 1
+      ) {
+        obscured = true;
+      }
+    }
+    return { who: el.tagName.toLowerCase() + ":" + who.replace(/\\s+/g, " "), obscured };
+  })()`;
+
+  const seen: string[] = [];
+  const obscured: string[] = [];
+  for (let i = 0; i < 80; i += 1) {
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(60);
+    const stop = (await page.evaluate(probe)) as { who: string; obscured: boolean } | null;
+    if (!stop) continue;
+    // Wrapping back to the first stop means the focus order is exhausted.
+    if (seen.length > 0 && stop.who === seen[0]) break;
+    seen.push(stop.who);
+    if (stop.obscured) obscured.push(stop.who);
+  }
+  return { stops: seen.length, obscured };
+}
 
 /**
  * The two resets.

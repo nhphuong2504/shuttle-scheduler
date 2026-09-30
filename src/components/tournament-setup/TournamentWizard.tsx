@@ -309,7 +309,7 @@ export function TournamentWizard({
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="wizard-flow mx-auto w-full max-w-3xl">
       {configEditable ? (
         <>
           <ol className="mb-5 flex items-center gap-2">
@@ -325,7 +325,7 @@ export function TournamentWizard({
                     className={cn(
                       "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
                       isCurrent
-                        ? "border-primary/40 bg-primary/10"
+                        ? "border-border-selected bg-primary/10"
                         : "border-hairline bg-surface hover:bg-muted/60",
                     )}
                   >

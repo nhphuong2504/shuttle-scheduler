@@ -438,8 +438,16 @@ describe("every colour utility resolves to a theme key", () => {
 
   /** Namespaces that take a colour, matching Tailwind's own utility families. */
   const NAMESPACES = ["bg", "text", "border", "ring", "fill", "stroke", "divide"] as const;
+  /**
+   * The lookbehind is `[\w-]` rather than `\b` so the scan reads class names and not
+   * token declarations: `--color-border-control: …` contains `-border-control` at a
+   * word boundary, and the stylesheet inside the last-resort document would otherwise
+   * be reported as a misused utility. A class name is never preceded by a word
+   * character or a hyphen - it follows whitespace, a quote, a backtick, a brace, a
+   * colon or a bracket - so nothing real is lost.
+   */
   const NAMESPACE_PATTERN = new RegExp(
-    `\\b(${NAMESPACES.join("|")})-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)`,
+    `(?<![\\w-])(${NAMESPACES.join("|")})-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)`,
     "g",
   );
 
@@ -452,9 +460,21 @@ describe("every colour utility resolves to a theme key", () => {
         const full = match[0]!;
         const name = match[2]!;
         if (NON_COLOUR.has(full)) continue;
-        // Full name first: `ring-offset-background` maps to --color-ring-offset-background,
-        // so splitting on the first hyphen would look for the wrong key.
-        if (colorMap.has(full)) continue;
+        // `ring-offset-background` is the one class where the utility *is* the key:
+        // `--color-ring-offset-background` is a single token, so there is no
+        // `ring-offset-` namespace whose remainder could be looked up. It is named
+        // here rather than reached by accepting the whole class as a token name,
+        // because that shortcut is what hid the defect below.
+        if (full.startsWith("ring-offset-") && colorMap.has(full)) continue;
+        // Otherwise the token is what follows the namespace, and only that - the rule
+        // Tailwind itself applies, since it emits `border-<key>` for `--color-<key>`.
+        // Accepting the whole class as a fallback made `border-selected` resolve
+        // against `--color-border-selected`, a key that does exist, while the class
+        // Tailwind emits for that key is `border-border-selected`. So the class was
+        // dropped from the build and the element kept the `--border` it inherited: a
+        // selected wizard step drawn with a 1.2:1 hairline while its source read as
+        // though the edge had been solved. A lexical check cannot read the compiled
+        // stylesheet, so the rule has to match the one the compiler uses.
         if (colorMap.has(name)) continue;
         orphans.push(`${relative}: ${full}`);
       }

@@ -67,8 +67,18 @@ constraint.
 `--border-selected` exists because a selected state is state information, and
 WCAG 1.4.11 requires state information to reach 3:1. Marking "selected" with a
 fill that equals the surface colour on a muted container measures 1.09:1 in light
-and 1.02:1 in dark, so the selected segment was not a shape at all. It is applied
-as `ring-1 ring-border-selected` on active segmented-control buttons and tabs.
+and 1.02:1 in dark, so the selected segment was not a shape at all.
+
+**Its utility spells the word twice.** The colour key is already
+`--color-border-selected`, so the edge is `ring-border-selected` or
+`border-border-selected` - applied as `ring-1 ring-border-selected` on an active
+segmented control or tab, and as `border-border-selected` on a step that is a box
+rather than a chip. A bare `border-selected` is not a class Tailwind emits, so it is
+dropped from the build and the element keeps whatever edge it inherited: the base
+layer's `border-color: var(--color-border)`. That is how the setup wizard's current
+step, rewritten from `border-primary/40` to `border-selected`, kept drawing the
+decorative hairline (measured 1.2:1 light and 1.4:1 dark against its own fill, where
+1.4.11 asks 3:1) while its source read as though the edge had been solved.
 
 ## Colour tokens
 
