@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { EmptyState, Panel, PublicShell } from "@/components/app-shell";
 import { TournamentCard } from "@/components/tournament-card";
@@ -10,6 +10,7 @@ import {
   normalizeTournamentStatus,
   type TournamentStatus,
 } from "@/lib/auth/authorization";
+import { signInSearch } from "@/lib/routing/redirect";
 import { useExploreTournaments } from "@/lib/tournament/data";
 
 interface ExploreSearch {
@@ -96,6 +97,14 @@ function ExplorePage() {
   const { q, status } = Route.useSearch();
   const navigate = useNavigate();
   const { signedIn } = useSession();
+  /**
+   * This page's own address, for the sign-in links.
+   *
+   * It carries the filter, and that is the whole point of reading it here rather than
+   * hard-coding `/explore`: somebody who signs in from a search result has to come back to
+   * the search they ran, not to an unfiltered list they then have to repeat.
+   */
+  const href = useLocation({ select: (location) => location.href });
 
   const query = q ?? "";
   const statusFilter = status ?? null;
@@ -131,7 +140,9 @@ function ExplorePage() {
           </Button>
         ) : (
           <Button size="sm" asChild>
-            <Link to="/auth">Sign in</Link>
+            <Link to="/auth" search={signInSearch(href)}>
+              Sign in
+            </Link>
           </Button>
         )
       }
@@ -223,7 +234,9 @@ function ExplorePage() {
                   </Button>
                 ) : (
                   <Button size="sm" asChild>
-                    <Link to="/auth">Sign in</Link>
+                    <Link to="/auth" search={signInSearch(href)}>
+                      Sign in
+                    </Link>
                   </Button>
                 )
               }

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { Panel, PublicShell } from "@/components/app-shell";
 import { TournamentWizard } from "@/components/tournament-setup/TournamentWizard";
@@ -10,6 +10,7 @@ import {
 } from "@/components/tournament-setup/types";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
+import { signInSearch } from "@/lib/routing/redirect";
 
 interface NewTournamentSearch {
   /** Which step of the wizard to show. */
@@ -73,6 +74,13 @@ function NewTournamentPage() {
   const { step: stepParam } = Route.useSearch();
   const navigate = useNavigate();
   const { signedIn } = useSession();
+  /**
+   * This page's address, which includes the wizard step.
+   *
+   * So somebody who signs in from the third step of the wizard comes back to the third step
+   * rather than to the first.
+   */
+  const href = useLocation({ select: (location) => location.href });
 
   const step: SetupStep = stepParam ?? "details";
   const index = setupStepIndex(step);
@@ -88,7 +96,9 @@ function NewTournamentPage() {
         subtitle="Sign in to create and run a tournament."
         actions={
           <Button size="sm" asChild>
-            <Link to="/auth">Sign in</Link>
+            <Link to="/auth" search={signInSearch(href)}>
+              Sign in
+            </Link>
           </Button>
         }
       >
@@ -98,7 +108,9 @@ function NewTournamentPage() {
             account, to get started.
           </p>
           <Button size="sm" asChild>
-            <Link to="/auth">Sign in</Link>
+            <Link to="/auth" search={signInSearch(href)}>
+              Sign in
+            </Link>
           </Button>
         </Panel>
       </PublicShell>

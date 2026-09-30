@@ -1,6 +1,7 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 
+import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { useTheme } from "@/hooks/useTheme";
@@ -11,6 +12,7 @@ import {
   type TournamentStatus,
 } from "@/lib/auth/authorization";
 import type { Theme } from "@/lib/design/theme";
+import { signInSearch } from "@/lib/routing/redirect";
 import {
   registrationStateHint,
   registrationStateLabel,
@@ -221,14 +223,29 @@ function BrandMark() {
  * same hue at both themes, so the dot and a live match read as one colour. Decorative —
  * the email and role beside it carry the meaning — so it stays out of the accessibility
  * tree.
+ *
+ * ## Signing in returns you to the page you were on
+ *
+ * The button carries the current address as `/auth`'s `redirect`, so a visitor reading a
+ * tournament comes back to it rather than to Home. The address is read from the router
+ * rather than passed in, because the shell is rendered by every page and the pages should
+ * not each have to remember to say where they are.
+ *
+ * Signing *out* deliberately carries nothing. A return address describes a page you were
+ * kept from, and leaving is the opposite of that: coming back to the page you just walked
+ * away from is not a kindness.
  */
 function SessionBlock() {
   const { session, signedIn, systemRole } = useSession();
   const navigate = useNavigate();
+  const href = useLocation({ select: (location) => location.href });
 
   if (!signedIn) {
     return (
-      <Button size="sm" onClick={() => navigate({ to: "/auth" })}>
+      <Button
+        size="sm"
+        onClick={() => navigate({ to: "/auth", search: signInSearch(href) })}
+      >
         Sign in
       </Button>
     );
@@ -444,24 +461,35 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <nav
-          aria-label="Tournament sections"
-          className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-1 px-4 py-2"
-        >
-          {tournamentId
-            ? sections.map((item) => (
-                <Link
-                  key={item.scoped}
-                  to={item.scoped}
-                  params={{ tournamentId }}
-                  className={NAV_ITEM_CLASS}
-                  activeProps={{ className: NAV_ACTIVE_CLASS }}
-                >
-                  {item.label}
-                </Link>
-              ))
-            : null}
-        </nav>
+        {/*
+          The section row, and the reason it is a `div` wrapping the `nav` rather than the
+          `nav` itself.
+
+          Two things live on this line: the sections of the tournament you are reading, and
+          the control that changes which tournament that is. The second is not a section, so
+          it does not belong inside the sections landmark. It also anchors its panel to this
+          row, which is the last row of the header: `relative` here is what puts the panel's
+          right edge on the same container edge the nav is aligned to, and its top on the
+          header's own bottom edge. See `TournamentSwitcher` for what those two facts buy.
+        */}
+        <div className="relative mx-auto flex max-w-[1400px] flex-wrap items-center gap-1 px-4 py-2">
+          <nav aria-label="Tournament sections" className="flex flex-wrap items-center gap-1">
+            {tournamentId
+              ? sections.map((item) => (
+                  <Link
+                    key={item.scoped}
+                    to={item.scoped}
+                    params={{ tournamentId }}
+                    className={NAV_ITEM_CLASS}
+                    activeProps={{ className: NAV_ACTIVE_CLASS }}
+                  >
+                    {item.label}
+                  </Link>
+                ))
+              : null}
+          </nav>
+          <TournamentSwitcher currentId={tournamentId} />
+        </div>
       </header>
 
       <main className="mx-auto min-h-[calc(100vh-5.5rem)] max-w-[1400px] px-4 py-6">

@@ -858,3 +858,47 @@ describe("no shipped link points at a route that does not resolve", () => {
     expect(routing).not.toMatch(/"\/auth"/);
   });
 });
+
+/**
+ * The working-tournament pointer is written in one place per act.
+ *
+ * `set_current_tournament` moves *the caller's own* row, so a second writer is not a
+ * privilege question - the database enforces whose row it is - but it is the difference
+ * between "which tournament I am working in is something I choose, in three known places"
+ * and "the pointer is something any page can move as a side effect". The three acts are the
+ * create flow (pointing at the tournament it has just made), the tournament card in My
+ * Tournaments (the same move from a list) and the workspace switcher (the same move from
+ * anywhere inside a tournament).
+ *
+ * The RPC's own name is a second, narrower claim: it belongs to the action module, so every
+ * caller goes through the one function that decides what arguments it takes and what it does
+ * with a failure.
+ */
+describe("the working-tournament pointer is written in one place per act", () => {
+  const src = join(__dirname, "..");
+  const files = sourceFiles(src, src);
+
+  it("names the RPC only in the action module", () => {
+    const namers = files.filter((file) =>
+      readFileSync(join(src, file), "utf8").includes('"set_current_tournament"'),
+    );
+    expect(namers).toEqual([join("lib", "tournament", "actions.ts")]);
+  });
+
+  it("calls the action from the three acts that change where you are working", () => {
+    const callers = files
+      .filter((file) =>
+        readFileSync(join(src, file), "utf8").includes("setCurrentTournament("),
+      )
+      .sort();
+    expect(callers).toEqual(
+      [
+        // The definition itself, which names the function it exports.
+        join("lib", "tournament", "actions.ts"),
+        join("components", "tournament-setup", "TournamentWizard.tsx"),
+        join("components", "tournament-switcher.tsx"),
+        join("routes", "me", "tournaments.tsx"),
+      ].sort(),
+    );
+  });
+});

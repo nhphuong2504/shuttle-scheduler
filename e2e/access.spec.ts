@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures/app";
+import { installAppMock } from "./fixtures/app-mock";
 import { routes } from "./fixtures/routes";
 
 /**
@@ -211,6 +212,86 @@ test.describe("a signed-out visitor", () => {
     const header = page.getByRole("banner");
     await expect(header.getByText(TOURNAMENT_NAME)).toBeVisible();
     await expect(header.getByRole("navigation", { name: /tournament sections/i })).toBeVisible();
+  });
+});
+
+/**
+ * The one control that changes which tournament you are working in.
+ *
+ * It is a control over the *caller's own pointer*, not a global act: selecting a row writes
+ * `set_current_tournament`, which moves nobody but the person who clicked. The integration
+ * suite proves that per-row claim against the real function; what this file can see, and the
+ * database cannot, is whether the control tells the truth about itself - that it is a
+ * disclosure rather than a menu, that it marks the tournament you are already in instead of
+ * hiding it, and that a caller with nothing to switch to is offered the act that would
+ * change that rather than an empty box.
+ */
+test.describe("the tournament switcher", () => {
+  test.use({ appMock: { preset: "layout", role: "user" } });
+
+  test("lists the caller's tournaments, marks the one you are in, and closes on Escape", async ({
+    page,
+  }) => {
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const header = page.getByRole("banner");
+    const trigger = header.getByRole("button", { name: /switch tournament/i });
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    // The list is every tournament this caller runs, so the one they are in is *marked*
+    // rather than withheld: choosing it is a no-op, and a list without it would answer
+    // "where can I go" while losing "where am I".
+    const item = header.locator("ul li button").first();
+    await expect(item).toContainText(TOURNAMENT_NAME);
+    await expect(item).toHaveAttribute("aria-current", "true");
+    await expect(item.getByText(/working here/i)).toBeVisible();
+
+    // Escape is a disclosure's own job - it is not in the browser's button semantics - so
+    // it is asserted, and it has to hand focus back to the trigger rather than drop it at
+    // the top of the document.
+    await page.keyboard.press("Escape");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(trigger).toBeFocused();
+  });
+
+  test("offers the act that would give you something to switch to", async ({ page }) => {
+    // A caller who runs nothing: the panel is not opened onto an apology, because this is a
+    // brand-new account's state rather than a fault. The alternative the control offers is
+    // the same one a visitor is offered below.
+    await installAppMock(page, {
+      preset: "layout",
+      role: "user",
+      status: "upcoming",
+      access: VIEWER_ACCESS,
+    });
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const header = page.getByRole("banner");
+    await header.getByRole("button", { name: /switch tournament/i }).click();
+    await expect(header.getByText(/nothing to switch to/i)).toBeVisible();
+    await expect(header.getByRole("link", { name: /create tournament/i })).toBeVisible();
+  });
+
+  test("is a single trip to the create flow for a visitor, not an empty disclosure", async ({
+    page,
+  }) => {
+    // Re-installed signed out. The route-level mock is registered last and wins, which is
+    // the harness's own documented way to vary a session mid-file.
+    await installAppMock(page, { preset: "layout", role: null });
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const header = page.getByRole("banner");
+    await expect(header.getByRole("button", { name: /switch tournament/i })).toHaveCount(0);
+    await expect(header.getByRole("link", { name: /create tournament/i })).toHaveAttribute(
+      "href",
+      routes.newTournament,
+    );
   });
 });
 

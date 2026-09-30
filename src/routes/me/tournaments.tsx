@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -8,6 +8,7 @@ import { TournamentCard } from "@/components/tournament-card";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { isConfigurable } from "@/lib/auth/authorization";
+import { signInSearch } from "@/lib/routing/redirect";
 import { deleteTournament, setCurrentTournament } from "@/lib/tournament/actions";
 import {
   useCurrentTournamentPointer,
@@ -71,6 +72,13 @@ function MyTournamentsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { signedIn, isPlatformAdmin } = useSession();
+  /**
+   * This page's address, for the one sign-in link it draws.
+   *
+   * It carries the tab, so a reader who followed "Shared with me" and then signed in comes
+   * back to the group they were reading rather than to the default one.
+   */
+  const href = useLocation({ select: (location) => location.href });
 
   const { summaries, ownedIds, isLoading, isError, error } = useMyTournaments();
   const pointer = useCurrentTournamentPointer().data ?? null;
@@ -143,7 +151,9 @@ function MyTournamentsPage() {
         subtitle="Sign in to see the tournaments you own and the ones you help run."
         actions={
           <Button size="sm" asChild>
-            <Link to="/auth">Sign in</Link>
+            <Link to="/auth" search={signInSearch(href)}>
+              Sign in
+            </Link>
           </Button>
         }
       >

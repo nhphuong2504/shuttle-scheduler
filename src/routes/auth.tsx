@@ -7,8 +7,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  localRedirect,
+  signedInDestination,
+  type SignInSearch,
+} from "@/lib/routing/redirect";
 
 export const Route = createFileRoute("/auth")({
+  /**
+   * The return address, narrowed to a local path or dropped.
+   *
+   * `validateSearch` is the one place the parameter is read, so an address that arrived
+   * from anywhere - a link in a chat, a hand-edited URL - is reduced to a path in this app
+   * or to nothing before any component sees it. `localRedirect` carries the rules and the
+   * argument for each one; nothing here decides on its own.
+   *
+   * A rejected value is dropped from the search rather than kept and ignored, so the URL a
+   * person copies on is one this page can read.
+   */
+  validateSearch: (search: Record<string, unknown>): SignInSearch => {
+    const redirect = localRedirect(search["redirect"]);
+    return redirect ? { redirect } : {};
+  },
   head: () => ({
     meta: [
       { title: "Desk Sign In | Tournova Tournament Ops" },
@@ -35,6 +55,14 @@ export const Route = createFileRoute("/auth")({
  */
 function AuthPage() {
   const navigate = useNavigate();
+  /**
+   * Where a successful sign-in or sign-up goes.
+   *
+   * The route's search has already been validated, so this is either a path in this app or
+   * Home. Both doors use it: an account created from a "sign in to register" link should
+   * land on the tournament that asked for it, exactly as a sign-in does.
+   */
+  const destination = signedInDestination(Route.useSearch());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -45,7 +73,7 @@ function AuthPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast.success("Signed in");
-      navigate({ to: "/" });
+      void navigate({ to: destination });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Sign in failed");
     } finally {
@@ -66,7 +94,7 @@ function AuthPage() {
       // The message says which of the two things happened rather than assuming.
       if (data.session) {
         toast.success("Account created. You can create a tournament now.");
-        navigate({ to: "/setup" });
+        void navigate({ to: destination });
       } else {
         toast.success("Account created. Check your email to confirm it, then sign in.");
       }

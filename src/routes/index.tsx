@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { EmptyState, Panel, PublicShell } from "@/components/app-shell";
@@ -6,6 +6,7 @@ import { TournamentCard } from "@/components/tournament-card";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { isConfigurable } from "@/lib/auth/authorization";
+import { signInSearch } from "@/lib/routing/redirect";
 import {
   useCurrentTournamentPointer,
   useExploreTournaments,
@@ -86,6 +87,8 @@ function HomePage() {
  * is what a host has to recognise before any of the rest is useful.
  */
 function Landing() {
+  const href = useLocation({ select: (location) => location.href });
+
   return (
     <PublicShell
       title="Run a badminton tournament from one console"
@@ -126,7 +129,9 @@ function Landing() {
             <Link to="/explore">Explore tournaments</Link>
           </Button>
           <Button size="sm" variant="outline" asChild>
-            <Link to="/auth">Sign in</Link>
+            <Link to="/auth" search={signInSearch(href)}>
+              Sign in
+            </Link>
           </Button>
           <p className="text-xs text-muted-foreground">
             Signing in is for running a tournament. Following one needs nothing.

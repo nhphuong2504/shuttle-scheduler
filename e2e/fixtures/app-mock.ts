@@ -410,6 +410,18 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
       return;
     }
     /**
+     * The working-tournament pointer, written.
+     *
+     * It is *this caller's own row* and nothing global moves, so there is nothing for the
+     * mock to record: the fixture's read already answers with the pointer the spec asked
+     * for. Answering the write explicitly is what makes a switch a successful act here
+     * rather than an unmodelled request that happens to look like an empty table.
+     */
+    if (target === "rpc/set_current_tournament") {
+      await rpc(null);
+      return;
+    }
+    /**
      * The card read behind Explore and My Tournaments.
      *
      * The arguments arrive in the request's JSON body, because `supabase.rpc` issues a POST -

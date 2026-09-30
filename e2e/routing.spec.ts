@@ -124,6 +124,47 @@ test.describe("the bare domain", () => {
   });
 });
 
+test.describe("the sign-in return address", () => {
+  test.use({ appMock: { preset: "layout", role: null } });
+
+  test("carries the page you were reading, so signing in comes back to it", async ({ page }) => {
+    await page.goto(`${routes.explore}?q=Forker`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("main").getByRole("link", { name: /sign in/i }).first().click();
+    await expect(page).toHaveURL(/\/auth/);
+
+    // The search is part of the page's address, and the point of a return address is that it
+    // is the address you left: somebody who signs in from a filtered list has to come back to
+    // the list they were reading, not to an unfiltered one they then have to repeat.
+    expect(new URL(page.url()).searchParams.get("redirect")).toBe(`${routes.explore}?q=Forker`);
+    await expect(page.getByRole("heading", { name: /control desk sign in/i })).toBeVisible();
+  });
+
+  test("writes nothing when a bare sign-in would land there anyway", async ({ page }) => {
+    await page.goto(routes.home, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // A parameter that changes nothing is still a parameter: it would lengthen the front
+    // door's own address to say what the fallback already says.
+    await expect(
+      page.getByRole("main").getByRole("link", { name: /sign in/i }).first(),
+    ).toHaveAttribute("href", "/auth");
+  });
+
+  test("drops a return address that does not stay in this app", async ({ page }) => {
+    await page.goto("/auth?redirect=https://evil.example/phish", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The value is written by whoever composed the link, and `/auth` is a trusted address, so
+    // a link to it that bounces on to another origin is a credible-looking phishing trip. The
+    // rules live in `src/lib/routing/redirect.ts` and are unit-tested there; this is the route
+    // actually applying them, and dropping the value rather than merely ignoring it.
+    await expect(page.getByRole("heading", { name: /control desk sign in/i })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("redirect")).toBeNull();
+  });
+});
+
 test.describe("an unknown tournament id", () => {
   test.use({ appMock: { preset: "layout", role: "user" } });
 
