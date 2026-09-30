@@ -3,15 +3,29 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Page, EmptyState, Panel } from "@/components/app-shell";
+import { Page, EmptyState, Panel, Notice } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addTournamentEditor, removeTournamentEditor } from "@/lib/tournament/actions";
-import { useScopedAccess, useScopedTournament, useTournamentEditors } from "@/lib/tournament/data";
+import {
+  useScopedAccess,
+  useScopedAccessLoading,
+  useScopedTournament,
+  useTournamentEditors,
+} from "@/lib/tournament/data";
 
-const ACCESS_DESCRIPTION =
-  "See who can edit the current tournament, and add or remove editors.";
+/**
+ * What the page is about, for the page's own metadata.
+ *
+ * It said "the current tournament" until this pass, which is the vocabulary S12 retired:
+ * there is no globally current tournament any more, only the caller's own pointer, and
+ * this page is about the tournament the URL names regardless of where that pointer sits.
+ * "Current" would be read as "whichever one I am working in", which is a different
+ * tournament whenever the two disagree - and a search engine or a link preview only ever
+ * sees this string.
+ */
+const ACCESS_DESCRIPTION = "See who can edit this tournament, and add or remove editors.";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/access")({
   head: () => ({
@@ -50,7 +64,8 @@ function AccessPage() {
   const qc = useQueryClient();
   const tournament = useScopedTournament();
   const access = useScopedAccess();
-  const { data: editors, isLoading } = useTournamentEditors(
+  const accessLoading = useScopedAccessLoading();
+  const { data: editors, isLoading, isError, error } = useTournamentEditors(
     access.can_edit ? tournament?.id : null,
   );
   const [email, setEmail] = useState("");
@@ -58,6 +73,39 @@ function AccessPage() {
 
   const rows = editors ?? [];
   const canManage = access.can_manage_access;
+
+  /**
+   * The roster read has not answered yet, for any of three reasons.
+   *
+   * The layout is still resolving the tournament, so there is no id to read with; or the
+   * access answer is in flight, so `can_edit` reads false and the read has not been issued
+   * yet; or the read itself is in flight. Collapsing them matters because the alternative
+   * is the panel's own empty state - which is what the page did before this pass, and what
+   * made an owner whose answer was still travelling read "Only the owner can edit".
+   */
+  const listPending = accessLoading || !tournament || isLoading;
+
+  /**
+   * The list was actually read.
+   *
+   * Separate from `!listPending`, because there are two ways to not be pending and only one
+   * of them has an answer: a caller who cannot edit never issues the read, so they are
+   * never pending and have no count. Drawing "0 people" for them would be the page asserting
+   * that nobody can edit this tournament, which is the one thing it must not say when it
+   * has not asked.
+   */
+  const listRead = access.can_edit && !listPending;
+
+  /**
+   * Who the ownership notice is for.
+   *
+   * A visitor and a viewer are already told by the shell's read-only notice that they
+   * cannot change this tournament, and not being its owner is not why - so this sentence
+   * is for an editor who can edit the tournament but not decide who else may. `canManage`
+   * alone would put it in front of every visitor, and the read has to have settled before
+   * it is asserted at all.
+   */
+  const cannotManage = !accessLoading && access.can_edit && !canManage;
 
   const add = async () => {
     if (!tournament) return;
@@ -91,29 +139,35 @@ function AccessPage() {
     }
   };
 
-  if (!tournament) {
-    return (
-      <Page title="Access" subtitle={ACCESS_DESCRIPTION}>
-        <EmptyState
-          title="No tournament selected"
-          hint="Choose or create a tournament on the setup page first."
-        />
-      </Page>
-    );
-  }
-
+  /**
+   * There is no "no tournament selected" branch.
+   *
+   * There used to be, and it was wrong in both directions. `useScopedTournament` answers
+   * null only while the layout is still resolving the id, and the layout 404s an id that
+   * does not exist - so the branch rendered a "choose or create a tournament on the setup
+   * page" empty state for a tournament that was already chosen, to a reader who was
+   * already looking at it. The two pages that carried the same copy were the last places
+   * still reasoning about a pointer that S12 removed, which is why the sentence pointed at
+   * the setup page: nothing else in the workspace needs it.
+   *
+   * The unresolved frame is not a state with something to say - the header is the shell's,
+   * and the list below is empty because it cannot be keyed yet - so the title falls back
+   * and the panel says it is reading rather than guessing at a count.
+   */
   return (
     <Page
       title="Access"
-      subtitle={`Who can edit ${tournament.name}.`}
+      subtitle={tournament ? `Who can edit ${tournament.name}.` : ACCESS_DESCRIPTION}
     >
-      {!canManage ? (
-        <div className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-xs font-medium text-warn-foreground">
-          {/* Said plainly rather than shown as a locked form: an editor who cannot change
-              this needs to know who can, and "not authorized" would not tell them. */}
+      {cannotManage ? (
+        /* Said plainly rather than shown as a locked form: an editor who cannot change
+           this needs to know who can, and "not authorized" would not tell them. It is not
+           shown while the answer is still travelling, or the sentence would flash in front
+           of an owner on every load. */
+        <Notice tone="warn">
           Only the owner of this tournament can change who may edit it. You can see the
           list below, and ask the owner to make a change.
-        </div>
+        </Notice>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
@@ -129,7 +183,7 @@ function AccessPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && email && void add()}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-t4 text-muted-foreground">
                   They need an account first. Ask them to sign up, then add the address they
                   used.
                 </p>
@@ -143,23 +197,54 @@ function AccessPage() {
         <Panel
           title="People who can edit"
           right={
-            <span className="font-score text-t2 text-muted-foreground">
-              {rows.length} {rows.length === 1 ? "person" : "people"}
-            </span>
+            /* No count while it is still reading, and none for a caller who never read it.
+               "0 people" would be the panel asserting an answer it has not got, and on
+               this page that reads as "nobody can edit this", which is the one thing the
+               reader is here to check. */
+            listRead ? (
+              <span className="font-score text-t2 text-muted-foreground">
+                {rows.length} {rows.length === 1 ? "person" : "people"}
+              </span>
+            ) : null
           }
           bodyClassName="p-0"
           {...(canManage ? {} : { className: "lg:col-span-2" })}
-        >          {isLoading ? (
-            <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-          ) : rows.length === 0 ? (
+        >
+          {listPending ? (
+            <p className="p-4 text-t3 text-muted-foreground">Loading the editors…</p>
+          ) : isError ? (
+            /* A failed read is not an empty list, and §5.3 is the reason this branch exists
+               rather than being folded into the one below: "nobody else can edit this" is
+               the one sentence this page must never say when it does not know, because the
+               reader acts on it by doing nothing. */
             <div className="p-4">
-              <EmptyState
-                title="Only the owner can edit"
-                hint="Add a colleague's email to let them help run this tournament."
-              />
+              <Notice tone="warn" className="mb-0">
+                {error instanceof Error
+                  ? error.message
+                  : "The list of editors did not load. Try again in a moment."}
+              </Notice>
+            </div>
+          ) : rows.length === 0 ? (
+            /* Two different silences, and the reason the branch is split rather than
+               collapsed. An editor always sees the owner, so an empty list means the read
+               was never issued - and the answer is that the names are not theirs to read.
+               A manager whose list came back empty has simply appointed nobody yet, which
+               is the state the page starts in and not a refusal. */
+            <div className="p-4">
+              {access.can_edit ? (
+                <EmptyState
+                  title="Only the owner can edit"
+                  hint="Add a colleague's email to let them help run this tournament."
+                />
+              ) : (
+                <EmptyState
+                  title="Only the people who run it can see this"
+                  hint="Ask the owner of this tournament for edit access."
+                />
+              )}
             </div>
           ) : (
-            <ul className="divide-y divide-hairline text-sm">
+            <ul className="divide-y divide-hairline text-t3">
               {rows.map((row) => (
                 <li
                   key={row.profile_id}

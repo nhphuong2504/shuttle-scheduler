@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { type ReactNode } from "react";
+import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
@@ -348,6 +348,49 @@ export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
 }
 
 /**
+ * The one page-level callout treatment.
+ *
+ * This is the treatment the read-only notice and Access's ownership notice both draw, and
+ * they drew it as two hand-written copies of the same five classes before this pass - one
+ * naming the type tier, one reaching around the scale with Tailwind's own `text-xs`. One
+ * component, because the treatment is one fact ("this is standing information, set apart
+ * from the page") and the tone is the only thing a caller chooses. `warn` is standing
+ * information that changes what the reader should do, and it is the tone both live copies
+ * already used; `info` is the neutral one, declared for the wizard's banner named below.
+ *
+ * **What is deliberately not migrated here.** Two more copies exist and both are named so
+ * the next pass does not have to rediscover them. Registrations' editor gate
+ * (`registrations.tsx`) is the same warn pair, standalone rather than inside a page of its
+ * own, so folding it in would add a bottom margin to a lone child - a layout change with no
+ * reviewer's question behind it. The wizard's info banner
+ * (`tournament-setup/TournamentWizard.tsx`) is a *step-scoped* callout inside a flow rather
+ * than page-level standing information, it is the one caller `info` is declared for, and it
+ * renders only for a tournament whose configuration is already fixed - a state no spec
+ * reaches, so moving it now would be a change nothing measures.
+ */
+export function Notice({
+  tone = "warn",
+  className,
+  ...rest
+}: {
+  tone?: "warn" | "info";
+  className?: string;
+} & ComponentPropsWithoutRef<"div">) {
+  return (
+    <div
+      className={cn(
+        "mb-4 rounded-lg border px-3 py-2 text-t4 font-medium",
+        tone === "warn"
+          ? "border-warn-border bg-warn-surface text-warn-foreground"
+          : "border-info-border bg-info-surface text-info-foreground",
+        className,
+      )}
+      {...rest}
+    />
+  );
+}
+
+/**
  * The read-only treatment, shared by a visitor and a viewer.
  *
  * One component because it is one fact - this caller may not change anything here - and
@@ -362,14 +405,11 @@ export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
  */
 function ReadOnlyNotice({ signedIn }: { signedIn: boolean }) {
   return (
-    <div
-      className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-t4 font-medium text-warn-foreground"
-      data-read-only
-    >
+    <Notice data-read-only>
       {signedIn
         ? "Read-only view. You can see this tournament but not change it — ask its owner for edit access."
         : "Read-only view. Sign in to start, score and schedule matches."}
-    </div>
+    </Notice>
   );
 }
 

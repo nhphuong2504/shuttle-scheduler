@@ -181,6 +181,56 @@ test.describe("an editor", () => {
       page.getByText(/only the owner of this tournament can change who may edit it/i),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: /add editor/i })).toHaveCount(0);
+
+    // And the list itself is theirs to read, because an edit right is a right to work in
+    // the tournament. The owner is named and marked, the editor's own row is there too,
+    // the count agrees with the rows, and the act that is the owner's alone is absent
+    // rather than disabled.
+    const list = page.getByRole("list").filter({ hasText: /@example\.test/ });
+    await expect(list.getByText("host@example.test")).toBeVisible();
+    await expect(list.getByText("desk@example.test")).toBeVisible();
+    await expect(list.getByText(/^Owner$/)).toBeVisible();
+    await expect(page.getByText(/2 people$/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^remove$/i })).toHaveCount(0);
+  });
+});
+
+/**
+ * The owner is the one caller who may decide the list, and until this pass no spec said so.
+ *
+ * The editor case proved the read half and the withholding; what was never asserted is the
+ * half that changes the roster - which is the *point* of the page, and the only reason the
+ * `add`/`remove` path exists. The fixture also had to learn to answer the list at all: it
+ * returned `[]`, which for an editor rendered the "not yours to read" state and would have
+ * passed the old assertions for the wrong reason.
+ */
+test.describe("the owner", () => {
+  test.use({ appMock: { preset: "layout", role: "user", status: "upcoming" } });
+
+  test("sees who can edit, and is offered both acts", async ({ page }) => {
+    await page.goto(routes.access, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The sentence about who may change the list is for callers who cannot, so the absence
+    // is the assertion here - a notice shown to the one person who *can* would be noise.
+    await expect(
+      page.getByText(/only the owner of this tournament can change who may edit it/i),
+    ).toHaveCount(0);
+
+    await expect(page.getByRole("button", { name: /add editor/i })).toBeVisible();
+    await expect(page.getByLabel(/email/i)).toBeVisible();
+
+    // One row: this fixture's owner holds no membership row, and the owner is drawn from
+    // the tournament's own column. So the count is one, the marker is on that row, and
+    // Remove is absent on it rather than disabled - the database refuses to remove the
+    // owner, and the button's absence is how the page says so without anyone finding out
+    // by trying. Scoped to the list because the same address is in the shell's own session
+    // chip, which is not this page's to assert.
+    const list = page.getByRole("list").filter({ hasText: /@example\.test/ });
+    await expect(page.getByText(/1 person$/)).toBeVisible();
+    await expect(list.getByText("desk@example.test")).toBeVisible();
+    await expect(list.getByText(/^Owner$/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^remove$/i })).toHaveCount(0);
   });
 });
 

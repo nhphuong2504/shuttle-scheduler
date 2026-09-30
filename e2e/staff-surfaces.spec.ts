@@ -516,6 +516,14 @@ test.describe("the setup wizard, which no route sweep renders", () => {
    */
   for (const theme of ["light", "dark"] as const) {
     test(`introduces no accessibility violation on any step (${theme})`, async ({ page }) => {
+      /**
+       * Three times the ordinary budget, because this is the heaviest test in the file:
+       * four navigations, each waiting for the network to settle, and four axe runs over
+       * the largest DOM the app renders. It passes in ~26s on an idle machine, and that
+       * is already most of the 60s default - so a quieter machine is not what it needs,
+       * it needs a budget that does not depend on what else is on the workers with it.
+       */
+      test.slow();
       await seedAppearance(page, { theme });
       await openStaffShell(page);
 

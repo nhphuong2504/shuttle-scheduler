@@ -763,6 +763,26 @@ const buildFixture = (
           current_tournament_id: TID,
           created_at: CREATED,
         },
+        /**
+         * The other owner: the person who owns the fixture tournament whenever the session
+         * does not.
+         *
+         * It is a `profiles` row rather than a bare id because ownership is held by a
+         * profile, and a surface that names the owner joins through this table to do it -
+         * the access list is the one that does today, and without this row it drew the
+         * owner's address as "—". `user_id` is NULL, which is the state the schema allows
+         * and the phase-1 model described: a profile that owns a tournament before its
+         * person has signed in. A read filtered by `user_id` therefore never returns it,
+         * which is what keeps it out of the session's own lookup.
+         */
+        {
+          id: OTHER_OWNER_PROFILE_ID,
+          user_id: null,
+          email: "host@example.test",
+          system_role: "user",
+          current_tournament_id: null,
+          created_at: CREATED,
+        },
       ],
     },
 

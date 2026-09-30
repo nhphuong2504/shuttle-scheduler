@@ -515,8 +515,39 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
       await rpc(fixture.tournamentSummaries(args));
       return;
     }
+    /**
+     * Who may edit the fixture tournament, projected the way the RPC projects it.
+     *
+     * It used to answer `[]` unconditionally, and that was not a neutral default: the
+     * owner is *always* a row in this list, so an editor asking for it got an empty one,
+     * and the page then said the list was not theirs to read. The answer is derived from
+     * the same rows the rest of the fixture serves - the membership rows and the
+     * tournament's own `owner_profile_id`, joined against `profiles` for the addresses -
+     * rather than invented here, so the list cannot disagree with the access summary that
+     * decides whether the page draws it at all.
+     */
     if (target === "rpc/list_tournament_editors") {
-      await rpc([]);
+      type ProfileRow = { id: string; email: string | null };
+      type EditorRow = { profile_id: string; created_at: string };
+      type TournamentRow = { owner_profile_id: string; created_at: string };
+      const profiles = (fixture.tables["profiles"] ?? []) as ProfileRow[];
+      const emailOf = (id: string | null) => profiles.find((p) => p.id === id)?.email ?? "";
+      const tournament = ((fixture.tables["tournaments"] ?? []) as TournamentRow[])[0];
+      const rows = ((fixture.tables["tournament_editors"] ?? []) as EditorRow[]).map((e) => ({
+        profile_id: e.profile_id,
+        email: emailOf(e.profile_id),
+        is_owner: false,
+        created_at: e.created_at,
+      }));
+      rows.push({
+        profile_id: tournament.owner_profile_id,
+        email: emailOf(tournament.owner_profile_id),
+        is_owner: true,
+        created_at: tournament.created_at,
+      });
+      // The RPC's own order: the owner first, then the editors, each group by address.
+      rows.sort((a, b) => Number(b.is_owner) - Number(a.is_owner));
+      await rpc(rows);
       return;
     }
     /**
