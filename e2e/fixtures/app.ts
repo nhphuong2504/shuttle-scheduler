@@ -1,6 +1,7 @@
 import { test as base, expect } from "@playwright/test";
 
 import { installAppMock, mockEscapes, type MockRole, type MockTournamentAccess } from "./app-mock";
+import type { MockMyRegistrationRow, MockRegistrationRow } from "./app-mock";
 import type { DeskMockPreset } from "./desk-mock";
 
 /**
@@ -31,6 +32,12 @@ export interface AppMockOptions {
   access?: Partial<MockTournamentAccess>;
   /** The tournament the caller's pointer names, or `null` for a caller who has none. */
   pointer?: string | null;
+  /** What `review_tournament_registrations` answers. Empty by default. */
+  registrationQueue?: readonly MockRegistrationRow[];
+  /** What `tournament_registration_state` answers. `null` (not offered) by default. */
+  registrationState?: string | null;
+  /** What `my_tournament_registration` answers. Empty by default. */
+  myRegistration?: readonly MockMyRegistrationRow[];
 }
 
 export const test = base.extend<{ appMock: AppMockOptions }>({

@@ -120,6 +120,83 @@ export interface AppMockOptions {
    * expressible here rather than inferred from an empty pointer elsewhere.
    */
   pointer?: string | null;
+
+  /**
+   * What `review_tournament_registrations` answers, in the RPC's row-per-entry shape.
+   *
+   * The reviewer's queue is a read the fixture has no opinion about: with no rows it is
+   * simply empty, which is the honest answer for every spec that is not about the queue -
+   * and the nav badge is then absent rather than wrong. A spec about the queue supplies
+   * the rows it wants, one per requested entry, and the app folds them exactly as it folds
+   * the real answer.
+   */
+  registrationQueue?: readonly MockRegistrationRow[];
+
+  /**
+   * What `tournament_registration_state` answers, as the database's own word.
+   *
+   * `null` is the un-migrated/absent answer, which reads as `not_offered` - the honest
+   * default, and the reason the Register panel is not drawn in any spec that does not ask
+   * for a window. A spec about the participant surface arrives with `"open"`, because the
+   * whole point of that surface is the form the window opens.
+   */
+  registrationState?: string | null;
+
+  /**
+   * What `my_tournament_registration` answers, in its row-per-entry shape.
+   *
+   * The caller's own request, as the participant's panel reads it. Empty by default, which
+   * is the state of somebody who has not asked to enter yet.
+   */
+  myRegistration?: readonly MockMyRegistrationRow[];
+}
+
+/**
+ * One `my_tournament_registration` row.
+ *
+ * The participant's read is narrower than the reviewer's: it carries the caller's own
+ * request and its entries and no identity columns, because the caller is the identity.
+ */
+export interface MockMyRegistrationRow {
+  registration_id: string;
+  status: string;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+  entry_id: string | null;
+  category_id: string | null;
+  category_code: string | null;
+  category_name: string | null;
+  entry_type: string | null;
+  partner_name: string | null;
+  partner_email: string | null;
+}
+
+/**
+ * One `review_tournament_registrations` row, in the wire shape the RPC returns.
+ *
+ * Declared rather than imported from the app, deliberately: the fixture is the *other* side
+ * of the contract, and a spec that imported the app's own row type would be asserting that
+ * the app agrees with itself. The nulls matter here - a pending request has no `decided_at`
+ * and a request with no entries has null entry columns - so the shape keeps them.
+ */
+export interface MockRegistrationRow {
+  registration_id: string;
+  profile_id: string | null;
+  email: string | null;
+  status: string;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+  entry_id: string | null;
+  category_id: string | null;
+  category_code: string | null;
+  category_name: string | null;
+  entry_type: string | null;
+  partner_name: string | null;
+  partner_email: string | null;
+  player_id: string | null;
+  partner_player_id: string | null;
 }
 
 /** The placeholder project CI uses. All requests to it are intercepted. */
@@ -261,6 +338,9 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     format,
     access: accessOverride,
     pointer,
+    registrationQueue = [],
+    registrationState = null,
+    myRegistration = [],
   } = options;
 
   if (!INSTALLED.has(page)) {
@@ -436,6 +516,27 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     }
     if (target === "rpc/list_tournament_editors") {
       await rpc([]);
+      return;
+    }
+    /**
+     * The participant's two reads. Both default to the "nothing here" answer - an absent
+     * window word and no request - so every spec that is not about registration sees the page
+     * as it is for somebody who has not asked to enter.
+     */
+    if (target === "rpc/tournament_registration_state") {
+      await rpc(registrationState);
+      return;
+    }
+    if (target === "rpc/my_tournament_registration") {
+      await rpc(myRegistration);
+      return;
+    }
+    /**
+     * The reviewer's queue. An empty answer by default, which is the honest one for every
+     * spec that is not about the queue: the nav badge is then absent rather than wrong.
+     */
+    if (target === "rpc/review_tournament_registrations") {
+      await rpc(registrationQueue);
       return;
     }
     if (target.startsWith("rpc/tournament_readiness")) {

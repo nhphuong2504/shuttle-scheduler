@@ -254,6 +254,16 @@ const categories = [
   },
 ];
 
+/**
+ * The fixture's two events, by id.
+ *
+ * Exported because a spec that has to name an event - the registration queue showing capacity
+ * for the event a request asked for - should name one that exists in the fixture rather than
+ * paste a uuid that nothing guarantees.
+ */
+export const CATEGORY_MD = uid(800);
+export const CATEGORY_XD = uid(801);
+
 const courts = Array.from({ length: COURT_COUNT }, (_, i) => ({
   id: courtId(i + 1),
   tournament_id: TID,

@@ -3,6 +3,7 @@ import { type ReactNode } from "react";
 
 import { RegistrationStatePill, TournamentStatusPill } from "@/components/app-shell";
 import type { TournamentSummary } from "@/lib/tournament/data";
+import { countText, dateRangeText } from "@/lib/tournament/summary-format";
 
 /**
  * One tournament, as a card.
@@ -27,9 +28,12 @@ import type { TournamentSummary } from "@/lib/tournament/data";
  * card is not. A card-sized click target swallows the footer's own buttons on a touch
  * screen, and a link whose text is a whole paragraph tells a screen reader nothing.
  *
- * The destination is the tournament's Desk, which is the surface a visitor can actually
- * read today. S10 adds the participant-facing public tournament page at
- * `/tournaments/:id` and this becomes the link to it.
+ * The destination is the tournament's own page - the participant surface at
+ * `/tournaments/:id`, which draws the registration window and the way in for somebody who
+ * has not entered yet. An operator reading the same card still reaches the desk from the
+ * workspace nav or from My Tournaments' own "work in this one", so nothing is lost by
+ * sending the card at the public reading: for a visitor it is the only page that can do
+ * anything for them.
  *
  * ## Why the card is `min-w-0`, and why its facts are a plain list
  *
@@ -60,7 +64,7 @@ export function TournamentCard({
       <div className="flex items-start justify-between gap-3">
         <h2 className="min-w-0 font-display text-sm font-semibold">
           <Link
-            to="/tournaments/$tournamentId/desk"
+            to="/tournaments/$tournamentId"
             params={{ tournamentId: summary.id }}
             className="block truncate rounded-sm hover:text-primary-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >

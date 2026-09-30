@@ -14,11 +14,17 @@ import {
 import type { Theme } from "@/lib/design/theme";
 import { signInSearch } from "@/lib/routing/redirect";
 import {
+  registrationDecisionHint,
+  registrationDecisionLabel,
   registrationStateHint,
   registrationStateLabel,
+  type RegistrationDecision,
   type RegistrationState,
 } from "@/lib/tournament/registration-state";
-import { useTournamentContext } from "@/lib/tournament/data";
+import {
+  useTournamentContext,
+  useTournamentRegistrationQueue,
+} from "@/lib/tournament/data";
 import {
   BYE_NOTE,
   displayStateFor,
@@ -91,18 +97,30 @@ const SECTIONS = [
 ] as const;
 
 /**
- * The two entries that belong to the people who run the tournament.
+ * The entries that belong to the people who run the tournament.
  *
- * Both are gated on `can_edit` rather than on being signed in, because both are about
- * changing this tournament: Setup is where its configuration and lifecycle live, and
- * Access is who else may operate it. A viewer is offered neither entry - the pages
- * themselves say plainly that they cannot be used, but a nav entry that leads to a page
- * telling you no is a worse answer than not offering the trip.
+ * All are gated on `can_edit` rather than on being signed in, because each is about changing
+ * this tournament: Registrations is where requests are decided and entrants are created, Setup
+ * is where its configuration and lifecycle live, and Access is who else may operate it. A
+ * viewer is offered none of them - the pages themselves say plainly that they cannot be used,
+ * but a nav entry that leads to a page telling you no is a worse answer than not offering the
+ * trip.
  */
 const EDITOR_SECTIONS = [
+  { label: "Registrations", scoped: "/tournaments/$tournamentId/registrations" },
   { label: "Setup", scoped: "/tournaments/$tournamentId/settings" },
   { label: "Access", scoped: "/tournaments/$tournamentId/access" },
 ] as const;
+
+/**
+ * The one nav entry that can carry a count.
+ *
+ * The queue is the only section with work that accumulates while nobody is looking, so it is
+ * the only one a count belongs on. Naming the path here rather than adding a flag to the
+ * entry keeps the section list a plain list of addresses, and means the badge cannot be
+ * attached to a section that has no number behind it.
+ */
+const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as const;
 
 /**
  * The public navigation: the three addresses that are not about one tournament.
@@ -135,6 +153,16 @@ const NAV_ITEM_CLASS =
   "rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
 const NAV_ACTIVE_CLASS =
   "bg-primary text-primary-foreground shadow-panel hover:bg-primary hover:text-primary-foreground";
+/**
+ * The count of work waiting, beside its section.
+ *
+ * The `warn` pair rather than the brand hue, because this is a state - work is waiting - and
+ * hue in this system is reserved for state, brand action and destructive. The number is not
+ * the only channel: the section's own word names what the number counts, and the link carries
+ * it into the accessible name, so a reader in grayscale and a screen reader both get it.
+ */
+const NAV_BADGE_CLASS =
+  "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full border border-warn-border bg-warn-surface px-1 font-score text-t4 leading-tight text-warn-foreground";
 
 /**
  * Theme switch.
@@ -401,6 +429,87 @@ export function RegistrationStatePill({ state }: { state: RegistrationState }) {
 }
 
 /**
+ * One glyph per decision, and the amber one is why this is not a second window pill.
+ *
+ * The window word answers "may I ask", and this answers "what did they say". They are
+ * different vocabularies because both questions are real at once - a window can be open
+ * while an earlier request sits decided, and one word cannot carry both without lying
+ * about one of them.
+ *
+ *   pending   tier 2, the shared amber   waiting on a person's answer, not on a clock
+ *   approved  a success tint             the outcome the participant wanted
+ *   rejected  tier 3, the neutral chip   an exceptional neutral, like `void`: it is
+ *                                        marked rather than alarming, because a refusal
+ *                                        is a fact about a request and not a danger
+ *
+ * The clock is deliberately *not* reused for `pending`. It means "waiting on the clock"
+ * in the window vocabulary, and the two can co-render on this very page - an event that
+ * opens soon beside a request already filed. A response sent back to the participant is
+ * the opposite of waiting for time to pass, so it gets its own mark: a hollow ring
+ * carrying a dot trail, which is "sent, and no answer yet".
+ *
+ * Red is not used. It means destructive, and nothing here is.
+ */
+
+/**
+ * Check: one mark for one fact, drawn once.
+ *
+ * A match that completed and a request that was accepted are the same assertion - "this
+ * happened, and it is done" - so they share the path rather than each carrying a copy of it.
+ * The decision map is declared above the match map, which is why the shared mark is declared
+ * above both instead of the check living in `STATE_GLYPH` and being borrowed upward.
+ */
+const CHECK_GLYPH = glyph(<path d="M5 9.4l2.7 2.7L13 6.4" />);
+
+const DECISION_GLYPH: Record<RegistrationDecision, ReactNode> = {
+  pending: glyph(
+    <>
+      <circle cx="9" cy="9" r="6.25" />
+      <circle cx="6.6" cy="9" r="0.95" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="9" r="0.95" fill="currentColor" stroke="none" />
+      <circle cx="11.4" cy="9" r="0.95" fill="currentColor" stroke="none" />
+    </>,
+  ),
+  approved: CHECK_GLYPH,
+  rejected: glyph(
+    <>
+      <path d="M6.4 6.4 11.6 11.6" />
+      <path d="M11.6 6.4 6.4 11.6" />
+    </>,
+  ),
+};
+
+/**
+ * The three treatments, and where each comes from.
+ *
+ * `pending` takes the warn pair that `StatTile`'s own warning tone uses, and `approved`
+ * takes the `bg-success/10` tint with the neutral ink on it - the identical pair
+ * `StatTile tone="good"` has shipped, so both are solved surfaces with an ink measured
+ * against them rather than new pairs nobody scanned.
+ */
+const DECISION_CLASS: Record<RegistrationDecision, string> = {
+  pending: "bg-warn-surface text-warn-foreground ring-warn-border",
+  approved: "bg-success/10 text-muted-foreground ring-hairline",
+  rejected: "bg-muted text-muted-foreground ring-hairline",
+};
+
+/** The participant's own registration request, as the word and the treatment for its state. */
+export function RegistrationDecisionPill({ decision }: { decision: RegistrationDecision }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        DECISION_CLASS[decision],
+      )}
+      title={registrationDecisionHint(decision)}
+    >
+      {DECISION_GLYPH[decision]}
+      {registrationDecisionLabel(decision)}
+    </span>
+  );
+}
+
+/**
  * The pages under one tournament.
  *
  * Rendered by the layout route, so it mounts once per workspace rather than once per
@@ -415,6 +524,18 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
   const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : SECTIONS;
   const readOnly = !accessLoading && !access.can_edit;
+  /**
+   * How much is waiting on the Registrations queue.
+   *
+   * Read here, in the shell, because the badge is chrome rather than page content - it has to
+   * be visible from the Desk, which is where a host actually sits. The page reads the same
+   * query, so the two share one cache entry and one fetch. Gated on `can_edit` exactly as the
+   * page and the nav entry are, so a viewer neither sees a count nor triggers the read.
+   */
+  const registrationQueue = useTournamentRegistrationQueue(tournamentId, {
+    enabled: access.can_edit,
+  });
+  const pendingRegistrations = registrationQueue.data?.pending.length ?? 0;
 
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
@@ -475,17 +596,29 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         <div className="relative mx-auto flex max-w-[1400px] flex-wrap items-center gap-1 px-4 py-2">
           <nav aria-label="Tournament sections" className="flex flex-wrap items-center gap-1">
             {tournamentId
-              ? sections.map((item) => (
-                  <Link
-                    key={item.scoped}
-                    to={item.scoped}
-                    params={{ tournamentId }}
-                    className={NAV_ITEM_CLASS}
-                    activeProps={{ className: NAV_ACTIVE_CLASS }}
-                  >
-                    {item.label}
-                  </Link>
-                ))
+              ? sections.map((item) => {
+                  const waiting =
+                    item.scoped === PENDING_REGISTRATIONS_PATH ? pendingRegistrations : 0;
+                  return (
+                    <Link
+                      key={item.scoped}
+                      to={item.scoped}
+                      params={{ tournamentId }}
+                      className={NAV_ITEM_CLASS}
+                      activeProps={{ className: NAV_ACTIVE_CLASS }}
+                    >
+                      {item.label}
+                      {waiting > 0 ? (
+                        <>
+                          <span aria-hidden="true" className={NAV_BADGE_CLASS}>
+                            {waiting}
+                          </span>
+                          <span className="sr-only">, {waiting} awaiting a decision</span>
+                        </>
+                      ) : null}
+                    </Link>
+                  );
+                })
               : null}
           </nav>
           <TournamentSwitcher currentId={tournamentId} />
@@ -802,7 +935,7 @@ const STATE_GLYPH: Record<string, ReactNode> = {
     </>,
   ),
   // Check.
-  completed: glyph(<path d="M5 9.4l2.7 2.7L13 6.4" />),
+  completed: CHECK_GLYPH,
   /**
    * Struck circle — the match was nullified.
    *

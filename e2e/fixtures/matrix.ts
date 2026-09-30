@@ -46,6 +46,7 @@ import { routes } from "./routes";
  * covers those.
  */
 export const ROUTES = [
+  routes.tournament,
   routes.desk,
   routes.entries,
   routes.placement,
@@ -55,6 +56,7 @@ export const ROUTES = [
   routes.scores,
   routes.settings,
   routes.access,
+  routes.registrations,
   /**
    * The surfaces that are about tournaments rather than *inside* one, and therefore
    * carry no id.

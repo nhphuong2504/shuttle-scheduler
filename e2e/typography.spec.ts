@@ -21,6 +21,7 @@ import { routes } from "./fixtures/routes";
  */
 
 const ROUTES = [
+  routes.tournament,
   routes.desk,
   routes.scores,
   routes.schedule,
@@ -30,6 +31,7 @@ const ROUTES = [
   routes.entries,
   routes.settings,
   routes.access,
+  routes.registrations,
   // The non-scoped surfaces, for the same reason the shared matrix lists them: the 12px
   // floor is a property of every page the app renders, not of the pages in the nav.
   routes.home,

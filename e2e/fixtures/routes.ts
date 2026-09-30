@@ -19,6 +19,13 @@ import { TOURNAMENT_ID } from "./desk-mock";
  * redirect and is now a page - `/` - is covered there as a page.
  */
 export const routes = {
+  /**
+   * The public page for one tournament, under the workspace layout.
+   *
+   * The only surface written for a participant rather than an operator: what the tournament
+   * is, whether the window is open, and how to enter.
+   */
+  tournament: `/tournaments/${TOURNAMENT_ID}`,
   desk: `/tournaments/${TOURNAMENT_ID}/desk`,
   entries: `/tournaments/${TOURNAMENT_ID}/entries`,
   placement: `/tournaments/${TOURNAMENT_ID}/placement`,
@@ -27,6 +34,8 @@ export const routes = {
   scores: `/tournaments/${TOURNAMENT_ID}/scores`,
   settings: `/tournaments/${TOURNAMENT_ID}/settings`,
   access: `/tournaments/${TOURNAMENT_ID}/access`,
+  /** The reviewer's queue. Editor-gated, so its signed-out reading is the notice. */
+  registrations: `/tournaments/${TOURNAMENT_ID}/registrations`,
   pools: `/tournaments/${TOURNAMENT_ID}/pools`,
   draws: `/tournaments/${TOURNAMENT_ID}/draws`,
   /** The surfaces that are not about one tournament, so they name no id. */

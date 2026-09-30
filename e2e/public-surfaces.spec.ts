@@ -2,6 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
+import type { MockMyRegistrationRow } from "./fixtures/app-mock";
+import { CATEGORY_MD } from "./fixtures/desk-mock";
 import { MATRIX_CELLS, openCell, WCAG_TAGS } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 
@@ -35,6 +37,27 @@ const TOURNAMENT_NAME = "Layout Validation Invitational";
 const VENUE_TERM = "Forker";
 /** A term that appears only in one of the fixture's event names. */
 const EVENT_TERM = "Mixed Doubles";
+
+/**
+ * The caller's own pending request, as `my_tournament_registration` returns it.
+ *
+ * One row per requested entry; this is a doubles entry, so the partner the requester named is
+ * on it. The declined and approved cases vary this rather than restating it.
+ */
+const PENDING_REQUEST: MockMyRegistrationRow = {
+  registration_id: "reg-mine",
+  status: "pending",
+  decided_at: null,
+  decision_note: null,
+  created_at: "2026-09-29T09:00:00Z",
+  entry_id: "entry-mine",
+  category_id: CATEGORY_MD,
+  category_code: "MD",
+  category_name: "Men's Doubles",
+  entry_type: "pair",
+  partner_name: "Rin",
+  partner_email: "rin@example.test",
+};
 
 test.describe("Home, for a caller working in a tournament", () => {
   test.use({ appMock: { preset: "layout", role: "user" } });
@@ -332,5 +355,173 @@ test.describe("Configuring one tournament", () => {
       "href",
       routes.myTournaments,
     );
+  });
+});
+
+/**
+ * The participant surface, with the window open.
+ *
+ * This cannot be reached by the shared matrix, and the reason is the fixture rather than the
+ * route: the matrix's mock answers `tournament_registration_state` with nothing, which reads
+ * as "not offered", so the route sweep meets a page whose Register panel says the tournament
+ * takes no requests. Every reading that matters here - the form, the sign-in door, the
+ * caller's own request - needs the window to be *open*, so it is served here.
+ */
+test.describe("The window is open", () => {
+  test.use({ appMock: { preset: "layout", role: "user", registrationState: "open" } });
+
+  test("draws the events the window opens, in the host's own order", async ({ page }) => {
+    await page.goto(routes.tournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: TOURNAMENT_NAME, level: 1 })).toBeVisible();
+    await expect(page.getByText("Registration is open.")).toBeVisible();
+
+    // The events are pressed-button choices, and each carries its own facts inside the
+    // control - the type, and capacity counted at approval (six approved entries here).
+    await expect(page.getByRole("button", { name: /Men's Doubles/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Mixed Doubles/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Singles · 6 entries so far/ })).toHaveCount(2);
+
+    // Nothing is chosen, so the request cannot be sent and the form says why.
+    const send = page.getByRole("button", { name: "Send registration request" });
+    await expect(send).toBeDisabled();
+    await expect(page.getByText("Choose at least one event.")).toBeVisible();
+
+    await page.getByRole("button", { name: /Men's Doubles/ }).click();
+    await expect(send).toBeEnabled();
+    await expect(page.getByText("1 event selected · up to 3 per player")).toBeVisible();
+  });
+
+  test("asks a visitor to sign in, carrying this page as the place to come back to", async ({
+    page,
+  }) => {
+    // The signed-out reading of the same affordance. The sweep's `not_offered` fixture hides
+    // it behind the window check, so this is the only place the door is asserted.
+    await installAppMock(page, { preset: "layout", role: null, registrationState: "open" });
+    await page.goto(routes.tournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const door = page.getByRole("link", { name: "Sign in to register" });
+    await expect(door).toBeVisible();
+    // A sign-in that dropped the reader on Home would be a longer way round to a page they
+    // were already on, so the trip carries the address it started from.
+    await expect(door).toHaveAttribute("href", /\/auth\?redirect=/);
+    await expect(page.getByRole("button", { name: "Send registration request" })).toHaveCount(0);
+  });
+});
+
+test.describe("The caller's own request, awaiting a decision", () => {
+  test.use({
+    appMock: {
+      preset: "layout",
+      role: "user",
+      registrationState: "open",
+      myRegistration: [PENDING_REQUEST],
+    },
+  });
+
+  test("shows what was asked for, and lets the requester withdraw it", async ({ page }) => {
+    await page.goto(routes.tournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: "Your registration" })).toBeVisible();
+    await expect(page.getByText(/Men's Doubles with Rin/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Withdraw request" })).toBeVisible();
+
+    // The form is seeded from the pending request, so the same form edits it rather than
+    // filing a second one.
+    await expect(page.getByRole("button", { name: "Update request" })).toBeVisible();
+  });
+});
+
+test.describe("The caller's own request, declined", () => {
+  test.use({
+    appMock: {
+      preset: "layout",
+      role: "user",
+      registrationState: "open",
+      myRegistration: [
+        {
+          ...PENDING_REQUEST,
+          status: "rejected",
+          decided_at: "2026-09-29T10:00:00Z",
+          decision_note: "Your partner has not registered yet.",
+        },
+      ],
+    },
+  });
+
+  test("states the refusal as a fact, and lets the person ask again", async ({ page }) => {
+    await page.goto(routes.tournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByText("Not accepted", { exact: true })).toBeVisible();
+    await expect(page.getByText("Your partner has not registered yet.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Withdraw request" })).toHaveCount(0);
+    // A declined request is not a barrier: the form is back, as a fresh one.
+    await expect(page.getByRole("button", { name: "Send registration request" })).toBeVisible();
+  });
+});
+
+test.describe("The caller's own request, approved", () => {
+  test.use({
+    appMock: {
+      preset: "layout",
+      role: "user",
+      registrationState: "open",
+      myRegistration: [
+        {
+          ...PENDING_REQUEST,
+          status: "approved",
+          decided_at: "2026-09-29T10:00:00Z",
+          entry_type: "individual",
+          partner_name: null,
+          partner_email: null,
+        },
+      ],
+    },
+  });
+
+  test("says there is nothing left to ask for", async ({ page }) => {
+    await page.goto(routes.tournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(
+      page.getByText(/You are already registered for this tournament/),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send registration request" })).toHaveCount(0);
+  });
+});
+
+test.describe("The window is open, and nobody is signed in", () => {
+  test.use({ appMock: { preset: "layout", role: null, registrationState: "open" } });
+
+  test("asks a visitor to sign in, carrying this page as the place to come back to", async ({
+    page,
+  }) => {
+    // The signed-out reading of the same affordance. The sweep's `not_offered` fixture hides
+    // it behind the window check, so this is the only place the door is asserted.
+    await page.goto(routes.tournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const door = page.getByRole("link", { name: "Sign in to register" });
+    await expect(door).toBeVisible();
+    // A sign-in that dropped the reader on Home would be a longer way round to a page they
+    // were already on, so the trip carries the address it started from.
+    await expect(door).toHaveAttribute("href", /\/auth\?redirect=/);
+    await expect(page.getByRole("button", { name: "Send registration request" })).toHaveCount(0);
+  });
+});
+
+test.describe("The window is open, scanned", () => {
+  test.use({ appMock: { preset: "layout", role: "user", registrationState: "open" } });
+
+  test("introduces no accessibility violation", async ({ page }) => {
+    await page.goto(routes.tournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(results.violations.map((v) => v.id).sort()).toEqual([]);
   });
 });

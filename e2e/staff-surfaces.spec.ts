@@ -2,6 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
+import type { MockRegistrationRow } from "./fixtures/app-mock";
+import { CATEGORY_MD, CATEGORY_XD } from "./fixtures/desk-mock";
 import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
 
@@ -546,4 +548,165 @@ test.describe("the two resets", () => {
       });
     });
   }
+});
+
+/**
+ * The reviewer's queue.
+ *
+ * Its own describe because it needs data the other staff surfaces do not: an empty queue is
+ * the fixture's default, and the whole point of this page is what it does with requests that
+ * are waiting. The rows are supplied in the RPC's row-per-entry shape - one per requested
+ * entry - so the app folds them exactly as it folds the real answer.
+ */
+test.describe("the registration queue", () => {
+  const queueRow = (overrides: Partial<MockRegistrationRow>): MockRegistrationRow => ({
+    registration_id: "reg-base",
+    profile_id: null,
+    email: null,
+    status: "pending",
+    decided_at: null,
+    decision_note: null,
+    created_at: "2026-09-29T09:00:00Z",
+    entry_id: null,
+    category_id: null,
+    category_code: null,
+    category_name: null,
+    entry_type: null,
+    partner_name: null,
+    partner_email: null,
+    player_id: null,
+    partner_player_id: null,
+    ...overrides,
+  });
+
+  const WAITING_FIRST = "00000000-0000-4000-8000-00000000aa01";
+  const WAITING_SECOND = "00000000-0000-4000-8000-00000000aa02";
+  const DECIDED = "00000000-0000-4000-8000-00000000aa03";
+
+  const QUEUE: readonly MockRegistrationRow[] = [
+    queueRow({
+      registration_id: WAITING_FIRST,
+      email: "ana@example.test",
+      entry_id: "00000000-0000-4000-8000-00000000bb01",
+      category_id: CATEGORY_MD,
+      category_code: "MD",
+      category_name: "Men's Doubles",
+      entry_type: "pair",
+      partner_name: "Rin",
+      partner_email: "rin@example.test",
+    }),
+    queueRow({
+      registration_id: WAITING_SECOND,
+      email: "bo@example.test",
+      created_at: "2026-09-29T08:00:00Z",
+      entry_id: "00000000-0000-4000-8000-00000000bb02",
+      category_id: CATEGORY_XD,
+      category_code: "XD",
+      category_name: "Mixed Doubles",
+      entry_type: "pair",
+      partner_name: "Ada",
+      partner_email: "ada@example.test",
+    }),
+    queueRow({
+      registration_id: DECIDED,
+      email: "cy@example.test",
+      status: "approved",
+      created_at: "2026-09-29T07:00:00Z",
+      decided_at: "2026-09-29T10:00:00Z",
+      decision_note: "See you Saturday.",
+      entry_id: "00000000-0000-4000-8000-00000000bb03",
+      category_id: CATEGORY_MD,
+      category_code: "MD",
+      category_name: "Men's Doubles",
+      entry_type: "pair",
+    }),
+  ];
+
+  test.use({ appMock: { preset: "layout", role: "admin", registrationQueue: QUEUE } });
+
+  test("lists what is waiting, with each event's own facts", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: "Awaiting a decision" })).toBeVisible();
+    await expect(page.getByText("ana@example.test")).toBeVisible();
+    // The entry's own facts sit beside it: who the partner is, the event's type, and what the
+    // event has taken - the last of which is capacity *at approval*, counted over approved
+    // entries only (the fixture holds six teams in each event and neither is capped). Scoped
+    // to the request's own row, because both events hold six and the same line would otherwise
+    // match twice.
+    const firstRequest = page.locator("li").filter({ hasText: "ana@example.test" });
+    await expect(firstRequest.getByText(/Men's Doubles with Rin/)).toBeVisible();
+    await expect(firstRequest.getByText(/Doubles · 6 entries so far/)).toBeVisible();
+    await expect(page.getByText(/Mixed Doubles with Ada/)).toBeVisible();
+  });
+
+  test("carries the waiting count on the section link", async ({ page }) => {
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The badge is chrome, not page content, so it has to be asserted from a page that is not
+    // the queue: a count that only appears on the queue's own page is not a count anybody
+    // would ever see. The number is excluded from the accessible name and restated in words,
+    // so the link reads as the sentence rather than as "Registrations 2".
+    await expect(page.getByRole("link", { name: /2 awaiting a decision/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Registrations/ })).toBeVisible();
+  });
+
+  test("records an approval with the note the reviewer wrote", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel(/note for the requester/i).first().fill("See you at 9am.");
+    const [request] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/rpc/decide_tournament_registration")),
+      page.getByRole("button", { name: "Approve" }).first().click(),
+    ]);
+
+    expect(request.postDataJSON()).toEqual({
+      p_registration_id: WAITING_FIRST,
+      p_decision: "approved",
+      p_note: "See you at 9am.",
+    });
+    await expect(page.getByText("Request approved")).toBeVisible();
+  });
+
+  test("declines from the same note field, with the note attached", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The first request's field is deliberately filled and the *second* request declined, so
+    // this cannot pass by sending the wrong request's note.
+    await page.getByLabel(/note for the requester/i).first().fill("Not this one.");
+    await page.getByLabel(/note for the requester/i).nth(1).fill("No space left.");
+    const [request] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/rpc/decide_tournament_registration")),
+      page.getByRole("button", { name: "Decline" }).nth(1).click(),
+    ]);
+
+    expect(request.postDataJSON()).toEqual({
+      p_registration_id: WAITING_SECOND,
+      p_decision: "rejected",
+      p_note: "No space left.",
+    });
+    await expect(page.getByText("Request declined")).toBeVisible();
+  });
+
+  test("shows what has already been decided rather than hiding it", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: "Decided" })).toBeVisible();
+    await expect(page.getByText("cy@example.test")).toBeVisible();
+    await expect(page.getByText("Note sent:")).toBeVisible();
+    await expect(page.getByText("See you Saturday.")).toBeVisible();
+  });
+
+  test("introduces no accessibility violation", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await settleAnimations(page, "main");
+
+    expect(violationIds(await scan(page))).toEqual([]);
+  });
 });
