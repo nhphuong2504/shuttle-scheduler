@@ -119,24 +119,37 @@ async function withScheduleImpact(
   return compareSchedule(before, after);
 }
 
+/**
+ * Adds a person to the global player roster.
+ *
+ * Returns nothing, and that is forced rather than a preference. PostgreSQL applies
+ * the table's **select** policy to `RETURNING`, and `players` deliberately does not
+ * admit the row a client has just created: `players read` is "you are this person,
+ * or a tournament they entered", and a walk-in has no entry at that moment. Requesting
+ * representation therefore fails with "new row violates row-level security policy" -
+ * the write is permitted and the read-back is not.
+ *
+ * The callers do not need the row: the roster they render comes from the
+ * `public_players` projection, which carries the id, and it is refetched after this
+ * returns. `createTeam` below *does* return its row, because a team is readable by
+ * whoever may edit its tournament - which is the person creating it.
+ */
 export async function createPlayer(input: {
   name: string;
   email?: string;
   phone?: string;
   gender?: string;
-}) {
-  return ok(
-    supabase
-      .from("players")
-      .insert({
-        name: input.name.trim(),
-        email: input.email?.trim() || null,
-        phone: input.phone?.trim() || null,
-        gender: input.gender || null,
-      })
-      .select("*")
-      .single(),
-  );
+}): Promise<void> {
+  // `profile_id` is not accepted here, and could not be set if it were: the column is
+  // withheld from `authenticated`, and the guard trigger refuses an insert that names
+  // it. A person's link is established by approving their registration request.
+  const { error } = await supabase.from("players").insert({
+    name: input.name.trim(),
+    email: input.email?.trim() || null,
+    phone: input.phone?.trim() || null,
+    gender: input.gender || null,
+  });
+  if (error) throw new Error(error.message);
 }
 
 // `tournament_id` is intentionally omitted: the `teams_shape` trigger derives it

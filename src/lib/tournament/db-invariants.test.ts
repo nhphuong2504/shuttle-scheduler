@@ -1179,3 +1179,250 @@ describe("realtime publication membership migration", () => {
     expect(withoutComments).not.toMatch(/\bREVOKE\b/);
   });
 });
+
+/**
+ * Registration entries and the identity bridge.
+ *
+ * Phase 1 answered "whose row is this" with an email address, which is not an identity: it
+ * is a string a person types, it is neither unique nor normalized on `players`, and a
+ * participant could therefore be handed somebody else's contact data by typing that address
+ * into a form. This migration gives a player row an owner, and it does so with **two**
+ * mechanisms rather than one - a column privilege and a trigger - because each alone has a
+ * way round it that the other closes: a later migration can re-issue a table-wide grant,
+ * and a policy cannot distinguish the one writer that is allowed to set the column.
+ *
+ * The assertions below are mostly questions the migration asks its own catalogue, asked
+ * again from the repository, for the reason the role-redesign block states: the migration
+ * must not be able to pass its own gate while the suite says something different. The two
+ * that are not restatements are the ordering inside the guard's transition table and what
+ * `can_manage_player` is allowed to read membership from - neither is visible to a
+ * catalogue query.
+ */
+describe("registration entries and the identity bridge", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const FILE = "20260929020000_registration_entries_and_identity.sql";
+  const sql = readFileSync(join(dir, FILE), "utf8");
+  /** The executable SQL with line comments stripped, so prose cannot satisfy a check. */
+  const executable = sql.replace(/--.*$/gm, "");
+  /**
+   * The same SQL with the migration's own `do $verify$ ... $verify$;` block removed. That
+   * block has to name the literals it scans the catalogue for, so its strings would read as
+   * violations of the rules it checks.
+   */
+  const withoutVerify = executable.replace(/do \$verify\$[\s\S]*?\$verify\$;/, "");
+
+  /**
+   * One function's source, from its `CREATE` to its closing dollar-quote.
+   *
+   * Anchored on `create ... function`, not on `function` alone: `comment on function
+   * public.x(...)` contains the same substring and would otherwise capture the comment
+   * following the definition instead of the definition.
+   */
+  const fnBody = (signature: string, source = executable): string => {
+    const start = source.search(new RegExp(`create (or replace )?function public\\.${signature}`, "i"));
+    expect(start, `${signature} is not defined`).toBeGreaterThan(-1);
+    const opener = source.slice(start).match(/as \$([a-z_]*)\$/i);
+    const tag = opener?.[1] ?? "";
+    const close = source.indexOf(`$${tag}$;`, start);
+    expect(close, `${signature} has no closing dollar-quote`).toBeGreaterThan(start);
+    return source.slice(start, close + tag.length + 4);
+  };
+
+  it("withholds the link at the privilege layer, and only the link", () => {
+    // The grants are read as a set rather than matched one column at a time: the editable
+    // list is the whole contract, and a column added to it in a later edit is exactly the
+    // change that has to fail here.
+    const grants = [
+      ...executable.matchAll(/grant (insert|update) \(([^)]*)\) on public\.players/gi),
+    ];
+    expect(grants.map((g) => g[1]?.toLowerCase()).sort()).toEqual(["insert", "update"]);
+    for (const grant of grants) {
+      const columns = [...(grant[2] ?? "").matchAll(/[a-z_]+/gi)].map((m) => m[0].toLowerCase());
+      expect(columns.sort()).toEqual(["email", "gender", "name", "phone"]);
+    }
+    // Withheld, not merely absent from the list: the table-wide write is closed first, so
+    // the column grants are the only way in.
+    expect(executable).toMatch(
+      /revoke insert, update, truncate, references, trigger\s+on public\.players from anon, authenticated/,
+    );
+    // DELETE is deliberately *not* in that revoke. The policy restricts deletion to a
+    // platform admin, and withdrawing the privilege as well would make that path
+    // unreachable rather than restricted.
+    expect(executable).toMatch(/create policy "players delete" on public\.players[\s\S]*?is_platform_admin\(\)/);
+  });
+
+  it("keeps the guard's transition table, in the order the arms depend on", () => {
+    const guard = fnBody("players_profile_link_guard\\(\\)");
+    // A rename or an email edit carries no transition, so it must be admitted first - or
+    // every ordinary edit would have to raise the flag.
+    const unchanged = guard.indexOf("is not distinct from old.profile_id");
+    // The de-link is unconditional, ahead of the flag, because the FK's
+    // `ON DELETE SET NULL` arrives as exactly this transition and has no recognisable
+    // actor. Ordering is what makes it expressible; there is no arm that identifies it.
+    const delink = guard.indexOf("if new.profile_id is null then");
+    // A -> B is refused *before* the flag is consulted, so an approved link is not a
+    // licence to hand the row to somebody else.
+    const relink = guard.indexOf("old.profile_id is not null");
+    const flag = guard.indexOf("if not v_linking then");
+    expect(unchanged).toBeGreaterThan(-1);
+    expect(delink).toBeGreaterThan(unchanged);
+    expect(relink).toBeGreaterThan(delink);
+    expect(flag).toBeGreaterThan(relink);
+
+    // The flag is transaction-local (`true`), so it cannot leak into a later statement on
+    // a pooled connection, and it is read as a setting rather than as a role name - which
+    // is what keeps the sanctioned writer recognisable without naming it.
+    expect(guard).toMatch(/current_setting\('tournova\.allow_profile_link', true\)/);
+    expect(guard).toMatch(/raise exception/);
+  });
+
+  it("reads membership from the entry, never from derived placement data", () => {
+    // `placement_entrants` is built by `sync_placement_entrants` after a draw exists and
+    // cleared by `reset_placement_stage`, so membership derived from it would appear and
+    // disappear with the placement stage - access that comes and goes, and refused for
+    // exactly the entrants who have not been placed yet.
+    const predicate = fnBody("can_manage_player\\(p_player_id uuid\\)");
+    expect(predicate).toMatch(/public\.teams t/);
+    expect(predicate).toMatch(/t\.player_1_id = p_player_id OR t\.player_2_id = p_player_id/);
+    expect(predicate).toMatch(/tr\.owner_profile_id = public\.current_profile_id\(\)/);
+    expect(predicate).toMatch(/public\.tournament_editors e/);
+    expect(predicate).toMatch(/public\.is_platform_admin\(\)/);
+    expect(predicate).not.toMatch(/placement_entrants/);
+    // The entry's own tournament column, not the category it derives from: NOT NULL,
+    // indexed, and the same hop the rest of the authorization surface reads.
+    expect(predicate).toMatch(/t\.tournament_id/);
+    expect(predicate).not.toMatch(/public\.categories/);
+    // And the identity-canon rule: a profile column is compared to a profile id, never to
+    // the auth uid, which would type-check and silently match nothing.
+    expect(predicate).toMatch(/pl\.profile_id = public\.current_profile_id\(\)/);
+    expect(predicate).not.toMatch(/profile_id\s*=\s*auth\.uid\(\)/);
+  });
+
+  it("replaces the Phase 1 editor policy with one per verb", () => {
+    // The role redesign shipped a single `FOR ALL` policy admitting any tournament editor,
+    // while `docs/authorization.md` documented UPDATE and DELETE as admin-only. Four verbs,
+    // because they answer four different questions - and no `FOR ALL` left, which is what
+    // an editor policy would be.
+    expect(executable).toMatch(/drop policy if exists "players editor write" on public\.players/);
+    const policies = [
+      ...executable.matchAll(/create policy "players (\w+)" on public\.players\s+for (\w+)/gi),
+    ];
+    expect(
+      policies.map((p) => `${p[1]}:${p[2]?.toLowerCase()}`).sort(),
+      "the players policies are the four verbs and nothing else",
+    ).toEqual(["delete:delete", "insert:insert", "read:select", "update:update"]);
+
+    // The insert arm keeps `profile_id is null` even though the grant already withholds the
+    // column: a policy that is only safe because of a grant two sections above reopens if
+    // the grant is ever re-issued, and this is the half the trigger backstops.
+    const insert = executable.slice(executable.indexOf('create policy "players insert"'));
+    expect(insert.slice(0, insert.indexOf(";"))).toMatch(/profile_id is null/);
+    // Both halves on the update policy. A `FOR UPDATE` policy with only `USING` restricts
+    // which rows may be updated and not what they may be updated *to*.
+    const update = executable.slice(executable.indexOf('create policy "players update"'));
+    const updateBody = update.slice(0, update.indexOf(";"));
+    expect(updateBody).toMatch(/using \(/);
+    expect(updateBody).toMatch(/with check \(/);
+  });
+
+  it("gives the entries table a shape that cannot claim a partner", () => {
+    // A partner is a name and an email, never a `players.id`: they have not claimed
+    // anything, may not be an account holder, and resolving them at submission time would
+    // either invent a person or claim one.
+    //
+    // Scoped to the table body rather than scanned across the file: the same file adds an
+    // FK to `profiles`, and a whole-file scan would be asserting about the wrong statement.
+    const table = executable.slice(executable.indexOf("create table public.tournament_registration_entries"));
+    const body = table.slice(0, table.indexOf(");"));
+    expect(body).toMatch(/registration_id uuid not null/);
+    expect(body).toMatch(/category_id uuid not null/);
+    expect(body).toMatch(/partner_name text/);
+    expect(body).toMatch(/partner_email text/);
+    // No partner *id* of any kind, which is the claim this table must never be able to make.
+    expect(body).not.toMatch(/player_id/);
+    expect(body).toMatch(/unique \(registration_id, category_id\)/);
+    // Both foreign keys cascade, so a deleted category cannot leave a request asking for
+    // something that no longer exists.
+    expect(body.match(/on delete cascade/g)).toHaveLength(2);
+    // Read by the requester and by nobody else through a policy: the reviewer path is the
+    // definer RPC, because a policy's subquery runs as the caller.
+    expect(executable).toMatch(
+      /alter table public\.tournament_registration_entries enable row level security/,
+    );
+    expect(executable).toMatch(
+      /create policy "registration entries own read" on public\.tournament_registration_entries/,
+    );
+    // And closed at the privilege layer too, so a direct write is refused whether or not a
+    // policy stays absent - the same treatment the request and membership tables get.
+    expect(executable).toMatch(
+      /revoke insert, update, delete, truncate, references, trigger\s+on public\.tournament_registration_entries from anon, authenticated/,
+    );
+    // And published, because a table outside the publication drops its events with no
+    // error at all - the stage the plan trusts rather than verifies.
+    expect(executable).toMatch(
+      /array\['tournament_registration_entries'\]/,
+    );
+    expect(executable).toMatch(
+      /alter publication supabase_realtime add table public\.%I/,
+    );
+  });
+
+  it("makes a rejection re-appliable, and moves the arbiter with the index", () => {
+    // An unconditional unique key makes a rejection permanent: the row stays, the key keeps
+    // it, and a person turned down once can never apply again. That is not a policy anybody
+    // chose - it is what the constraint means.
+    expect(executable).toMatch(
+      /create unique index tournament_registrations_live_request_idx\s+on public\.tournament_registrations \(tournament_id, profile_id\)\s+where status <> 'rejected'/,
+    );
+    expect(executable).toMatch(
+      /alter table public\.tournament_registrations\s+drop constraint if exists tournament_registrations_unique_request/,
+    );
+    // The Phase 1 body inferred the dropped constraint, and an `ON CONFLICT` clause that no
+    // longer resolves raises at run time rather than at apply time - so it has to move in
+    // the same file as the index it infers, and both reads have to carry the predicate or a
+    // rejected row and a live row can coexist and the read could return either.
+    const fn = fnBody("submit_tournament_registration\\(p_tournament_id uuid\\)");
+    expect(fn).toMatch(/on conflict \(tournament_id, profile_id\) where status <> 'rejected' do nothing/);
+    expect(fn.match(/status <> 'rejected'/g)).toHaveLength(2);
+  });
+
+  it("closes the executable surface it adds", () => {
+    // `create function` grants EXECUTE to PUBLIC, so a new predicate is an API until it is
+    // closed - and a new function that is not closed is the failure this project has hit
+    // before with `activate_tournament`.
+    expect(executable).toMatch(/revoke all on function public\.can_manage_player\(uuid\) from public, anon/);
+    expect(executable).toMatch(/grant execute on function public\.can_manage_player\(uuid\) to authenticated/);
+    // The predicate has to stay callable: an RLS policy is evaluated as the querying role.
+    expect(executable).toMatch(
+      /revoke all on function public\.players_profile_link_guard\(\) from public, anon, authenticated/,
+    );
+  });
+
+  it("adds the link once, as a null-able reference that survives the person", () => {
+    // The link is `ON DELETE SET NULL`, not `CASCADE`: deleting a person must not delete
+    // the player rows that record what they did in a tournament, and it must not fail
+    // either. The guard's unconditional de-link arm is what makes this FK legal.
+    expect(withoutVerify).toMatch(
+      /alter table public\.players\s+add column profile_id uuid references public\.profiles\(id\) on delete set null/,
+    );
+    const additions = executable.match(/add column profile_id/g) ?? [];
+    expect(additions).toHaveLength(1);
+    // One row per person, and NULL is the common case - a walk-in and a partner supplied by
+    // name both have no account. A plain unique index would allow exactly one of them.
+    expect(executable).toMatch(
+      /create unique index players_profile_id_key\s+on public\.players \(profile_id\)\s+where profile_id is not null/,
+    );
+    // The projection anon reads must not gain the link, and a `create or replace view` here
+    // is the one-line change that would publish who is who.
+    expect(withoutVerify).not.toMatch(/create or replace view public\.public_players/);
+  });
+
+  it("asserts its own gates before it commits", () => {
+    // The migration raises rather than warns, for the reason the role redesign states: a
+    // warning in a CI log is not a failure, and this is a change whose half-applied state
+    // is worse than no change at all.
+    expect(sql).toMatch(/do \$verify\$/);
+    expect(sql).toMatch(/raise exception 'registration:/);
+    expect(sql.replace(/--.*$/gm, "")).not.toMatch(/raise warning/i);
+  });
+});

@@ -495,6 +495,7 @@ export type Database = {
           id: string
           name: string
           phone: string | null
+          profile_id: string | null
         }
         Insert: {
           created_at?: string
@@ -503,6 +504,7 @@ export type Database = {
           id?: string
           name: string
           phone?: string | null
+          profile_id?: string | null
         }
         Update: {
           created_at?: string
@@ -511,8 +513,17 @@ export type Database = {
           id?: string
           name?: string
           phone?: string | null
+          profile_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "players_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pool_entries: {
         Row: {
@@ -1185,6 +1196,48 @@ export type Database = {
           },
         ]
       }
+      tournament_registration_entries: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          partner_email: string | null
+          partner_name: string | null
+          registration_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          partner_email?: string | null
+          partner_name?: string | null
+          registration_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          partner_email?: string | null
+          partner_name?: string | null
+          registration_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_registration_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_registration_entries_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournament_registrations: {
         Row: {
           created_at: string
@@ -1467,6 +1520,7 @@ export type Database = {
         Args: { p_tournament_id: string }
         Returns: boolean
       }
+      can_manage_player: { Args: { p_player_id: string }; Returns: boolean }
       can_manage_tournament_access: {
         Args: { p_tournament_id: string }
         Returns: boolean

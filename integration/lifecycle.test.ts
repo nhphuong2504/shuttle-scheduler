@@ -171,14 +171,24 @@ describe("a tournament can be created and run end to end", () => {
     // so it is not lifecycle-gated - the pool draw below is.
     const teams: Team[] = [];
     for (let i = 0; i < PLAYER_COUNT; i += 1) {
-      const player = await createPlayer({
-        name: `itest lifecycle player ${i}`,
-        gender: "M",
-      });
-      playerIds.push(player.id);
+      const playerName = `itest lifecycle player ${i}`;
+      await createPlayer({ name: playerName, gender: "M" });
+      // The id comes from the roster projection rather than from the insert, which is what
+      // the desk does too: `createPlayer` returns nothing because PostgreSQL checks
+      // `RETURNING` against the read policy, and a freshly created player has no entry, so
+      // nobody may read it back yet. `public_players` is the definer view that carries it.
+      const { data: rosterPlayers, error: rosterError } = await admin.client
+        .from("public_players")
+        .select("id")
+        .eq("name", playerName)
+        .limit(1);
+      if (rosterError) throw new Error(rosterError.message);
+      const playerId = rosterPlayers?.[0]?.id;
+      expect(playerId, `the roster did not show ${playerName}`).toBeTruthy();
+      playerIds.push(playerId as string);
       const team = await createTeam({
         categoryId: categoryId as string,
-        player1: player.id,
+        player1: playerId as string,
         player2: null,
       });
       teams.push(team as Team);

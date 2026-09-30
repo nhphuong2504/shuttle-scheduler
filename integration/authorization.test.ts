@@ -10,6 +10,7 @@ import {
   expectRefused,
   grantEditor,
   saveCategory,
+  serviceClient,
   type TestIdentity,
 } from "./env";
 
@@ -493,5 +494,280 @@ describe("the editor roster round-trips a profile id", () => {
     } as never);
     expect(accessError).toBeNull();
     expect(access).toMatchObject({ is_editor: false, can_edit: false });
+  }, 120_000);
+});
+
+/**
+ * Player identity, the contact read, and what a request is for.
+ *
+ * The two mechanisms that keep `players.profile_id` to one writer live at different layers,
+ * and this is the only place both can be probed against a real database:
+ *
+ *   - the **privilege** layer is proved with a client session, because a column grant is
+ *     enforced before any policy is consulted;
+ *   - the **trigger** layer is proved with the service role, which is normally reserved for
+ *     fixtures. That is deliberate and not a violation of this file's rule: the trigger is
+ *     not RLS, so bypassing RLS does not bypass the guard - and reaching the guard past the
+ *     grant is the only way to show the two are independent. If the guard were missing, a
+ *     service-role write would succeed here and the privilege would be the *only* thing
+ *     standing between a client and the identity column.
+ *
+ * The contact read is a matrix rather than a single case, because the failure this replaces
+ * was a rule nobody could state: an editor of any tournament could read every player's email
+ * and phone number platform-wide.
+ */
+describe("player identity and the contact read", () => {
+  /** Fixtures only - and the trigger probes, which RLS cannot reach. */
+  const roster = serviceClient();
+
+  let contactOwner: TestIdentity;
+  let contactEditor: TestIdentity;
+  let contactAdmin: TestIdentity;
+  let outsider: TestIdentity;
+  let contactTournamentId = "";
+  let categoryId = "";
+  /** A player entered in that tournament, carrying the contact data under test. */
+  let enteredPlayerId = "";
+  /** A player in the roster with no entry anywhere: the discriminator. */
+  let unenteredPlayerId = "";
+  /** The walk-in the client inserts itself, cleaned up with the rest. */
+  let walkInPlayerId = "";
+
+  const contactEmail = `itest-contact-${Date.now().toString(36)}@tournova.test`;
+  const contactPhone = "+15550000111";
+
+  beforeAll(async () => {
+    contactOwner = await createIdentity("user", "contact");
+    contactEditor = await createIdentity("user", "contact");
+    contactAdmin = await createIdentity("admin", "contact");
+    outsider = await createIdentity("user", "contact");
+
+    // Days in the future, so a registration window can legitimately be open now: the window
+    // has to close at or before the derived start, and the default fixture's day is in 2020.
+    const day = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+    contactTournamentId = await createOwnedTournament(contactOwner, {
+      days: [{ date: day, startTime: "09:00", endTime: "18:00", courts: [1, 2] }],
+    });
+    await grantEditor(contactTournamentId, contactEditor, contactOwner);
+
+    // The window, written by the owner through the same RPC the Schedule page uses. The
+    // basics are re-sent because this RPC replaces them: `venue_name` in particular is a
+    // replace-with-null field, and a null venue fails the `basics` readiness check that
+    // `submit_tournament_registration` requires.
+    const { error: windowError } = await contactOwner.client.rpc("save_tournament_config", {
+      p_tournament_id: contactTournamentId,
+      p_payload: {
+        name: "contact probe",
+        venue_name: "Integration Test Venue",
+        venue_timezone: "America/Chicago",
+        format: "two_round_placement",
+        registration_opens_at: new Date(Date.now() - 3_600_000).toISOString(),
+        registration_closes_at: new Date(Date.now() + 3_600_000).toISOString(),
+      },
+    } as never);
+    if (windowError) throw new Error(`opening the registration window failed: ${windowError.message}`);
+
+    const { data: category, error: categoryError } = await roster
+      .from("categories")
+      .select("id")
+      .eq("tournament_id", contactTournamentId)
+      .limit(1)
+      .single();
+    if (categoryError) throw new Error(`reading the fixture category failed: ${categoryError.message}`);
+    categoryId = category.id;
+
+    const entered = await roster
+      .from("players")
+      .insert({ name: `itest-entered-${Date.now().toString(36)}`, email: contactEmail, phone: contactPhone })
+      .select("id")
+      .single();
+    if (entered.error) throw new Error(`seeding the entered player failed: ${entered.error.message}`);
+    enteredPlayerId = entered.data.id;
+
+    // The entry, which is what makes the contact data reachable for the tournament's staff.
+    const { error: teamError } = await roster
+      .from("teams")
+      .insert({ category_id: categoryId, player_1_id: enteredPlayerId } as never);
+    if (teamError) throw new Error(`seeding the entry failed: ${teamError.message}`);
+
+    const unentered = await roster
+      .from("players")
+      .insert({ name: `itest-unentered-${Date.now().toString(36)}`, email: `itest-unentered-${Date.now().toString(36)}@tournova.test` })
+      .select("id")
+      .single();
+    if (unentered.error) throw new Error(`seeding the unentered player failed: ${unentered.error.message}`);
+    unenteredPlayerId = unentered.data.id;
+  }, 180_000);
+
+  afterAll(async () => {
+    // The tournament first: it cascades to the entry, and the players cannot be deleted
+    // while a team still references them.
+    await destroyTournaments(contactTournamentId);
+    await roster
+      .from("players")
+      .delete()
+      .in("id", [enteredPlayerId, unenteredPlayerId, walkInPlayerId].filter(Boolean));
+    for (const identity of [contactOwner, contactEditor, contactAdmin, outsider]) {
+      await destroyIdentity(identity);
+    }
+  }, 180_000);
+
+  /** The contact columns as `identity` can see them for one player. */
+  async function contactRows(identity: TestIdentity, playerId: string) {
+    const { data, error } = await identity.client
+      .from("players")
+      .select("id, email, phone")
+      .eq("id", playerId);
+    expect(error).toBeNull();
+    return data ?? [];
+  }
+
+  it("lets the owner and the editor of the entered tournament read the contact data", async () => {
+    for (const identity of [contactOwner, contactEditor]) {
+      const rows = await contactRows(identity, enteredPlayerId);
+      expect(rows, `${identity.role}/${identity.email}`).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ id: enteredPlayerId, email: contactEmail, phone: contactPhone });
+    }
+  });
+
+  it("lets a platform admin read it", async () => {
+    const rows = await contactRows(contactAdmin, enteredPlayerId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ email: contactEmail });
+  });
+
+  it("shows nothing to anyone else, and nothing for a player who has not entered", async () => {
+    // An empty result rather than an error: `authenticated` holds table-wide SELECT, so the
+    // policy filters rows. Asserting the error instead would pass on a broken grant.
+    expect(await contactRows(outsider, enteredPlayerId)).toEqual([]);
+    // The same owner, a different player: membership comes from the entry, so a tournament's
+    // edit right is not a platform-wide read of the roster.
+    expect(await contactRows(contactOwner, unenteredPlayerId)).toEqual([]);
+  });
+
+  it("refuses an anonymous read of the contact table outright", async () => {
+    const error = await expectRefused(() => anonClient().from("players").select("id, email").limit(1));
+    expect(error.message.toLowerCase()).toContain("permission denied");
+  });
+
+  it("refuses the link column at the privilege layer", async () => {
+    // The first mechanism. `profile_id` is withheld, so this fails before any policy runs -
+    // which is also why the write cannot be blamed on the guard being absent.
+    for (const identity of [contactOwner, contactEditor]) {
+      const error = await expectRefused(() =>
+        identity.client.from("players").update({ profile_id: identity.profileId } as never).eq("id", enteredPlayerId),
+      );
+      expect(error.message.toLowerCase()).toMatch(/permission denied|not permitted|column/);
+    }
+    // And it is still unlinked afterwards, so the refused write changed nothing.
+    expect(await contactRows(contactOwner, enteredPlayerId)).toHaveLength(1);
+  });
+
+  it("refuses the link column at the trigger layer too", async () => {
+    // The second, durable mechanism, reached past the grant with the service role. An
+    // insert that names a link is refused, so the privilege layer is not the only thing
+    // standing in the way.
+    const inserted = await roster
+      .from("players")
+      .insert({ name: "itest-link-probe", profile_id: contactOwner.profileId } as never);
+    expect(inserted.error).not.toBeNull();
+    expect(inserted.error?.message ?? "").toMatch(/approved registration/i);
+
+    // And an existing unlinked row cannot be linked either - this is the transition the
+    // approval performs, gated on a transaction-local flag that only the approval sets.
+    const updated = await roster
+      .from("players")
+      .update({ profile_id: contactOwner.profileId } as never)
+      .eq("id", unenteredPlayerId);
+    expect(updated.error).not.toBeNull();
+    expect(updated.error?.message ?? "").toMatch(/approved registration/i);
+  });
+
+  it("still lets a client add a person to the roster, and the roster is where the id comes from", async () => {
+    // The desk's walk-in path, and the shape of it matters twice over.
+    //
+    // It has to keep working: creation is deliberately broader than reading, because a
+    // walk-in has no entry yet and contact data is readable only through one.
+    //
+    // And it must not ask for the row back: `RETURNING` is checked against the read policy,
+    // so requesting representation here fails with a row-level security error even though
+    // the write is permitted. The id the desk needs comes from `public_players` instead,
+    // which is the projection the roster screen is built on.
+    const name = `itest-walk-in-${Date.now().toString(36)}`;
+    const inserted = await contactOwner.client.from("players").insert({ name } as never);
+    expect(inserted.error).toBeNull();
+    expect(inserted.data).toBeNull();
+
+    const { data: rosterRows, error: rosterError } = await contactOwner.client
+      .from("public_players")
+      .select("id, name")
+      .eq("name", name);
+    expect(rosterError).toBeNull();
+    expect(rosterRows).toHaveLength(1);
+    walkInPlayerId = rosterRows?.[0]?.id ?? "";
+    expect(walkInPlayerId).toBeTruthy();
+
+    // And the client still cannot read the row it just wrote, which is the rule that made
+    // the representation-free insert necessary rather than incidental.
+    expect(await contactRows(contactOwner, walkInPlayerId)).toEqual([]);
+  });
+
+  it("refuses a direct write to the request entries", async () => {
+    // Entries are written by the submission RPC. The policy is absent *and* the grant is
+    // closed, so this is refused for the owner of the tournament as much as for anyone else.
+    const error = await expectRefused(() =>
+      contactOwner.client
+        .from("tournament_registration_entries")
+        .insert({ registration_id: crypto.randomUUID(), category_id: categoryId } as never),
+    );
+    expect(error.message.toLowerCase()).toMatch(/permission denied|row-level security|violates/);
+  });
+
+  it("makes a rejected request re-appliable, and keeps one live request per person", async () => {
+    // The Phase 1 key was unconditional, which made a rejection permanent: the row stayed,
+    // the key kept it, and the person could never apply again.
+    const first = await outsider.client.rpc("submit_tournament_registration", {
+      p_tournament_id: contactTournamentId,
+    } as never);
+    expect(first.error).toBeNull();
+    const firstId = first.data as unknown as string;
+    expect(firstId).toBeTruthy();
+
+    // A second submission is idempotent, which is `ON CONFLICT` hitting the *partial* index
+    // rather than a missing one.
+    const again = await outsider.client.rpc("submit_tournament_registration", {
+      p_tournament_id: contactTournamentId,
+    } as never);
+    expect(again.error).toBeNull();
+    expect(again.data).toBe(firstId);
+
+    // The owner rejects it, which is the only way a row leaves the index.
+    const decided = await contactOwner.client.rpc("decide_tournament_registration", {
+      p_registration_id: firstId,
+      p_decision: "rejected",
+      p_note: "probe",
+    } as never);
+    expect(decided.error).toBeNull();
+
+    // Now a new request is a new row, not the rejected one handed back.
+    const resubmitted = await outsider.client.rpc("submit_tournament_registration", {
+      p_tournament_id: contactTournamentId,
+    } as never);
+    expect(resubmitted.error).toBeNull();
+    const secondId = resubmitted.data as unknown as string;
+    expect(secondId).not.toBe(firstId);
+
+    // And the owner's queue shows two requests for that person: the rejected one and the new
+    // live one. A single unconditional key would have returned the rejected row above and
+    // this read would show one row, forever.
+    const review = await contactOwner.client.rpc("review_tournament_registrations", {
+      p_tournament_id: contactTournamentId,
+    } as never);
+    expect(review.error).toBeNull();
+    const mine = (review.data as unknown as { id: string; profile_id: string; status: string }[]).filter(
+      (row) => row.profile_id === outsider.profileId,
+    );
+    expect(mine.map((row) => row.status).sort()).toEqual(["pending", "rejected"]);
+    expect(mine.map((row) => row.id)).toEqual(expect.arrayContaining([firstId, secondId]));
   }, 120_000);
 });

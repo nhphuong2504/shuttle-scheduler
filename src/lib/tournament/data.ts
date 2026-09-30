@@ -736,10 +736,15 @@ export function useCourts() {
 /**
  * The global player roster.
  *
- * Reads the `public_players` projection, which is a definer view over the three
- * columns the roster shows. It is deliberately not `players`: that table's policy
- * keys on tournament edit access, which an entrant by definition does not have, so
- * reading it here would blank the list for exactly the people who need it.
+ * Reads the `public_players` projection, which is a definer view over the roster
+ * columns: id, name, gender, when the row was added. It is deliberately not
+ * `players`, and the reason is now narrower than when this was written. That
+ * table's read policy admits the person the row belongs to and the owner or
+ * editors of a tournament it has entered - so a participant can read their own
+ * contact row, and cannot read anybody else's, and no reader sees the roster as a
+ * whole. Every screen wants the roster as a whole, including for people who can
+ * read nothing on `players` at all (a visitor), so the projection is what they
+ * read. It is also the only shape that never carries an email address.
  */
 export function usePlayers() {
   return useQuery({

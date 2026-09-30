@@ -40,7 +40,7 @@ correct home for them.
 
 | Level | Granted by | May |
 | --- | --- | --- |
-| **Owner** | `tournaments.owner_user_id` | Everything an editor may, **plus** manage who else may edit, and delete the tournament |
+| **Owner** | `tournaments.owner_profile_id` | Everything an editor may, **plus** manage who else may edit, and delete the tournament |
 | **Editor** | a row in `tournament_editors` | Normal operation: configure, seed, generate, start, score, reschedule, and the operational resets |
 | **Viewer** | nothing — the default | Read only. Anonymous visitors read public tournament data too |
 
@@ -69,16 +69,17 @@ These are the only names the application layer should reference. All are `SECURI
 | --- | --- |
 | `current_system_role()` | `admin` \| `user` for the caller, or `NULL` when signed out |
 | `is_platform_admin()` | The caller is a platform admin |
-| `is_tournament_owner(uuid)` | `owner_user_id` is the caller's profile |
+| `is_tournament_owner(uuid)` | `owner_profile_id` is the caller's profile |
 | `is_tournament_editor(uuid)` | The caller has an editor row for this tournament |
 | `can_edit_tournament(uuid)` | admin **or** owner **or** editor. Also the registration-review predicate |
 | `can_manage_tournament_access(uuid)` | admin **or** owner. Access management, and delete |
 | `has_any_tournament_edit()` | The caller owns or edits *something* |
+| `can_manage_player(uuid)` | The caller is this player, or owns or edits a tournament they entered, or is a platform admin |
 
 `has_any_tournament_edit()` is deliberately awkward, and its only use is the `players` write
 policy. `players` is a global table with no `tournament_id`, so "may this person create a
 player identity" cannot be answered per tournament. The name keeps that debt visible rather
-than dressing it up as a rule — see [Known debt](#9-known-debt).
+than dressing it up as a rule — see [Known debt](#10-known-debt).
 
 ### Internal helpers are not callable
 
@@ -140,7 +141,7 @@ flowchart LR
 - **`completed`** — finished, operationally read-only for normal paths.
 
 **No reverse transition exists.** `in_progress → upcoming` and `completed → in_progress` are
-both refused, and neither is reachable by a direct client write (Section 8). A mis-completion
+both refused, and neither is reachable by a direct client write (Section 9). A mis-completion
 is corrected by a platform admin through the named repair paths in Section 4, which is the
 same surface a completed tournament is edited through anyway. A real reopen is Phase 2 work,
 if it is still wanted after someone has used this.
@@ -343,12 +344,113 @@ Who may act on a request:
 
 Registration is writable rather than configurable-guarded on the decision path, because a
 window may close at the derived start and the last requests can legitimately be decided after
-it. Approval changes no working context, grants no management right, and — in Phase 1 —
-creates no player, team or entry: there is no user↔player bridge yet.
+it. Approval changes no working context and grants no management right. The bridge it will
+acquire in this phase (Section 7) links the requester's player row and creates their entry, and
+it never makes the requester an editor — being approved is never an authorization input.
 
-## 7. Column privileges, and how `status` is kept out of reach
+## 7. Players, contact data, and the request entries
 
-Direct `PostgREST` mutation of `status`, `is_active` or `owner_user_id` must be impossible for
+`players` is the one global table in the schema: it has no `tournament_id`, and every
+tournament draws from the same roster. That is why it is the one table whose "who may see this
+row" needed a rule of its own, and why it carried the longest debt in Phase 1.
+
+### The link, and the two mechanisms that keep it
+
+`players.profile_id` is the person a player row belongs to.
+
+- **`NULL` is the ordinary value**, not a defect. A walk-in typed in at the desk and a partner
+  supplied by name have no account to link to, and a plain unique index would allow exactly
+  one of them — so the unique index is partial: `where profile_id is not null`.
+- The foreign key is `ON DELETE SET NULL`. Deleting a person must not delete the rows that
+  record what they played, and must not fail either.
+
+One code path links a player: the requester branch of `decide_tournament_registration`
+(Section 6). Two mechanisms keep it that way, and they are deliberately redundant — each one
+alone has a way round it that the other closes:
+
+| Layer | What it closes | How it can be lost |
+| --- | --- | --- |
+| Column privilege | `INSERT` and `UPDATE` on `profile_id` for `anon` and `authenticated` | A later migration re-issues a table-wide `GRANT` |
+| Trigger `players_profile_link_guard` | Any write that would set a link without the sanctioned flag, from any role | Nothing. This is the durable half |
+
+The grant withholds `profile_id`, `id` and `created_at`, and re-grants the four columns a
+person legitimately types: `name`, `email`, `phone`, `gender`. `DELETE` is deliberately **not**
+withdrawn — the policy restricts deletion to a platform admin, and taking the privilege away
+as well would make that path unreachable rather than restricted.
+
+The trigger decides by **state transition, not by actor**, and that choice is what makes the
+FK's `ON DELETE SET NULL` expressible: the cascade arrives as an ordinary
+`UPDATE ... SET profile_id = NULL`, with nothing about the session to distinguish it from a
+client doing the same thing.
+
+| Transition | Rule |
+| --- | --- |
+| `INSERT`, null | Allowed. Walk-in, unlinked partner |
+| `INSERT`, non-null | The flag only |
+| `UPDATE`, unchanged | Allowed. A name or contact edit carries no transition |
+| `UPDATE`, non-null → null | Allowed unconditionally. The de-link, and what the FK needs |
+| `UPDATE`, a → b (both non-null) | Refused **even under the flag** |
+| `UPDATE`, null → non-null | The flag only |
+
+A de-link is legal for everyone because it is not a *claim*: it removes contact access, grants
+nothing, and the only way back is the flagged arm.
+
+The flag is the transaction-local setting `tournova.allow_profile_link`. It is set by exactly
+one function — the approval — and it is read as a setting rather than as a role name, so the
+sanctioned writer is recognisable without any part of the rule depending on who is connected.
+
+**The consequence that surprises people.** `INSERT ... RETURNING` is checked against the
+`SELECT` policy, and `players read` does not admit a row that was just created, so a client
+cannot read back the player it wrote: the write succeeds and the read-back is refused.
+`createPlayer` therefore inserts without representation and the screens refetch the roster.
+
+### Who may do what to a player row
+
+| Verb | Rule |
+| --- | --- |
+| `SELECT` | The person themselves, or `can_manage_player(id)` |
+| `INSERT` | `profile_id is null` **and** the caller's own JWT email, or `has_any_tournament_edit()` |
+| `UPDATE` | The person themselves, or a platform admin |
+| `DELETE` | A platform admin |
+
+This replaces a single `FOR ALL` policy that admitted any tournament editor to all four verbs
+while this document described `UPDATE` and `DELETE` as admin-only.
+
+`can_manage_player(id)` is true for the player, for the owner or an editor of a tournament the
+player has **entered**, or for a platform admin. Membership is read from the entry —
+`teams.player_1_id` / `teams.player_2_id` → `teams.tournament_id` → owner or editor — and
+**never** from `placement_entrants`. That projection is built by the placement stage and
+cleared by `reset_placement_stage`, so membership read from it would appear and disappear with
+the placement stage — and be refused for exactly the entrants who have not been placed yet.
+
+Creation stays broader than reading, on purpose: an operator may create a walk-in they cannot
+read back, because contact data is readable only through an entry and a fresh walk-in has none.
+The roster those screens render is `public_players`, which carries no email address and no link.
+
+### The request entries
+
+`tournament_registration_entries` is what a request is *for*: one row per category, carrying the
+named partner. The partner is a **name and an email, never a `players.id`** — they have claimed
+nothing, may not be an account holder, and resolving them at submission time would either
+invent a person or claim one. `UNIQUE (registration_id, category_id)` makes a resubmit replace a
+set rather than duplicate it.
+
+The table is readable by its requester and by nobody else through a policy — reviewers read it
+through the definer RPC, because a policy's subquery is evaluated as the calling role. It is a
+member of the realtime publication, which is what makes the requester's own panel react; a
+reviewer's queue needs the reviewer arm that the queue itself adds.
+
+### One live request, and re-application
+
+`tournament_registrations` is unique on `(tournament_id, profile_id)` **where
+`status <> 'rejected'`**. Phase 1's unconditional key made a rejection permanent: the row
+stayed, the key kept it, and a person turned down once could never apply again. That is what an
+unconditional unique key means rather than a rule anybody chose. A rejected row now leaves the
+index, so re-applying is a new request with a new decision rather than a reopened one.
+
+## 8. Column privileges, and how `status` is kept out of reach
+
+Direct `PostgREST` mutation of `status`, `is_active` or `owner_profile_id` must be impossible for
 every client — owner, editor, unrelated user and platform admin alike — while the lifecycle
 RPCs must be able to write them.
 
@@ -362,7 +464,7 @@ privileges separate the two paths structurally instead:
   legitimately write: the ones the two existing direct writers touch
   (`updateTournamentTimings`, `updateTournamentMatchSettings`), plus the owner-editable
   configuration and the two registration-window fields.
-- `status`, `is_active` and `owner_user_id` are **omitted from the list**, so a write touching
+- `status`, `is_active` and `owner_profile_id` are **omitted from the list**, so a write touching
   them fails at the privilege layer before RLS is consulted.
 - `SECURITY DEFINER` runs as the table owner, so `start_tournament`, `complete_tournament` and
   `set_active_tournament` write those columns freely. The bypass is a property of function
@@ -373,7 +475,7 @@ read-only until it is granted, and the symptom is a write that appears to succee
 nothing. `db-invariants.test.ts` asserts the grant list covers every editable column and
 excludes the three protected ones, which is what turns that into a loud failure.
 
-## 8. Profile identity, and the recovery seam
+## 9. Profile identity, and the recovery seam
 
 `profiles` is a rename of `staff_roles`, not a new table, because the email-durability seam
 the recovery runbook depends on had to survive. Email is the durable key:
@@ -385,7 +487,7 @@ the recovery runbook depends on had to survive. Email is the durable key:
 - `current_system_role()` matches on `user_id = auth.uid()` OR the JWT email, so it resolves
   even before the trigger has run.
 
-**Ownership points at the profile, not at the identity.** `tournaments.owner_user_id`
+**Ownership points at the profile, not at the identity.** `tournaments.owner_profile_id`
 references `profiles(id)`, which is what lets the recovery runbook delete and recreate the
 admin's login without orphaning a tournament. The delete-and-recreate sequence is asserted in
 `integration/profile-identity.test.ts`, including the part that used to fail quietly: because
@@ -407,29 +509,38 @@ not a tournament-wide fact. `set_current_tournament` writes only the caller's ro
 resolves it per user, and switching it affects nobody else. It is `NULL` for a user who has
 not chosen one, and clears itself if the tournament is deleted.
 
-## 9. Known debt
+## 10. Known debt
 
 Carried out of Phase 1 on purpose, with the reasoning, so it is not rediscovered as a bug.
+Where the current work closes one, the entry stays and says so — the list is a record of what
+was deferred and why, not a to-do list.
 
-1. **No user↔player bridge.** Neither submitting nor approving a registration touches
-   `players` or `teams`.
-2. **Global player identity retains cross-tournament creation** by any editor. Additive only:
-   `UPDATE` and `DELETE` on `players` are closed to non-admins. `has_any_tournament_edit()`
-   is the named, awkward half of this.
-3. **Player contacts are readable by any editor platform-wide.** Not fixable per tournament
-   without the identity model. `public_players` is the anonymous-safe projection
-   (`id, name, gender, created_at`), and `anon` has no `SELECT` on `players` itself — the
-   table carries email and phone, and a view is not a redaction unless the underlying table
-   stops answering.
+1. **The user↔player bridge is schema-only so far.** `players.profile_id`, the guard that keeps
+   it to one writer and the entry shape all exist, and nothing yet sets the link: the approval
+   is the next step. What will stay open after it is the *partner* half — a named partner is
+   matched to an unlinked row or created then, and is never linked to an account by that act.
+2. **Global player identity retains cross-tournament creation** by any editor, and this is now
+   the only part of the `players` surface still keyed on a platform-wide right. Additive only:
+   `UPDATE` and `DELETE` on `players` are closed to non-admins, and the link column cannot be
+   set by a client at all. `has_any_tournament_edit()` is the named, awkward half of this.
+3. **Player contacts are readable by anyone who owns or edits a tournament the player entered**
+   — a tournament scope, read from an entry rather than from a placement projection
+   (Section 7). The residual is that `tournament_editors` is per tournament rather than per
+   team, so an editor can read the contact data of every entrant in their tournament, which is
+   the same set of people the desk is calling about. `public_players` remains the anonymous-safe
+   projection (`id, name, gender, created_at`), and `anon` still has no `SELECT` on `players`
+   itself.
 4. **`desk_activity` has no tournament scope.** The policy resolves a tournament from the
    match, so the debt is bounded per match rather than per tournament.
-5. **Terminal decisions plus the unique key** mean a rejected user cannot currently submit
-   again. Reapplication, and whether re-decisions are allowed, are Phase 2 decisions.
+5. **Re-application is open, re-decision is not.** The unique key is now partial on
+   `status <> 'rejected'`, so a rejected person may submit again as a new request (Section 7).
+   A decided request still cannot be reopened — `pending → approved | rejected` has no reverse,
+   which is asserted by the guard trigger rather than by this document.
 6. **Pending requests do not reserve capacity**, so a tournament could approve more requests
-   than it can seat.
+   than it can seat. The category cap is enforced on the entry, and that is where it fails.
 7. **No participant self-service** (cancel/withdraw), and no registration window per category.
 8. **`is_active` is Phase-1-only legacy presentation infrastructure** — see Section 3.
-9. **The column-level `UPDATE` grant list is a maintenance surface** — see Section 7.
+9. **The column-level `UPDATE` grant list is a maintenance surface** — see Section 8.
 10. **`completed` is enforced by shared RPC guards, not by RLS.** A future write path that
     bypasses the guarded RPCs is not covered unless it calls a guard. The invariants assertion
     keeps the classified list explicit and pins `assert_tournament_writable` to its enumerated
@@ -444,7 +555,7 @@ Carried out of Phase 1 on purpose, with the reasoning, so it is not rediscovered
     role conversion, where it exists at all, is staging/test scaffolding rather than a
     production path.
 
-## 10. Changing any of this
+## 11. Changing any of this
 
 A change to authorization, the lifecycle guards, the column privileges or the RLS policies is
 a **high-risk change** and takes the full PR/phase-close gate at every stage — typecheck,

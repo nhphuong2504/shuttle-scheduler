@@ -192,7 +192,7 @@ created. There is no UUID or password to migrate.
 Deleting an identity does not delete its profile: `on_auth_user_deleted_unlink_profile`
 clears `profiles.user_id` and leaves the row — with its `system_role` — in place, so an
 account recreated at the same address re-links to the same profile. That is what lets a
-tournament keep its owner across an admin login being recreated. `tournaments.owner_user_id`
+tournament keep its owner across an admin login being recreated. `tournaments.owner_profile_id`
 points at the *profile*, not at the identity, for exactly this reason.
 
 **What this means in practice:** after a recovery, **nobody can sign in until their login
