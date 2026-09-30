@@ -30,8 +30,11 @@ the directory *is* the prefix, and the page reads the id with `useTournamentId()
 
 ```
 src/routes/
-  index.tsx                          /              → redirect (shim; Landing/Home later)
+  index.tsx                          /              Landing (visitor) / Home (signed in)
   auth.tsx                           /auth
+  explore.tsx                        /explore
+  me/tournaments.tsx                 /me/tournaments
+  tournaments/new.tsx                /tournaments/new
   tournaments/$tournamentId/
     route.tsx                        layout: tournament + access by context
     desk.tsx                         the Desk
@@ -50,7 +53,9 @@ Two things about that list are easy to get wrong:
   `/registration`, `/placement`, `/knockout`, `/placement-schedule`, `/schedule` and
   `/matches` were shipped addresses before the workspace move, so each renders
   `<WorkspaceRedirect>` and resolves on the caller's own working tournament. They carry
-  no markup and own no data. `/` is the same idea, temporarily, until Landing/Home lands.
+  no markup and own no data. `/` was the same idea until S6, and is now the real
+  Landing/Home - a surface rather than a redirect, and the only page that decides what
+  to draw from whether there is a session.
 
 A redirect must **not** be a `beforeLoad`. That runs during server rendering too, where
 there is no session to read the pointer from — the server would redirect a bookmark to the

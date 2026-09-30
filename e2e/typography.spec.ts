@@ -32,6 +32,7 @@ const ROUTES = [
   routes.access,
   // The non-scoped surfaces, for the same reason the shared matrix lists them: the 12px
   // floor is a property of every page the app renders, not of the pages in the nav.
+  routes.home,
   routes.explore,
   routes.myTournaments,
   routes.newTournament,

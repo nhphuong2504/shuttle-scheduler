@@ -37,9 +37,10 @@ import { cn } from "@/lib/utils";
  *    lifecycle status, and the section nav for the pages under it. Its read-only
  *    treatment is one component shared by a signed-out visitor and a signed-in viewer,
  *    because the two are the same fact - this caller may not change anything here.
- *  - **`PublicShell`** wraps the pages that are not about one tournament: sign-in today,
- *    Explore and the landing page next. It has no tournament to name and no section nav,
- *    because there is nothing scoped for it to navigate to.
+ *  - **`PublicShell`** wraps the pages that are not about one tournament: the front door,
+ *    sign-in, Explore, My Tournaments and the create flow. It has no tournament to name
+ *    and no scoped section nav, because there is nothing for it to navigate to; it carries
+ *    the public nav instead.
  *
  * The split is what lets the workspace header hold the tournament's name at all. While
  * every page rendered its own shell, the header could only show what a page passed it,
@@ -66,11 +67,11 @@ import { cn } from "@/lib/utils";
  * entries that lead to its own engine.
  *
  * **Every section is a child of the workspace layout, so a nav link carries an id.**
- * `flat` is the legacy address each section used to live at, and it is kept for the one
- * place a shell renders *outside* a workspace: `PublicShell`'s nav. There the id is not
- * known, so those entries go through the flat redirects, which resolve on the caller's
- * own pointer - exactly as they did before the workspace move. S6 replaces that nav with
- * the public one (Explore, the caller's tournaments) and this pair collapses to one path.
+ * Until S6 there was a second address beside each scoped one - the flat path the section
+ * lived at before the workspace move - because `PublicShell` rendered this nav outside a
+ * workspace, where no id exists. It carries the public nav now, so the pair is gone: the
+ * only consumer of these entries is the shell that knows its tournament, and the flat
+ * paths survive only as redirects (`lib/routing/workspace-redirect.ts`).
  *
  * `Registration` became `Entries` in the same commit that moved the file to
  * `entries.tsx`. That is deliberate rather than cosmetic: S11 adds a *different*
@@ -79,12 +80,12 @@ import { cn } from "@/lib/utils";
  * tournament, which is what "Entries" says and "Registration" no longer does.
  */
 const SECTIONS = [
-  { label: "Desk", scoped: "/tournaments/$tournamentId/desk", flat: "/" },
-  { label: "Entries", scoped: "/tournaments/$tournamentId/entries", flat: "/registration" },
-  { label: "Placement", scoped: "/tournaments/$tournamentId/placement", flat: "/placement" },
-  { label: "Knockout", scoped: "/tournaments/$tournamentId/knockout", flat: "/knockout" },
-  { label: "Schedule", scoped: "/tournaments/$tournamentId/schedule", flat: "/schedule" },
-  { label: "Scores", scoped: "/tournaments/$tournamentId/scores", flat: "/matches" },
+  { label: "Desk", scoped: "/tournaments/$tournamentId/desk" },
+  { label: "Entries", scoped: "/tournaments/$tournamentId/entries" },
+  { label: "Placement", scoped: "/tournaments/$tournamentId/placement" },
+  { label: "Knockout", scoped: "/tournaments/$tournamentId/knockout" },
+  { label: "Schedule", scoped: "/tournaments/$tournamentId/schedule" },
+  { label: "Scores", scoped: "/tournaments/$tournamentId/scores" },
 ] as const;
 
 /**
@@ -97,8 +98,29 @@ const SECTIONS = [
  * telling you no is a worse answer than not offering the trip.
  */
 const EDITOR_SECTIONS = [
-  { label: "Setup", scoped: "/tournaments/$tournamentId/settings", flat: "/setup" },
-  { label: "Access", scoped: "/tournaments/$tournamentId/access", flat: "/staff" },
+  { label: "Setup", scoped: "/tournaments/$tournamentId/settings" },
+  { label: "Access", scoped: "/tournaments/$tournamentId/access" },
+] as const;
+
+/**
+ * The public navigation: the three addresses that are not about one tournament.
+ *
+ * The workspace nav resolves its sections against a tournament id, and outside a
+ * workspace there is none - so until S6 this shell rendered the *flat* legacy paths and
+ * let them resolve on the caller's pointer. That is gone, and it is the better answer
+ * rather than merely the tidier one: a nav entry that silently moves a reader to
+ * whichever tournament their pointer names is a nav entry that lies about where it goes.
+ * These three say what they are.
+ *
+ * It does not change with the session. "My tournaments" and "New tournament" lead a
+ * visitor to a page that states plainly what it needs rather than to a dead link, and a
+ * nav that grows an entry once the session settles would move the row the reader is
+ * aiming at.
+ */
+const PUBLIC_SECTIONS = [
+  { label: "Explore", to: "/explore" },
+  { label: "My tournaments", to: "/me/tournaments" },
+  { label: "New tournament", to: "/tournaments/new" },
 ] as const;
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -453,11 +475,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 /**
  * The pages that are not about one tournament.
  *
- * Sign-in today, Explore and the landing page next. It has no tournament to name and no
- * section nav, and it keeps the flat nav the old shell used outside a workspace: those
- * addresses resolve on the caller's own pointer, so a signed-in reader can still reach
- * their own tournament from here. S6 replaces that nav with the public one, which is
- * when the flat addresses stop being the only thing there is to link to.
+ * Sign-in, Explore, My Tournaments, the create flow and the front door. It has no
+ * tournament to name and no section nav, and it renders the public nav instead - three
+ * addresses that need no id, rather than the flat legacy paths that used to resolve on
+ * the caller's pointer. See `PUBLIC_SECTIONS` for why that matters.
  */
 export function PublicShell({
   title,
@@ -479,22 +500,11 @@ export function PublicShell({
           <Link to="/" className="flex items-center gap-2">
             <BrandMark />
           </Link>
-          <nav aria-label="Tournament sections" className="flex flex-wrap items-center gap-1">
-            {SECTIONS.map((item) => (
+          <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
+            {PUBLIC_SECTIONS.map((item) => (
               <Link
-                key={item.flat}
-                to={item.flat}
-                className={NAV_ITEM_CLASS}
-                activeProps={{ className: NAV_ACTIVE_CLASS }}
-                activeOptions={{ exact: item.flat === "/" }}
-              >
-                {item.label}
-              </Link>
-            ))}
-            {EDITOR_SECTIONS.map((item) => (
-              <Link
-                key={item.flat}
-                to={item.flat}
+                key={item.to}
+                to={item.to}
                 className={NAV_ITEM_CLASS}
                 activeProps={{ className: NAV_ACTIVE_CLASS }}
               >

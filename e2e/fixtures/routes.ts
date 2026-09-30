@@ -15,8 +15,8 @@ import { TOURNAMENT_ID } from "./desk-mock";
  *     at the scoped address directly keeps each spec measuring one thing.
  *
  * The redirects themselves are covered on purpose, and only where they are the subject:
- * `/` is exercised by the routing spec, and the flat paths are exercised through the one
- * shared component they all render.
+ * the flat paths are exercised by the routing spec, and the one address that used to be a
+ * redirect and is now a page - `/` - is covered there as a page.
  */
 export const routes = {
   desk: `/tournaments/${TOURNAMENT_ID}/desk`,
@@ -30,6 +30,7 @@ export const routes = {
   pools: `/tournaments/${TOURNAMENT_ID}/pools`,
   draws: `/tournaments/${TOURNAMENT_ID}/draws`,
   /** The surfaces that are not about one tournament, so they name no id. */
+  home: "/",
   explore: "/explore",
   myTournaments: "/me/tournaments",
   newTournament: "/tournaments/new",
@@ -42,14 +43,11 @@ export const routes = {
  * spec visits each address and asserts the browser ended up at the scoped page. Keeping the
  * pairs here means the spec cannot assert a target the map does not name.
  *
- * `/` is the one entry whose target is not a workspace page: it is S3's shim, which resolves
- * on the caller's pointer and lands on the desk because this fixture's session has one. A
- * caller with no pointer lands on `/explore` instead - see `NO_POINTER_FALLBACK` - and that
- * is covered where the fallback lives rather than by a second walk here. S6 replaces the shim
- * with the real Landing/Home and this entry moves with it.
+ * `/` is not on the list. It was S3's shim - the Desk's old address, resolving on the
+ * caller's pointer - and S6 replaced the shim with the real Landing/Home, which is a page
+ * rather than a redirect and is covered as one.
  */
 export const legacyRoutes: readonly { from: string; to: string }[] = [
-  { from: "/", to: routes.desk },
   { from: "/setup", to: routes.settings },
   { from: "/staff", to: routes.access },
   { from: "/registration", to: routes.entries },

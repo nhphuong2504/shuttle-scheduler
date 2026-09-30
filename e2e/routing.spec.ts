@@ -78,14 +78,6 @@ test.describe("a caller with no working tournament", () => {
     await expect(page.getByRole("heading", { name: /explore tournaments/i })).toBeVisible();
   });
 
-  test("is sent to Explore from the bare domain, which is the same answer", async ({ page }) => {
-    // Both callers read one constant, and this is the second of them: a bookmark and a typed
-    // domain have to land in the same place, or "no working tournament" would have two
-    // meanings depending on how somebody arrived.
-    await page.goto("/", { waitUntil: "load" });
-    await expect(page).toHaveURL(at(NO_POINTER_FALLBACK));
-  });
-
   test("still reads the workspace an address names, because the address is the subject", async ({
     page,
   }) => {
@@ -97,6 +89,38 @@ test.describe("a caller with no working tournament", () => {
     // renders the tournament the URL names.
     await expect(page.getByRole("heading", { name: /control desk/i, level: 1 })).toBeVisible();
     await expect(page.getByRole("banner").getByText(TOURNAMENT_NAME)).toBeVisible();
+  });
+});
+
+test.describe("the bare domain", () => {
+  test.use({ appMock: { preset: "layout", role: "user" } });
+
+  test("is a page for a signed-in caller, not a redirect to the Desk", async ({ page }) => {
+    await page.goto(routes.home, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // S3's shim sent this address to the caller's own Desk, so the two readings of "it works"
+    // are "it rendered" and "it stayed". The path is asserted first: a surviving redirect
+    // would pass a heading check by landing somewhere else entirely.
+    expect(new URL(page.url()).pathname).toBe("/");
+    await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  });
+
+  test("is Landing for a visitor, which is the other reading of one address", async ({ page }) => {
+    // Re-installed signed out. The route-level mock is registered last and wins, which is
+    // the harness's own documented way to vary a session mid-file.
+    await installAppMock(page, { preset: "layout", role: null });
+    await page.goto(routes.home, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    expect(new URL(page.url()).pathname).toBe("/");
+    // The session decides which reading renders, in the page rather than in a guard: a
+    // `beforeLoad` would decide during server rendering, where there is never a session, and
+    // would show every signed-in caller the visitor's page on their first paint.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      /run a badminton tournament from one console/i,
+    );
+    await expect(page.getByRole("link", { name: "Explore tournaments" })).toBeVisible();
   });
 });
 

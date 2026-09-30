@@ -1,9 +1,12 @@
+import AxeBuilder from "@axe-core/playwright";
+
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
+import { MATRIX_CELLS, openCell, WCAG_TAGS } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 
 /**
- * The three surfaces S5 added, as a person uses them.
+ * The surfaces that are not inside a tournament, as a person uses them.
  *
  * Explore, My Tournaments and the create flow are the first pages in the app that are *not*
  * about one tournament, and they are also the first that answer a question with a URL: a
@@ -11,6 +14,11 @@ import { routes } from "./fixtures/routes";
  * refreshed and returned to. That is the part no other spec can see - `access.spec.ts`
  * asserts what each role is offered on these pages, and this file asserts what the page
  * does when it is *used*.
+ *
+ * `/` joined them in S6. It is the one surface whose content depends on the *session*
+ * rather than on an address, so it is covered here in both readings: Landing, in the
+ * routing spec's bare-domain case and in the shared matrix, and Home below, which needs a
+ * signed-in caller and so cannot be swept by the route matrix at all.
  *
  * ## Why the filters are asserted through the address
  *
@@ -27,6 +35,70 @@ const TOURNAMENT_NAME = "Layout Validation Invitational";
 const VENUE_TERM = "Forker";
 /** A term that appears only in one of the fixture's event names. */
 const EVENT_TERM = "Mixed Doubles";
+
+test.describe("Home, for a caller working in a tournament", () => {
+  test.use({ appMock: { preset: "layout", role: "user" } });
+
+  test("resumes the working tournament, and describes it once", async ({ page }) => {
+    await page.goto(routes.home, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+
+    const main = page.getByRole("main");
+    // The fixture's pointer names the tournament this session owns, so Continue draws it and
+    // offers the trip back to the desk it was left on.
+    await expect(main.getByRole("link", { name: /open the desk/i })).toHaveAttribute(
+      "href",
+      routes.desk,
+    );
+
+    /**
+     * **Once**, and that is the assertion rather than a detail of it.
+     *
+     * Three panels that each answered "which tournaments exist" would draw the same card
+     * three times for a caller who owns one tournament, which reads as a rendering fault.
+     * Each panel renders what the ones above it have not: Continue the working tournament,
+     * Your tournaments the caller's *other* ones, Discover what is neither - and the two
+     * exclusions announce themselves instead of leaving an empty panel.
+     */
+    await expect(main.getByRole("heading", { name: TOURNAMENT_NAME })).toHaveCount(1);
+    await expect(main.getByText(/nothing else to show/i)).toBeVisible();
+    await expect(main.getByText(/nothing else is on tournova yet/i)).toBeVisible();
+  });
+
+  test("still lists the caller's own tournaments when there is nothing to continue", async ({
+    page,
+  }) => {
+    // The state a brand-new account is in, and the other half of the pointer's contract:
+    // nothing to resume, but the panel below is about the caller rather than about the
+    // pointer, so the tournament they own is still drawn.
+    await installAppMock(page, { preset: "layout", role: "user", pointer: null });
+    await page.goto(routes.home, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const main = page.getByRole("main");
+    // `EmptyState` draws its title as a paragraph rather than as a heading - it is a state,
+    // not a section - so this is a text assertion and not a role one.
+    await expect(main.getByText(/no working tournament/i)).toBeVisible();
+    await expect(main.getByRole("heading", { name: TOURNAMENT_NAME })).toHaveCount(1);
+  });
+
+  test("introduces no accessibility violation, in either theme", async ({ page }) => {
+    // Home cannot be swept by the shared route matrix, because its content depends on a
+    // session and the matrix runs signed out. So it is scanned here, against the same rule
+    // set - and to zero rather than to a baseline: a surface added in this commit has no
+    // pre-existing findings to grandfather in.
+    for (const cell of MATRIX_CELLS) {
+      await openCell(page, routes.home, cell);
+      const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+      expect(
+        results.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.length} node(s)`),
+        `axe on ${routes.home} in ${cell.theme}`,
+      ).toEqual([]);
+    }
+  });
+});
 
 test.describe("Explore", () => {
   test.use({ appMock: { preset: "layout", role: null } });

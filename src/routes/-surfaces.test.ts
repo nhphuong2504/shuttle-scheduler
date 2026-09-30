@@ -599,9 +599,9 @@ function sourceFiles(dir: string, root: string): string[] {
  * own tests, and quietly become a second definition of the same page. Asserting the URLs
  * cannot see that, because both copies would answer to different URLs and each URL would
  * work. So this asks the tree directly: which files mention the desk's own day-scoping
- * helpers, and what is left at `/`.
+ * helpers, what is left at `/`, and how each flat address still resolves.
  */
-describe("the desk lives in one file, and `/` is only a redirect", () => {
+describe("the desk lives in one file, and `/` is a page of its own", () => {
   // Walked from `src`, not from `routes`: a copy of the desk left in `components/` would
   // still render and still pass its own tests, and a walk of `routes` alone could not see it.
   const src = join(__dirname, "..");
@@ -637,16 +637,28 @@ describe("the desk lives in one file, and `/` is only a redirect", () => {
     expect(definers).toEqual([deskFile]);
   });
 
-  it("leaves `/` a shim with no markup to reconcile", () => {
-    const shim = read("index.tsx");
-    // It redirects to the Desk on the caller's pointer: the page `/` served before the
-    // move, so behaviour is preserved rather than merely preserved from 404ing.
-    expect(shim).toMatch(/component: \(\) => <WorkspaceRedirect section="desk" \/>/);
-    // And it renders no surface: no shell, no panel, no wrapper element of any kind. A
-    // shim that grew a surface would be a second definition of `/` for the real route to
-    // displace, and S6's check would have to tell "replaced" from "shadowed".
-    expect(shim).not.toMatch(/WorkspaceShell|PublicShell/);
-    expect(shim).not.toMatch(/<(div|section|main|Panel|EmptyState)\b/);
+  it("leaves the temporary shim gone from `/`, not merely shadowed", () => {
+    const home = read("index.tsx");
+    // S6 replaced the shim with the real surface. A shim left behind - even one whose
+    // component no longer renders, or that kept a second `createFileRoute("/")` around -
+    // would be a second definition of `/` that the real route shadows silently, which is
+    // the failure mode this assertion exists for. So the check reads for the *absence of
+    // the shim*, not for the presence of the page: `WorkspaceRedirect` is what `/` used to
+    // render, and it must not be here at all.
+    expect(home).not.toMatch(/WorkspaceRedirect/);
+    expect(home).not.toMatch(/workspace-redirect/);
+    // And it is a surface now: the shell that wraps every page outside a tournament, and
+    // the two readings of the front door, chosen by the session rather than by a route.
+    expect(home).toMatch(/<PublicShell/);
+    expect(home).toMatch(/signedIn \? <SignedInHome \/> : <Landing \/>/);
+  });
+
+  it("renders `/` as the one route that draws both readings of the front door", () => {
+    // One file defines `/`, and only one: a second definition would be a shadowed route.
+    const definers = files.filter((file) =>
+      readFileSync(join(src, file), "utf8").includes('createFileRoute("/")'),
+    );
+    expect(definers).toEqual([join("routes", "index.tsx")]);
   });
 
   it("resolves every flat legacy path on the caller's own pointer", () => {
@@ -744,12 +756,13 @@ describe("the workspace chrome is mounted once, by the layout", () => {
    * rather than matching "not under the workspace" is what makes a new surface have to be
    * added here - which is the moment the question "which shell does this draw" gets asked.
    *
-   * `routes/index.tsx` is deliberately absent while it is S3's shim; S6 replaces it with the
-   * real Landing/Home, which belongs in this list.
+   * `routes/index.tsx` is on the list since S6: it was S3's shim, absent because it drew no
+   * shell, and it is now the front door, which is a page like any other outside a workspace.
    */
   const publicRoutes = [
     join("routes", "auth.tsx"),
     join("routes", "explore.tsx"),
+    join("routes", "index.tsx"),
     join("routes", "me", "tournaments.tsx"),
     join("routes", "tournaments", "new.tsx"),
   ];
@@ -836,8 +849,10 @@ describe("no shipped link points at a route that does not resolve", () => {
 
   it("sends a caller with no working tournament to Explore, not to sign-in", () => {
     // S3 shipped the shared fallback as `/auth` because `/explore` did not exist yet, and
-    // flipped it in the commit that created the route - one constant, so neither caller (the
-    // flat paths and the `/` shim) was edited when the destination changed.
+    // flipped it in the commit that created the route - one constant, so the callers it had
+    // then (the flat paths and S3's `/` shim) were not edited when the destination changed.
+    // The shim is gone; the flat paths still read this, and so does the assertion below,
+    // which is what keeps the fallback from drifting back to a sign-in form.
     const routing = readFileSync(join(src, "lib", "routing", "workspace-redirect.ts"), "utf8");
     expect(routing).toMatch(/NO_POINTER_FALLBACK = "\/explore"/);
     expect(routing).not.toMatch(/"\/auth"/);

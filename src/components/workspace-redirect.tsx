@@ -28,11 +28,14 @@ import { useCurrentTournamentPointer } from "@/lib/tournament/data";
  *
  * A component runs after hydration, on the browser, with the real session. Nothing is
  * fetched during server rendering (`useQuery` does not fetch on the server), so this
- * renders `null` there and stays hermetic.
+ * renders `null` there and stays hermetic - and it renders nothing at all in the browser
+ * either, because it is a redirect and a placeholder would be a surface built to be thrown
+ * away.
  *
- * It renders nothing at all, deliberately. A placeholder would be a second surface built
- * to be thrown away, and for `/` specifically it would be a second definition of the
- * address the real Landing/Home has to displace.
+ * `/` used to render this component, because `/` was the Desk before S3 moved it and a
+ * shipped address cannot simply stop existing. S6 replaced that shim with the real
+ * Landing/Home, so the callers now are the flat paths alone - each of which was, and still
+ * is, a real address somebody may have bookmarked.
  */
 export function WorkspaceRedirect({ section }: { section: WorkspaceSection }) {
   const navigate = useNavigate();

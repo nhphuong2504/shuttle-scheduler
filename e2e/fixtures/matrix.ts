@@ -56,14 +56,19 @@ export const ROUTES = [
   routes.settings,
   routes.access,
   /**
-   * The three surfaces that are about tournaments rather than *inside* one, and therefore
+   * The surfaces that are about tournaments rather than *inside* one, and therefore
    * carry no id.
    *
-   * They were added in S5, when they first existed. Leaving them out would have made the
-   * route list a list of the routes somebody remembered: they are the pages an unauthenticated
-   * visitor meets first, which is exactly the audience least likely to be in any sweep's
-   * author's head.
+   * They were added in S5, when they first existed, and `/` joined them in S6: leaving any
+   * of them out would have made the route list a list of the routes somebody remembered.
+   * They are the pages an unauthenticated visitor meets first, which is exactly the
+   * audience least likely to be in any sweep's author's head.
+   *
+   * `/` renders its *visitor* reading here, because this list is swept signed out. The
+   * signed-in reading - Home - needs a session, so it is scanned in
+   * `public-surfaces.spec.ts` against the same axe tags and in both themes.
    */
+  routes.home,
   routes.explore,
   routes.myTournaments,
   routes.newTournament,

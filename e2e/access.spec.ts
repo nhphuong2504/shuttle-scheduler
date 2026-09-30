@@ -77,10 +77,11 @@ test.describe("a viewer", () => {
     await expect(page.getByText(/nobody has shared one with you/i)).toBeVisible();
     await expect(page.getByText(TOURNAMENT_NAME)).toHaveCount(0);
 
-    // Scoped to `main`, which is the list: the shell's own nav still carries the flat
-    // addresses (`/setup`, `/staff`) from before the workspace move - S4's handoff to S6's
-    // public nav - and those resolve on the *caller's* pointer rather than on this row, so
-    // they are a bookmark to your own tournament and not an act on somebody else's.
+    // Scoped to `main`, which is the list, because the header is not this page's to assert:
+    // since S6 it carries the public nav (Explore, My tournaments, New tournament), whose
+    // entries are about the caller rather than about a row - so an act on *this* tournament
+    // is a `main` question, and the nav's absence of `Setup` is asserted where the workspace
+    // nav lives.
     const main = page.getByRole("main");
     await expect(main.getByRole("button", { name: /^delete$/i })).toHaveCount(0);
     await expect(main.getByRole("link", { name: /^setup$/i })).toHaveCount(0);

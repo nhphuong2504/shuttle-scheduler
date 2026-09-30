@@ -125,12 +125,15 @@ export const keys = {
 /**
  * The caller's working tournament, as `current_tournament_id()` resolves it.
  *
- * Read for redirects rather than for rendering. Since S3 the route's `$tournamentId`
- * decides what a page shows; the pointer only decides where a *flat* address, or `/`,
- * sends a caller who asked for a page without naming a tournament. Routing has no hook
- * to hang a query on, so this is exposed as a plain query for `beforeLoad` to
- * `ensureQueryData`, and the key lives here so nothing invents a second cache entry for
- * the same answer.
+ * Read for redirects rather than for rendering - since S3 the route's `$tournamentId`
+ * decides what a page shows - and for the two surfaces that are *about* the caller rather
+ * than about a page: Home's Continue card and, from S7, the switcher. What it no longer
+ * decides is where `/` goes, because S6 made that a page of its own.
+ *
+ * The readers are components rather than route loaders, deliberately: the pointer is a
+ * session fact, and a `beforeLoad` also runs during server rendering, where the request is
+ * anonymous and `current_tournament_id()` would answer with the public desk default. See
+ * `components/workspace-redirect.tsx` for that argument in full.
  *
  * Deliberately not cached in React state and deliberately short-lived at the call site:
  * a stale pointer would send a caller to the tournament they just switched away from.
