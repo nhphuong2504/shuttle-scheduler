@@ -205,7 +205,7 @@ function PlacementPage() {
           <Panel>
             <EmptyState
               title="No active events"
-              hint="Activate a tournament and enable its events before running the placement stage."
+              hint="Add an event in tournament setup before running the placement stage."
             />
           </Panel>
         ) : null}

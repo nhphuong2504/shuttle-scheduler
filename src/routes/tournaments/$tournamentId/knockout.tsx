@@ -110,7 +110,7 @@ function KnockoutPage() {
         <Panel>
           <EmptyState
             title="No active events"
-            hint="Activate a tournament and enable its events before the brackets can be drawn."
+            hint="Add an event in tournament setup before the brackets can be drawn."
           />
         </Panel>
       ) : (
