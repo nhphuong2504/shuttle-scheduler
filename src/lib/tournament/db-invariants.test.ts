@@ -567,7 +567,10 @@ describe("identity canon migration", () => {
     const grant = executable.match(/grant update \(([\s\S]*?)\) on public\.tournaments/);
     expect(grant, "the migration must list the editable columns explicitly").toBeTruthy();
     const columns = [...(grant?.[1] ?? "").matchAll(/([a-z_]+)/g)].map((m) => m[1] as string);
+    // Both withheld columns: ownership is the FK's business, and `is_active` was the global
+    // presentation pointer - a client write to either is the failure this asserts away.
     expect(columns).not.toContain("owner_profile_id");
+    expect(columns).not.toContain("is_active");
     expect(columns).toContain("name");
     expect(columns).toContain("registration_opens_at");
     expect(executable).toMatch(
