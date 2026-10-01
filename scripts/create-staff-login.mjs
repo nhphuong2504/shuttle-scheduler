@@ -18,6 +18,12 @@
 //   - `current_system_role()` matches on `user_id = auth.uid()` OR the JWT email, so it
 //     resolves even before the trigger has run.
 //
+// Phase 2 keyed every *domain* relationship on the profile rather than the identity
+// (`tournament_editors.profile_id`, `tournament_registrations.profile_id`), so recreating an
+// identity no longer loses an editor grant or a registration request even before this script
+// re-links it. Nothing here needed to change for that: this script only creates the login
+// that proves the platform role, and the two axes stay separate.
+//
 // `profiles.system_role` is the platform axis only: `admin` or `user`. It is deliberately not
 // per-tournament access, which is a row in `tournament_editors` or ownership of a tournament,
 // and therefore not something this script can seed.

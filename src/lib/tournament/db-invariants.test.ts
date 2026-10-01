@@ -1707,3 +1707,78 @@ describe("retire is_active migration", () => {
     expect(executable).not.toMatch(/raise warning/i);
   });
 });
+
+/**
+ * Naming the walk-in arm.
+ *
+ * Phase 1's `has_any_tournament_edit()` described the wrong thing: it authorises adding an
+ * unlinked person to the *global* roster, not an edit of any tournament, and a reader looking
+ * for a per-tournament capability already has `can_edit_tournament(uuid)`. Phase 2 narrowed
+ * the read side of the `players` surface with `can_manage_player(uuid)`; this migration
+ * finishes the pair on the create side.
+ *
+ * It is a rename and nothing else, which is what makes the contract small and worth pinning:
+ * the three arms are unchanged, the policy is re-pointed before the old function is dropped,
+ * and the old name survives in neither the catalogue nor any function body.
+ */
+describe("walk-in predicate migration", () => {
+  const FILE = "20260929030000_walk_in_player_predicate.sql";
+  const sql = readFileSync(join(__dirname, "../../../supabase/migrations", FILE), "utf8");
+  const executable = sql.replace(/--.*$/gm, "");
+
+  it("keeps the authorization the old name carried, under a name that says it", () => {
+    const start = executable.search(
+      /create (or replace )?function public\.can_add_walk_in_player\(\)/i,
+    );
+    expect(start, "can_add_walk_in_player() is not defined").toBeGreaterThan(-1);
+    const body = executable.slice(start, executable.indexOf("$$;", start));
+    expect(body).toMatch(/is_platform_admin\(\)/);
+    expect(body).toMatch(
+      /from public\.tournaments t\s+where t\.owner_profile_id = public\.current_profile_id\(\)/,
+    );
+    expect(body).toMatch(
+      /from public\.tournament_editors e\s+where e\.profile_id = public\.current_profile_id\(\)/,
+    );
+    // Every arm resolves the caller through the one predicate, never by comparing a profile
+    // column to the auth uid - which type-checks and silently matches nothing.
+    expect(body).not.toMatch(/profile_id\s*=\s*auth\.uid\(\)/);
+  });
+
+  it("re-points the policy before it drops the old function", () => {
+    // A policy is a dependent object: dropping first makes the migration fail, and skipping
+    // the alter leaves the dropped name referenced, so the order *is* the change.
+    const alter = executable.indexOf('alter policy "players insert" on public.players');
+    const drop = executable.indexOf("drop function public.has_any_tournament_edit();");
+    expect(alter, "the policy is not re-pointed").toBeGreaterThan(-1);
+    expect(drop, "the old predicate is not dropped").toBeGreaterThan(alter);
+    expect(executable.slice(alter, drop)).toMatch(/can_add_walk_in_player\(\)/);
+  });
+
+  it("leaves the policy's self-service arm untouched", () => {
+    // The other arm grants nothing - the row it admits is unlinked - and a rename that
+    // quietly dropped it would close self-insertion for a person adding themselves.
+    const alter = executable.slice(executable.indexOf('alter policy "players insert"'));
+    expect(alter).toMatch(/profile_id is null/);
+    expect(alter).toMatch(
+      /public\.normalize_email\(email\) = public\.normalize_email\(auth\.jwt\(\) ->> 'email'\)/,
+    );
+  });
+
+  it("closes the implicit PUBLIC grant and opens it to authenticated alone", () => {
+    expect(executable).toMatch(
+      /revoke all on function public\.can_add_walk_in_player\(\) from anon, public/,
+    );
+    expect(executable).toMatch(
+      /grant execute on function public\.can_add_walk_in_player\(\) to authenticated/,
+    );
+    expect(executable).not.toMatch(
+      /grant execute on function public\.can_add_walk_in_player\(\) to anon/,
+    );
+  });
+
+  it("verifies the rename against the catalogue before it commits", () => {
+    expect(sql).toMatch(/do \$verify\$/);
+    expect(sql).toMatch(/raise exception 'walk-in predicate:/);
+    expect(executable).not.toMatch(/raise warning/i);
+  });
+});

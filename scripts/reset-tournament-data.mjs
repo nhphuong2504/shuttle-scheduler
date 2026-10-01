@@ -1,9 +1,10 @@
 /**
  * Wipe the desk back to a blank slate so a tournament can be created from scratch.
  *
- * Removes every result (pool + knockout), every entry, every player, and the
- * tournament itself with its days, courts and categories. `profiles` is kept so
- * nobody loses their login or its platform role. Safe to re-run.
+ * Removes every result (placement, tier draw, pool and knockout), every entry, every
+ * registration request, every player, and the tournament itself with its days, courts and
+ * categories. `profiles` is kept so nobody loses their login or its platform role. Safe to
+ * re-run.
  *
  * Usage (pick one auth method):
  *   SUPABASE_SERVICE_ROLE_KEY=sb_secret_... node scripts/reset-tournament-data.mjs --yes
@@ -13,7 +14,7 @@
  * Flags:
  *   --yes                skip the confirmation prompt
  *   --keep-tournament    keep the tournament, its days, courts and categories,
- *                        and only clear results / entries / players
+ *                        and only clear results / entries / requests / players
  *
  * The equivalent SQL is in scripts/reset-tournament-data.sql for the Supabase
  * SQL editor (which needs no credentials at all).
@@ -53,9 +54,18 @@ const keepTournament = args.has("--keep-tournament");
  * Leaf-first. Every foreign key in this schema is ON DELETE CASCADE or
  * SET NULL, so this order is not strictly required — but doing it explicitly
  * keeps the run reportable and makes a failure easy to reason about.
+ *
+ * The placement and tier tables are listed even though deleting `teams` would
+ * cascade the first four: `tier_draws` hangs off `tournaments` and `categories`
+ * rather than off a team, so in `--keep-tournament` mode it would otherwise survive
+ * as a bracket with no entrants in it.
  */
 const RESULT_TABLES = [
   "desk_activity",
+  "tier_draw_matches",
+  "tier_draws",
+  "placement_matches",
+  "placement_entrants",
   "draw_matches",
   "draws",
   "pool_matches",
@@ -63,7 +73,19 @@ const RESULT_TABLES = [
   "pools",
 ];
 
-const ENTRY_TABLES = ["teams", "players"];
+/**
+ * People and what they asked for. `tournament_registration_entries` carries the
+ * categories and named partners of a request, so it goes before the request itself.
+ *
+ * Deleting a `players` row never touches a login: `players.profile_id` is a link to
+ * `profiles` with ON DELETE SET NULL, in that direction only.
+ */
+const ENTRY_TABLES = [
+  "tournament_registration_entries",
+  "tournament_registrations",
+  "teams",
+  "players",
+];
 
 /** Only cleared when the whole tournament is being removed. */
 const STRUCTURE_TABLES = ["categories", "courts", "tournament_days", "tournaments"];

@@ -26,6 +26,15 @@
 -- Expect the extension and publication sections to differ on a first run; those are
 -- managed outside migrations and are the point of the check. Anything else differing is a
 -- real finding. See `supabase/migrations/README.md`.
+--
+-- Everything below is generated from the catalogue, so a new table
+-- (`tournament_registration_entries`) or a new column (`players.profile_id`) needs no edit
+-- here. The one exception is *column-level* grants: `pg_class.relacl` holds only the
+-- table-wide privileges, so a column grant is invisible to the table ACL and is dumped in a
+-- section of its own. That matters here because two of the schema's most important
+-- privileges are exactly that shape - `players` withholds `profile_id`, and `tournaments`
+-- withholds `status`, `owner_profile_id` and the derived counters while granting the
+-- editable columns by name.
 
 WITH lines AS (
   -- Schemas -----------------------------------------------------------------
@@ -183,6 +192,29 @@ WITH lines AS (
   CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, acldefault('r', c.relowner))) g
   WHERE n.nspname = 'public'
     AND c.relkind IN ('r', 'v', 'S')
+
+  -- Column grants ------------------------------------------------------------
+  -- The table ACL above cannot see a column-level grant, and this schema depends on
+  -- several: `players` withholds `profile_id`, `id` and `created_at` while granting the
+  -- four columns a person types, and `tournaments` withholds `status`, `owner_profile_id`,
+  -- `is_active` (before Phase 2 dropped it) and the derived counters. A replay that
+  -- re-issued a table-wide GRANT - the documented failure mode for the identity link -
+  -- leaves every table ACL identical and changes only these rows.
+  UNION ALL
+  SELECT 'grant_column',
+         n.nspname || '.' || c.relname || '.' || a.attname || ' -> '
+           || (CASE WHEN g.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(g.grantee) END),
+         g.privilege_type
+           || CASE WHEN g.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END
+  FROM pg_attribute a
+  JOIN pg_class c ON c.oid = a.attrelid
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  CROSS JOIN LATERAL aclexplode(a.attacl) g
+  WHERE n.nspname = 'public'
+    AND c.relkind IN ('r', 'v')
+    AND a.attnum > 0
+    AND NOT a.attisdropped
+    AND a.attacl IS NOT NULL
 
   -- Function grants ----------------------------------------------------------
   -- The REVOKEs on the dropped helpers (`current_staff_role`, `has_staff_role`,

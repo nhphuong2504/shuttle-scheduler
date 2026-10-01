@@ -32,7 +32,7 @@ let admin: TestIdentity;
 
 beforeAll(async () => {
   // A platform admin, because the warm-up probe writes `players` and the second test writes a
-  // tournament day - `has_any_tournament_edit()` admits an admin, and neither table is in the
+  // tournament day - `can_add_walk_in_player()` admits an admin, and neither table is in the
   // harness so there is no owner or editor to be instead.
   admin = await createIdentity("admin", "rt");
   await waitForStreaming();

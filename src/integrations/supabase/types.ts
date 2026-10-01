@@ -1517,6 +1517,7 @@ export type Database = {
         Args: { p_tournament_id: string }
         Returns: boolean
       }
+      can_add_walk_in_player: { Args: never; Returns: boolean }
       can_manage_player: { Args: { p_player_id: string }; Returns: boolean }
       can_manage_tournament_access: {
         Args: { p_tournament_id: string }
@@ -1546,7 +1547,6 @@ export type Database = {
         Args: { p_tournament_id: string }
         Returns: undefined
       }
-      has_any_tournament_edit: { Args: never; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
       is_tournament_editor: {
         Args: { p_tournament_id: string }

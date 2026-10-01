@@ -1,13 +1,16 @@
 -- Wipe the desk back to a blank slate so a tournament can be created from scratch.
 --
--- Removes: every result (pool + knockout), every entry, every player, and the
---          tournament itself with its days, courts and categories.
+-- Removes: every result (placement, tier draw, pool and knockout), every entry, every
+--          registration request, every player, and the tournament itself with its days,
+--          courts and categories.
 -- Keeps:   profiles (so nobody loses their login or its platform role).
 --
 -- `profiles.current_tournament_id` is cleared for free: it is a foreign key to
--- `tournaments` with ON DELETE SET NULL, so the pointer follows the rows out rather
--- than dangling. Editors are rows on `tournament_editors` keyed by tournament, so they
--- cascade with the tournament and are not deleted explicitly either.
+-- `tournaments` with ON DELETE SET NULL, so the pointer follows the rows out rather than
+-- dangling. Editors are rows on `tournament_editors` keyed by tournament, so they
+-- cascade with the tournament and are not deleted explicitly either. `players.profile_id`
+-- points the other way and is also ON DELETE SET NULL: deleting the roster never touches a
+-- login.
 --
 -- Safe to re-run: deleting already-deleted rows is a no-op.
 --
@@ -19,6 +22,14 @@ BEGIN;
 -- Results -------------------------------------------------------------------
 DELETE FROM public.desk_activity;
 
+-- Both stages. The tier tables hang off `tournaments` and `categories` rather than off a
+-- team, so they have to go explicitly; the placement tables would cascade from `teams`
+-- below, and are listed anyway so the order is legible here rather than implied.
+DELETE FROM public.tier_draw_matches;
+DELETE FROM public.tier_draws;
+DELETE FROM public.placement_matches;
+DELETE FROM public.placement_entrants;
+
 DELETE FROM public.draw_matches;
 DELETE FROM public.draws;
 
@@ -26,7 +37,11 @@ DELETE FROM public.pool_matches;
 DELETE FROM public.pool_entries;
 DELETE FROM public.pools;
 
--- Entries and roster --------------------------------------------------------
+-- Requests, entries and roster ----------------------------------------------
+-- The entries carry the categories and named partners of a request, so they go first.
+DELETE FROM public.tournament_registration_entries;
+DELETE FROM public.tournament_registrations;
+
 DELETE FROM public.teams;
 DELETE FROM public.players;
 
@@ -54,8 +69,13 @@ UNION ALL SELECT 'tournament_day_courts', count(*) FROM public.tournament_day_co
 UNION ALL SELECT 'tournament_day_breaks', count(*) FROM public.tournament_day_breaks
 UNION ALL SELECT 'tournament_editors',    count(*) FROM public.tournament_editors
 UNION ALL SELECT 'tournament_registrations', count(*) FROM public.tournament_registrations
+UNION ALL SELECT 'tournament_registration_entries', count(*) FROM public.tournament_registration_entries
 UNION ALL SELECT 'players',         count(*) FROM public.players
 UNION ALL SELECT 'teams',           count(*) FROM public.teams
+UNION ALL SELECT 'placement_entrants', count(*) FROM public.placement_entrants
+UNION ALL SELECT 'placement_matches',  count(*) FROM public.placement_matches
+UNION ALL SELECT 'tier_draws',        count(*) FROM public.tier_draws
+UNION ALL SELECT 'tier_draw_matches', count(*) FROM public.tier_draw_matches
 UNION ALL SELECT 'pools',           count(*) FROM public.pools
 UNION ALL SELECT 'pool_entries',    count(*) FROM public.pool_entries
 UNION ALL SELECT 'pool_matches',    count(*) FROM public.pool_matches
