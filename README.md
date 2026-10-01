@@ -4,10 +4,14 @@ Tournament operations console for badminton events. Built to be run live at a de
 during a tournament, on imperfect wifi, by a small control team.
 
 It handles registration, seeding, match generation, live scoring, court scheduling
-and knockout draws, and it is operated by two different people during the day:
+and knockout draws. Two kinds of operator run it during the day, and a third
+audience — participants — signs in to enter:
 
 - The **organiser** plans the tournament. The Schedule tab is their view.
 - The **moderator** runs a single court in real time. The Desk is their view.
+- A **participant** registers from a tournament's public page, and may withdraw
+  while the request is still pending. Approval is what creates their entry, and it
+  grants no operating rights.
 
 ## Stack
 
@@ -41,6 +45,8 @@ fails without them.
 | `npm run build` | Production build |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run test` | Vitest — unit and component tests |
+| `npm run test:integration` | Vitest against a **real** backend: auth, RLS, RPC authorization per role, realtime, the lifecycle. Targets the local stack — see [`AGENTS.md`](AGENTS.md) |
+| `npm run ci:shard-plan` | Reports the browser suite's CI shard split and its wall time; re-run it when a spec file is added or renamed |
 | `npm run test:e2e` | Playwright — rendered app, hermetic (no network to Supabase) |
 | `npm run test:e2e:final` | The phase-close gate: fails on any skip, then asserts zero skips |
 | `npm run test:e2e:record-auth` | Optional. Records a real staff session for manual checks against a live backend |
@@ -81,6 +87,7 @@ review the diff.
 | [`AGENTS.md`](AGENTS.md) | Working rules: design system, security, workflow, gates, review tiering |
 | [`docs/design-system.md`](docs/design-system.md) | Tokens, typography, states, components, do/don't |
 | [`docs/authorization.md`](docs/authorization.md) | Who may do what: platform role vs per-tournament access, the lifecycle guards, registration, and the column privileges |
+| [`docs/information-architecture.md`](docs/information-architecture.md) | The URL scheme, the two shells, and the flows between them |
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
 | [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md) | The manual checks no automated gate covers |
@@ -101,8 +108,16 @@ Many tournaments may be `upcoming` or `in_progress` at once; there is no global 
 tournament. Each signed-in user has their own working tournament
 (`profiles.current_tournament_id`, written by `set_current_tournament`), and a caller with
 no pointer browses `/explore`. The Phase 1 `is_active` pointer and its
-`set_active_tournament` verb were retired. The `players` table is global rather than
-tournament-scoped. See [`docs/authorization.md`](docs/authorization.md).
+`set_active_tournament` verb were retired.
+
+The `players` table is global rather than tournament-scoped, with `players.profile_id` linking
+a row to the person it belongs to — `NULL` for a walk-in and for a partner supplied by name.
+Registration requests and the categories they ask for live in `tournament_registrations` and
+`tournament_registration_entries`; approval is the one path that links a player, and the only
+path that creates an entry from a request. The domain relationships
+(`owner_profile_id`, `tournament_editors.profile_id`, `tournament_registrations.profile_id`)
+key on the profile rather than the auth identity, so recreating a login loses nothing. See
+[`docs/authorization.md`](docs/authorization.md).
 
 ### Operator scripts
 
@@ -116,7 +131,7 @@ Each refuses to act on an unknown target rather than defaulting to one.
 | `scripts/compare-api-surface.mjs` | Diffs the tables, columns and RPC signatures of two backends using their keys. A narrower check than `parity-dump.sql`: function bodies and policies are not visible over HTTP. |
 | `scripts/run-sql.mjs` | Runs one read-only `.sql` file against a project, either over a Postgres connection string or, with `--project-ref`, through the Management API. Refuses anything that is not a single read-only statement. |
 | `scripts/verify-build-target.mjs` | Asserts a build was compiled against the backend currently in `.env`, that a production build targets the production project, and that the generated Worker is `tournova-ops`. See "Deploying the Worker" below. |
-| `scripts/reset-tournament-data.mjs` | Clears tournament data while keeping `profiles`. Requires `SUPABASE_URL` and a key; it has no hardcoded project. |
+| `scripts/reset-tournament-data.mjs` | Clears tournament data while keeping `profiles`: results, entries, registration requests and the player roster. Requires `SUPABASE_URL` and a key; it has no hardcoded project. |
 | `scripts/restore-backup.mjs` | Restores a `pg_dump` backup into the local stack, or into a named project with `--project-ref`. Refuses the production ref without `--allow-production`. See "Backups" below. |
 
 The database-side counterparts — `parity-dump.sql` and `migration-drift-check.sql` — are

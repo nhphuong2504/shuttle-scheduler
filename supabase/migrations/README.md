@@ -2167,3 +2167,307 @@ stack and prove it rather than assuming it:
 npm run integration:target -- local
 npm run test:integration   # includes profile-identity.test.ts, which deletes and recreates an identity
 ```
+
+## Applying `20260929001000_tournament_summary.sql`
+
+Phase 2's second new file, and a fourth rather than one of Section 4's three. S5 ships
+Explore, which needs a tournament read that did not exist, and both later files are *after* it
+in concern — so it is timestamped between S1's identity canon and S8/S9's registration work,
+which keeps the fresh-database order the same as the incremental one (S5 → S8/S9 → S12) instead
+of inverting it. It changes no table.
+
+### What it adds
+
+Two reads, both `SECURITY DEFINER` and `STABLE`:
+
+- **`tournament_registration_state(p_tournament_id)`** — the registration window as one word:
+  `not_offered` · `not_ready` · `opens_soon` · `open` · `closed` · `started` · `completed`. It
+  mirrors `assert_registration_not_shut` and `submit_tournament_registration` in the same order,
+  so the Register button and the RPC cannot disagree about whether a request would be accepted.
+  It is a read: the RPC still re-checks everything.
+- **`tournament_summary(p_query, p_status, p_ids, p_limit, p_offset)`** — one row per
+  tournament in the shape a card draws: id, name, venue, status, the derived start and end, the
+  registration state, the entry and event counts, and the caller's `access_level`
+  (`admin`/`owner`/`editor`/`viewer`). It replaces the client-side full-table read and is what
+  Explore, My Tournaments and the create flow's list all render, so they cannot drift apart.
+  `p_status` is validated rather than ignored, `p_ids` makes My Tournaments one read, and the
+  counts read `teams` and `categories` — never a placement projection, which is cleared by a
+  stage reset.
+
+It deliberately exposes no readiness detail and no editor email: Explore is public, so every
+column is a fact the anonymous desk view could already see. `tournament_summary` is therefore
+granted to `anon` as well as `authenticated`; `tournament_registration_state` is granted to
+both for the same reason.
+
+### Verify after applying
+
+```sql
+-- Both exist, with the right argument lists.
+select to_regprocedure('public.tournament_registration_state(uuid)');
+select to_regprocedure('public.tournament_summary(text, text, uuid[], int, int)');
+
+-- Every tournament answers with a state word from the documented set.
+select id, name, public.tournament_registration_state(id) as state from public.tournaments;
+
+-- The card read, for everyone: no session, therefore viewer or admin by predicate.
+select id, name, status, registration_state, entry_count, category_count, access_level
+from public.tournament_summary(null, null, null, 25, 0);
+
+-- A typo in the status filter is refused rather than silently answered as "all".
+select * from public.tournament_summary(null, 'draft', null, 5, 0);  -- expect an exception
+
+-- The public grant, and the closed default.
+select has_function_privilege('anon', 'public.tournament_summary(text, text, uuid[], int, int)', 'execute');
+```
+
+### Rolling back
+
+```sql
+drop function if exists public.tournament_summary(text, text, uuid[], int, int);
+drop function if exists public.tournament_registration_state(uuid);
+```
+
+Nothing else reads either, so the drop is complete. The pages that call them would fail loudly
+rather than silently render an empty list.
+
+## Applying `20260929010000_retire_is_active.sql`
+
+Removes Phase 1's global navigation state. `is_active` was a boolean plus a partial unique
+index that allowed exactly one row to hold it, deciding which event an unpointed visitor landed
+on. Phase 2 replaced the meaning with the per-user pointer (`profiles.current_tournament_id`,
+written by `set_current_tournament`) and with `/explore` for a caller who has not chosen — so by
+the time this file lands the column has no reader left, and an unused navigation default can
+only drift from what the app does.
+
+### What it does, in order
+
+1. **Re-scopes `current_tournament_id()` to the pointer alone**, dropping the fallback to the
+   globally live tournament. An anonymous caller — which is also the server-rendering request —
+   now gets `NULL` deliberately, so a server-side call can never redirect a bookmark to
+   somebody's live desk.
+2. **Drops `set_active_tournament(uuid)`**, the only writer left. Its predecessor
+   `activate_tournament` was already dropped by the role redesign, which moved its
+   Draft → In Progress meaning to `start_tournament`.
+3. **Drops `tournaments_single_active`**, explicitly rather than leaving it to the column drop,
+   so the intent is legible.
+4. **Drops the column**, which also drops `tournaments_active_status_check` — the CHECK that
+   tied the boolean to `status = 'in_progress'`, which the three-state machine had already
+   replaced. Deliberately **no `CASCADE`**, so if anything unexpected still depends on the
+   column this fails loudly instead of quietly taking a dependent object with it.
+
+No grant change is needed: Phase 1 already withheld `is_active` from the `authenticated` UPDATE
+list, so dropping the column withdraws nothing a client held. The `tournaments` column grant
+belongs to the identity migration and is not restated here.
+
+### Verify after applying
+
+```sql
+-- The column, its index and the global verb are gone. Expect 0, null, null.
+select count(*) from information_schema.columns
+where table_schema = 'public' and table_name = 'tournaments' and column_name = 'is_active';
+select to_regclass('public.tournaments_single_active');
+select to_regprocedure('public.set_active_tournament(uuid)');
+
+-- The reader survived and no longer names the column. Expect one row, false.
+select proname, prosrc ilike '%is_active%' as still_reads_it
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'current_tournament_id';
+
+-- And the pointer still works for a signed-in caller.
+select public.current_tournament_id();
+```
+
+The migration runs the same questions in its own `do $verify$` block before it commits.
+
+### Rolling back
+
+The column can be re-added, but not its meaning: there is no writer to restore (the RPC is
+gone), and `current_tournament_id()` deliberately no longer falls back. Reinstating a global
+default is a product decision rather than a rollback — do it as its own migration and its own
+review, not as a restore of this one.
+
+### After it is applied
+
+Nothing to do. Every surface that used to lean on the fallback already handles `NULL` — Home
+renders its empty state, and a flat path sends the caller to `/explore`.
+
+## Applying `20260929020000_registration_entries_and_identity.sql`
+
+Phase 2's steps 8 and 9 in one file: the registration schema and policies, then the RPCs that
+use them. They are one transaction against one concern — a request that carries categories and
+named partners, and the bridge that turns an approved one into `players` and `teams` rows.
+
+Two things the file establishes, and both are about *whose* data something is:
+
+- **`players.profile_id` gives a player row an owner, and exactly one code path may set it** —
+  the approval. Before this, a player row had no identity column at all, so "the person this row
+  belongs to" was answered by matching an email address. Email is a string a person types; it is
+  neither unique nor normalised on this table, so a participant could be handed somebody else's
+  contact data by typing their address into a form.
+- **`can_manage_player` derives "may the caller read this person's contact data" from the
+  entry**, never from a projection of it. The projection that exists — `placement_entrants` — is
+  generated and cleared by the placement stage, so access read from it would come and go, and
+  would be refused for exactly the entrants who have not been placed.
+
+### What it adds, in the file's own order
+
+1. `players.profile_id uuid references public.profiles(id) on delete set null`, a partial unique
+   index `where profile_id is not null` (so any number of walk-ins and partners may be
+   unlinked), and a column `INSERT`/`UPDATE` grant that withholds `profile_id`, `id` and
+   `created_at` while re-granting `name`, `email`, `phone`, `gender`.
+2. **`players_profile_link_guard`** — a trigger that decides by *state transition, not by actor*:
+   a null insert is allowed, a link is set only under the transaction-local flag
+   `tournova.allow_profile_link`, an unchanged update is allowed, a de-link is allowed
+   unconditionally (that is what `ON DELETE SET NULL` arrives as), and a→b is refused even under
+   the flag. The column grant and the trigger are deliberately redundant.
+3. **`can_manage_player(p_player_id)`** — the player, an owner or editor of a tournament the
+   player has entered, or a platform admin. Membership reads `teams`, never `placement_entrants`.
+4. **The four `players` policies** replacing Phase 1's single `FOR ALL`: read (own or
+   `can_manage_player`), insert (self-service by the caller's own JWT email with `profile_id`
+   null, or a walk-in), update (own or platform admin), delete (platform admin only).
+5. **`tournament_registration_entries`** — one row per category a request asks for, carrying the
+   partner as a **name and an email, never a `players.id`**, uniquely keyed on
+   `(registration_id, category_id)` so a resubmit replaces a set. Added to the realtime
+   publication, with a policy admitting only the requester (reviewers read through the definer
+   RPC).
+6. **The partial unique key** on `tournament_registrations`: `(tournament_id, profile_id) where
+   status <> 'rejected'`. Phase 1's unconditional key made a rejection permanent, because the
+   row stayed and the key kept it.
+7. **Five RPCs**: `submit_tournament_registration(uuid, jsonb)`,
+   `withdraw_tournament_registration(uuid)`, `review_tournament_registrations(uuid)`,
+   `my_tournament_registration(uuid)` and `decide_tournament_registration(uuid, text, text)`.
+   Submission and the review read were dropped and re-created because their signatures changed,
+   so their grants are re-issued.
+
+`submit_tournament_registration` gates on a resolved profile, the lifecycle, the configured
+window, readiness, at least one entry, every event this tournament's and active, the per-player
+event cap, and a partner who is not the caller. It is idempotent: a retry returns the same
+request and replaces its entries. `decide_tournament_registration` is editor-gated and
+terminal, and runs the whole bridge in one transaction — the requester's row found by
+`profile_id` and reused or created, each partner matched by normalised email among *unlinked*
+rows only or created unlinked, the caps turned into a sentence, then the `teams` rows.
+
+### Verify after applying
+
+```sql
+-- The link, the index and the guard.
+select column_name, is_nullable from information_schema.columns
+where table_schema = 'public' and table_name = 'players' and column_name = 'profile_id';
+select indexdef from pg_indexes
+where schemaname = 'public' and tablename = 'players' and indexdef ilike '%profile_id%';
+select tgname from pg_trigger where tgrelid = 'public.players'::regclass and not tgisinternal;
+
+-- The link is unreachable by a client: expect no rows for anon or authenticated.
+select grantee, privilege_type from information_schema.column_privileges
+where table_schema = 'public' and table_name = 'players' and column_name = 'profile_id';
+
+-- The entries table, its key and its publication membership.
+select conname, pg_get_constraintdef(oid) from pg_constraint
+where conrelid = 'public.tournament_registration_entries'::regclass;
+select tablename from pg_publication_tables
+where schemaname = 'public' and tablename = 'tournament_registration_entries';
+
+-- The five RPCs, with their argument lists.
+select p.proname, pg_get_function_identity_arguments(p.oid)
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname in (
+  'submit_tournament_registration', 'withdraw_tournament_registration',
+  'review_tournament_registrations', 'my_tournament_registration',
+  'decide_tournament_registration')
+order by 1;
+
+-- The plan itself is one live request per person, and a rejection leaves the index.
+select conname, pg_get_constraintdef(oid) from pg_constraint
+where conrelid = 'public.tournament_registrations'::regclass
+  and conname like '%unique%';
+```
+
+Because this file changes RLS policies and RPC guards — the surfaces the hermetic suite
+structurally cannot see — rehearse it in the local stack and prove the behaviour rather than the
+shape:
+
+```sh
+npm run integration:target -- local
+npm run test:integration   # authorization.test.ts, profile-identity.test.ts, realtime.test.ts
+```
+
+### Rolling back
+
+There is no rewind. `players.profile_id` is additive and a link is a real fact once written;
+the RPCs can be dropped, but the approval they perform is the only way an entry is created from
+a request. A restore is the recovery path — see [`docs/recovery-runbook.md`](../../docs/recovery-runbook.md).
+
+### After it is applied
+
+`scripts/create-staff-login.mjs` needs no change and still matches the identity model: it
+creates the `auth.users` identity for a seeded `profiles` row and verifies the platform role,
+and the domain relationships now key on the profile, so recreating an identity no longer loses
+an editor grant or a request. Nothing links a player on approval but the approval itself.
+
+## Applying `20260929030000_walk_in_player_predicate.sql`
+
+Phase 1 created one predicate whose name described the wrong thing. It answers "may this caller
+add an unlinked person to the *global* player roster", and it was called
+`has_any_tournament_edit()` — which reads as a capability over tournaments, and invites a writer
+to reach for it where the per-tournament `can_edit_tournament(uuid)` is the right answer.
+
+The read side of the `players` surface was narrowed in step 8 with `can_manage_player(uuid)`.
+This file finishes the pair by giving the create side a name that says what it authorises:
+**`can_add_walk_in_player()`**. It cannot be narrowed further — `players` has no tournament
+scope, and the entry that would scope it does not exist until the player has been created — so
+the change is a rename, and the body, the three arms and the admin override are identical.
+
+### What it does, in order
+
+1. Creates `can_add_walk_in_player()` (a platform admin, or the owner or an editor of any
+   tournament), closes its implicit `PUBLIC` grant and grants `EXECUTE` to `authenticated`
+   alone.
+2. **Re-points `players insert` with `ALTER POLICY`**, which rewrites the stored expression and
+   so releases the dependency on the old function. The self-service arm is reproduced exactly:
+   `profile_id is null` **and** the caller's own normalised JWT email.
+3. Drops `has_any_tournament_edit()`. Order matters — a policy is a dependent object, so
+   dropping first fails.
+4. Its own `do $verify$` block checks the new name exists, the old one does not, no surviving
+   function body names it, the policy names the new one, `authenticated` can execute it, and
+   `anon` cannot.
+
+### Verify after applying
+
+```sql
+select to_regprocedure('public.can_add_walk_in_player()');            -- one row
+select to_regprocedure('public.has_any_tournament_edit()');           -- null
+
+select policyname, with_check from pg_policies
+where schemaname = 'public' and tablename = 'players' and policyname = 'players insert';
+
+-- No function body still names the old predicate. Expect 0.
+select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.prosrc ilike '%has_any_tournament_edit%';
+
+select has_function_privilege('authenticated', 'public.can_add_walk_in_player()', 'execute');  -- t
+select has_function_privilege('anon', 'public.can_add_walk_in_player()', 'execute');           -- f
+```
+
+### Rolling back
+
+Recreate the old name by copying the body and reverse the two catalogue steps:
+
+```sql
+create or replace function public.has_any_tournament_edit() returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_platform_admin()
+      or exists (select 1 from public.tournaments t where t.owner_profile_id = public.current_profile_id())
+      or exists (select 1 from public.tournament_editors e where e.profile_id = public.current_profile_id());
+$$;
+alter policy "players insert" on public.players
+with check (
+  profile_id is null and (
+    public.normalize_email(email) = public.normalize_email(auth.jwt() ->> 'email')
+    or public.has_any_tournament_edit()
+  )
+);
+drop function public.can_add_walk_in_player();
+```
+
+A rollback through the repository's own history is the restore path, as usual — see
+[`docs/recovery-runbook.md`](../../docs/recovery-runbook.md).

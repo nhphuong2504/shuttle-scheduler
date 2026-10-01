@@ -10,13 +10,16 @@ TypeScript, Tailwind v4, Supabase (Postgres, RLS, RPCs), deployed on Cloudflare
 Workers. It is operated live at a desk during a tournament, often on imperfect
 wifi, by people who cannot reload a page mid-match.
 
-Two audiences share the app and their needs differ:
+Three audiences share the app and their needs differ:
 
 - **Tournament organiser** — tournament-wide planning. Lives on the Schedule tab.
 - **Moderator** — a single court, a single day, in real time. Lives on the Desk.
+- **Participant** — registers from a tournament's public page, and sees the state of
+  their own request. Never an operator: being approved grants no operating right.
 
-Keep those two apart. A moderator should not be shown tournament-wide forecasts, and
-an organiser should not be shown desk-level operational noise.
+Keep the two operators apart. A moderator should not be shown tournament-wide forecasts,
+and an organiser should not be shown desk-level operational noise. A participant is not an
+operator at all, and no surface should present participation as authority.
 
 ## Before you start
 
@@ -27,7 +30,9 @@ an organiser should not be shown desk-level operational noise.
 3. Read [`docs/authorization.md`](docs/authorization.md) before any change to access
    control: who may edit a tournament, who may manage its editors, or what a platform
    admin may override.
-4. Check the repository state and do not discard existing work.
+4. Read [`docs/information-architecture.md`](docs/information-architecture.md) before adding,
+   moving or redirecting an address.
+5. Check the repository state and do not discard existing work.
 
 ## Design system rules
 
