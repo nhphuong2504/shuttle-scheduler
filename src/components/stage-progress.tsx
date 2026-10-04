@@ -10,6 +10,11 @@
 
 import { EmptyState } from "@/components/app-shell";
 import type { StageProgressRow } from "@/lib/tournament/stage-progress";
+import { cn } from "@/lib/utils";
+
+function remainingLabel(count: number): string {
+  return `${count} match${count === 1 ? "" : "es"} remaining`;
+}
 
 export function StageProgressList({ rows }: { rows: readonly StageProgressRow[] }) {
   if (!rows.length) {
@@ -36,15 +41,28 @@ export function StageProgressList({ rows }: { rows: readonly StageProgressRow[] 
             </span>
           </span>
           <span className="flex items-center gap-3">
-            <span className="font-score text-xs text-muted-foreground">
-              {row.created === 0 ? "no matches yet" : `${row.completed}/${row.created} done`}
-            </span>
-            {row.canAdvance ? (
-              <span className="text-xs font-semibold text-primary">
-                {row.advanceLabel ?? "Ready to advance"}
+            {row.total > 0 ? (
+              <span className="font-score text-xs text-muted-foreground">
+                {row.completed} / {row.total} matches completed
               </span>
-            ) : row.blockedReason ? (
-              <span className="text-xs text-warn-foreground">{row.blockedReason}</span>
+            ) : row.status === "waiting" ? (
+              <span className="font-score text-xs text-muted-foreground">No matches yet</span>
+            ) : null}
+            {row.remaining > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                {remainingLabel(row.remaining)}
+              </span>
+            ) : row.action ? (
+              <span className="text-xs font-semibold text-primary">{row.action.label}</span>
+            ) : row.note ? (
+              <span
+                className={cn(
+                  "text-xs",
+                  row.status === "waiting" ? "text-warn-foreground" : "text-muted-foreground",
+                )}
+              >
+                {row.note}
+              </span>
             ) : null}
           </span>
         </li>

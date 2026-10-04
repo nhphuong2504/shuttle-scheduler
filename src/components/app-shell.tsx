@@ -245,12 +245,12 @@ function BrandMark() {
 /**
  * Who is signed in, and how to stop being signed in.
  *
- * The presence dot is the live ink, not the live chip: it is a 6px solid mark, the same
- * shape the live status pill draws its glyph from, and the chip is a pale wash (L 0.935
- * in light) that would be invisible at this size. The ink is the saturated end of the
- * same hue at both themes, so the dot and a live match read as one colour. Decorative —
- * the email and role beside it carry the meaning — so it stays out of the accessibility
- * tree.
+ * The presence dot is its own token, not the live ink: it is a 6px solid mark, the same
+ * shape the live status pill draws its glyph from, but `--presence-ink` is a separate
+ * value so the mark reads as "someone is signed in" rather than "a match is live", and so
+ * tuning it cannot move the state palette (`--state-live-ink` is read by the court-state
+ * vocabulary and the status pills). Decorative — the email and role beside it carry the
+ * meaning — so it stays out of the accessibility tree.
  *
  * The chip names its own tier (`text-t4`) rather than inheriting: the shell sets no size
  * on the header row, so without it this label renders at the browser's 16px - a step above
@@ -288,7 +288,7 @@ function SessionBlock() {
   return (
     <>
       <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-t4 text-muted-foreground sm:inline-flex">
-        <span aria-hidden className="size-1.5 rounded-full bg-state-live-ink" />
+        <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
         {session?.userEmail}
         {systemRole ? ` · ${systemRole}` : ""}
       </span>

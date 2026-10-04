@@ -1716,7 +1716,7 @@ export function PlacementScheduler() {
           title="Stage progress"
           right={
             <span className="text-t4 text-muted-foreground">
-              completed / created · advance readiness
+              matches completed / total · next step
             </span>
           }
         >

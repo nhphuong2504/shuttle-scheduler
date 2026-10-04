@@ -15,6 +15,7 @@ import { placementStagesForDay, stagesForDay } from "./data";
 import {
   courtsAddedToDays,
   courtsForDay,
+  frozenMatchIdsFor,
   placementMatchLabel,
   placementStageLabel,
   planPlacementSchedule,
@@ -1887,5 +1888,247 @@ describe("projectSlotsOntoMatches", () => {
 
     expect(rows[0]?.scheduled_time).toBe("2026-09-17T10:00:00Z");
     expect(rows[0]?.court_id).toBe("c3");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Near-term freeze
+// ---------------------------------------------------------------------------
+
+/**
+ * A rebuild used to reconsider everything, so a match the desk was about to be called for could be
+ * handed a new time or a new court by a rebuild that had not been asked to change it. The freeze is
+ * the smallest guarantee that stops it: whatever is next on each court stays put.
+ *
+ * `frozenMatchIds` is deliberately not `fixedMatchIds`. A frozen row is still `scheduled` — the desk
+ * has not played it — so the writer must still place it and the preview must still show it. Treating
+ * the two as one set is the trap these tests exist to catch: the payload would drop the row, and
+ * `applyPlacementSchedulePlan` would refuse the whole build.
+ */
+describe("planPlacementSchedule — near-term freeze", () => {
+  /** A committed row: still `scheduled`, but already on a court at a time. */
+  const committed = (
+    id: string,
+    entrantA: string,
+    entrantB: string,
+    courtId: string,
+    time: string,
+  ) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "scheduled",
+      court_id: courtId,
+      // Stored as an instant, the way a row comes back from the database. The diff compares the
+      // current time as a string, so a hand-written local-looking literal would read as a move.
+      scheduled_time: new Date(time).toISOString(),
+    });
+
+  it("pins the next committed match on each court and leaves it in the payload", () => {
+    const result = plan({
+      placementMatches: [
+        committed("late", "e1", "e2", "c2", "2026-09-17T14:00:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    // Frozen for the solver, but not decided history, so the two sets disagree.
+    expect(result.frozenMatchIds).toEqual(["late"]);
+    expect(result.fixedMatchIds).toEqual([]);
+    expect(result.summary.anchorCount).toBe(0);
+
+    // The row is still `scheduled`, so the writer must still name it or the RPC fails the build.
+    expect(result.placementSlotPayload.map((slot) => slot.match_id).sort()).toEqual([
+      "free",
+      "late",
+    ]);
+    expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
+
+    const pinned = result.slots.find((slot) => slot.matchId === "late");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T14:00:00").toISOString());
+    expect(pinned?.courtNumber).toBe(2);
+  });
+
+  it("reports a frozen match in the rebuild preview as unchanged rather than dropping it", () => {
+    const result = plan({
+      placementMatches: [
+        committed("late", "e1", "e2", "c2", "2026-09-17T14:00:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    const change = result.diff.changes.find((entry) => entry.matchId === "late");
+    expect(change?.kind).toBe("unchanged");
+    // Counted as placed, not as an anchor: the preview must not under-count the rebuild.
+    expect(result.diff.placedCount).toBe(result.diff.changes.length);
+    expect(result.diff.changes.map((entry) => entry.matchId).sort()).toEqual(["free", "late"]);
+  });
+
+  it("does not push an overdue but unplayed match further down", () => {
+    // The row's time has already passed and nobody has reported it. Reconsidering it would move it
+    // to the back of the day, which is the behaviour the freeze exists to stop.
+    const overdue = committed("overdue", "e1", "e2", "c1", "2026-09-17T08:00:00");
+    const result = plan({
+      placementMatches: [overdue, placementMatch("free", "round1", "e3", "e4")],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["overdue"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "overdue");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T08:00:00").toISOString());
+  });
+
+  it("freezes only the earliest committed match on a court, not the whole queue", () => {
+    const result = plan({
+      placementMatches: [
+        committed("first", "e1", "e2", "c1", "2026-09-17T10:00:00"),
+        committed("second", "e3", "e4", "c1", "2026-09-17T11:00:00"),
+      ],
+    });
+
+    // One per court, which is the whole guarantee. `second` is still the solver's to move.
+    expect(result.frozenMatchIds).toEqual(["first"]);
+    expect(result.fixedMatchIds).toEqual([]);
+  });
+
+  it("freezes a longer window only when one is asked for", () => {
+    const matches = [
+      committed("first", "e1", "e2", "c1", "2026-09-17T10:00:00"),
+      committed("second", "e3", "e4", "c2", "2026-09-17T10:30:00"),
+    ];
+
+    // Default 0: one match per court.
+    expect(plan({ placementMatches: matches }).frozenMatchIds).toEqual(["first", "second"]);
+
+    // Two rows on one court, 90 minutes apart, with a 2-hour horizon from 09:00: both are inside.
+    const wide = plan({
+      placementMatches: [
+        committed("first", "e1", "e2", "c1", "2026-09-17T10:00:00"),
+        committed("second", "e3", "e4", "c1", "2026-09-17T11:30:00"),
+      ],
+      freezeHorizonMinutes: 180,
+    });
+    expect(wide.frozenMatchIds).toEqual(["first", "second"]);
+  });
+
+  it("leaves a row movable when the day does not play its court", () => {
+    // Pinning it would make it an anchor with no slot of its own, so the payload would drop a
+    // `scheduled` row and `applyPlacementSchedulePlan` would refuse the build. Re-placing it on a
+    // court the day does play is the only answer that keeps the write whole.
+    const result = plan({
+      courts: [court(1)],
+      placementMatches: [
+        committed("elsewhere", "e1", "e2", "c2", "2026-09-17T10:00:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual([]);
+    expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
+  });
+
+  it("leaves a row movable when a reported match has overrun into its window", () => {
+    // Two fixed matches overlapping on one court is a physical impossibility the problem validator
+    // rejects outright, so the pin has to give way rather than the build.
+    const result = plan({
+      placementMatches: [
+        placementMatch("played", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T11:00:00",
+        }),
+        committed("clash", "e3", "e4", "c1", "2026-09-17T10:00:00"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual([]);
+    expect(result.fixedMatchIds).toEqual(["played"]);
+  });
+
+  it("freezes a knockout row too, and keeps it in the knockout payload", () => {
+    const result = plan({
+      placementMatches: [],
+      tierMatches: [
+        tierMatch("k1", 1, 1, "e1", "e2", {
+          status: "scheduled",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T15:00:00",
+        }),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["k1"]);
+    expect(result.knockoutSlotPayload.map((slot) => slot.match_id)).toEqual(["k1"]);
+    expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
+  });
+
+  it("does not move a frozen match to make room for a better finish", () => {
+    // The point of the freeze over an objective term: it is a guarantee, not a preference. A
+    // strongly preferred placement elsewhere cannot buy the pinned slot.
+    const result = plan({
+      placementMatches: [
+        committed("pinned", "e1", "e2", "c1", "2026-09-17T17:00:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    const pinned = result.slots.find((slot) => slot.matchId === "pinned");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T17:00:00").toISOString());
+    expect(pinned?.courtNumber).toBe(1);
+  });
+});
+
+describe("frozenMatchIdsFor", () => {
+  const at = (time: string) => new Date(time).getTime();
+
+  it("picks the earliest row on each court and ignores rows with no court or no time", () => {
+    expect(
+      frozenMatchIdsFor({
+        committed: [
+          { id: "a", courtNumber: 1, start: at("2026-09-17T10:00:00") },
+          { id: "b", courtNumber: 1, start: at("2026-09-17T09:00:00") },
+          { id: "c", courtNumber: 2, start: at("2026-09-17T12:00:00") },
+          { id: "d", courtNumber: null, start: at("2026-09-17T09:00:00") },
+          { id: "e", courtNumber: 3, start: null },
+        ],
+        now: at("2026-09-17T09:00:00"),
+      }),
+    ).toEqual(["b", "c"]);
+  });
+
+  it("breaks a tie on the court by id, so the choice is canonical", () => {
+    expect(
+      frozenMatchIdsFor({
+        committed: [
+          { id: "z", courtNumber: 1, start: at("2026-09-17T10:00:00") },
+          { id: "a", courtNumber: 1, start: at("2026-09-17T10:00:00") },
+        ],
+        now: 0,
+      }),
+    ).toEqual(["a"]);
+  });
+
+  it("extends to a window when one is asked for, and never shrinks below one per court", () => {
+    const committed = [
+      { id: "next", courtNumber: 1, start: at("2026-09-17T10:00:00") },
+      { id: "later", courtNumber: 1, start: at("2026-09-17T11:00:00") },
+      { id: "dayEnd", courtNumber: 2, start: at("2026-09-17T18:00:00") },
+    ];
+    const now = at("2026-09-17T09:00:00");
+
+    // A zero horizon is exactly the per-court guarantee.
+    expect(frozenMatchIdsFor({ committed, now })).toEqual(["dayEnd", "next"]);
+    // One hour from 09:00 does not reach either follower.
+    expect(frozenMatchIdsFor({ committed, now, horizonMinutes: 60 })).toEqual(["dayEnd", "next"]);
+    // Two hours reaches the 11:00 follower but not the 18:00 one.
+    expect(frozenMatchIdsFor({ committed, now, horizonMinutes: 120 })).toEqual([
+      "dayEnd",
+      "later",
+      "next",
+    ]);
+    // A negative horizon is read as zero rather than un-freezing the per-court pin.
+    expect(frozenMatchIdsFor({ committed, now, horizonMinutes: -60 })).toEqual(["dayEnd", "next"]);
+  });
+
+  it("returns nothing when there is nothing committed", () => {
+    expect(frozenMatchIdsFor({ committed: [], now: 0 })).toEqual([]);
   });
 });

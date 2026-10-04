@@ -87,6 +87,15 @@
   --color-state-void-ink: var(--state-void-ink);
   --color-state-completed-ink: var(--state-completed-ink);
 
+  /* Session presence: bg-presence-ink.
+
+     A mark, not a match state. It borrows the live green's hue so the header reads
+     as one palette, but it owns its token, for two reasons. Tuning the dot cannot
+     then move the match-state chip or ink - and it cannot inherit the state
+     palette's meaning either, which is "a match is live". A host glancing at the
+     header reads presence, not a scoreboard. */
+  --color-presence-ink: var(--presence-ink);
+
   /* Importance tiers. `text-tN` emits font-size + line-height together, so a
      component names the job and the scale decides the size. The values are `inline`
      references to the `--type-*` tokens rather than literals, so editing the scale
@@ -288,6 +297,19 @@
   --state-void-chip: oklch(0.9 0.008 255);
   --state-void-ink: oklch(0.4 0.014 255);
 
+  /* Session presence, light. Solved against the ACCOUNT PILL rather than the page,
+     because that is the surface the dot is painted on: `bg-surface/85` over the
+     page, then `bg-muted/60` over that, which composites to #f4f6f8. Light mode is
+     the binding one - the literal green this replaces measured 2.27:1 here against
+     6.95:1 in dark, because one value cannot serve both surfaces.
+
+     Solved to 4.00:1 rather than as bright as it could be: the dot is decorative,
+     so the aim is a mark that is clearly present without becoming the loudest thing
+     in the header. Chroma .11 holds it visibly green rather than grey at this
+     lightness. Contrast falls as L rises on a light surface, so this is the
+     lightest value that still clears the target. */
+  --presence-ink: oklch(0.565 0.11 150);
+
   /* --- Type scale, by importance rather than by size ---------------------
      Tiers are named for the JOB the text does, not for how large it is, so the
      scale can be adjusted without any component changing its markup.
@@ -399,6 +421,16 @@
      distinction, and they are load-bearing rather than decorative. */
   --state-void-chip: oklch(0.44 0.008 255);
   --state-void-ink: oklch(0.88 0.012 255);
+
+  /* Session presence, dark. The same pill composited in this theme is #191c1f, and
+     the same hue and chroma are re-solved against it rather than reused: here
+     contrast RISES with lightness, so the answer is the lowest L that clears the
+     target instead of the highest. Measures 5.50:1.
+
+     Lighter than the light value on purpose - it is not a dimmed light theme, it is
+     the same mark on a surface of the opposite polarity, which is how every other
+     token in this block is solved too. */
+  --presence-ink: oklch(0.648 0.11 150);
 }
 
 @layer base {

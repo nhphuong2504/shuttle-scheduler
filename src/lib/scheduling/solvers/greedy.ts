@@ -24,7 +24,6 @@ import {
 } from "../constraints";
 import {
   compareIds,
-  completionKeyOf,
   forbiddenStartInterval,
   type Assignment,
   type ScheduleMatch,
@@ -43,33 +42,32 @@ import {
   recordAssignment,
   uniqueParticipants,
 } from "./shared";
+import { buildUrgencyBoard, rankByUrgency } from "./urgency";
 import type { Solver, SolverRunOptions } from "./types";
 
 /** Bounds the gap search so a pathological input degrades instead of spinning. */
 const MAX_GAP_STEPS = 100_000;
 
 /**
- * Process order: completion pressure (largest unit first, so a unit drains before the next one
- * starts), then soft order, phase, sequence and finally the id comparator.
+ * Process order: the one shared urgency order, recomputed for each dependency pass.
+ *
+ * Recomputed rather than computed once because `stageRemaining` and `completionPressure` count what
+ * is *still* unplaced. A single snapshot taken from the whole problem would keep voting for a stage
+ * that has already drained — the opposite of what the stage tier exists for.
+ *
+ * Greedy has no clock, so waiting time is a tie at 0 and the window is measured from the problem
+ * floor. That is an input difference, not a different order: the comparator is the shared one.
  */
-function processingOrder(problem: SchedulingProblem): ScheduleMatch[] {
-  const pressure = new Map<string, number>();
-  for (const match of problem.matches) {
-    if (match.fixed) continue;
-    const key = completionKeyOf(match);
-    pressure.set(key, (pressure.get(key) ?? 0) + 1);
-  }
-  return problem.matches
-    .filter((match) => !match.fixed)
-    .slice()
-    .sort(
-      (a, b) =>
-        (pressure.get(completionKeyOf(b)) ?? 0) - (pressure.get(completionKeyOf(a)) ?? 0) ||
-        (a.softOrder ?? 0) - (b.softOrder ?? 0) ||
-        (a.phase ?? 0) - (b.phase ?? 0) ||
-        (a.sequence ?? 0) - (b.sequence ?? 0) ||
-        compareIds(a.id, b.id),
-    );
+function processingOrder(
+  problem: SchedulingProblem,
+  pending: readonly ScheduleMatch[] = problem.matches.filter((match) => !match.fixed),
+): ScheduleMatch[] {
+  const board = buildUrgencyBoard({
+    remaining: pending,
+    planningEnd: problem.planningEnd,
+    referenceTime: problem.floor,
+  });
+  return rankByUrgency(pending, board);
 }
 
 function firstOverlap(
@@ -160,9 +158,9 @@ function solveGreedy(problem: SchedulingProblem, options: SolverRunOptions): Sol
   }
 
   const unscheduled: string[] = [];
-  const order = processingOrder(problem);
   const placeable: ScheduleMatch[] = [];
-  for (const match of order) {
+  for (const match of problem.matches) {
+    if (match.fixed) continue;
     if (!hasDecidedParticipants(match)) unscheduled.push(match.id);
     else placeable.push(match);
   }
@@ -216,9 +214,12 @@ function solveGreedy(problem: SchedulingProblem, options: SolverRunOptions): Sol
   // chains resolve in order and a cycle places nothing.
   let pending = placeable;
   while (pending.length) {
+    // Re-ranked from what is still unplaced, so the stage and completion tiers shrink as the run
+    // drains them instead of being a fixed snapshot of the whole problem.
+    const ordered = processingOrder(problem, pending);
     let placedThisPass = 0;
     const next: ScheduleMatch[] = [];
-    for (const match of pending) {
+    for (const match of ordered) {
       if (!allDependenciesKnown(match, indexes, scheduledEnd)) {
         next.push(match);
         continue;

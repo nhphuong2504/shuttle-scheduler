@@ -1,28 +1,42 @@
 /**
- * Tournament progress by event, stage and round.
+ * Tournament progress by event and stage.
  *
  * The organizer's question is "how far through is each part of the event, and is the next part
  * ready to be generated?". This module answers it once, in a shape the UI can render without
  * knowing anything about the format it came from.
  *
- * The model is deliberately format-agnostic: a row carries adapter-supplied labels
- * (`eventLabel`, `stageLabel`, `roundLabel`) and counts. That is what keeps the shared
- * component free of stage and tier literals — a new format means a new adapter, not an edit to
- * the component. Readiness wording is adapter-supplied for the same reason.
+ * The pipeline is explicit. A two-round placement event runs
  *
- * Progress is measured against **the rows that exist**. It reports how many of them have been
- * created and how many are done, and never an expected total for work that has not been
- * generated: a stage's size is a forecasting question, and this module deliberately does not
- * forecast. Where a round's depth matters — telling a final from an intermediate round it can
- * offer a successor to — it comes from `bracketRoundCount`, the bracket builder's own answer,
- * rather than a re-derivation.
+ *     Round 1 → Round 2 → Knockout → Tournament Complete
  *
- * One count is still borrowed from a format generator: a pool's outstanding matches come from
- * `buildRoundRobin`, the same routine that would create them, so "N matches still to come" is
- * the generator's number rather than a guess.
+ * and every stage answers with the same three things: a status, a match count and at most one
+ * action. A status is `completed`, `current` or `waiting`, which the view draws as `✓`, `●` and
+ * `○`. A stage is complete when the domain says so, current once it has rows to play, and
+ * waiting until then — one rule, so a stage can never read "in progress" and "not generated" at
+ * the same time.
  *
- * Readiness is likewise borrowed, never re-decided: the placement gate, `tierRoundComplete` and
- * `poolIsComplete` are the same checks their own tabs gate their generate buttons on.
+ * Progress is always counted in MATCHES — "12 / 19 matches completed", "7 matches remaining" —
+ * and never in entrants. The placement gate still counts entrants internally, because that is
+ * what decides whether a round may be generated, but an entrant count is not a progress measure:
+ * five undecided round-two matches involving six entrants are five matches to play, not six of
+ * anything. The gate's shortfall is deliberately not this module's headline, and a stage that
+ * cannot advance says *which stage it is waiting on* instead.
+ *
+ * Counts are measured against **the rows that exist**. Placement rounds report the matches that
+ * have been generated, so a round nobody has created is waiting rather than a forecast. The
+ * knockout is the one stage whose size is known before its rows are: a single-elimination bracket
+ * over N entrants plays exactly N - 1 matches once its byes are excluded, because every match
+ * eliminates one entrant. That is a property of the draw rather than a forecast, and it is what
+ * lets a half-generated bracket read "2 / 3 matches completed" instead of "2 / 2" — a count that
+ * would claim the final was decided while it did not yet exist.
+ *
+ * Readiness is borrowed, never re-decided: the placement gate, `poolIsComplete` and
+ * `buildRoundRobin` are the same checks and the same generator their own tabs use. A second
+ * opinion here would be a second set of rules.
+ *
+ * The model is format-agnostic: a row carries adapter-supplied labels (`eventLabel`,
+ * `stageLabel`, `roundLabel`) and action wording. That is what keeps the shared component free of
+ * stage and tier literals — a new format means a new adapter, not an edit to the component.
  *
  * Pure and read-only. It reads rows and returns counts; it never writes and never runs the
  * scheduler.
@@ -43,30 +57,52 @@ import type {
 } from "./data";
 import { buildCategoryView } from "./placement-actions";
 import { poolIsComplete } from "./standings";
-import { bracketRoundCount, tierRoundComplete } from "./tier-draw";
+import { bracketRoundCount } from "./tier-draw";
 
 /** Statuses that mean a match has been decided and needs nothing more from anyone. */
 const PLAYED = new Set(["reported", "walkover"]);
+
+/** Statuses that mean nothing more will ever be entered: a void is over, not outstanding. */
+const SETTLED = new Set(["reported", "walkover", "void"]);
+
+/** How a stage is doing. The view owns the glyph; this owns the meaning. */
+export type StageStatus = "completed" | "current" | "waiting";
+
+/** The one thing that moves a stage along, when there is one. */
+export interface StageAction {
+  /** `generate` creates the stage; `enter-results` opens the surface that scores it. */
+  kind: "generate" | "enter-results";
+  /** Adapter-supplied. Always the verb first, e.g. "Generate Round 2". */
+  label: string;
+  /**
+   * The event the action belongs to, for whoever owns it — the placement pipeline generates a
+   * stage one category at a time. Opaque here: this module never interprets it and the view
+   * only hands it back.
+   */
+  scopeId: string | null;
+}
 
 export interface StageProgressRow {
   /** Stable key, unique across the whole list. */
   key: string;
   /** The event this belongs to, e.g. a category code, or null when unknown. */
   eventLabel: string | null;
-  /** The stage, e.g. "Placement" or "Tier A". Adapter-supplied. */
+  /** The stage, e.g. "Round 1" or "Knockout". Adapter-supplied. */
   stageLabel: string;
-  /** The round, e.g. "Round 1". Adapter-supplied; null for a stage-level row. */
+  /** A second level inside the stage, e.g. a pool name. Adapter-supplied; often null. */
   roundLabel: string | null;
-  /** Rows that already exist and are playable. */
-  created: number;
-  /** Rows that have been reported or walked over. */
+  /** Complete, current or waiting. Derived from the stage's own completion rule. */
+  status: StageStatus;
+  /** Matches the stage has, or — for a generated fixture list — will have. */
+  total: number;
+  /** Matches decided. */
   completed: number;
-  /** True when this row's next step can be generated right now. */
-  canAdvance: boolean;
-  /** What that next step is, when it can be generated. Adapter-supplied. */
-  advanceLabel: string | null;
-  /** Why it cannot be advanced yet, when that is worth saying. Adapter-supplied. */
-  blockedReason: string | null;
+  /** Matches still to decide. `total - completed`, so it can never disagree with them. */
+  remaining: number;
+  /** What to do next, when there is a next. */
+  action: StageAction | null;
+  /** A short frame for a stage with nothing to count yet. Adapter-supplied. */
+  note: string | null;
 }
 
 export interface StageProgressInput {
@@ -84,6 +120,18 @@ export interface StageProgressInput {
   drawMatches?: readonly DrawMatch[] | null | undefined;
 }
 
+/** Stage labels the placement pipeline prints. The component knows none of these. */
+const ROUND_ONE = "Round 1";
+const ROUND_TWO = "Round 2";
+const KNOCKOUT = "Knockout";
+const TOURNAMENT_COMPLETE = "Tournament Complete";
+
+/** Shown on a stage that can be created right now, beside the button that creates it. */
+const READY_TO_GENERATE = "Ready to generate";
+
+/** Position inside an event, so the pipeline sorts as R1 → R2 → Knockout → Complete. */
+const ORDER = { roundOne: 1, roundTwo: 2, knockout: 3, complete: 4 } as const;
+
 function groupBy<T, K>(rows: readonly T[], keyOf: (row: T) => K): Map<K, T[]> {
   const map = new Map<K, T[]>();
   for (const row of rows) {
@@ -99,186 +147,257 @@ function completion(rows: readonly { status: string }[]): number {
   return rows.filter((row) => PLAYED.has(row.status)).length;
 }
 
-/** "1 match" / "3 matches". */
-function matchCount(count: number): string {
-  return `${count} match${count === 1 ? "" : "es"}`;
+function generateAction(label: string, scopeId: string): StageAction {
+  return { kind: "generate", label: `Generate ${label}`, scopeId };
 }
 
-/** "1 entrant" / "3 entrants". */
-function entrantCount(count: number): string {
-  return `${count} entrant${count === 1 ? "" : "s"}`;
+function enterResults(): StageAction {
+  return { kind: "enter-results", label: "Enter Results", scopeId: null };
 }
 
-function readyOrBlocked(
-  ready: { advanceLabel: string } | null,
-  blockedReason: string | null,
-): Pick<StageProgressRow, "canAdvance" | "advanceLabel" | "blockedReason"> {
-  if (ready) return { canAdvance: true, advanceLabel: ready.advanceLabel, blockedReason: null };
-  return { canAdvance: false, advanceLabel: null, blockedReason };
+/** A row plus the position that orders it within its event. */
+interface Draft extends StageProgressRow {
+  order: number;
 }
 
 /**
- * The placement stage: round one and round two, per event.
+ * Builds one row, deriving the status from the stage's own completion rule.
  *
- * Reuses `buildCategoryView`, which is the same view model the Placement tab gates its generate
- * buttons on. That is deliberate: "round one is settled, so round two can be generated" and
- * "every entrant has played both matches, so the draws can be generated" are the gate's answers,
- * and a second opinion here would be a second set of rules.
- *
- * A round row is emitted while the field is big enough to have that round — the view's own
- * `roundOneExpected`/`roundTwoExpected`, which are booleans, not counts. That keeps a home for
- * "Ready to generate round two" before that round exists.
- *
- * Draw readiness is reported on the last row of the stage, because after it there is no
- * placement round left — that is what absorbs the Desk's removed "Draws ready" link.
+ * `started` exists for the legacy pool rows, whose fixture list is known before any row is
+ * created: six matches scheduled and none generated is "waiting with six to come", not "in
+ * progress". Everywhere else, having a total means having rows.
  */
-function placementRows(input: StageProgressInput, codeOf: (id: string) => string | null) {
-  const rows: StageProgressRow[] = [];
-  const entrantsByCategory = groupBy(input.entrants ?? [], (row) => row.category_id);
-  const matchesByCategory = groupBy(input.placementMatches ?? [], (row) => row.category_id);
+function stageRow(draft: {
+  key: string;
+  eventLabel: string | null;
+  stageLabel: string;
+  roundLabel?: string | null;
+  order: number;
+  total: number;
+  completed: number;
+  done: boolean;
+  started?: boolean;
+  action?: StageAction | null;
+  note?: string | null;
+}): Draft {
+  const total = Math.max(0, draft.total);
+  const completed = Math.min(Math.max(0, draft.completed), total);
+  const started = draft.started ?? total > 0;
+  const status: StageStatus = draft.done ? "completed" : started ? "current" : "waiting";
 
-  for (const [categoryId, categoryEntrants] of entrantsByCategory) {
-    const matches = matchesByCategory.get(categoryId) ?? [];
-    const view = buildCategoryView(categoryEntrants, matches);
-    const eventLabel = codeOf(categoryId);
+  return {
+    key: draft.key,
+    eventLabel: draft.eventLabel,
+    stageLabel: draft.stageLabel,
+    roundLabel: draft.roundLabel ?? null,
+    order: draft.order,
+    status,
+    total,
+    completed,
+    remaining: total - completed,
+    action: draft.action ?? null,
+    note: draft.note ?? null,
+  };
+}
 
-    const roundOne = view.roundOne.filter((match) => match.status !== "void");
-    const roundTwo = view.roundTwo.filter((match) => match.status !== "void");
+/** What a set of tier draws adds up to, across every tier of one event. */
+interface KnockoutTotals {
+  total: number;
+  completed: number;
+  /** Draws that carry a bracket worth counting. */
+  draws: number;
+}
 
-    const roundOneUndecided = roundOne.filter((match) => !PLAYED.has(match.status)).length;
-    const roundOnePending =
-      roundOne.length === 0
-        ? "Round one is not generated yet"
-        : roundOneUndecided > 0
-          ? `${matchCount(roundOneUndecided)} still to decide in round one`
-          : null;
-    const drawsReady = view.gate.ready;
-    const short = view.gate.short.length;
+/**
+ * Adds up an event's A/B/C/D brackets.
+ *
+ * A draw of N entrants plays N - 1 matches. That is exact rather than estimated — each match
+ * eliminates exactly one entrant, so the bracket ends after N - 1 of them — which is why the
+ * knockout stage can report a total before its later rounds exist. Byes are already excluded by
+ * construction: a bracket of size B holding N entrants has B - N byes, and (B - 1) - (B - N) is
+ * N - 1.
+ */
+function knockoutTotals(
+  draws: readonly TierDraw[],
+  matchesByDraw: Map<string, TierDrawMatch[]>,
+): KnockoutTotals {
+  let total = 0;
+  let completed = 0;
+  let counted = 0;
 
-    if (view.roundOneExpected) {
-      const ungenerated = roundOne.length === 0;
-      const onlyStage = !view.roundTwoExpected;
-      rows.push({
-        key: `placement:${categoryId}:r1`,
-        eventLabel,
-        stageLabel: "Placement",
-        roundLabel: "Round 1",
-        created: roundOne.length,
-        completed: completion(roundOne),
-        ...(ungenerated
-          ? readyOrBlocked(
-              view.seedsLocked ? { advanceLabel: "Ready to generate round one" } : null,
-              view.seedsLocked ? null : "Seeds are not locked yet",
-            )
-          : onlyStage && drawsReady
-            ? readyOrBlocked({ advanceLabel: "Draws ready" }, null)
-            : readyOrBlocked(null, onlyStage ? roundOnePending : null)),
-      });
-    }
-
-    if (view.roundTwoExpected) {
-      const ungenerated = roundTwo.length === 0;
-      rows.push({
-        key: `placement:${categoryId}:r2`,
-        eventLabel,
-        stageLabel: "Placement",
-        roundLabel: "Round 2",
-        created: roundTwo.length,
-        completed: completion(roundTwo),
-        ...(ungenerated
-          ? readyOrBlocked(
-              roundOnePending === null ? { advanceLabel: "Ready to generate round two" } : null,
-              roundOnePending,
-            )
-          : drawsReady
-            ? readyOrBlocked({ advanceLabel: "Draws ready" }, null)
-            : readyOrBlocked(
-                null,
-                short > 0 ? `${entrantCount(short)} still need placement results` : null,
-              )),
-      });
-    }
+  for (const draw of draws) {
+    if (draw.bracket_size <= 1 || draw.entrant_count <= 1) continue;
+    counted += 1;
+    total += draw.entrant_count - 1;
+    completed += (matchesByDraw.get(draw.id) ?? []).filter(
+      (match) => !match.is_bye && SETTLED.has(match.status),
+    ).length;
   }
 
-  return rows;
+  return { total, completed, draws: counted };
 }
 
 /**
- * The A/B/C/D knockouts: one row per round the draw actually has, deepest last.
+ * The placement pipeline: round one, round two and the knockout, per event.
  *
- * A bye is not a match, so it is excluded from both counts — the same filter the planner uses.
- * A round with no row at all contributes no row: progress is reported against what exists, so
- * there is nothing to say about a round nobody has generated yet. The deepest round is the one
- * that can still unlock its successor, and `bracketRoundCount` is what tells a final round from
- * an intermediate one.
+ * Reuses `buildCategoryView`, which is the same view model the Placement tab gates its generate
+ * buttons on. Its `stage` is the domain's own answer to "what is next" — `seeding`, `round1`,
+ * `round2` or `draws` — so it decides every status here rather than a second set of rules:
+ * round one is complete once the stage has moved past it, and the placement stage is complete
+ * once the gate is ready, which is the same condition that unlocks the draws.
+ *
+ * A category is a placement entry when it has entrants, and earns a knockout row when it has a
+ * field big enough to be drawn or a draw that already exists. So a field of one, which has no
+ * rounds and no bracket, contributes nothing — and a draw whose entrants were not passed in
+ * still reports itself rather than vanishing.
  */
-function knockoutRows(input: StageProgressInput, codeOf: (id: string) => string | null) {
-  const rows: StageProgressRow[] = [];
-  const matchesByDraw = groupBy(input.tierMatches ?? [], (row) => row.draw_id);
+function placementRows(
+  input: StageProgressInput,
+  codeOf: (id: string) => string | null,
+): Draft[] {
+  const rows: Draft[] = [];
+  const entrantsByCategory = groupBy(input.entrants ?? [], (row) => row.category_id);
+  const matchesByCategory = groupBy(input.placementMatches ?? [], (row) => row.category_id);
+  const drawsByCategory = groupBy(input.tierDraws ?? [], (row) => row.category_id);
+  const tierMatchesByDraw = groupBy(input.tierMatches ?? [], (row) => row.draw_id);
 
-  for (const draw of input.tierDraws ?? []) {
-    if (draw.bracket_size <= 1 || draw.entrant_count <= 1) continue;
-    const rounds = bracketRoundCount(draw.bracket_size);
-    if (rounds <= 0) continue;
+  const categoryIds = new Set([...entrantsByCategory.keys(), ...drawsByCategory.keys()]);
 
-    const drawMatches = matchesByDraw.get(draw.id) ?? [];
-    const eventLabel = codeOf(draw.category_id);
-    const stageLabel = draw.tier ? `Tier ${draw.tier}` : "Knockout";
+  for (const categoryId of categoryIds) {
+    const entrants = entrantsByCategory.get(categoryId) ?? [];
+    const matches = matchesByCategory.get(categoryId) ?? [];
+    const draws = drawsByCategory.get(categoryId) ?? [];
+    const eventLabel = codeOf(categoryId);
+    const view = entrants.length > 0 ? buildCategoryView(entrants, matches) : null;
 
-    const playableInRound = (round: number) =>
-      drawMatches.filter(
-        (match) => match.round === round && !match.is_bye && match.status !== "void",
+    const knockout = knockoutTotals(draws, tierMatchesByDraw);
+    const canKnockout = knockout.draws > 0 || (view?.roundOneExpected ?? false);
+
+    // A void match is not playable, so it is not part of the progress a round reports.
+    const roundOne = (view?.roundOne ?? []).filter((match) => match.status !== "void");
+    const roundTwo = (view?.roundTwo ?? []).filter((match) => match.status !== "void");
+
+    const roundOneDone = view?.stage === "round2" || view?.stage === "draws";
+    const placementDone = view?.stage === "draws";
+
+    const eventRows: Draft[] = [];
+
+    if (view?.roundOneExpected) {
+      const generated = roundOne.length > 0;
+      let action: StageAction | null = null;
+      let note: string | null = null;
+      if (!generated) {
+        // Nothing to generate until the seed order is frozen — the pairing needs it.
+        if (view.seedsLocked) {
+          action = generateAction(ROUND_ONE, categoryId);
+          note = READY_TO_GENERATE;
+        } else {
+          note = "Seeds are not locked yet";
+        }
+      } else if (!roundOneDone) {
+        action = enterResults();
+      }
+
+      eventRows.push(
+        stageRow({
+          key: `placement:${categoryId}:r1`,
+          eventLabel,
+          stageLabel: ROUND_ONE,
+          order: ORDER.roundOne,
+          total: roundOne.length,
+          completed: completion(roundOne),
+          done: roundOneDone,
+          action,
+          note,
+        }),
       );
-
-    const roundsWithRows = [
-      ...new Set(
-        drawMatches
-          .filter((match) => !match.is_bye && match.status !== "void")
-          .map((match) => match.round),
-      ),
-    ].sort((a, b) => a - b);
-    const deepestCreated = roundsWithRows.length ? roundsWithRows[roundsWithRows.length - 1]! : 0;
-
-    const deepestPlayable = deepestCreated === 0 ? [] : playableInRound(deepestCreated);
-    const deepestDecided =
-      deepestCreated > 0 &&
-      tierRoundComplete(
-        deepestPlayable.map((match) => ({ slot: match.slot, winnerId: match.winner_id })),
-      );
-    const deepestUndecided = deepestPlayable.filter((match) => !PLAYED.has(match.status)).length;
-
-    for (const round of roundsWithRows) {
-      const playable = playableInRound(round);
-      const isDeepest = round === deepestCreated;
-      const moreRounds = round < rounds;
-
-      const readiness = !isDeepest
-        ? readyOrBlocked(null, null)
-        : !moreRounds
-          ? // The final round has nothing after it but its own result.
-            readyOrBlocked(
-              null,
-              deepestUndecided > 0 ? `${matchCount(deepestUndecided)} still to decide` : null,
-            )
-          : deepestDecided && draw.champion_id == null
-            ? readyOrBlocked({ advanceLabel: `Ready for round ${round + 1}` }, null)
-            : readyOrBlocked(
-                null,
-                deepestUndecided > 0
-                  ? `${matchCount(deepestUndecided)} still to decide in round ${deepestCreated}`
-                  : "Waiting on the previous round",
-              );
-
-      rows.push({
-        key: `tier:${draw.id}:r${round}`,
-        eventLabel,
-        stageLabel,
-        roundLabel: `Round ${round}`,
-        created: playable.length,
-        completed: completion(playable),
-        ...readiness,
-      });
     }
+
+    if (view?.roundTwoExpected) {
+      const generated = roundTwo.length > 0;
+      let action: StageAction | null = null;
+      let note: string | null = null;
+      if (!generated) {
+        if (roundOneDone) {
+          action = generateAction(ROUND_TWO, categoryId);
+          note = READY_TO_GENERATE;
+        } else {
+          note = `Waiting on ${ROUND_ONE}`;
+        }
+      } else if (!placementDone) {
+        action = enterResults();
+      }
+
+      eventRows.push(
+        stageRow({
+          key: `placement:${categoryId}:r2`,
+          eventLabel,
+          stageLabel: ROUND_TWO,
+          order: ORDER.roundTwo,
+          total: roundTwo.length,
+          completed: completion(roundTwo),
+          done: placementDone,
+          action,
+          note,
+        }),
+      );
+    }
+
+    if (canKnockout) {
+      // A draw row is the signal that the knockout exists, not a countable match inside it. A
+      // field of two is drawn as two champion-only brackets, which hold no matches at all — so
+      // asking for a total would leave the event offering to generate a knockout it already has,
+      // and no terminal stage would ever arrive.
+      const generated = draws.length > 0;
+      const settled =
+        generated && (knockout.total === 0 || knockout.completed >= knockout.total);
+      let action: StageAction | null = null;
+      let note: string | null = null;
+      if (!generated) {
+        if (placementDone) {
+          action = generateAction(KNOCKOUT, categoryId);
+          note = READY_TO_GENERATE;
+        } else {
+          // A field of two reaches the draws straight from round one, so name whichever round
+          // this event actually has left to finish rather than a round it never plays.
+          note = `Waiting on ${view?.roundTwoExpected ? ROUND_TWO : ROUND_ONE}`;
+        }
+      } else if (!settled) {
+        action = enterResults();
+      }
+
+      eventRows.push(
+        stageRow({
+          key: `knockout:${categoryId}`,
+          eventLabel,
+          stageLabel: KNOCKOUT,
+          order: ORDER.knockout,
+          total: knockout.total,
+          completed: knockout.completed,
+          done: settled,
+          action,
+          note,
+        }),
+      );
+    }
+
+    // The terminal stage names itself rather than adding a count: there is nothing left to
+    // measure, which is the whole point of it.
+    if (view && eventRows.length > 0 && eventRows.every((row) => row.status === "completed")) {
+      eventRows.push(
+        stageRow({
+          key: `complete:${categoryId}`,
+          eventLabel,
+          stageLabel: TOURNAMENT_COMPLETE,
+          order: ORDER.complete,
+          total: 0,
+          completed: 0,
+          done: true,
+        }),
+      );
+    }
+
+    rows.push(...eventRows);
   }
 
   return rows;
@@ -287,12 +406,19 @@ function knockoutRows(input: StageProgressInput, codeOf: (id: string) => string 
 /**
  * The legacy round-robin format: one row per pool, one per knockout draw round.
  *
- * Group readiness reuses `poolIsComplete`, the same check the Draws tab gates on. How many
- * matches a pool still owes comes from `buildRoundRobin` — the generator that would create
- * them — because that is a known fixture list rather than a forecast.
+ * A pool's fixture list is generated rather than forecast, so its outstanding count comes from
+ * `buildRoundRobin` — the same routine that would create the matches — and its readiness from
+ * `poolIsComplete`, the same check the Draws tab gates on. Its status still follows the rows
+ * that exist: six matches known and none created is waiting, not in progress.
+ *
+ * The draw rounds report progress only. Their generation belongs to the Draws tab, so no action
+ * is offered here.
  */
-function roundRobinRows(input: StageProgressInput, codeOf: (id: string) => string | null) {
-  const rows: StageProgressRow[] = [];
+function roundRobinRows(
+  input: StageProgressInput,
+  codeOf: (id: string) => string | null,
+): Draft[] {
+  const rows: Draft[] = [];
   const entriesByPool = groupBy(input.poolEntries ?? [], (row) => row.pool_id);
   const matchesByPool = groupBy(input.poolMatches ?? [], (row) => row.pool_id);
 
@@ -302,23 +428,25 @@ function roundRobinRows(input: StageProgressInput, codeOf: (id: string) => strin
     const poolMatches = matchesByPool.get(pool.id) ?? [];
     const playable = poolMatches.filter((match) => match.status !== "void");
     const expected = buildRoundRobin({ entrants: teamIds, groupKey: pool.id }).length;
+    const complete = poolIsComplete(teamIds, poolMatches);
 
-    rows.push({
-      key: `pool:${pool.id}`,
-      eventLabel: codeOf(pool.category_id),
-      stageLabel: "Group",
-      roundLabel: pool.name,
-      created: playable.length,
-      completed: completion(playable),
-      ...(poolIsComplete(teamIds, poolMatches)
-        ? readyOrBlocked({ advanceLabel: "Ready for the draw" }, null)
-        : readyOrBlocked(
-            null,
-            Math.max(0, expected - completion(playable)) > 0
-              ? `${matchCount(expected - completion(playable))} still to come`
-              : null,
-          )),
-    });
+    rows.push(
+      stageRow({
+        key: `pool:${pool.id}`,
+        eventLabel: codeOf(pool.category_id),
+        stageLabel: "Group",
+        roundLabel: pool.name,
+        order: 1,
+        total: expected,
+        completed: completion(playable),
+        done: complete,
+        started: playable.length > 0,
+        // A group with no matches yet has nothing to score, so it offers no action; its
+        // outstanding count is the generator's fixture list rather than a missing stage.
+        action: complete || playable.length === 0 ? null : enterResults(),
+        note: complete ? "Ready for the draw" : null,
+      }),
+    );
   }
 
   const drawMatchesByDraw = groupBy(input.drawMatches ?? [], (row) => row.draw_id);
@@ -335,17 +463,20 @@ function roundRobinRows(input: StageProgressInput, codeOf: (id: string) => strin
       const playable = drawMatches.filter(
         (match) => match.round === round && !match.is_bye && match.status !== "void",
       );
-      rows.push({
-        key: `draw:${draw.id}:r${round}`,
-        eventLabel: codeOf(draw.category_id),
-        stageLabel: draw.tier ? `Draw ${draw.tier}` : "Draw",
-        roundLabel: `Round ${round}`,
-        created: playable.length,
-        completed: completion(playable),
-        canAdvance: false,
-        advanceLabel: null,
-        blockedReason: null,
-      });
+      const completed = completion(playable);
+
+      rows.push(
+        stageRow({
+          key: `draw:${draw.id}:r${round}`,
+          eventLabel: codeOf(draw.category_id),
+          stageLabel: draw.tier ? `Draw ${draw.tier}` : "Draw",
+          roundLabel: `Round ${round}`,
+          order: 2,
+          total: playable.length,
+          completed,
+          done: playable.length > 0 && completed === playable.length,
+        }),
+      );
     }
   }
 
@@ -353,7 +484,7 @@ function roundRobinRows(input: StageProgressInput, codeOf: (id: string) => strin
 }
 
 /**
- * Every stage row for the tournament, in event order and then by stage.
+ * Every stage row for the tournament, in event order and then down the pipeline.
  *
  * Formats that contribute nothing simply contribute no rows, so one function serves a placement
  * tournament, a round-robin one and anything that mixes them.
@@ -370,17 +501,15 @@ export function buildStageProgress(input: StageProgressInput): StageProgressRow[
     orderByCode.set(category.code, input.categoryOrder?.get(category.id) ?? 0);
   }
 
-  const rows = [
-    ...placementRows(input, codeOf),
-    ...knockoutRows(input, codeOf),
-    ...roundRobinRows(input, codeOf),
-  ];
+  const drafts = [...placementRows(input, codeOf), ...roundRobinRows(input, codeOf)];
 
-  return rows.sort(
-    (a, b) =>
-      (orderByCode.get(a.eventLabel ?? "") ?? 0) - (orderByCode.get(b.eventLabel ?? "") ?? 0) ||
-      (a.eventLabel ?? "").localeCompare(b.eventLabel ?? "") ||
-      a.stageLabel.localeCompare(b.stageLabel) ||
-      (a.roundLabel ?? "").localeCompare(b.roundLabel ?? ""),
-  );
+  return drafts
+    .sort(
+      (a, b) =>
+        (orderByCode.get(a.eventLabel ?? "") ?? 0) - (orderByCode.get(b.eventLabel ?? "") ?? 0) ||
+        (a.eventLabel ?? "").localeCompare(b.eventLabel ?? "") ||
+        a.order - b.order ||
+        (a.roundLabel ?? "").localeCompare(b.roundLabel ?? ""),
+    )
+    .map(({ order: _order, ...row }) => row);
 }

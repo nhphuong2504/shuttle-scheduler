@@ -197,63 +197,130 @@ const find = (rows: StageProgressRow[], key: string): StageProgressRow => {
   return row;
 };
 
+/** A field of four with its seeds frozen, so round one can be generated. */
+const fourEntrants = [
+  entrant("e1", 1),
+  entrant("e2", 2),
+  entrant("e3", 3),
+  entrant("e4", 4),
+];
+
+/** Round one decided, round two created but not played out. */
+const roundTwoInProgress = [
+  placementMatch("r1-a", "round1", "e1", "e2", { status: "reported", winner_id: "e1" }),
+  placementMatch("r1-b", "round1", "e3", "e4", { status: "reported", winner_id: "e3" }),
+  placementMatch("r2-a", "round2", "e1", "e3", { status: "reported", winner_id: "e1" }),
+  placementMatch("r2-b", "round2", "e2", "e4"),
+];
+
+/** Both placement rounds played out, so every entrant holds their full record. */
+const placementComplete = [
+  placementMatch("r1-a", "round1", "e1", "e2", { status: "reported", winner_id: "e1" }),
+  placementMatch("r1-b", "round1", "e3", "e4", { status: "reported", winner_id: "e3" }),
+  placementMatch("r2-a", "round2", "e1", "e3", { status: "reported", winner_id: "e1" }),
+  placementMatch("r2-b", "round2", "e2", "e4", { status: "reported", winner_id: "e2" }),
+];
+
+/** One bracket of four, its first round decided and its final still to play. */
+const knockoutInProgress = [
+  tierMatch("k1", 1, 1, { status: "reported", winner_id: "e1" }),
+  tierMatch("k2", 1, 2, { status: "reported", winner_id: "e3" }),
+  tierMatch("k3", 2, 1),
+];
+
 // ---------------------------------------------------------------------------
-// Placement
+// The pipeline
 // ---------------------------------------------------------------------------
 
-describe("placement stage progress", () => {
-  /** A field of four: two round-one matches, then two round-two matches. */
-  const fourEntrants = [entrant("e1", 1), entrant("e2", 2), entrant("e3", 3), entrant("e4", 4)];
-
-  it("emits a row per round the field has, with nothing created yet", () => {
+describe("placement pipeline", () => {
+  it("lays out one event's stages in pipelined order", () => {
     const rows = buildStageProgress({
       categories: [category()],
       entrants: fourEntrants,
       placementMatches: [],
     });
 
-    expect(rows.map((row) => row.key)).toEqual(["placement:cat1:r1", "placement:cat1:r2"]);
-    expect(rows.map((row) => row.roundLabel)).toEqual(["Round 1", "Round 2"]);
-    expect(rows.every((row) => row.stageLabel === "Placement")).toBe(true);
+    expect(rows.map((row) => row.key)).toEqual([
+      "placement:cat1:r1",
+      "placement:cat1:r2",
+      "knockout:cat1",
+    ]);
+    expect(rows.map((row) => row.stageLabel)).toEqual(["Round 1", "Round 2", "Knockout"]);
     expect(rows.every((row) => row.eventLabel === "MS")).toBe(true);
-    // Progress is reported against the rows that exist, so nothing generated means zeroes and
-    // no invented total for the rounds that have not been created.
-    expect(rows.map((row) => row.created)).toEqual([0, 0]);
-    expect(rows.map((row) => row.completed)).toEqual([0, 0]);
-    expect(rows.every((row) => !("expected" in row))).toBe(true);
+    // Nothing is generated, so every stage is waiting and nothing has a count yet.
+    expect(rows.map((row) => row.status)).toEqual(["waiting", "waiting", "waiting"]);
+    expect(rows.map((row) => row.total)).toEqual([0, 0, 0]);
   });
 
-  it("will not offer round one before the seeds are locked", () => {
-    // Seeding is a separate step: until every entrant has a seed, round one has no pairing to
-    // generate, even though the field size already says how many matches there will be.
-    const unseeded = [
-      entrant("e1", null),
-      entrant("e2", null),
-      entrant("e3", null),
-      entrant("e4", null),
-    ];
+  it("withholds round one until the seeds are locked", () => {
+    // Seeding is a separate step: with no seed order there is no pairing to generate, even
+    // though the field size already says how many matches there will be.
+    const unseeded = fourEntrants.map((row) => ({ ...row, seed: null }));
     const row = find(
       buildStageProgress({ categories: [category()], entrants: unseeded, placementMatches: [] }),
       "placement:cat1:r1",
     );
-    expect(row.canAdvance).toBe(false);
-    expect(row.blockedReason).toBe("Seeds are not locked yet");
+
+    expect(row.status).toBe("waiting");
+    expect(row.action).toBeNull();
+    expect(row.note).toBe("Seeds are not locked yet");
   });
 
   it("offers round one once the seeds are locked", () => {
-    const locked = fourEntrants.map((row) => ({
-      ...row,
-      seed_locked_at: "2026-09-17T00:00:00Z",
-    }));
     const row = find(
-      buildStageProgress({ categories: [category()], entrants: locked, placementMatches: [] }),
+      buildStageProgress({ categories: [category()], entrants: fourEntrants, placementMatches: [] }),
       "placement:cat1:r1",
     );
-    expect(row.canAdvance).toBe(true);
-    expect(row.advanceLabel).toBe("Ready to generate round one");
+
+    expect(row.status).toBe("waiting");
+    expect(row.note).toBe("Ready to generate");
+    expect(row.action).toEqual({
+      kind: "generate",
+      label: "Generate Round 1",
+      scopeId: "cat1",
+    });
   });
 
-  it("counts a walkover as completed without claiming the field is done", () => {
+  it("reports a running round in matches, and offers the results surface", () => {
+    const rows = buildStageProgress({
+      categories: [category()],
+      entrants: fourEntrants,
+      placementMatches: roundTwoInProgress,
+    });
+
+    const roundOne = find(rows, "placement:cat1:r1");
+    expect(roundOne.status).toBe("completed");
+    expect(roundOne.total).toBe(2);
+    expect(roundOne.completed).toBe(2);
+    expect(roundOne.remaining).toBe(0);
+    expect(roundOne.action).toBeNull();
+
+    const roundTwo = find(rows, "placement:cat1:r2");
+    expect(roundTwo.status).toBe("current");
+    expect(roundTwo.total).toBe(2);
+    expect(roundTwo.completed).toBe(1);
+    expect(roundTwo.remaining).toBe(1);
+    expect(roundTwo.action).toEqual({ kind: "enter-results", label: "Enter Results", scopeId: null });
+  });
+
+  it("counts a running round in matches even when every undecided one involves two entrants", () => {
+    // The bug this pipeline replaces: once round two existed, progress switched from matches to
+    // entrants and a single undecided match read as "2 entrants still need placement results".
+    // The stage still owes one match, and that is what it must say.
+    const rows = buildStageProgress({
+      categories: [category()],
+      entrants: fourEntrants,
+      placementMatches: roundTwoInProgress,
+    });
+
+    const roundTwo = find(rows, "placement:cat1:r2");
+    expect(roundTwo.remaining).toBe(1);
+    expect(roundTwo.completed).toBe(1);
+    // No row anywhere may describe progress in entrants.
+    expect(JSON.stringify(rows)).not.toMatch(/entrant/i);
+  });
+
+  it("offers round two the moment round one is decided", () => {
     const matches = [
       placementMatch("r1-a", "round1", "e1", "e2", { status: "reported", winner_id: "e1" }),
       placementMatch("r1-b", "round1", "e3", "e4", { status: "walkover", winner_id: "e3" }),
@@ -264,15 +331,17 @@ describe("placement stage progress", () => {
       placementMatches: matches,
     });
 
+    // A walkover is decided, so round one is complete and round two is ready to be created.
     expect(find(rows, "placement:cat1:r1").completed).toBe(2);
-    expect(find(rows, "placement:cat1:r1").created).toBe(2);
-    // Both round-one matches are decided, so round two can be generated now.
+    expect(find(rows, "placement:cat1:r1").status).toBe("completed");
+
     const roundTwo = find(rows, "placement:cat1:r2");
-    expect(roundTwo.canAdvance).toBe(true);
-    expect(roundTwo.advanceLabel).toBe("Ready to generate round two");
+    expect(roundTwo.status).toBe("waiting");
+    expect(roundTwo.note).toBe("Ready to generate");
+    expect(roundTwo.action?.label).toBe("Generate Round 2");
   });
 
-  it("will not offer round two while round one is undecided", () => {
+  it("names the stage a waiting round is waiting on, rather than counting entrants", () => {
     const matches = [
       placementMatch("r1-a", "round1", "e1", "e2", { status: "reported", winner_id: "e1" }),
       placementMatch("r1-b", "round1", "e3", "e4"),
@@ -285,59 +354,71 @@ describe("placement stage progress", () => {
       }),
       "placement:cat1:r2",
     );
-    expect(roundTwo.canAdvance).toBe(false);
-    expect(roundTwo.blockedReason).toBe("1 match still to decide in round one");
+
+    expect(roundTwo.status).toBe("waiting");
+    expect(roundTwo.action).toBeNull();
+    expect(roundTwo.note).toBe("Waiting on Round 1");
   });
 
-  it("reports draws readiness once every entrant has played both matches", () => {
-    // The gate is the same one the Placement tab gates its generate buttons on, and this is
-    // what absorbs the Desk's removed "Draws ready" link.
-    const matches = [
-      placementMatch("r1-a", "round1", "e1", "e2", { status: "reported", winner_id: "e1" }),
-      placementMatch("r1-b", "round1", "e3", "e4", { status: "reported", winner_id: "e3" }),
-      placementMatch("r2-a", "round2", "e1", "e3", { status: "reported", winner_id: "e1" }),
-      placementMatch("r2-b", "round2", "e2", "e4", { status: "reported", winner_id: "e2" }),
-    ];
-    const roundTwo = find(
-      buildStageProgress({
-        categories: [category()],
-        entrants: fourEntrants,
-        placementMatches: matches,
-      }),
-      "placement:cat1:r2",
-    );
-    expect(roundTwo.completed).toBe(2);
-    expect(roundTwo.canAdvance).toBe(true);
-    expect(roundTwo.advanceLabel).toBe("Draws ready");
+  it("offers the knockout once the placement stage is played out", () => {
+    const rows = buildStageProgress({
+      categories: [category()],
+      entrants: fourEntrants,
+      placementMatches: placementComplete,
+    });
+
+    expect(find(rows, "placement:cat1:r1").status).toBe("completed");
+    expect(find(rows, "placement:cat1:r2").status).toBe("completed");
+
+    const knockout = find(rows, "knockout:cat1");
+    expect(knockout.status).toBe("waiting");
+    expect(knockout.note).toBe("Ready to generate");
+    expect(knockout.action).toEqual({
+      kind: "generate",
+      label: "Generate Knockout",
+      scopeId: "cat1",
+    });
+    // The event is not finished, so there is no terminal stage yet.
+    expect(rows.some((row) => row.key.startsWith("complete:"))).toBe(false);
   });
 
-  it("names the entrants still short of results while the placement stage runs", () => {
-    const matches = [
-      placementMatch("r1-a", "round1", "e1", "e2", { status: "reported", winner_id: "e1" }),
-      placementMatch("r1-b", "round1", "e3", "e4", { status: "reported", winner_id: "e3" }),
-      placementMatch("r2-a", "round2", "e1", "e3", { status: "reported", winner_id: "e1" }),
-      placementMatch("r2-b", "round2", "e2", "e4"),
-    ];
-    const roundTwo = find(
-      buildStageProgress({
-        categories: [category()],
-        entrants: fourEntrants,
-        placementMatches: matches,
-      }),
-      "placement:cat1:r2",
-    );
-    expect(roundTwo.canAdvance).toBe(false);
-    expect(roundTwo.blockedReason).toBe("2 entrants still need placement results");
-  });
-
-  it("gives a field of two only a round one", () => {
+  it("gives a field of two round one and the knockout, with no round two", () => {
     const rows = buildStageProgress({
       categories: [category()],
       entrants: [entrant("e1", 1), entrant("e2", 2)],
       placementMatches: [],
     });
-    expect(rows.map((row) => row.key)).toEqual(["placement:cat1:r1"]);
-    expect(rows[0]!.created).toBe(0);
+
+    expect(rows.map((row) => row.key)).toEqual(["placement:cat1:r1", "knockout:cat1"]);
+    // Round one is all this event plays, so the knockout is what it waits on after it.
+    expect(find(rows, "knockout:cat1").note).toBe("Waiting on Round 1");
+  });
+
+  it("settles a field of two once its champion-only brackets exist", () => {
+    // Two entrants sort into two one-player brackets, which hold no matches at all. The stage
+    // still has to settle, or the event would offer to generate a knockout it already has and
+    // the terminal stage would never arrive.
+    const rows = buildStageProgress({
+      categories: [category()],
+      entrants: [entrant("e1", 1), entrant("e2", 2)],
+      placementMatches: [
+        placementMatch("r1-a", "round1", "e1", "e2", { status: "reported", winner_id: "e1" }),
+      ],
+      tierDraws: [
+        tierDraw({ id: "draw-A", tier: "A", bracket_size: 1, entrant_count: 1, champion_id: "e1" }),
+        tierDraw({ id: "draw-D", tier: "D", bracket_size: 1, entrant_count: 1, champion_id: "e2" }),
+      ],
+    });
+
+    const knockout = find(rows, "knockout:cat1");
+    expect(knockout.status).toBe("completed");
+    expect(knockout.action).toBeNull();
+
+    expect(rows.map((row) => row.stageLabel)).toEqual([
+      "Round 1",
+      "Knockout",
+      "Tournament Complete",
+    ]);
   });
 
   it("adds no rows for a waived-only field", () => {
@@ -355,85 +436,129 @@ describe("placement stage progress", () => {
 // ---------------------------------------------------------------------------
 
 describe("knockout stage progress", () => {
-  it("reports only the rounds the draw actually has", () => {
-    expect(buildStageProgress({ tierDraws: [tierDraw()], tierMatches: [] })).toEqual([]);
-
+  it("sizes the bracket from the draw, so a half-generated one is not called complete", () => {
+    // A bracket of four plays three matches. Two of them are decided and the final does not
+    // exist yet, so a count taken from the rows that exist would report "2 / 2 completed" and
+    // call the event finished.
     const rows = buildStageProgress({
       tierDraws: [tierDraw()],
-      tierMatches: [tierMatch("r1-a", 1, 1, { status: "scheduled" })],
+      tierMatches: knockoutInProgress,
     });
-    expect(rows.map((row) => row.roundLabel)).toEqual(["Round 1"]);
-    expect(rows[0]!.created).toBe(1);
-    expect(rows[0]!.completed).toBe(0);
+
+    expect(rows).toHaveLength(1);
+    const row = find(rows, "knockout:cat1");
+    expect(row.total).toBe(3);
+    expect(row.completed).toBe(2);
+    expect(row.remaining).toBe(1);
+    expect(row.status).toBe("current");
+    expect(row.action?.label).toBe("Enter Results");
   });
 
-  it("carries the draw's own tier label rather than a hardcoded one", () => {
+  it("completes once every match of every bracket is decided", () => {
     const rows = buildStageProgress({
-      tierDraws: [tierDraw({ tier: "C" })],
-      tierMatches: [tierMatch("r1-a", 1, 1, { status: "scheduled" })],
+      tierDraws: [tierDraw()],
+      tierMatches: [
+        ...knockoutInProgress.slice(0, 2),
+        tierMatch("k3", 2, 1, { status: "reported", winner_id: "e1" }),
+      ],
     });
-    expect(rows.every((row) => row.stageLabel === "Tier C")).toBe(true);
+
+    const row = find(rows, "knockout:cat1");
+    expect(row.total).toBe(3);
+    expect(row.completed).toBe(3);
+    expect(row.remaining).toBe(0);
+    expect(row.status).toBe("completed");
+    expect(row.action).toBeNull();
   });
 
-  it("excludes byes from both counts, so an all-bye round has no row", () => {
-    // A bracket of four with two entrants is two byes and one real match: round one has
-    // nothing to play, so it contributes no progress row at all.
+  it("excludes byes from the bracket's size", () => {
+    // A bracket of four holding two entrants is two byes and one match to play.
     const rows = buildStageProgress({
       tierDraws: [tierDraw({ bracket_size: 4, entrant_count: 2 })],
       tierMatches: [
-        tierMatch("bye-1", 1, 1, { is_bye: true, status: "bye", winner_id: "x" }),
-        tierMatch("bye-2", 1, 2, { is_bye: true, status: "bye", winner_id: "y" }),
-        tierMatch("final", 2, 1, { status: "scheduled" }),
+        tierMatch("bye-1", 1, 1, { is_bye: true, status: "bye", winner_id: "e1" }),
+        tierMatch("bye-2", 1, 2, { is_bye: true, status: "bye", winner_id: "e2" }),
+        tierMatch("final", 2, 1),
       ],
     });
-    expect(rows.map((row) => row.key)).toEqual(["tier:draw-A:r2"]);
-    const final = find(rows, "tier:draw-A:r2");
-    expect(final.created).toBe(1);
-    expect(final.completed).toBe(0);
+
+    const row = find(rows, "knockout:cat1");
+    expect(row.total).toBe(1);
+    expect(row.completed).toBe(0);
+    expect(row.remaining).toBe(1);
+    expect(row.status).toBe("current");
   });
 
-  it("offers the next round only once the deepest round is fully decided", () => {
-    const pending = buildStageProgress({
-      tierDraws: [tierDraw()],
-      tierMatches: [
-        tierMatch("r1-a", 1, 1, { status: "reported", winner_id: "e1" }),
-        tierMatch("r1-b", 1, 2),
-      ],
-    });
-    const roundOne = find(pending, "tier:draw-A:r1");
-    expect(roundOne.canAdvance).toBe(false);
-    expect(roundOne.blockedReason).toBe("1 match still to decide in round 1");
-
-    const decided = buildStageProgress({
-      tierDraws: [tierDraw()],
-      tierMatches: [
-        tierMatch("r1-a", 1, 1, { status: "reported", winner_id: "e1" }),
-        tierMatch("r1-b", 1, 2, { status: "reported", winner_id: "e2" }),
-      ],
-    });
-    const ready = find(decided, "tier:draw-A:r1");
-    expect(ready.canAdvance).toBe(true);
-    expect(ready.advanceLabel).toBe("Ready for round 2");
-  });
-
-  it("offers nothing after the final round", () => {
+  it("reports one stage for every tier of an event, not one per bracket", () => {
+    // The four brackets are generated by one action and finish together, so they are one stage.
     const rows = buildStageProgress({
-      tierDraws: [tierDraw({ champion_id: "e1" })],
+      tierDraws: [
+        tierDraw({ id: "draw-A", tier: "A", bracket_size: 4, entrant_count: 4 }),
+        tierDraw({ id: "draw-B", tier: "B", bracket_size: 4, entrant_count: 4 }),
+      ],
       tierMatches: [
-        tierMatch("r1-a", 1, 1, { status: "reported", winner_id: "e1" }),
-        tierMatch("r1-b", 1, 2, { status: "reported", winner_id: "e2" }),
-        tierMatch("final", 2, 1, { status: "reported", winner_id: "e1" }),
+        tierMatch("a1", 1, 1, { status: "reported", winner_id: "e1" }),
+        tierMatch("a2", 1, 2, { status: "reported", winner_id: "e3" }),
+        tierMatch("a3", 2, 1, { status: "reported", winner_id: "e1" }),
+        tierMatch("b1", 1, 1, { draw_id: "draw-B", status: "reported", winner_id: "e2" }),
+        tierMatch("b2", 1, 2, { draw_id: "draw-B" }),
+        tierMatch("b3", 2, 1, { draw_id: "draw-B" }),
       ],
     });
-    const final = find(rows, "tier:draw-A:r2");
-    expect(final.canAdvance).toBe(false);
-    expect(final.blockedReason).toBeNull();
+
+    const knockouts = rows.filter((row) => row.stageLabel === "Knockout");
+    expect(knockouts).toHaveLength(1);
+    expect(knockouts[0]!.total).toBe(6);
+    expect(knockouts[0]!.completed).toBe(4);
+    expect(knockouts[0]!.remaining).toBe(2);
+  });
+
+  it("reports a draw whose event was not passed in rather than dropping it", () => {
+    const rows = buildStageProgress({
+      tierDraws: [tierDraw()],
+      tierMatches: [tierMatch("k1", 1, 1, { status: "reported", winner_id: "e1" })],
+    });
+
+    expect(rows.map((row) => row.key)).toEqual(["knockout:cat1"]);
+    expect(rows[0]!.eventLabel).toBeNull();
   });
 
   it("ignores a draw with no bracket", () => {
     expect(
       buildStageProgress({ tierDraws: [tierDraw({ bracket_size: 1, entrant_count: 1 })] }),
     ).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tournament complete
+// ---------------------------------------------------------------------------
+
+describe("the terminal stage", () => {
+  it("arrives only when every stage of the event is done", () => {
+    const rows = buildStageProgress({
+      categories: [category()],
+      entrants: fourEntrants,
+      placementMatches: placementComplete,
+      tierDraws: [tierDraw()],
+      tierMatches: [
+        ...knockoutInProgress.slice(0, 2),
+        tierMatch("k3", 2, 1, { status: "reported", winner_id: "e1" }),
+      ],
+    });
+
+    expect(rows.map((row) => row.stageLabel)).toEqual([
+      "Round 1",
+      "Round 2",
+      "Knockout",
+      "Tournament Complete",
+    ]);
+    const complete = rows[rows.length - 1]!;
+    expect(complete.status).toBe("completed");
+    // It carries no count: there is nothing left to measure, which is what it says.
+    expect(complete.total).toBe(0);
+    expect(complete.remaining).toBe(0);
+    expect(complete.action).toBeNull();
   });
 });
 
@@ -458,25 +583,34 @@ describe("round-robin stage progress", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]!.key).toBe("pool:pool-1");
+    expect(rows[0]!.eventLabel).toBeNull();
     expect(rows[0]!.stageLabel).toBe("Group");
     expect(rows[0]!.roundLabel).toBe("Pool 1");
-    expect(rows[0]!.created).toBe(0);
     // The pool's fixture list is generated rather than forecast, so the outstanding count is
     // known before a single match row exists.
     expect(expected).toBe(6);
-    expect(rows[0]!.blockedReason).toBe("6 matches still to come");
+    expect(rows[0]!.total).toBe(6);
+    expect(rows[0]!.completed).toBe(0);
+    expect(rows[0]!.remaining).toBe(6);
+    // Nothing has been created, so there is nothing to score and nothing to advance.
+    expect(rows[0]!.status).toBe("waiting");
+    expect(rows[0]!.action).toBeNull();
   });
 
-  it("keeps its pool name as the row label rather than inventing one", () => {
+  it("counts a running pool in matches and offers its results", () => {
     const rows = buildStageProgress({
-      pools: [pool({ name: "Group B" })],
+      pools: [pool()],
       poolEntries: entries,
-      poolMatches: [],
+      poolMatches: [poolMatch("pm1", "t1", "t2", { status: "reported", winner_id: "t1" })],
     });
-    expect(rows[0]!.roundLabel).toBe("Group B");
+
+    expect(rows[0]!.completed).toBe(1);
+    expect(rows[0]!.remaining).toBe(5);
+    expect(rows[0]!.status).toBe("current");
+    expect(rows[0]!.action?.label).toBe("Enter Results");
   });
 
-  it("offers the draw once every pool result is in", () => {
+  it("completes the pool once every fixture is played", () => {
     const pairs: [string, string][] = [
       ["t1", "t2"],
       ["t3", "t4"],
@@ -495,18 +629,18 @@ describe("round-robin stage progress", () => {
     });
 
     expect(rows[0]!.completed).toBe(6);
-    expect(rows[0]!.canAdvance).toBe(true);
-    expect(rows[0]!.advanceLabel).toBe("Ready for the draw");
+    expect(rows[0]!.status).toBe("completed");
+    expect(rows[0]!.note).toBe("Ready for the draw");
+    expect(rows[0]!.action).toBeNull();
   });
 
-  it("names how many results a running pool still owes", () => {
+  it("keeps its pool name as the row label rather than inventing one", () => {
     const rows = buildStageProgress({
-      pools: [pool()],
+      pools: [pool({ name: "Group B" })],
       poolEntries: entries,
-      poolMatches: [poolMatch("pm1", "t1", "t2", { status: "reported", winner_id: "t1" })],
+      poolMatches: [],
     });
-    expect(rows[0]!.canAdvance).toBe(false);
-    expect(rows[0]!.blockedReason).toBe("5 matches still to come");
+    expect(rows[0]!.roundLabel).toBe("Group B");
   });
 
   it("ignores a pool with fewer than two teams", () => {
@@ -555,12 +689,12 @@ describe("round-robin stage progress", () => {
 
     expect(rows.map((row) => row.roundLabel)).toEqual(["Round 1", "Round 2"]);
     expect(rows.map((row) => row.stageLabel)).toEqual(["Draw A", "Draw A"]);
-    expect(rows[0]!.created).toBe(1);
     expect(rows[0]!.completed).toBe(1);
-    expect(rows[1]!.created).toBe(1);
+    expect(rows[0]!.status).toBe("completed");
     expect(rows[1]!.completed).toBe(0);
+    expect(rows[1]!.status).toBe("current");
     // The legacy draw rounds report progress only; the desk drives their generation.
-    expect(rows.every((row) => !row.canAdvance)).toBe(true);
+    expect(rows.every((row) => row.action === null)).toBe(true);
   });
 });
 
@@ -587,7 +721,8 @@ describe("stage progress assembly", () => {
       ],
       placementMatches: [],
     });
-    expect(rows.map((row) => row.eventLabel)).toEqual(["WS", "MS"]);
+
+    expect([...new Set(rows.map((row) => row.eventLabel))]).toEqual(["WS", "MS"]);
   });
 
   it("returns nothing for a tournament with no stages", () => {

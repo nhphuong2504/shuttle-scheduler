@@ -11,6 +11,7 @@ import {
   compareIds,
   compareResources,
   type Assignment,
+  type BaselineSlot,
   type ScheduleMatch,
   type SchedulingProblem,
   type Violation,
@@ -27,6 +28,7 @@ import {
 import {
   buildSolution,
   compareMetrics,
+  DISRUPTION_COURT_CHANGE_MINUTES,
   groupFragmentation,
   metricsOf,
   softOrderInversions,
@@ -141,17 +143,43 @@ describe("metric formulas", () => {
     const base: SolutionMetrics = {
       unscheduled: 0,
       afterCutoff: 0,
+      stageProgression: 0,
       makespan: 100,
       resourceIdle: 0,
       excessWait: 0,
       fragmentation: 0,
       softOrderDeviation: 0,
+      disruption: 0,
     };
     const slightlyLate: SolutionMetrics = { ...base, afterCutoff: 1, makespan: 0 };
     expect(compareMetrics(slightlyLate, base)).toBeGreaterThan(0);
     const better: SolutionMetrics = { ...base, makespan: 99 };
     expect(compareMetrics(better, base)).toBeLessThan(0);
     expect(compareMetrics(base, base)).toBe(0);
+  });
+
+  it("ranks stage progression above makespan and below the lateness criteria", () => {
+    const base: SolutionMetrics = {
+      unscheduled: 0,
+      afterCutoff: 0,
+      stageProgression: 1_000,
+      makespan: 100,
+      resourceIdle: 0,
+      excessWait: 0,
+      fragmentation: 0,
+      softOrderDeviation: 0,
+      disruption: 0,
+    };
+    // A minute off a stage close buys a worse finish time, and the stage still wins.
+    expect(compareMetrics({ ...base, stageProgression: 999, makespan: 200 }, base)).toBeLessThan(0);
+    // With progression tied, makespan decides.
+    expect(compareMetrics({ ...base, makespan: 99 }, base)).toBeLessThan(0);
+    expect(compareMetrics({ ...base, makespan: 101 }, base)).toBeGreaterThan(0);
+    // Progression never buys an extra minute past the cutoff, and never buys an unscheduled match.
+    expect(compareMetrics({ ...base, afterCutoff: 1, stageProgression: 0 }, base)).toBeGreaterThan(
+      0,
+    );
+    expect(compareMetrics(base, { ...base, unscheduled: 1, stageProgression: 0 })).toBeLessThan(0);
   });
 });
 
@@ -557,5 +585,183 @@ describe("GRASP event loop", () => {
     expect(compareResources(problem.resources[0]!, problem.resources[1]!)).toBeLessThan(0);
     const solution = solve(problem, "grasp", { runs: 2, seed: 1 });
     expect(solution.assignments[0]!.resourceId).toBe("b");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Disruption
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `disruption` is the one criterion that asks "how much did you make the desk re-read?".
+ *
+ * It is ordered last on purpose, so these tests pin its formula and its two safety properties
+ * rather than any claim about how often it decides a fold: it must be zero when nothing moved, and
+ * it must never be consulted before a criterion that outranks it.
+ */
+describe("disruption", () => {
+  /** Two independent matches on two courts, so a re-solve has genuinely somewhere else to go. */
+  const twoMatchProblem = (baseline?: readonly BaselineSlot[]): SchedulingProblem => ({
+    matches: [
+      match({ id: "a", participants: ["p1", "p2"], groupKey: "g" }),
+      match({ id: "b", participants: ["p3", "p4"], groupKey: "g" }),
+    ],
+    resources: [resource("r1", 1), resource("r2", 2)],
+    horizonStart: T0,
+    planningEnd: at(600),
+    hardEnd: null,
+    floor: T0,
+    ...(baseline ? { baseline } : {}),
+  });
+
+  const slot = (matchId: string, startMinutes: number, resourceId: string): BaselineSlot => ({
+    matchId,
+    start: at(startMinutes),
+    resourceId,
+  });
+
+  const disruptionOf = (
+    problem: SchedulingProblem,
+    assignments: Assignment[],
+    unscheduled: string[] = [],
+  ) => metricsOf(problem, solutionWith(problem, assignments, unscheduled)).disruption;
+
+  it("is zero with no baseline, which is what a first build gets", () => {
+    const problem = twoMatchProblem();
+    expect(disruptionOf(problem, [assign("a", 0), assign("b", 0, 30, "r2")])).toBe(0);
+  });
+
+  it("is zero when the rebuild agrees with the schedule it was handed", () => {
+    const problem = twoMatchProblem([slot("a", 0, "r1"), slot("b", 0, "r2")]);
+    expect(disruptionOf(problem, [assign("a", 0), assign("b", 0, 30, "r2")])).toBe(0);
+  });
+
+  it("charges the minutes a start moved", () => {
+    const problem = twoMatchProblem([slot("a", 0, "r1"), slot("b", 0, "r2")]);
+    expect(disruptionOf(problem, [assign("a", 45), assign("b", 0, 30, "r2")])).toBe(45);
+    // Direction does not matter: an earlier slot is as much a re-read as a later one.
+    expect(disruptionOf(problem, [assign("a", 15), assign("b", 0, 30, "r2")])).toBe(15);
+  });
+
+  it("charges a court change on top of any start move", () => {
+    const problem = twoMatchProblem([slot("a", 0, "r1"), slot("b", 0, "r2")]);
+    // Same time, different court: only the court penalty.
+    expect(disruptionOf(problem, [assign("a", 0, 30, "r2"), assign("b", 0, 30, "r2")])).toBe(
+      DISRUPTION_COURT_CHANGE_MINUTES,
+    );
+    // Both changed: the two costs add.
+    expect(disruptionOf(problem, [assign("a", 10, 30, "r2"), assign("b", 0, 30, "r2")])).toBe(
+      10 + DISRUPTION_COURT_CHANGE_MINUTES,
+    );
+  });
+
+  it("ignores a baseline match the problem marks fixed", () => {
+    // A fixed match is pinned, so a solver that moved it would have failed validation rather than
+    // scored badly. Counting it would just add a constant to every candidate.
+    const base = twoMatchProblem([slot("a", 0, "r1"), slot("b", 0, "r2")]);
+    const pinned = match({
+      id: "p",
+      participants: ["p5", "p6"],
+      fixed: true,
+      start: at(0),
+      end: at(30),
+      resourceId: "r1",
+    });
+    const problem: SchedulingProblem = {
+      ...base,
+      matches: [...base.matches, pinned],
+      baseline: [...base.baseline!, slot("p", 240, "r1")],
+    };
+    // The pinned row is at 240 in the baseline and at 0 in the solution, and costs nothing.
+    expect(disruptionOf(problem, [assign("a", 0), assign("b", 0, 30, "r2")])).toBe(0);
+  });
+
+  it("gives a plain re-solve of the same problem zero disruption", () => {
+    // The idempotence property, on a real solver rather than on hand-built assignments: the second
+    // run is handed the first run's schedule as its baseline and must not want to change it.
+    const first = solve(twoMatchProblem(), "greedy");
+    const baseline = first.assignments.map((assignment) => ({
+      matchId: assignment.matchId,
+      start: assignment.start,
+      resourceId: assignment.resourceId,
+    }));
+    const second = solve(twoMatchProblem(baseline), "greedy");
+
+    expect(second.assignments).toEqual(first.assignments);
+    expect(metricsOf(twoMatchProblem(baseline), second).disruption).toBe(0);
+  });
+
+  it("moves only the tail when a pin lands in the middle of the running order", () => {
+    // Two back-to-back matches on one court with a pinned match pushed in between them. The head
+    // stays exactly where the desk last read it, and only what sits behind the pin shifts.
+    const chain = (baseline?: readonly BaselineSlot[]): SchedulingProblem => ({
+      matches: [
+        match({ id: "m1", participants: ["p1", "p2"], groupKey: "g" }),
+        match({ id: "m2", participants: ["p3", "p4"], groupKey: "g" }),
+        match({
+          id: "pin",
+          participants: ["p5", "p6"],
+          groupKey: "g",
+          fixed: true,
+          start: at(30),
+          end: at(60),
+          resourceId: "r1",
+        }),
+      ],
+      resources: [resource("r1", 1)],
+      horizonStart: T0,
+      planningEnd: at(600),
+      hardEnd: null,
+      floor: T0,
+      ...(baseline ? { baseline } : {}),
+    });
+
+    const baseline: BaselineSlot[] = [
+      { matchId: "m1", start: at(0), resourceId: "r1" },
+      { matchId: "m2", start: at(30), resourceId: "r1" },
+    ];
+    const problem = chain(baseline);
+    const solution = solve(problem, "greedy");
+    const startOf = (id: string) =>
+      solution.assignments.find((assignment) => assignment.matchId === id)!.start;
+
+    expect(startOf("m1")).toBe(at(0));
+    expect(startOf("m2")).toBe(at(60));
+    // Exactly the tail's shift: the head never moved and the pin is immovable.
+    expect(metricsOf(problem, solution).disruption).toBe(30);
+  });
+
+  it("never outranks a criterion above it", () => {
+    // Disruption is the loosest preference there is. A candidate that finishes a minute later has to
+    // win even when the other one left the whole schedule exactly where it was.
+    const steady: SolutionMetrics = {
+      unscheduled: 0,
+      afterCutoff: 0,
+      stageProgression: 0,
+      makespan: 400,
+      resourceIdle: 0,
+      excessWait: 0,
+      fragmentation: 0,
+      softOrderDeviation: 0,
+      disruption: 0,
+    };
+    const shuffled = { ...steady, makespan: 401, disruption: 500 };
+    expect(compareMetrics(shuffled, steady)).toBeGreaterThan(0);
+  });
+
+  it("still decides when every other criterion ties", () => {
+    const steady: SolutionMetrics = {
+      unscheduled: 0,
+      afterCutoff: 0,
+      stageProgression: 0,
+      makespan: 400,
+      resourceIdle: 0,
+      excessWait: 0,
+      fragmentation: 0,
+      softOrderDeviation: 0,
+      disruption: 0,
+    };
+    expect(compareMetrics(steady, { ...steady, disruption: 1 })).toBeLessThan(0);
+    expect(compareMetrics(steady, steady)).toBe(0);
   });
 });
