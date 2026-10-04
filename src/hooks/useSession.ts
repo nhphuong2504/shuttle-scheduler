@@ -1,24 +1,33 @@
 import { useSyncExternalStore } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
-import type { StaffRoleName } from "@/lib/tournament/data";
+import {
+  isPlatformAdmin as platformAdminOf,
+  normalizeSystemRole,
+  type SystemRole,
+} from "@/lib/auth/authorization";
 
 type SessionUser = { userEmail: string | null; userId: string | null };
 
 type SessionState = {
   session: SessionUser | null;
-  role: StaffRoleName | null;
+  systemRole: SystemRole | null;
   ready: boolean;
 };
 
-const INITIAL_STATE: SessionState = { session: null, role: null, ready: false };
+const INITIAL_STATE: SessionState = { session: null, systemRole: null, ready: false };
 
 /**
- * Session + role are cached at module scope so they survive the `AppShell`
- * remount that happens on every route change. Each route renders its own
- * `<AppShell>`, so a per-component `useState` role would reset to `null` on
- * each navigation and make the role-gated "New event" / "Staff" links blink
- * out and back in.
+ * Session + platform role are cached at module scope so they survive a shell remount.
+ * The workspace shell mounts once per workspace rather than once per navigation, but it
+ * is still remounted when a caller moves between the public pages and a workspace, and
+ * the layout's own header reads the role to decide what to offer. A per-component
+ * `useState` role would reset to `null` on each of those moves and make the role-gated
+ * links blink out and back in.
+ *
+ * The platform role is the *only* thing cached here. Tournament access is not: it is
+ * per tournament and belongs to `useTournamentAccess`, which is why nothing in this
+ * hook says whether the caller may edit anything.
  */
 let state: SessionState = INITIAL_STATE;
 const listeners = new Set<() => void>();
@@ -27,7 +36,7 @@ function setState(next: Partial<SessionState>) {
   const merged = { ...state, ...next };
   if (
     merged.session === state.session &&
-    merged.role === state.role &&
+    merged.systemRole === state.systemRole &&
     merged.ready === state.ready
   ) {
     return;
@@ -48,26 +57,31 @@ async function load() {
       : null;
 
     if (!next) {
-      setState({ session: null, role: null, ready: true });
+      setState({ session: null, systemRole: null, ready: true });
       return;
     }
 
     setState({ session: next });
-    const { data: roleName } = await supabase.rpc("current_staff_role");
+    const { data: roleName } = await supabase.rpc("current_system_role");
     // Ignore a stale response if the signed-in user changed while in flight.
     if (state.session?.userId !== next.userId) return;
-    setState({ role: (roleName as StaffRoleName | null) ?? null, ready: true });
+    // A missing or unrecognised role reads as `user`. That is the same direction the
+    // database resolves in, so the browser never shows more than the server allows.
+    setState({
+      systemRole: roleName == null ? "user" : normalizeSystemRole(roleName),
+      ready: true,
+    });
   } catch {
-    // An unknown role is the safe default: keep the role-gated links hidden
-    // rather than flashing privileges we could not verify. Settling `ready`
-    // also stops every later mount from retrying on an unreachable backend.
+    // An unknown role is the safe default: keep the privileged links hidden rather
+    // than flashing privileges we could not verify. Settling `ready` also stops every
+    // later mount from retrying on an unreachable backend.
     if (!state.ready) setState({ ready: true });
   }
 }
 
 function refresh() {
-  // Coalesce concurrent mounts into one request, but make sure an auth change
-  // that lands mid-flight is not swallowed: queue a follow-up run.
+  // Coalesce concurrent mounts into one request, but make sure an auth change that
+  // lands mid-flight is not swallowed: queue a follow-up run.
   if (inFlight) {
     rerun = true;
     return inFlight;
@@ -86,16 +100,16 @@ function ensureAuthSubscription() {
   if (subscribed) return;
   subscribed = true;
   supabase.auth.onAuthStateChange(() => {
-    // Defer: calling other Supabase methods synchronously from this callback
-    // can deadlock the auth client.
+    // Defer: calling other Supabase methods synchronously from this callback can
+    // deadlock the auth client.
     setTimeout(() => void refresh(), 0);
   });
 }
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
-  // Effects never run during SSR, but guard anyway so no request-scoped state
-  // is ever written on the server.
+  // Effects never run during SSR, but guard anyway so no request-scoped state is ever
+  // written on the server.
   if (typeof window === "undefined") {
     return () => listeners.delete(listener);
   }
@@ -110,28 +124,23 @@ function getSnapshot() {
   return state;
 }
 
+/**
+ * Who is signed in, and what platform role they hold.
+ *
+ * Deliberately says nothing about what they may do. Every edit control is gated on
+ * `useTournamentAccess(tournamentId)` instead, because "can this person edit" is a
+ * per-tournament question now - a staff role could answer it globally, owner and
+ * editor rows cannot.
+ */
 export function useSession() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const { session, role } = snapshot;
-
-  const can = (...needed: StaffRoleName[]) => !!role && needed.includes(role);
+  const { session, systemRole } = snapshot;
 
   return {
     session,
     ready: snapshot.ready,
     signedIn: !!session,
-    role,
-    isAdmin: role === "admin",
-    canRegister: can("admin", "registrar"),
-    canScore: can("admin", "scorer"),
-    canSchedule: can("admin", "scheduler"),
-    canGenerate: can("admin", "registrar"),
-    // The placement format's own gates, matching its RPCs exactly. They are
-    // separate from the round-robin flags because the database roles differ:
-    // `sync_placement_entrants` accepts a registrar, while generating and locking
-    // is scheduler work and reporting is scorer work.
-    canEditPlacementEntrants: can("admin", "registrar", "scheduler"),
-    canGeneratePlacement: can("admin", "scheduler"),
-    canScorePlacement: can("admin", "scorer", "scheduler"),
+    systemRole,
+    isPlatformAdmin: platformAdminOf(systemRole),
   };
 }

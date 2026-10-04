@@ -1,6 +1,7 @@
 import { type Page } from "@playwright/test";
 
 import { THEME_STORAGE_KEY, type Theme } from "../../src/lib/design/theme";
+import { routes } from "./routes";
 
 /**
  * The infrastructure matrix: routes x themes.
@@ -22,32 +23,59 @@ import { THEME_STORAGE_KEY, type Theme } from "../../src/lib/design/theme";
 /**
  * Every route the app can render, not just the ones in the nav.
  *
- * `/auth`, `/pools`, `/schedule` and `/staff` were all reachable and all unscanned, which
- * is how `/staff` kept two critical violations - an unnamed combobox and an unlabelled
- * input, the same defect P2 fixed on `/registration` - through two phases of
- * accessibility work. A gate is only as complete as its route list, so the list comes
- * from the route files rather than from the navigation.
+ * `/auth`, `/pools` and `/staff` were all reachable and all unscanned, which is how
+ * `/staff` kept two critical violations - an unnamed combobox and an unlabelled input, the
+ * same defect P2 fixed on `/registration` - through two phases of accessibility work. A
+ * gate is only as complete as its route list, so the list comes from the route files
+ * rather than from the navigation.
  *
- * `/pools` and `/schedule` render the replaced round-robin engine and are reachable only
- * by direct URL. They are included deliberately: "not in the nav" is not "not shipped".
+ * **Every operational address is a workspace address now**, so they all carry the fixture
+ * tournament's id. `routes.ts` owns those strings; this list names the pages.
+ *
+ * One entry deserves a note, because the count went *down* rather than up: `/schedule` and
+ * `/placement-schedule` used to be two routes and are now one, so listing both would scan
+ * the same component twice and call it coverage. The format decides which of the two
+ * scheduling views renders, and this fixture runs the placement format - the day planner is
+ * measured in `schedule-formats.spec.ts`, which asks the mock for a round-robin tournament.
+ *
+ * `/pools` renders the replaced round-robin engine and is reachable only by direct URL. It
+ * is included deliberately: "not in the nav" is not "not shipped".
  *
  * Signed-in-only surfaces - the settings panels and the score dialogs - are not covered
  * here, because they are gated by a role rather than a route. The staff-session suite
  * covers those.
  */
 export const ROUTES = [
-  "/",
-  "/registration",
-  "/placement",
-  "/draws",
-  "/knockout",
-  "/placement-schedule",
-  "/matches",
-  "/setup",
-  "/staff",
+  routes.tournament,
+  routes.desk,
+  routes.entries,
+  routes.placement,
+  routes.draws,
+  routes.knockout,
+  routes.schedule,
+  routes.scores,
+  routes.settings,
+  routes.access,
+  routes.registrations,
+  /**
+   * The surfaces that are about tournaments rather than *inside* one, and therefore
+   * carry no id.
+   *
+   * They were added in S5, when they first existed, and `/` joined them in S6: leaving any
+   * of them out would have made the route list a list of the routes somebody remembered.
+   * They are the pages an unauthenticated visitor meets first, which is exactly the
+   * audience least likely to be in any sweep's author's head.
+   *
+   * `/` renders its *visitor* reading here, because this list is swept signed out. The
+   * signed-in reading - Home - needs a session, so it is scanned in
+   * `public-surfaces.spec.ts` against the same axe tags and in both themes.
+   */
+  routes.home,
+  routes.explore,
+  routes.myTournaments,
+  routes.newTournament,
   "/auth",
-  "/pools",
-  "/schedule",
+  routes.pools,
 ] as const;
 
 export const THEMES = ["light", "dark"] as const satisfies readonly Theme[];

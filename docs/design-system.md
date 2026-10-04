@@ -1,22 +1,81 @@
 # Tournova design system
 
-This document describes the design system **as shipped**. It is descriptive, not
-prescriptive: where this document and the code disagree, the code is right and
-this file is the thing to fix.
+This file has two parts.
 
-Two consequences worth stating up front, because they are the reason this file
-exists at all:
+- **Part 1, Invariants and conventions,** is the part that binds. Invariants are mandatory;
+  conventions are mandatory *intent* applied with judgement. Each invariant says how it is
+  checked, because some are enforced by a test and some only by review or measurement.
+- **Part 2, Reference,** describes the system as shipped: token values, states, components
+  and the reasoning behind past decisions. Where Part 2 and the code disagree, the code is
+  right and Part 2 is the bug. Part 2 never overrides Part 1.
 
-- It records current behaviour, so it does not introduce design decisions. If a
-  rule here cannot be pointed at in the code, treat it as a bug in this file.
-- It lives in the repository so it travels with a clone. The design work was
-  originally documented in a Cursor canvas outside the repo, which meant a fresh
-  checkout had no design authority at all.
+The system is a **cool neutral slate chassis with blue as the brand hue**. There is no warm
+earth palette and no terracotta, sage, indigo, mint or amber brand colour; those appear only
+in deleted, superseded plans.
 
-The system is a **cool neutral slate chassis with blue as the brand hue**. There
-is no warm earth palette and no terracotta, sage, indigo, mint or amber brand
-colour; those appear only in deleted, superseded plans. If you find a document
-recommending them, it is stale.
+It lives in the repository so it travels with a clone: a fresh checkout carries its own design
+authority.
+
+---
+
+# Part 1 - Invariants and conventions
+
+## Invariants
+
+| # | Invariant | How it is checked |
+| --- | --- | --- |
+| I1 | **Colour comes from tokens.** Every colour utility resolves to a `--color-*` key defined in [`src/styles.css`](../src/styles.css). No hex, `rgb()` or default Tailwind palette. The one documented exception is the [last-resort document](#the-last-resort-document) | Test: [`tokens.test.ts`](../src/lib/design/tokens.test.ts) |
+| I2 | **12px floor.** Nothing renders below 12px | Test: `tokens.test.ts` statically, [`e2e/typography.spec.ts`](../e2e/typography.spec.ts) in the rendered DOM |
+| I3 | **Status is never colour alone.** User-visible operational and status states - match status, court state, lifecycle, connection - carry a distinct glyph and a text label as well as a colour | Test for match status and tiers ([`status-pill.test.tsx`](../src/components/status-pill.test.tsx)); review for the rest |
+| I4 | **Hue is reserved** for state, brand action and destructive. A state hue is never decoration, and `--accent` is the neutral hover surface, not a brand colour | Review |
+| I5 | **A fill and its text twin are separate tokens.** Text on a new fill needs an ink token solved against that fill. Contrast claims are numbers, so measure them | Measurement: [`e2e/matrix.spec.ts`](../e2e/matrix.spec.ts), [`e2e/criteria.spec.ts`](../e2e/criteria.spec.ts) and axe cover resolvable pairs; a new pair needs a hand measurement |
+| I6 | **Theme takes no pathname.** Its fallback is the operating system, not the route, so navigating never changes the lighting | Test: [`e2e/theme.spec.ts`](../e2e/theme.spec.ts) |
+| I7 | **Tier-4 match states render as ink only**, with no chip | Test: `tokens.test.ts`, `status-pill.test.tsx` |
+
+Every colour token is defined in both `:root` and `.dark`; `tokens.test.ts` enforces that parity.
+
+## Conventions
+
+These are not mechanically checked. They are the intent a change is reviewed against.
+
+**Type tiers name the job of the text, not its size.** Choose a tier by what the text is doing.
+
+| Tier | Job |
+| --- | --- |
+| T1 Glance | Values read without scanning: match score, timer |
+| T2 Identify | Identifying text, control labels, important metadata |
+| T3 Support | Supporting, explanatory or secondary text |
+| T4 Reference | Detail found on demand: timestamps, captions, hints |
+
+T2 and T3 share a size today. The distinction is semantic and is kept on purpose: a later
+decision may separate them by weight, size or tracking, and text already tiered by job will
+move correctly. Apply tiers to text you are writing or already changing. Do not migrate
+Tailwind size classes in bulk; a bulk rename changes no pixel and records no judgement.
+
+**Every view has a clear action hierarchy.** Prefer one primary action where the workflow
+permits it. Where several high-priority actions are genuinely required, their relative
+importance must still be obvious from size, weight, position or fill. The primary action sits
+before the explanation, not after it.
+
+**Hierarchy is built from size, weight and position first, and colour last.** A view shows
+about three saturated elements - brand action, live state, and a destructive action when one
+is present. That is a heuristic, not a count to hit.
+
+**Audiences stay separate.** This is product intent, and it is mandatory even though no test
+enforces it. A moderator works one court on one day in real time and is not shown
+tournament-wide forecasts. An organiser plans the tournament and is not shown desk-level
+operational noise. A participant is not an operator, and no surface presents participation or
+approval as authority.
+
+**A change must earn its place.** It must improve the actual user experience, a clearly
+defined invariant above, or maintainability with an explicit downstream benefit. Technically
+conforming, with the screen unchanged, is not enough.
+
+---
+
+# Part 2 - Reference
+
+The rest of this file describes the system as shipped.
 
 ## Where the system lives
 
@@ -28,6 +87,7 @@ recommending them, it is stale.
 | Theme resolution | [`src/lib/design/theme.ts`](../src/lib/design/theme.ts) |
 | Shared components | [`src/components/app-shell.tsx`](../src/components/app-shell.tsx) |
 | Pre-hydration appearance bootstrap | [`src/routes/__root.tsx`](../src/routes/__root.tsx) |
+| The last-resort document | [`src/lib/error-page.ts`](../src/lib/error-page.ts) — carries its own copy of the palette; see [below](#the-last-resort-document) |
 
 ## Chassis
 
@@ -66,8 +126,18 @@ constraint.
 `--border-selected` exists because a selected state is state information, and
 WCAG 1.4.11 requires state information to reach 3:1. Marking "selected" with a
 fill that equals the surface colour on a muted container measures 1.09:1 in light
-and 1.02:1 in dark, so the selected segment was not a shape at all. It is applied
-as `ring-1 ring-border-selected` on active segmented-control buttons and tabs.
+and 1.02:1 in dark, so the selected segment was not a shape at all.
+
+**Its utility spells the word twice.** The colour key is already
+`--color-border-selected`, so the edge is `ring-border-selected` or
+`border-border-selected` - applied as `ring-1 ring-border-selected` on an active
+segmented control or tab, and as `border-border-selected` on a step that is a box
+rather than a chip. A bare `border-selected` is not a class Tailwind emits, so it is
+dropped from the build and the element keeps whatever edge it inherited: the base
+layer's `border-color: var(--color-border)`. That is how the setup wizard's current
+step, rewritten from `border-primary/40` to `border-selected`, kept drawing the
+decorative hairline (measured 1.2:1 light and 1.4:1 dark against its own fill, where
+1.4.11 asks 3:1) while its source read as though the edge had been solved.
 
 ## Colour tokens
 
@@ -260,22 +330,19 @@ and no automatic inversion - each token is chosen for its own theme.
 
 ## Typography
 
-Tiers are named for the **job** the text does, not for its size, so the scale can be
-adjusted without any component changing its markup.
+Tiers are named for the job the text does; the jobs are defined in
+[Conventions](#conventions). This table is only the sizes they currently emit.
 
-| Tier | Job | Examples | Size / line height |
-| --- | --- | --- | --- |
-| T1 Glance | Values read without scanning | match score, timer | 24 / 28 |
-| T2 Identify | Things named while moving | court id, player names, status | 14 / 20 |
-| T3 Read | Content read in sequence | body copy, form values | 14 / 20 |
-| T4 Reference | Detail found on demand | timestamps, captions, hints | 12 / 16 |
+| Tier | Size / line height |
+| --- | --- |
+| T1 | 24 / 28 |
+| T2 | 14 / 20 |
+| T3 | 14 / 20 |
+| T4 | 12 / 16 |
 
-Sizes in px; each tier emits font-size and line-height together as `text-tN`.
+Sizes in px; each tier emits font-size and line-height together as `text-tN`. The 12px floor
+is invariant [I2](#invariants).
 
-- **12px is the floor.** Nothing in the app may render below it. The legacy scale
-  had 64 uses of 11px and 18 of 10px, which is the defect the scale exists to remove
-  rather than a preference being expressed. Enforced statically and in the rendered
-  DOM.
 - **Fonts:** Plus Jakarta Sans for display (`--font-display`), Inter for body
   (`--font-body`) and scores (`--font-score`). All are loaded in
   [`__root.tsx`](../src/routes/__root.tsx).
@@ -285,7 +352,7 @@ Sizes in px; each tier emits font-size and line-height together as `text-tN`.
   a font-size group. Without that, `cn("text-t1", "text-muted-foreground")` would
   strip the size class and silently change the type scale.
 
-## Radius, elevation and spacing
+## Radius and elevation
 
 - Radius derives from a single `--radius: 0.875rem`, with `--radius-sm|md|lg|xl|2xl|3xl`
   computed around it. Prefer the derived tokens over literals.
@@ -295,6 +362,33 @@ Sizes in px; each tier emits font-size and line-height together as `text-tN`.
 - The elevation tint source and the body text colour are separate tokens. They happen
   to share a value, but the roles differ.
 
+## The last-resort document
+
+[`src/lib/error-page.ts`](../src/lib/error-page.ts) is the response served when the application
+itself failed to render. It is the **one place in `src/` that is not written against
+`src/styles.css`**, and it is worth understanding why rather than rediscovering it.
+
+It cannot link the stylesheet: that is a build artifact the response does not include, and a crash
+page that depends on the thing that just crashed is not a crash page. So it is a standalone
+document with its own `<style>`, and it carries **its own copy of the palette**, under the same
+`--color-*` names. Three properties keep that copy from becoming a second source of truth:
+
+- **It is a copy, not a palette.** It declares no colour the design system has not solved, and
+  `tokens.test.ts` asserts that every value it declares is byte-identical to the corresponding
+  token in `styles.css` for the theme it belongs to. Moving a token in the stylesheet therefore
+  fails the suite until the copy moves with it, which is the only thing that makes a duplicated
+  value safe here.
+- **It follows the operating system, not a stored choice.** The stored choice lives in the
+  application's own storage and is unreachable from a document that failed before the application
+  ran. `prefers-color-scheme` is the documented fallback for a caller with nothing stored, so a
+  dark venue gets a dark crash page rather than a white flash.
+- **It uses the shipped type tiers** — T3 for prose, T1 for the heading — and a `system-ui` font
+  stack, because a crash page must not wait on a network font to decide whether it has a layout.
+
+Seven colours are copied: `background`, `foreground`, `surface`, `muted-foreground`,
+`border-control`, `primary` and `primary-foreground`. Nothing is copied that the document does not
+paint with.
+
 ## Components
 
 Shared components and what they are for. All are exported from
@@ -302,7 +396,11 @@ Shared components and what they are for. All are exported from
 
 | Component | Purpose |
 | --- | --- |
-| `AppShell` | Page chrome: sticky header, nav, appearance toggles, session block, title and subtitle |
+| `WorkspaceShell` | One tournament's chrome, rendered once by [`tournaments/$tournamentId/route.tsx`](../src/routes/tournaments/$tournamentId/route.tsx): tournament name, lifecycle pill, section nav, appearance control, session block, and the shared read-only notice |
+| `PublicShell` | The chrome for pages that are not about one tournament (sign-in today; Explore and the landing page next): brand, flat nav, appearance control, session block, title and subtitle |
+| `Page` | One page inside a shell: its title row, then its content. `PageHeader` is the row it renders |
+| `TournamentStatusPill` | A tournament's lifecycle word drawn through the match tiers: upcoming → tier 3 neutral chip, in progress → tier 1 live chip, completed → tier 4 ink only |
+| `ReadOnlyNotice` | The one read-only treatment, shared by a signed-out visitor and a signed-in viewer |
 | `Panel` | The standard bordered surface with an optional title bar |
 | `StatTile` | One labelled number, with `normal` / `good` / `warn` / `danger` tones |
 | `EmptyState` | Dashed-border placeholder for "nothing here yet" |
@@ -311,6 +409,16 @@ Shared components and what they are for. All are exported from
 | `MatchFormatCard` ([`match-format.tsx`](../src/components/match-format.tsx)) | Scoring, match length and rest gap per stage, in one card |
 | `StageProgressList` ([`stage-progress.tsx`](../src/components/stage-progress.tsx)) | Format-agnostic stage progress rows |
 | `ScheduledFinish` / `DayScheduleStatus` ([`schedule-status.tsx`](../src/components/schedule-status.tsx)) | Scheduled finish measured against the official close, and per-day status |
+| `ConnectionBadge` ([`connection-badge.tsx`](../src/components/connection-badge.tsx)) | The live-connection readout, shared by the Desk and the Schedule page: four states, each with its own word, as a `role="status"` live region. It owns the clock that ages its own "last change" copy |
+
+**The shell is split by audience, not by page.** `WorkspaceShell` mounts once per tournament
+from the layout route, so the header and the nav survive a move between the pages under it,
+and the tournament's own identity is stated by the chrome rather than by whichever page
+happened to pass a title. `PublicShell` is for the pages that have no tournament to name.
+A page renders `Page`, never a shell; `src/routes/-surfaces.test.ts` fails the suite if a
+page starts drawing chrome of its own again. Match tiers and lifecycle tiers are one
+vocabulary, which is why `TournamentStatusPill` reuses `--state-*` rather than minting a
+second set of lifecycle colours.
 
 `StatTile` carries a rule worth knowing: **a toned tile's label takes the tone's own
 ink**, not `text-muted-foreground`. The neutral ink is solved against neutral
@@ -319,37 +427,16 @@ mode the neutral label measured 3.95:1 against the 4.5:1 that 12px needs. Each t
 already has an ink solved against its own surface, which is what `--warn-foreground`
 and `--danger-foreground` are.
 
-## Do and don't
-
-**Do**
-
-- Use a token. Every colour utility must resolve to a `--color-*` key.
-- Use the type tiers. A component names the job (`text-t2`), and the scale decides the size.
-- Give every state a glyph and a label as well as a colour.
-- Use `bg-primary/10` for primary-tinted fills; it is the tint `--primary-ink` was solved against.
-- Check a new fill for text sitting on it, and add an ink twin if there is any.
-- Measure. Contrast claims in this system are numbers, and a plausible-looking value
-  has been wrong more than once.
-
-**Don't**
-
-- Don't hardcode a colour, a hex, an `rgb()`, or an arbitrary `text-[13px]`.
-- Don't render text below 12px, and don't introduce a size off the tier scale.
-- Don't convey status with colour alone.
-- Don't give a tier-4 state a chip; tier 4 is ink only.
-- Don't use a state hue for decoration, and don't introduce a new hue without solving
-  it for both themes and checking it in grayscale.
-- Don't use `--accent` as a brand colour.
-- Don't reach for a blue chip for a state - blue means brand action.
-- Don't make the theme resolve from the route; its fallback is the environment.
-
 ## The gates that enforce this
 
 `npm run typecheck && npm run test && npm run test:e2e`
 
+These enforce the invariants marked as tests in Part 1. Invariants I3 (outside match status),
+I4 and the conventions need review; see [`ux-review-checklist.md`](./ux-review-checklist.md).
+
 | Gate | Covers |
 | --- | --- |
-| [`tokens.test.ts`](../src/lib/design/tokens.test.ts) | Token references resolve; theme parity; tier-4 ink sharing; the 12px floor; the type scale is complete; dead tokens; every colour utility has a theme key |
+| [`tokens.test.ts`](../src/lib/design/tokens.test.ts) | Token references resolve; theme parity; tier-4 ink sharing; the 12px floor; the type scale is complete; dead tokens; every colour utility has a theme key; the crash document's palette copy stays identical to `styles.css` |
 | [`status-pill.test.tsx`](../src/components/status-pill.test.tsx), [`stat-tile.test.tsx`](../src/components/stat-tile.test.tsx) | Component rendering per tier and per tone |
 | [`-surfaces.test.ts`](../src/routes/-surfaces.test.ts) | Source-level guards on UI decisions that components cannot see |
 | [`e2e/a11y.spec.ts`](../e2e/a11y.spec.ts) | Axe across every route in both themes, as a pinned baseline |

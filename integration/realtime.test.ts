@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createStaffIdentity, destroyStaffIdentity, type TestIdentity } from "./env";
+import { createIdentity, destroyIdentity, type TestIdentity } from "./env";
 
 /**
  * Realtime delivery.
@@ -31,12 +31,15 @@ import { createStaffIdentity, destroyStaffIdentity, type TestIdentity } from "./
 let admin: TestIdentity;
 
 beforeAll(async () => {
-  admin = await createStaffIdentity("admin", "rt");
+  // A platform admin, because the warm-up probe writes `players` and the second test writes a
+  // tournament day - `can_add_walk_in_player()` admits an admin, and neither table is in the
+  // harness so there is no owner or editor to be instead.
+  admin = await createIdentity("admin", "rt");
   await waitForStreaming();
 }, 120_000);
 
 afterAll(async () => {
-  await destroyStaffIdentity(admin);
+  await destroyIdentity(admin);
 }, 120_000);
 
 interface Received {
@@ -171,7 +174,7 @@ async function collectEvents(act: () => Promise<void>, settleMs = 4_000): Promis
 }
 
 describe("realtime delivery", () => {
-  it("delivers a roster change to a signed-in staff session", async () => {
+  it("delivers a roster change to a signed-in session", async () => {
     const name = `itest-realtime-${Date.now().toString(36)}`;
 
     const events = await collectEvents(async () => {
@@ -195,14 +198,13 @@ describe("realtime delivery", () => {
     await admin.client.from("players").delete().eq("name", name);
   }, 60_000);
 
-  it("delivers tournament day changes to a signed-in staff session", async () => {
+  it("delivers tournament day changes to a signed-in session", async () => {
     // A second table family: structure changes are what the organiser's Schedule tab watches,
     // and they are a different code path from the desk's match refresh.
-    const { data: tournamentId, error: createError } = await admin.client.rpc(
-      "create_tournament_draft",
-      { p_payload: { name: `itest-realtime-${Date.now().toString(36)}` } } as never,
-    );
-    if (createError) throw new Error(`creating the draft failed: ${createError.message}`);
+    const { data: tournamentId, error: createError } = await admin.client.rpc("create_tournament", {
+      p_payload: { name: `itest-realtime-${Date.now().toString(36)}` },
+    } as never);
+    if (createError) throw new Error(`creating the tournament failed: ${createError.message}`);
 
     try {
       const events = await collectEvents(async () => {
@@ -231,7 +233,7 @@ describe("realtime delivery", () => {
           "supabase_realtime publication, or the signed-in session cannot SELECT the row.",
       ).toBeGreaterThan(0);
     } finally {
-      await admin.client.rpc("delete_tournament_draft", {
+      await admin.client.rpc("discard_tournament", {
         p_tournament_id: tournamentId,
       } as never);
     }

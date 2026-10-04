@@ -15,6 +15,7 @@ import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
 import { REFERENCE } from "./fixtures/desk-mock";
 import { MATRIX_CELLS, WCAG_TAGS, cellLabel, openCell } from "./fixtures/matrix";
+import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
 
 /**
@@ -36,9 +37,9 @@ import { settleAnimations } from "./fixtures/settle";
  *
  * ## What it deliberately does not claim
  *
- * Match statuses are only partly reachable here. `/placement-schedule` renders
- * without a session and is where the status vocabulary is swept, but its running
- * order excludes `void` by design - a void match never played, so it is not part of
+ * Match statuses are only partly reachable here. The running order at `routes.schedule`
+ * renders without a session and is where the status vocabulary is swept, but it excludes
+ * `void` by design - a void match never played, so it is not part of
  * a running order - and drops byes because they have no court or time. `void` and the
  * bye marker are therefore covered at the component level, not here, and the staff
  * surfaces behind `/matches` are still the four skipped specs in
@@ -77,7 +78,7 @@ test.describe.configure({ timeout: 180_000 });
  */
 test("the app clock is pinned to the fixture reference", async ({ page }) => {
   await installAppMock(page, { preset: "states" });
-  await openCell(page, "/", MATRIX_CELLS[0]!);
+  await openCell(page, routes.desk, MATRIX_CELLS[0]!);
 
   const appNow = await page.evaluate(() => Date.now());
   expect(
@@ -360,7 +361,7 @@ for (const cell of MATRIX_CELLS) {
 
     test("every court state chip is a discrete surface on its own tile", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const chips = await readCourtChips(page);
       const byState = new Map(chips.map((chip) => [chip.state, chip]));
@@ -395,7 +396,7 @@ for (const cell of MATRIX_CELLS) {
 
     test("every court state renders, with its own label and its own fill", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const chips = await readCourtChips(page);
       expect(chips.length, "no court tiles rendered").toBeGreaterThan(0);
@@ -463,7 +464,7 @@ for (const cell of MATRIX_CELLS) {
      */
     test("every court state chip clears 4.5:1 between its ink and its fill", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const chips = await readCourtChips(page);
       const byState = new Map(chips.map((chip) => [chip.state, chip]));
@@ -486,7 +487,7 @@ for (const cell of MATRIX_CELLS) {
 
     test("the four urgency treatments all render and separate", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const report = await page.evaluate(() => {
         const live = document.querySelector('[aria-live="polite"]');
@@ -568,7 +569,7 @@ for (const cell of MATRIX_CELLS) {
 
     test("the state chips survive grayscale and deuteranopia", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const chips = await readCourtChips(page);
       const byState = new Map(chips.map((chip) => [chip.state, chip]));
@@ -611,17 +612,28 @@ for (const cell of MATRIX_CELLS) {
       // The layout preset, not the states preset: the archived statuses live there,
       // because a match that has finished only needs to exist to be drawn.
       await installAppMock(page, { preset: "layout" });
-      await openCell(page, "/placement-schedule", cell);
+      await openCell(page, routes.schedule, cell);
 
-      const pills = await page.evaluate(() =>
-        [
+      // Scoped to the running-order panel, not the document. The workspace chrome now
+      // draws a lifecycle pill of its own ("In progress"), which is tournament state and
+      // not a match status; a page-wide sweep would flag the shell for a vocabulary it
+      // does not belong to, and loosening the vocabulary to admit it would let a real
+      // invented match status through. The panel is found by its heading because that is
+      // what a reader uses to find it.
+      const pills = await page.evaluate(() => {
+        const order = [...document.querySelectorAll("section")].find((section) =>
+          [...section.querySelectorAll("h2")].some(
+            (heading) => heading.textContent?.trim() === "Running order",
+          ),
+        );
+        return [
           ...new Set(
-            [...document.querySelectorAll("span")]
+            [...(order?.querySelectorAll("span") ?? [])]
               .filter((el) => el.querySelector("svg") && (el.textContent ?? "").trim())
               .map((el) => el.textContent!.trim()),
           ),
-        ].sort(),
-      );
+        ].sort();
+      });
 
       const vocabulary = new Set(
         PERSISTED_MATCH_STATUSES.map(
@@ -657,7 +669,7 @@ for (const cell of MATRIX_CELLS) {
       // tournament, so the court board, the KPI row and the alert list - the surfaces
       // the redesign exists for - had never been scanned with content in them.
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
       const ids = results.violations.map((v) => v.id).sort();
@@ -667,7 +679,7 @@ for (const cell of MATRIX_CELLS) {
 
     test("a populated running order introduces no new a11y violation", async ({ page }) => {
       await installAppMock(page, { preset: "layout" });
-      await openCell(page, "/placement-schedule", cell);
+      await openCell(page, routes.schedule, cell);
 
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
       const ids = results.violations.map((v) => v.id).sort();
@@ -691,7 +703,7 @@ for (const cell of MATRIX_CELLS) {
        * waiting round, a round waiting on that one, and a live bracket at once.
        */
       await installAppMock(page, { preset: "layout" });
-      await openCell(page, "/placement-schedule", cell);
+      await openCell(page, routes.schedule, cell);
 
       const panel = page.locator("section", {
         has: page.getByRole("heading", { name: "Stage progress" }),
@@ -747,7 +759,7 @@ for (const cell of MATRIX_CELLS) {
       // walks them empty. A ring can be clipped by the tile that contains it, so the
       // populated tile is the case worth stating separately.
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       await page.locator("button[aria-label^='Court ']").first().focus();
       const ring = await page.evaluate(() => {

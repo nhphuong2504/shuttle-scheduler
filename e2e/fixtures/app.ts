@@ -1,6 +1,7 @@
 import { test as base, expect } from "@playwright/test";
 
-import { installAppMock, mockEscapes, type MockRole } from "./app-mock";
+import { installAppMock, mockEscapes, type MockRole, type MockTournamentAccess } from "./app-mock";
+import type { MockMyRegistrationRow, MockRegistrationRow } from "./app-mock";
 import type { DeskMockPreset } from "./desk-mock";
 
 /**
@@ -23,8 +24,20 @@ import type { DeskMockPreset } from "./desk-mock";
 export interface AppMockOptions {
   /** Which match dataset to serve. */
   preset: DeskMockPreset;
-  /** The role `current_staff_role` returns. `null` means the signed-out view. */
+  /** The platform role the session holds. `null` means the signed-out view. */
   role: MockRole;
+  /** The lifecycle word to serve the fixture tournament as. Defaults to the fixture's own. */
+  status?: "upcoming" | "in_progress" | "completed";
+  /** Overrides part of the per-tournament access answer, for a viewer or an editor case. */
+  access?: Partial<MockTournamentAccess>;
+  /** The tournament the caller's pointer names, or `null` for a caller who has none. */
+  pointer?: string | null;
+  /** What `review_tournament_registrations` answers. Empty by default. */
+  registrationQueue?: readonly MockRegistrationRow[];
+  /** What `tournament_registration_state` answers. `null` (not offered) by default. */
+  registrationState?: string | null;
+  /** What `my_tournament_registration` answers. Empty by default. */
+  myRegistration?: readonly MockMyRegistrationRow[];
 }
 
 export const test = base.extend<{ appMock: AppMockOptions }>({

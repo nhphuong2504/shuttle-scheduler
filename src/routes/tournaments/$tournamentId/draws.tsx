@@ -4,14 +4,15 @@ import { Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel } from "@/components/app-shell";
+import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { useSession } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
 import { drawGate, generateDrawsForCategory } from "@/lib/tournament/actions";
 import {
   indexBy,
   teamLabel,
+  useScopedAccess,
+  useScopedTournament,
   useCategories,
   useDrawMatches,
   useDraws,
@@ -25,7 +26,7 @@ import { roundName } from "@/lib/tournament/draws";
 import { parseGames } from "@/lib/tournament/format";
 import { isByeMatch } from "@/lib/tournament/match-status";
 
-export const Route = createFileRoute("/draws")({
+export const Route = createFileRoute("/tournaments/$tournamentId/draws")({
   head: () => ({
     meta: [
       { title: "Knockout Draws A–D | Tournova Tournament Ops" },
@@ -88,7 +89,10 @@ function SideRow({
 
 function DrawsPage() {
   const qc = useQueryClient();
-  const { canGenerate } = useSession();
+  const tournament = useScopedTournament();
+  // Generating a draw writes to the tournament, so it is an edit right, not a role.
+  const access = useScopedAccess();
+  const canEdit = access.can_edit;
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -106,7 +110,7 @@ function DrawsPage() {
   const label = (id: string | null) => (id ? teamLabel(teamMap.get(id), playerMap) : "TBC");
 
   return (
-    <AppShell
+    <Page
       title="Knockout draws"
       subtitle="Draw A = pool winners, B = runners-up, C = thirds, D = fourths plus any fifths. Byes go to the top seeds."
     >
@@ -144,7 +148,7 @@ function DrawsPage() {
                   )}
                   <Button
                     size="sm"
-                    disabled={!canGenerate || !gate.ready}
+                    disabled={!canEdit || !gate.ready}
                     onClick={async () => {
                       try {
                         const force = catDraws.length
@@ -387,6 +391,6 @@ function DrawsPage() {
           );
         })}
       </div>
-    </AppShell>
+    </Page>
   );
 }

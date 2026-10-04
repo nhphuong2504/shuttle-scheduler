@@ -3,13 +3,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import { AppShell, EmptyState, Panel } from "@/components/app-shell";
+import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { useSession } from "@/hooks/useSession";
 import { generatePoolsForCategory, setManualRankOverride } from "@/lib/tournament/actions";
 import {
   indexBy,
   teamLabel,
+  useScopedAccess,
+  useScopedTournament,
   useCategories,
   usePlayers,
   usePoolEntries,
@@ -20,7 +21,7 @@ import {
 import { signed } from "@/lib/tournament/format";
 import { computeStandings, poolIsComplete } from "@/lib/tournament/standings";
 
-export const Route = createFileRoute("/pools")({
+export const Route = createFileRoute("/tournaments/$tournamentId/pools")({
   head: () => ({
     meta: [
       { title: "Pools & Standings | Tournova Tournament Ops" },
@@ -42,7 +43,11 @@ export const Route = createFileRoute("/pools")({
 
 function PoolsPage() {
   const qc = useQueryClient();
-  const { canGenerate, canScore } = useSession();
+  const tournament = useScopedTournament();
+  // Both former role flags are now one question - may this person change anything in
+  // this tournament - so generating pools and scoring a pool match take the same answer.
+  const access = useScopedAccess();
+  const canEdit = access.can_edit;
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -54,7 +59,7 @@ function PoolsPage() {
   const teamMap = useMemo(() => indexBy(teams), [teams]);
 
   return (
-    <AppShell
+    <Page
       title="Pools & standings"
       subtitle="Pools are always four, or five where the entry count requires it — never three."
     >
@@ -73,7 +78,7 @@ function PoolsPage() {
                 </h2>
                 <Button
                   size="sm"
-                  disabled={!canGenerate || catTeams.length < 4}
+                  disabled={!canEdit || catTeams.length < 4}
                   onClick={async () => {
                     try {
                       const force = catPools.length
@@ -161,7 +166,7 @@ function PoolsPage() {
                                     {signed(s.diff)}
                                   </td>
                                   <td className="pl-2 text-right">
-                                    {canScore && entry ? (
+                                    {canEdit && entry ? (
                                       <button
                                         className="text-t4 uppercase tracking-wide text-muted-foreground hover:text-primary"
                                         onClick={async () => {
@@ -195,6 +200,6 @@ function PoolsPage() {
           );
         })}
       </div>
-    </AppShell>
+    </Page>
   );
 }

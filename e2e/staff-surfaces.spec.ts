@@ -2,6 +2,10 @@ import AxeBuilder from "@axe-core/playwright";
 import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
+import type { MockRegistrationRow } from "./fixtures/app-mock";
+import { CATEGORY_MD, CATEGORY_XD } from "./fixtures/desk-mock";
+import { seedAppearance } from "./fixtures/matrix";
+import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
 
 /**
@@ -30,8 +34,8 @@ import { settleAnimations } from "./fixtures/settle";
  *
  * Now the session is synthetic and network-free: the shared mock in
  * `./fixtures/app-mock.ts` seeds the `localStorage` entry that `supabase.auth.getSession()`
- * reads and answers the `current_staff_role` RPC. Nothing is recorded, nothing is
- * committed, and no credentials are needed here or in CI.
+ * reads and answers `current_system_role`, `current_tournament_id` and `tournament_access`.
+ * Nothing is recorded, nothing is committed, and no credentials are needed here or in CI.
  *
  * `npm run test:e2e:record-auth` still exists for manual checks against a live backend.
  * It is not part of this file.
@@ -92,7 +96,7 @@ const violationIds = (results: { violations: { id: string }[] }): string[] =>
 
 /** Navigates to the Desk and confirms the authenticated shell rendered. */
 async function openStaffShell(page: Page): Promise<void> {
-  await page.goto("/", { waitUntil: "load" });
+  await page.goto(routes.desk, { waitUntil: "load" });
   await page.waitForLoadState("networkidle");
   const signOut = await page.getByRole("button", { name: /sign out/i }).count();
   requirePrerequisite(signOut > 0, "The authenticated shell did not render");
@@ -111,7 +115,7 @@ test.describe("staff surfaces", () => {
 
   test("role-gated controls are enabled, not merely read", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     /**
@@ -135,7 +139,7 @@ test.describe("staff surfaces", () => {
 
   test("the tournament settings panel opens by interaction and is accessible", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     /**
@@ -167,7 +171,7 @@ test.describe("staff surfaces", () => {
 
   test("a replaced picker glyph is a real control that takes the focus ring", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: /settings/i }).first().click();
 
@@ -303,7 +307,7 @@ test.describe("staff surfaces", () => {
     page,
   }) => {
     await openStaffShell(page);
-    await page.goto("/placement-schedule", { waitUntil: "load" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await page.getByRole("button", { name: /settings/i }).first().click();
@@ -346,7 +350,7 @@ test.describe("staff surfaces", () => {
 
   test("the score dialog opens by interaction and is accessible", async ({ page }) => {
     await openStaffShell(page);
-    await page.goto("/matches", { waitUntil: "load" });
+    await page.goto(routes.scores, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     /**
@@ -381,6 +385,35 @@ test.describe("staff surfaces", () => {
     expect(violationIds(await scan(page))).toEqual([]);
   });
 
+  test("the score filters are a named group of pressed buttons", async ({ page }) => {
+    /**
+     * The two filter rows on the score desk were a flat set of buttons whose selected one was
+     * distinguishable only by its fill, and only to a sighted reader.
+     *
+     * Asserted here rather than in a unit test because it is the *wiring* that regressed: the
+     * chip component now sets `aria-pressed`, but a group is only announced as one filter when
+     * the container names it, and the two facts live in different elements. There is a second
+     * reason this is worth a case of its own - `criteria.spec.ts` selects the nodes for the
+     * WCAG 1.4.11 sweep by `aria-pressed`, so a group that loses the attribute does not fail
+     * that sweep, it silently leaves it. This is the assertion that fails instead.
+     */
+    await openStaffShell(page);
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    for (const name of ["Filter by event", "Filter by status"]) {
+      const group = page.getByRole("group", { name });
+      await expect(group, `${name} is not a named group`).toBeVisible();
+
+      expect(await group.getByRole("button").count(), `${name} has no chips`).toBeGreaterThan(1);
+
+      // Exactly one option is the current one. Zero means the state is not exposed at all;
+      // more than one means the group is not exclusive.
+      const pressed = await group.locator('button[aria-pressed="true"]').count();
+      expect(pressed, `${name} does not mark exactly one chip as pressed`).toBe(1);
+    }
+  });
+
   test("focus is visible on an authenticated surface", async ({ page }) => {
     await openStaffShell(page);
 
@@ -409,6 +442,159 @@ test.describe("staff surfaces", () => {
 });
 
 /**
+ * The setup wizard, which no route sweep renders.
+ *
+ * It is editor-gated, so every route-driven sweep in the suite sees the read-only notice
+ * instead: `criteria.spec.ts` and `a11y.spec.ts` both walk `ROUTES` signed out, and the
+ * `a11y-baseline.json` they pin was produced that way. Two things follow, and both are
+ * fixed here rather than recorded as debt.
+ *
+ * **WCAG 2.4.11.** `criteria.spec.ts` puts this question to `document.querySelector
+ * ("header")` and excludes controls inside it, so the question has only ever been asked of
+ * the sticky *header*. The wizard has a sticky *footer*, and that left a real failure with
+ * no gate on it: tabbing to the venue phone field parked it at 728..764px inside the bar's
+ * 706..768px band, entirely hidden, in both themes, because the browser's scroll-into-view
+ * judged the field visible and never scrolled. `scroll-margin-bottom` on the wizard's
+ * fields reserves the bar's height, and the first case below keeps that rule honest.
+ *
+ * **Axe.** The step navigation, the problems callout and the review checklist have shipped
+ * un-scanned, so the second case walks all four steps in both themes. There is no route
+ * sweep to carry the second theme, which is why both are walked here.
+ *
+ * The tournament is pinned `upcoming` because a started tournament's configuration is
+ * frozen: the wizard then renders the read-only notice instead of the steps, so there is
+ * no action bar and nothing to scan.
+ */
+test.describe("the setup wizard, which no route sweep renders", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
+
+  test("never leaves a focused field under its sticky action bar", async ({ page }) => {
+    const obscured: string[] = [];
+    let stops = 0;
+
+    for (const theme of ["light", "dark"] as const) {
+      await seedAppearance(page, { theme });
+      await openStaffShell(page);
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+
+      // The mechanism, asserted directly: the clearance must cover the bar it clears.
+      const clearance = await page.evaluate(() => {
+        const field = document.querySelector<HTMLElement>("#t-org-phone");
+        const bars = [...document.querySelectorAll<HTMLElement>("*")].filter((n) => {
+          const s = getComputedStyle(n);
+          return s.position === "sticky" && s.bottom === "0px";
+        });
+        return {
+          field: field ? parseFloat(getComputedStyle(field).scrollMarginBottom) : 0,
+          bar: bars[0]?.getBoundingClientRect().height ?? 0,
+        };
+      });
+      expectPresent(clearance.bar > 0, "The wizard's action bar is not sticky, so nothing clears it");
+      expectPresent(
+        clearance.field >= clearance.bar,
+        `The wizard's fields reserve ${clearance.field}px for a ${clearance.bar}px bar`,
+      );
+
+      const walked = await walkFocusAndFindObscured(page);
+      stops += walked.stops;
+      obscured.push(...walked.obscured.map((who) => `${theme}: ${who}`));
+    }
+
+    expectPresent(stops >= 40, "The wizard walked fewer focus stops than the form it renders");
+    expect(obscured, "Focused controls left entirely inside a sticky element").toEqual([]);
+  });
+
+  /**
+   * Axe over all four steps, in both themes.
+   *
+   * The wizard is editor-gated, so `a11y.spec.ts` - which sweeps `ROUTES` signed out, and
+   * `a11y-baseline.json` with it - has never once rendered it. That is the same gap the
+   * 2.4.11 case above exists to close, and it means the step navigation, the problems
+   * callout and the review checklist have shipped un-scanned. Both themes are walked here
+   * rather than one because there is no route sweep to carry the second.
+   */
+  for (const theme of ["light", "dark"] as const) {
+    test(`introduces no accessibility violation on any step (${theme})`, async ({ page }) => {
+      /**
+       * Three times the ordinary budget, because this is the heaviest test in the file:
+       * four navigations, each waiting for the network to settle, and four axe runs over
+       * the largest DOM the app renders. It passes in ~26s on an idle machine, and that
+       * is already most of the 60s default - so a quieter machine is not what it needs,
+       * it needs a budget that does not depend on what else is on the workers with it.
+       */
+      test.slow();
+      await seedAppearance(page, { theme });
+      await openStaffShell(page);
+
+      for (const step of ["details", "events", "structure", "review"]) {
+        await page.goto(`${routes.settings}?step=${step}`, { waitUntil: "load" });
+        await page.waitForLoadState("networkidle");
+        expectPresent(
+          (await page.locator("ol button").count()) === 4,
+          `The wizard's step navigation on the ${step} step`,
+        );
+        expect(violationIds(await scan(page)), `Accessibility violations on the ${step} step`).toEqual(
+          [],
+        );
+      }
+    });
+  }
+});
+
+/**
+ * Walks the focus order once and reports any stop that lands entirely inside a sticky
+ * element it does not belong to.
+ *
+ * The exclusion is the same one `criteria.spec.ts` makes for the header: a sticky element
+ * cannot obscure its own contents, and counting them turns every header link into a false
+ * failure.
+ */
+async function walkFocusAndFindObscured(
+  page: Page,
+): Promise<{ stops: number; obscured: string[] }> {
+  const probe = `(() => {
+    const el = document.activeElement;
+    if (!el || el === document.body || el === document.documentElement) return null;
+    const stickies = [...document.querySelectorAll("*")].filter((n) => {
+      const s = getComputedStyle(n);
+      return s.position === "sticky" && (s.bottom === "0px" || s.top === "0px");
+    });
+    const r = el.getBoundingClientRect();
+    const who =
+      el.id || el.getAttribute("aria-label") || (el.textContent || "").trim().slice(0, 24) ||
+      el.tagName.toLowerCase();
+    let obscured = false;
+    for (const s of stickies) {
+      if (s.contains(el)) continue;
+      const b = s.getBoundingClientRect();
+      if (
+        r.width > 0 && r.height > 0 &&
+        r.top >= b.top - 1 && r.bottom <= b.bottom + 1 &&
+        r.left >= b.left - 1 && r.right <= b.right + 1
+      ) {
+        obscured = true;
+      }
+    }
+    return { who: el.tagName.toLowerCase() + ":" + who.replace(/\\s+/g, " "), obscured };
+  })()`;
+
+  const seen: string[] = [];
+  const obscured: string[] = [];
+  for (let i = 0; i < 80; i += 1) {
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(60);
+    const stop = (await page.evaluate(probe)) as { who: string; obscured: boolean } | null;
+    if (!stop) continue;
+    // Wrapping back to the first stop means the focus order is exhausted.
+    if (seen.length > 0 && stop.who === seen[0]) break;
+    seen.push(stop.who);
+    if (stop.obscured) obscured.push(stop.who);
+  }
+  return { stops: seen.length, obscured };
+}
+
+/**
  * The two resets.
  *
  * Both are the app's only irreversible actions, so no route scan reaches either one
@@ -432,7 +618,7 @@ test.describe("the two resets", () => {
 
       test("the schedule reset says the seed order survives", async ({ page }) => {
         await openStaffShell(page);
-        await page.goto("/placement-schedule", { waitUntil: "load" });
+        await page.goto(routes.schedule, { waitUntil: "load" });
         await page.waitForLoadState("networkidle");
 
         const toggle = page.getByRole("button", { name: /^show$/i }).first();
@@ -458,7 +644,7 @@ test.describe("the two resets", () => {
         // The `layout` fixture serves a built tournament, so the gate is closed. This is
         // the state the gate exists for: a bracket is still paired from the seed order.
         await openStaffShell(page);
-        await page.goto("/placement", { waitUntil: "load" });
+        await page.goto(routes.placement, { waitUntil: "load" });
         await page.waitForLoadState("networkidle");
 
         // It is a header button now, which is the whole point of the change — one action
@@ -507,7 +693,7 @@ test.describe("the two resets", () => {
         page,
       }) => {
         await openStaffShell(page);
-        await page.goto("/placement", { waitUntil: "load" });
+        await page.goto(routes.placement, { waitUntil: "load" });
         await page.waitForLoadState("networkidle");
 
         const header = page
@@ -545,4 +731,165 @@ test.describe("the two resets", () => {
       });
     });
   }
+});
+
+/**
+ * The reviewer's queue.
+ *
+ * Its own describe because it needs data the other staff surfaces do not: an empty queue is
+ * the fixture's default, and the whole point of this page is what it does with requests that
+ * are waiting. The rows are supplied in the RPC's row-per-entry shape - one per requested
+ * entry - so the app folds them exactly as it folds the real answer.
+ */
+test.describe("the registration queue", () => {
+  const queueRow = (overrides: Partial<MockRegistrationRow>): MockRegistrationRow => ({
+    registration_id: "reg-base",
+    profile_id: null,
+    email: null,
+    status: "pending",
+    decided_at: null,
+    decision_note: null,
+    created_at: "2026-09-29T09:00:00Z",
+    entry_id: null,
+    category_id: null,
+    category_code: null,
+    category_name: null,
+    entry_type: null,
+    partner_name: null,
+    partner_email: null,
+    player_id: null,
+    partner_player_id: null,
+    ...overrides,
+  });
+
+  const WAITING_FIRST = "00000000-0000-4000-8000-00000000aa01";
+  const WAITING_SECOND = "00000000-0000-4000-8000-00000000aa02";
+  const DECIDED = "00000000-0000-4000-8000-00000000aa03";
+
+  const QUEUE: readonly MockRegistrationRow[] = [
+    queueRow({
+      registration_id: WAITING_FIRST,
+      email: "ana@example.test",
+      entry_id: "00000000-0000-4000-8000-00000000bb01",
+      category_id: CATEGORY_MD,
+      category_code: "MD",
+      category_name: "Men's Doubles",
+      entry_type: "pair",
+      partner_name: "Rin",
+      partner_email: "rin@example.test",
+    }),
+    queueRow({
+      registration_id: WAITING_SECOND,
+      email: "bo@example.test",
+      created_at: "2026-09-29T08:00:00Z",
+      entry_id: "00000000-0000-4000-8000-00000000bb02",
+      category_id: CATEGORY_XD,
+      category_code: "XD",
+      category_name: "Mixed Doubles",
+      entry_type: "pair",
+      partner_name: "Ada",
+      partner_email: "ada@example.test",
+    }),
+    queueRow({
+      registration_id: DECIDED,
+      email: "cy@example.test",
+      status: "approved",
+      created_at: "2026-09-29T07:00:00Z",
+      decided_at: "2026-09-29T10:00:00Z",
+      decision_note: "See you Saturday.",
+      entry_id: "00000000-0000-4000-8000-00000000bb03",
+      category_id: CATEGORY_MD,
+      category_code: "MD",
+      category_name: "Men's Doubles",
+      entry_type: "pair",
+    }),
+  ];
+
+  test.use({ appMock: { preset: "layout", role: "admin", registrationQueue: QUEUE } });
+
+  test("lists what is waiting, with each event's own facts", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: "Awaiting a decision" })).toBeVisible();
+    await expect(page.getByText("ana@example.test")).toBeVisible();
+    // The entry's own facts sit beside it: who the partner is, the event's type, and what the
+    // event has taken - the last of which is capacity *at approval*, counted over approved
+    // entries only (the fixture holds six teams in each event and neither is capped). Scoped
+    // to the request's own row, because both events hold six and the same line would otherwise
+    // match twice.
+    const firstRequest = page.locator("li").filter({ hasText: "ana@example.test" });
+    await expect(firstRequest.getByText(/Men's Doubles with Rin/)).toBeVisible();
+    await expect(firstRequest.getByText(/Doubles · 6 entries so far/)).toBeVisible();
+    await expect(page.getByText(/Mixed Doubles with Ada/)).toBeVisible();
+  });
+
+  test("carries the waiting count on the section link", async ({ page }) => {
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The badge is chrome, not page content, so it has to be asserted from a page that is not
+    // the queue: a count that only appears on the queue's own page is not a count anybody
+    // would ever see. The number is excluded from the accessible name and restated in words,
+    // so the link reads as the sentence rather than as "Registrations 2".
+    await expect(page.getByRole("link", { name: /2 awaiting a decision/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Registrations/ })).toBeVisible();
+  });
+
+  test("records an approval with the note the reviewer wrote", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel(/note for the requester/i).first().fill("See you at 9am.");
+    const [request] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/rpc/decide_tournament_registration")),
+      page.getByRole("button", { name: "Approve" }).first().click(),
+    ]);
+
+    expect(request.postDataJSON()).toEqual({
+      p_registration_id: WAITING_FIRST,
+      p_decision: "approved",
+      p_note: "See you at 9am.",
+    });
+    await expect(page.getByText("Request approved")).toBeVisible();
+  });
+
+  test("declines from the same note field, with the note attached", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The first request's field is deliberately filled and the *second* request declined, so
+    // this cannot pass by sending the wrong request's note.
+    await page.getByLabel(/note for the requester/i).first().fill("Not this one.");
+    await page.getByLabel(/note for the requester/i).nth(1).fill("No space left.");
+    const [request] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes("/rpc/decide_tournament_registration")),
+      page.getByRole("button", { name: "Decline" }).nth(1).click(),
+    ]);
+
+    expect(request.postDataJSON()).toEqual({
+      p_registration_id: WAITING_SECOND,
+      p_decision: "rejected",
+      p_note: "No space left.",
+    });
+    await expect(page.getByText("Request declined")).toBeVisible();
+  });
+
+  test("shows what has already been decided rather than hiding it", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: "Decided" })).toBeVisible();
+    await expect(page.getByText("cy@example.test")).toBeVisible();
+    await expect(page.getByText("Note sent:")).toBeVisible();
+    await expect(page.getByText("See you Saturday.")).toBeVisible();
+  });
+
+  test("introduces no accessibility violation", async ({ page }) => {
+    await page.goto(routes.registrations, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await settleAnimations(page, "main");
+
+    expect(violationIds(await scan(page))).toEqual([]);
+  });
 });

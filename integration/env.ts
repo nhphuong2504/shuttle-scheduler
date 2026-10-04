@@ -190,39 +190,52 @@ export function serviceClient(): AppClient {
 
 // --- Fixture identities -------------------------------------------------------
 
-export type StaffRoleName = "admin" | "registrar" | "scorer" | "scheduler";
+/**
+ * The platform role a fixture identity holds.
+ *
+ * Two values, mirroring `profiles.system_role`. There is no per-tournament role here on
+ * purpose: access to a tournament is a row in `tournament_editors`, or ownership, and
+ * both are fixtures of their own below rather than a property of the identity.
+ */
+export type PlatformRole = "admin" | "user";
 
 export interface TestIdentity {
   email: string;
   password: string;
+  /** The auth identity. `profiles.user_id` and `desk_activity.actor_id` point at this. */
   userId: string;
-  role: StaffRoleName;
+  /** The durable profile. Ownership, editor rows and requests point at this instead. */
+  profileId: string;
+  role: PlatformRole;
   client: AppClient;
 }
 
+function randomTag(label: string): string {
+  return `${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 /**
- * Creates a confirmed auth user with a staff role, and returns a signed-in client.
+ * Creates an auth user with a platform role, and returns a signed-in client.
  *
  * Provisioning the identities rather than requiring operator-supplied credentials keeps the
  * suite self-contained: it needs only the three project values, and it exercises the same
- * path the application uses (`staff_roles` keyed by email, with `user_id` linked) rather
+ * path the application uses - a `profiles` row keyed by email with `user_id` linked - rather
  * than a fixture that bypasses it.
  *
- * Order matters. `current_staff_role()` matches on `user_id = auth.uid()` OR on the email
- * claim, and `link_staff_role()` only backfills `user_id` when the row already exists - so
- * the staff row is inserted first, then the user, mirroring the documented recreation order.
+ * Order matters, and it is the documented recovery order. The `profiles` row is written
+ * first, carrying the role; the auth user is created second, and the `link_profile()`
+ * trigger attaches the identity to the row that already exists. Creating the user first
+ * would let the trigger insert an ordinary `user` profile, and the fixture would then have
+ * to raise its own role with a privilege an ordinary sign-up does not have.
  */
-export async function createStaffIdentity(
-  role: StaffRoleName,
-  label: string,
-): Promise<TestIdentity> {
+export async function createIdentity(role: PlatformRole, label: string): Promise<TestIdentity> {
   const admin = serviceClient();
-  const tag = `${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const tag = randomTag(label);
   const email = `itest-${tag}@tournova.test`;
   const password = `itest-${tag}-${role}`;
 
-  const { error: roleError } = await admin.from("staff_roles").insert({ email, role });
-  if (roleError) throw new Error(`seeding staff_roles failed: ${roleError.message}`);
+  const { error: profileError } = await admin.from("profiles").insert({ email, system_role: role });
+  if (profileError) throw new Error(`seeding profiles failed: ${profileError.message}`);
 
   const { data: created, error: userError } = await admin.auth.admin.createUser({
     email,
@@ -232,13 +245,34 @@ export async function createStaffIdentity(
   });
   if (userError) throw new Error(`creating the auth user failed: ${userError.message}`);
 
-  const client = createClient<Database>(url, publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { error: signInError } = await client.auth.signInWithPassword({ email, password });
-  if (signInError) throw new Error(`signing in as ${role} failed: ${signInError.message}`);
+  const client = await signInClient(email, password);
+  const { data: profile, error: readError } = await admin
+    .from("profiles")
+    .select("id, user_id")
+    .eq("email", email)
+    .single();
+  if (readError) throw new Error(`reading the profile back failed: ${readError.message}`);
+  // The link is the whole point of the ordering above, so it is asserted here rather than
+  // left to fail as a puzzling "not authorized" three tests later.
+  if (profile.user_id !== created.user.id) {
+    throw new Error(
+      `the profile for ${email} was not linked to its auth identity; link_profile() did not run`,
+    );
+  }
 
-  return { email, password, userId: created.user.id, role, client };
+  return { email, password, userId: created.user.id, profileId: profile.id, role, client };
+}
+
+/**
+ * A signed-in user with the ordinary platform role and no tournament access.
+ *
+ * The shape matters: a real authenticated session that owns nothing and edits nothing,
+ * which is the only way to test that authentication alone grants nothing. A service-role
+ * client would skip the distinction between "signed in" and "authorized" - the exact
+ * distinction the authorization surface depends on.
+ */
+export async function createUserIdentity(label: string): Promise<TestIdentity> {
+  return createIdentity("user", label);
 }
 
 /**
@@ -258,49 +292,156 @@ export async function signInClient(email: string, password: string): Promise<App
   return client;
 }
 
-/** Removes an identity and its staff row. Safe to call for an identity that was never made. */
-export async function destroyStaffIdentity(identity: TestIdentity | undefined): Promise<void> {
+/** Removes an identity, its profile row and anything it owned. Safe when it was never made. */
+export async function destroyIdentity(identity: TestIdentity | undefined): Promise<void> {
   if (!identity) return;
   const admin = serviceClient();
-  // The user first: `staff_roles.user_id` may reference it, and the staff row is the
-  // record the role is read from.
+  // The profile row is deleted last and by id: the auth-user delete fires `unlink_profile`,
+  // which only clears the link, and a re-created identity would re-link to a row this
+  // teardown does not want around.
   await admin.auth.admin.deleteUser(identity.userId).catch(() => undefined);
-  await admin.from("staff_roles").delete().eq("email", identity.email);
+  await admin.from("profiles").delete().eq("id", identity.profileId);
+  await admin.from("tournaments").delete().eq("owner_profile_id", identity.profileId);
+}
+
+// --- Tournament fixtures ------------------------------------------------------
+
+export interface DayFixture {
+  date: string;
+  startTime: string;
+  endTime: string;
+  courts: number[];
+}
+
+export interface OwnedTournamentOptions {
+  name?: string;
+  timezone?: string;
+  /** Written after creation. Omitted leaves the tournament with no days, hence not ready. */
+  days?: DayFixture[];
+  /** Writes one open Men's Singles event. Defaults to true, because readiness needs one. */
+  category?: boolean;
+  /**
+   * Moves the tournament's status with the service role. Setup, never an assertion - the
+   * interesting transitions are driven through the RPCs, and a test that needs a tournament
+   * already `in_progress` should not first have to satisfy the start gate.
+   */
+  status?: "upcoming" | "in_progress" | "completed";
+}
+
+/** Writes the whole day/court configuration on `identity`'s session. */
+export async function saveDays(
+  identity: TestIdentity,
+  tournamentId: string,
+  days: DayFixture[],
+): Promise<void> {
+  const { error } = await identity.client.rpc("save_tournament_days", {
+    p_tournament_id: tournamentId,
+    p_days: days.map((day) => ({
+      date: day.date,
+      start_time: day.startTime,
+      end_time: day.endTime,
+      courts: day.courts,
+      breaks: [],
+    })),
+  } as never);
+  if (error) throw new Error(`save_tournament_days failed: ${error.message}`);
+}
+
+/** Writes one open Men's Singles event on `identity`'s session. */
+export async function saveCategory(identity: TestIdentity, tournamentId: string): Promise<void> {
+  const { error } = await identity.client.rpc("save_tournament_categories", {
+    p_tournament_id: tournamentId,
+    p_categories: [
+      {
+        code: "MS",
+        name: "Men's Singles",
+        entry_type: "individual",
+        gender: "men",
+        sort_order: 1,
+        active: true,
+        max_entries: null,
+      },
+    ],
+  } as never);
+  if (error) throw new Error(`save_tournament_categories failed: ${error.message}`);
 }
 
 /**
- * A signed-in user with no `staff_roles` row.
+ * Creates an `upcoming` tournament owned by `identity`, optionally configured to be ready.
  *
- * The shape matters: this is a real authenticated session that holds no role, which is the
- * only way to test that authentication alone grants nothing. A service-role client would
- * skip the distinction between "signed in" and "authorized" - the exact distinction the
- * authorization surface depends on.
- *
- * The email carries a random suffix, so a stale row from an interrupted run cannot collide
- * and turn this into a confusing sign-in failure.
+ * Called on the identity's own client, so `owner_profile_id` is that profile and RLS applies
+ * exactly as it does for the real creator. A default fixture is ready: readiness needs a
+ * day, a timezone and an event, and a tournament that cannot start makes almost every
+ * lifecycle assertion harder to express than the thing it is testing.
  */
-export async function createUnprivilegedIdentity(label: string): Promise<TestIdentity> {
-  const admin = serviceClient();
-  const tag = `${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const email = `itest-${tag}@tournova.test`;
-  const password = `itest-${tag}-none`;
+export async function createOwnedTournament(
+  identity: TestIdentity,
+  options: OwnedTournamentOptions = {},
+): Promise<string> {
+  const { data, error } = await identity.client.rpc("create_tournament", {
+    p_payload: {
+      name: options.name ?? `itest-${randomTag("tournament")}`,
+      format: "two_round_placement",
+      venue_name: "Integration Test Venue",
+      venue_timezone: options.timezone ?? "America/Chicago",
+    },
+  } as never);
+  if (error) throw new Error(`create_tournament failed: ${error.message}`);
+  const tournamentId = data as unknown as string;
 
-  const { data: created, error: userError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
+  const days =
+    options.days ??
+    // Far in the past, so `start_tournament`'s derived-start floor is already satisfied and
+    // a start test is about readiness rather than about the clock. A test that cares about
+    // the floor passes its own dates.
+    [{ date: "2020-01-04", startTime: "09:00", endTime: "18:00", courts: [1, 2] }];
+  if (days.length > 0) await saveDays(identity, tournamentId, days);
+  if (options.category !== false) await saveCategory(identity, tournamentId);
+  if (options.status) await forceStatus(tournamentId, options.status);
+
+  return tournamentId;
+}
+
+/**
+ * Moves a tournament's status with the service role.
+ *
+ * A fixture, not an assertion. It exists so a test about scoring an `in_progress`
+ * tournament does not also have to walk the whole create/configure/start sequence, and it
+ * is deliberately not used to test any transition - those go through the RPCs.
+ */
+export async function forceStatus(
+  tournamentId: string,
+  status: "upcoming" | "in_progress" | "completed",
+): Promise<void> {
+  const { error } = await serviceClient().from("tournaments").update({ status }).eq("id", tournamentId);
+  if (error) throw new Error(`forcing status failed: ${error.message}`);
+}
+
+/**
+ * Adds an editor row directly, which is what `add_tournament_editor` writes.
+ *
+ * The service role is used so a test can set up an editor without the owner's session. The
+ * row is keyed by *profile*: membership is a fact about a person, and the auth id is only
+ * what lets that person exercise it.
+ */
+export async function grantEditor(
+  tournamentId: string,
+  editor: TestIdentity,
+  owner: TestIdentity,
+): Promise<void> {
+  const { error } = await serviceClient().from("tournament_editors").insert({
+    tournament_id: tournamentId,
+    profile_id: editor.profileId,
+    added_by_profile_id: owner.profileId,
   });
-  if (userError) throw new Error(`creating an unprivileged user failed: ${userError.message}`);
+  if (error) throw new Error(`granting editor access failed: ${error.message}`);
+}
 
-  const client = createClient<Database>(url, publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { error: signInError } = await client.auth.signInWithPassword({ email, password });
-  if (signInError) throw new Error(`signing in unprivileged failed: ${signInError.message}`);
-
-  // `role` is not meaningful for this identity - it holds no staff row - but the shared
-  // type requires a value. Cleanup deletes the auth user and matches no staff row.
-  return { email, password, userId: created.user.id, role: "registrar", client };
+/** Removes tournaments by id with the service role, cascading to everything they own. */
+export async function destroyTournaments(...tournamentIds: (string | undefined)[]): Promise<void> {
+  const ids = tournamentIds.filter((id): id is string => !!id);
+  if (ids.length === 0) return;
+  await serviceClient().from("tournaments").delete().in("id", ids);
 }
 
 /**
@@ -317,7 +458,7 @@ export async function expectRefused(
   if (!error) {
     throw new Error(
       "Expected the operation to be refused, but it succeeded. A missing refusal is an " +
-        "authorization hole: check the RLS policy and the function's has_staff_role guard.",
+        "authorization hole: check the RLS policy and the function's can_edit_tournament guard.",
     );
   }
   return error;

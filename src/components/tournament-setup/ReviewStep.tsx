@@ -1,6 +1,7 @@
 import { Panel } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { TournamentStatus } from "@/lib/auth/authorization";
 import type { TournamentReadiness } from "@/lib/tournament/data";
 import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
 import { cn } from "@/lib/utils";
@@ -15,22 +16,31 @@ import { dateRangeLabel, type DraftForm } from "./types";
  * blocking. A check can still declare itself advisory (`blocking: false`) and the
  * rendering honours that, but nothing uses it today: the settings that used to be
  * advisory — the venue's courts — are configured on the Schedule page instead.
+ *
+ * The checklist is information, not the gate. Start is enabled whenever the tournament
+ * exists, and the RPC names its own refusal: it knows the blockers and the venue-local
+ * start time, and a disabled button would only be able to say "no".
  */
 export function ReviewStep({
   form,
   readiness,
   readinessError,
   busy,
-  canActivate,
-  onActivate,
+  hasTournament,
+  status,
+  onStart,
+  onComplete,
   onDiscard,
 }: {
   form: DraftForm;
   readiness: TournamentReadiness | undefined;
   readinessError: string | null;
   busy: boolean;
-  canActivate: boolean;
-  onActivate: () => void;
+  /** Whether the tournament exists yet. The first step creates it. */
+  hasTournament: boolean;
+  status: TournamentStatus;
+  onStart: () => void;
+  onComplete: () => void;
   onDiscard: () => void;
 }) {
   const activeEvents = form.events.filter((event) => event.active !== false);
@@ -230,26 +240,62 @@ export function ReviewStep({
       </Panel>
 
       <Panel title="Finish">
-        <p className="mb-3 text-xs text-muted-foreground">
-          Activating moves this tournament from <span className="font-semibold">Draft</span> to{" "}
-          <span className="font-semibold">In Progress</span> and makes it the active scope for the
-          desk. The current active tournament is switched off. Discarding deletes the draft and
-          everything it owns.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={busy || !canActivate || !ready} onClick={onActivate}>
-            {busy ? "Working…" : "Activate tournament"}
-          </Button>
-          <Button variant="outline" disabled={busy} onClick={onDiscard}>
-            Discard draft
-          </Button>
-        </div>
-        {!ready && readiness ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Activation is blocked until every blocking check passes. The database enforces the same
-            checks.
+        {/*
+          The lifecycle in one paragraph, and only the actions valid right now beneath it.
+          Two states reach this panel with a button: an upcoming tournament can be started
+          or discarded, and a running one can be completed.
+        */}
+        {status === "upcoming" ? (
+          <>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Starting moves this tournament from{" "}
+              <span className="font-semibold">Upcoming</span> to{" "}
+              <span className="font-semibold">In progress</span> and makes it the tournament you
+              are working in. It will not start before every check passes and its own start time
+              has arrived. Discarding deletes it and everything it owns.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {/*
+                Enabled whenever the tournament exists, even with failing checks. The RPC
+                re-runs the checklist and refuses with the blockers named - and it is the only
+                thing that knows the venue-local start time, so pre-empting it in the browser
+                would replace a precise refusal with a vague one.
+              */}
+              <Button disabled={busy || !hasTournament} onClick={onStart}>
+                {busy ? "Working…" : "Start tournament"}
+              </Button>
+              <Button variant="outline" disabled={busy || !hasTournament} onClick={onDiscard}>
+                Discard tournament
+              </Button>
+            </div>
+            {ready ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Every check passes. If the start time has not arrived yet, starting will say when
+                it does.
+              </p>
+            ) : readiness ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Starting is refused until every blocking check passes. The database enforces the
+                same checks, and if you press it early it will name what is missing.
+              </p>
+            ) : null}
+          </>
+        ) : status === "in_progress" ? (
+          <>
+            <p className="mb-3 text-xs text-muted-foreground">
+              This tournament is running. Its configuration is now frozen, so the settings above
+              are read-only. Completing it closes the event.
+            </p>
+            <Button disabled={busy || !hasTournament} onClick={onComplete}>
+              {busy ? "Working…" : "Complete tournament"}
+            </Button>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            This tournament is completed. Nothing can be started or changed here; a platform admin
+            can repair individual results from the desk.
           </p>
-        ) : null}
+        )}
       </Panel>
     </div>
   );

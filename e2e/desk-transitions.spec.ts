@@ -5,6 +5,7 @@ import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
 import { COURT_COUNT, REFERENCE } from "./fixtures/desk-mock";
 import { cellLabel, MATRIX_CELLS, openCell } from "./fixtures/matrix";
+import { routes } from "./fixtures/routes";
 
 /**
  * The Next-transitions panel, rendered with data.
@@ -73,7 +74,7 @@ for (const cell of MATRIX_CELLS) {
   test.describe(cellLabel(cell), () => {
     test("the panel lists the venue's next transitions, soonest first", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const rows = await readRows(page);
       expect(rows.length, "no transitions rendered").toBeGreaterThan(0);
@@ -119,7 +120,7 @@ for (const cell of MATRIX_CELLS) {
 
     test("distinguishes an estimated finish from a scheduled start", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const rows = await readRows(page);
       const text = rows.map((r) => r.text).join("\n");
@@ -162,7 +163,7 @@ for (const cell of MATRIX_CELLS) {
       page,
     }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       /**
        * Colour and the icon used to be a second and third channel for the kind. Both were
@@ -188,7 +189,7 @@ for (const cell of MATRIX_CELLS) {
 
     test("the panel is read-only, whatever it is showing", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const rows = await readRows(page);
       expect(rows.length).toBeGreaterThan(0);
@@ -212,7 +213,7 @@ for (const cell of MATRIX_CELLS) {
       // Twenty-six minutes on from the fixture's reference: the live match on court 2 is now an
       // overrun, and the three matches that were due in twenty are six minutes late.
       await page.clock.setFixedTime(new Date(REFERENCE.getTime() + 26 * 60_000));
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       const rows = await readRows(page);
       expect(rows.length, "no transitions rendered once the fixture fell overdue").toBeGreaterThan(
@@ -285,7 +286,7 @@ for (const cell of MATRIX_CELLS) {
         }
         await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
       });
-      await openCell(page, "/", cell);
+      await openCell(page, routes.desk, cell);
 
       expect(await page.locator(ROWS).count(), "an empty board still rendered rows").toBe(0);
       await expect(panel(page).getByText("Nothing transitioning")).toBeVisible();

@@ -8,7 +8,7 @@
 -- `supabase/seed/`, so nothing happens until you paste it into the Supabase SQL
 -- editor and run it.
 --
--- Against the ACTIVE tournament it:
+-- Against the tournament the platform admin is pointed at, it:
 --   * inserts 50 players (30 men, 20 women) with realistic names
 --   * registers them as teams in MS, WS, MD, WD and XD
 --   * creates the matching `placement_entrants` rows, with skill levels spread
@@ -25,8 +25,8 @@
 -- Names are plain and realistic, as asked for. The handle is the EMAIL instead:
 -- every test player gets `<name>@tournova.test`. `.test` is reserved by
 -- RFC 2606 and can never resolve, so it cannot collide with a real person, and
--- the app never renders a player's email — only `staff_roles.email` is shown, on
--- the staff page. So the roster and every court screen look like a genuine
+-- the app never renders a player's email — only `profiles.email` is shown, on
+-- the access page. So the roster and every court screen look like a genuine
 -- field, while `WHERE email LIKE '%@tournova.test'` stays an exact handle for
 -- both the reset and the cleanup.
 --
@@ -87,12 +87,25 @@ BEGIN
   -- -------------------------------------------------------------------------
   -- 0. Which tournament
   -- -------------------------------------------------------------------------
-  SELECT id, name INTO v_tournament, v_tname
-  FROM public.tournaments
-  WHERE is_active = true;
+  --
+  -- Phase 2 has no global active tournament: the admin's own pointer
+  -- (`profiles.current_tournament_id`) is the working tournament, and it is what the
+  -- app writes when they open one. Set it there before seeding; there is deliberately
+  -- no "newest tournament" fallback, because seeding the wrong event silently is worse
+  -- than refusing.
+  SELECT t.id, t.name INTO v_tournament, v_tname
+  FROM public.tournaments t
+  WHERE t.id = (
+    SELECT p.current_tournament_id
+    FROM public.profiles p
+    WHERE p.system_role = 'admin'
+      AND p.current_tournament_id IS NOT NULL
+    ORDER BY p.created_at, p.id
+    LIMIT 1
+  );
 
   IF v_tournament IS NULL THEN
-    RAISE EXCEPTION 'No tournament is active. Activate one, then seed test data.';
+    RAISE EXCEPTION 'No working tournament is set for the admin. Open a tournament in the app, then seed test data.';
   END IF;
 
   SELECT max_categories_per_player INTO v_cap
@@ -313,7 +326,7 @@ BEGIN
   -- 6. Entrants, for the test teams only.
   --
   -- This mirrors `sync_placement_entrants`, which cannot be called from here:
-  -- it is guarded by `has_staff_role`, and the SQL editor has no JWT, so
+  -- it is guarded by `can_edit_tournament`, and the SQL editor has no JWT, so
   -- `auth.uid()` is NULL and the guard would reject it. The upsert is the same
   -- one the RPC performs.
   --
@@ -417,7 +430,11 @@ FROM public.categories c
 JOIN public.teams t   ON t.category_id = c.id
 JOIN public.players p ON p.id = t.player_1_id
 LEFT JOIN public.placement_entrants e ON e.team_id = t.id
-WHERE c.tournament_id = (SELECT id FROM public.tournaments WHERE is_active = true)
+WHERE c.tournament_id = (
+        SELECT p.current_tournament_id FROM public.profiles p
+        WHERE p.system_role = 'admin' AND p.current_tournament_id IS NOT NULL
+        ORDER BY p.created_at, p.id LIMIT 1
+      )
   AND p.email LIKE '%@tournova.test'
 GROUP BY c.code, c.entry_type, c.sort_order
 ORDER BY c.sort_order;
@@ -430,8 +447,8 @@ WHERE email LIKE '%@tournova.test';
 -- Reset the placement stage
 --
 -- Run this, then re-run the script above, to get a clean field again after the
--- rounds have been generated. It clears the stage for the ACTIVE tournament and
--- nothing else. Uncomment it -- it is off by default so it can never fire by
+-- rounds have been generated. It clears the stage for the ADMIN'S WORKING TOURNAMENT
+-- and nothing else. Uncomment it -- it is off by default so it can never fire by
 -- accident.
 --
 -- It does NOT touch `pool_matches` / `draw_matches`: those are the round-robin
@@ -439,17 +456,21 @@ WHERE email LIKE '%@tournova.test';
 -- ===========================================================================
 --
 -- DELETE FROM public.placement_matches
--- WHERE tournament_id = (SELECT id FROM public.tournaments WHERE is_active = true);
+-- WHERE tournament_id = (SELECT current_tournament_id FROM public.profiles
+--   WHERE system_role = 'admin' ORDER BY created_at, id LIMIT 1);
 --
 -- DELETE FROM public.tier_draw_matches
--- WHERE tournament_id = (SELECT id FROM public.tournaments WHERE is_active = true);
+-- WHERE tournament_id = (SELECT current_tournament_id FROM public.profiles
+--   WHERE system_role = 'admin' ORDER BY created_at, id LIMIT 1);
 --
 -- DELETE FROM public.tier_draws
--- WHERE tournament_id = (SELECT id FROM public.tournaments WHERE is_active = true);
+-- WHERE tournament_id = (SELECT current_tournament_id FROM public.profiles
+--   WHERE system_role = 'admin' ORDER BY created_at, id LIMIT 1);
 --
 -- UPDATE public.placement_entrants
 -- SET seed = NULL, tier = NULL, seed_locked_at = NULL, excluded = false
--- WHERE tournament_id = (SELECT id FROM public.tournaments WHERE is_active = true);
+-- WHERE tournament_id = (SELECT current_tournament_id FROM public.profiles
+--   WHERE system_role = 'admin' ORDER BY created_at, id LIMIT 1);
 
 -- ===========================================================================
 -- Remove the test data entirely

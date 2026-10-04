@@ -2,8 +2,10 @@
  * Theme state, shared across routes and persisted.
  *
  * Follows the module-scope store pattern used by `useSession`, and for the same
- * reason: each route renders its own `AppShell`, so a per-component `useState`
- * would reset the control on navigation.
+ * reason: the theme control lives in the shell, and the shell is mounted by a route
+ * rather than by the application, so a per-component `useState` would reset the
+ * control whenever the storage-backed initial read ran again - on a move between
+ * `/auth` and a workspace, for instance.
  *
  * The store has two inputs: the stored choice, and the operating system's colour
  * scheme as a fallback. The fallback is not knowable from storage - the page does

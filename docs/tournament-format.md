@@ -119,10 +119,11 @@ end date range, and then managed from the Schedule page:
 The old "day 1 is groups, day 2 is knockouts" split is no longer a structural
 constraint, because the number of days is not fixed.
 
-## Active tournament
+## Working tournament
 
-Exactly one tournament is active at a time (`is_active = true`). The `players` table
-is global rather than tournament-scoped.
+There is no global active tournament. Each signed-in user has their own working tournament
+(`profiles.current_tournament_id`), and a caller with none browses `/explore`. The `players`
+table is global rather than tournament-scoped.
 
 ## Legacy pool engine
 

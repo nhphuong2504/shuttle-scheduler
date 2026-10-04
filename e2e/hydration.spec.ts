@@ -3,6 +3,7 @@ import { type ConsoleMessage, type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/app";
 
 import { cellLabel, MATRIX_CELLS, openCell, ROUTES, seedAppearance } from "./fixtures/matrix";
+import { routes } from "./fixtures/routes";
 
 /**
  * Hydration, checked across the matrix.
@@ -97,7 +98,7 @@ test.describe("the desk clock is client-owned", () => {
     // React has already replaced the tree by the time any assertion could read it.
     await seedAppearance(page, { theme: "light" });
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto(routes.desk, { waitUntil: "domcontentloaded" });
 
     const panel = page.locator("text=updates every 30s").first();
     await expect(panel).toBeVisible();
@@ -108,7 +109,7 @@ test.describe("the desk clock is client-owned", () => {
   });
 
   test("the clock appears once React has taken over", async ({ page }) => {
-    await openCell(page, "/", { theme: "light" });
+    await openCell(page, routes.desk, { theme: "light" });
     const panel = page.locator("text=updates every 30s").first();
     await expect(panel).toHaveText(/\d{1,2}:\d{2}/);
   });
@@ -148,7 +149,7 @@ test.describe("the desk clock is client-owned", () => {
  * this step reports a wall-clock time in every server render and is simply wrong.
  */
 test.describe("the server render carries no time-derived match text", () => {
-  const ROUTES_WITH_TIME_TEXT = ["/", "/matches", "/draws", "/placement-schedule"] as const;
+  const ROUTES_WITH_TIME_TEXT = [routes.desk, routes.scores, routes.draws, routes.schedule] as const;
 
   for (const route of ROUTES_WITH_TIME_TEXT) {
     test(`${route} ships neither a clock nor elapsed minutes`, async ({ request }) => {

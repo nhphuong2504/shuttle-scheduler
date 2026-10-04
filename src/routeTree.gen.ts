@@ -11,16 +11,30 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as DrawsRouteImport } from './routes/draws'
+import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as KnockoutRouteImport } from './routes/knockout'
 import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as PlacementRouteImport } from './routes/placement'
 import { Route as PlacementScheduleRouteImport } from './routes/placement-schedule'
-import { Route as PoolsRouteImport } from './routes/pools'
 import { Route as RegistrationRouteImport } from './routes/registration'
 import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as StaffRouteImport } from './routes/staff'
+import { Route as MeTournamentsRouteImport } from './routes/me/tournaments'
+import { Route as TournamentsTournamentIdRouteRouteImport } from './routes/tournaments/$tournamentId/route'
+import { Route as TournamentsNewRouteImport } from './routes/tournaments/new'
+import { Route as TournamentsTournamentIdIndexRouteImport } from './routes/tournaments/$tournamentId/index'
+import { Route as TournamentsTournamentIdAccessRouteImport } from './routes/tournaments/$tournamentId/access'
+import { Route as TournamentsTournamentIdDeskRouteImport } from './routes/tournaments/$tournamentId/desk'
+import { Route as TournamentsTournamentIdDrawsRouteImport } from './routes/tournaments/$tournamentId/draws'
+import { Route as TournamentsTournamentIdEntriesRouteImport } from './routes/tournaments/$tournamentId/entries'
+import { Route as TournamentsTournamentIdKnockoutRouteImport } from './routes/tournaments/$tournamentId/knockout'
+import { Route as TournamentsTournamentIdPlacementRouteImport } from './routes/tournaments/$tournamentId/placement'
+import { Route as TournamentsTournamentIdPoolsRouteImport } from './routes/tournaments/$tournamentId/pools'
+import { Route as TournamentsTournamentIdRegistrationsRouteImport } from './routes/tournaments/$tournamentId/registrations'
+import { Route as TournamentsTournamentIdScheduleRouteImport } from './routes/tournaments/$tournamentId/schedule'
+import { Route as TournamentsTournamentIdScoresRouteImport } from './routes/tournaments/$tournamentId/scores'
+import { Route as TournamentsTournamentIdSettingsRouteImport } from './routes/tournaments/$tournamentId/settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -32,9 +46,9 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DrawsRoute = DrawsRouteImport.update({
-  id: '/draws',
-  path: '/draws',
+const ExploreRoute = ExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KnockoutRoute = KnockoutRouteImport.update({
@@ -57,11 +71,6 @@ const PlacementScheduleRoute = PlacementScheduleRouteImport.update({
   path: '/placement-schedule',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PoolsRoute = PoolsRouteImport.update({
-  id: '/pools',
-  path: '/pools',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const RegistrationRoute = RegistrationRouteImport.update({
   id: '/registration',
   path: '/registration',
@@ -82,108 +91,280 @@ const StaffRoute = StaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MeTournamentsRoute = MeTournamentsRouteImport.update({
+  id: '/me/tournaments',
+  path: '/me/tournaments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TournamentsTournamentIdRouteRoute =
+  TournamentsTournamentIdRouteRouteImport.update({
+    id: '/tournaments/$tournamentId',
+    path: '/tournaments/$tournamentId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const TournamentsNewRoute = TournamentsNewRouteImport.update({
+  id: '/tournaments/new',
+  path: '/tournaments/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TournamentsTournamentIdIndexRoute =
+  TournamentsTournamentIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdAccessRoute =
+  TournamentsTournamentIdAccessRouteImport.update({
+    id: '/access',
+    path: '/access',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdDeskRoute =
+  TournamentsTournamentIdDeskRouteImport.update({
+    id: '/desk',
+    path: '/desk',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdDrawsRoute =
+  TournamentsTournamentIdDrawsRouteImport.update({
+    id: '/draws',
+    path: '/draws',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdEntriesRoute =
+  TournamentsTournamentIdEntriesRouteImport.update({
+    id: '/entries',
+    path: '/entries',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdKnockoutRoute =
+  TournamentsTournamentIdKnockoutRouteImport.update({
+    id: '/knockout',
+    path: '/knockout',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdPlacementRoute =
+  TournamentsTournamentIdPlacementRouteImport.update({
+    id: '/placement',
+    path: '/placement',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdPoolsRoute =
+  TournamentsTournamentIdPoolsRouteImport.update({
+    id: '/pools',
+    path: '/pools',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdRegistrationsRoute =
+  TournamentsTournamentIdRegistrationsRouteImport.update({
+    id: '/registrations',
+    path: '/registrations',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdScheduleRoute =
+  TournamentsTournamentIdScheduleRouteImport.update({
+    id: '/schedule',
+    path: '/schedule',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdScoresRoute =
+  TournamentsTournamentIdScoresRouteImport.update({
+    id: '/scores',
+    path: '/scores',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
+const TournamentsTournamentIdSettingsRoute =
+  TournamentsTournamentIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/draws': typeof DrawsRoute
+  '/explore': typeof ExploreRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
-  '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/tournaments/$tournamentId': typeof TournamentsTournamentIdRouteRouteWithChildren
+  '/me/tournaments': typeof MeTournamentsRoute
+  '/tournaments/new': typeof TournamentsNewRoute
+  '/tournaments/$tournamentId/access': typeof TournamentsTournamentIdAccessRoute
+  '/tournaments/$tournamentId/desk': typeof TournamentsTournamentIdDeskRoute
+  '/tournaments/$tournamentId/draws': typeof TournamentsTournamentIdDrawsRoute
+  '/tournaments/$tournamentId/entries': typeof TournamentsTournamentIdEntriesRoute
+  '/tournaments/$tournamentId/knockout': typeof TournamentsTournamentIdKnockoutRoute
+  '/tournaments/$tournamentId/placement': typeof TournamentsTournamentIdPlacementRoute
+  '/tournaments/$tournamentId/pools': typeof TournamentsTournamentIdPoolsRoute
+  '/tournaments/$tournamentId/registrations': typeof TournamentsTournamentIdRegistrationsRoute
+  '/tournaments/$tournamentId/schedule': typeof TournamentsTournamentIdScheduleRoute
+  '/tournaments/$tournamentId/scores': typeof TournamentsTournamentIdScoresRoute
+  '/tournaments/$tournamentId/settings': typeof TournamentsTournamentIdSettingsRoute
+  '/tournaments/$tournamentId/': typeof TournamentsTournamentIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/draws': typeof DrawsRoute
+  '/explore': typeof ExploreRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
-  '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/me/tournaments': typeof MeTournamentsRoute
+  '/tournaments/new': typeof TournamentsNewRoute
+  '/tournaments/$tournamentId/access': typeof TournamentsTournamentIdAccessRoute
+  '/tournaments/$tournamentId/desk': typeof TournamentsTournamentIdDeskRoute
+  '/tournaments/$tournamentId/draws': typeof TournamentsTournamentIdDrawsRoute
+  '/tournaments/$tournamentId/entries': typeof TournamentsTournamentIdEntriesRoute
+  '/tournaments/$tournamentId/knockout': typeof TournamentsTournamentIdKnockoutRoute
+  '/tournaments/$tournamentId/placement': typeof TournamentsTournamentIdPlacementRoute
+  '/tournaments/$tournamentId/pools': typeof TournamentsTournamentIdPoolsRoute
+  '/tournaments/$tournamentId/registrations': typeof TournamentsTournamentIdRegistrationsRoute
+  '/tournaments/$tournamentId/schedule': typeof TournamentsTournamentIdScheduleRoute
+  '/tournaments/$tournamentId/scores': typeof TournamentsTournamentIdScoresRoute
+  '/tournaments/$tournamentId/settings': typeof TournamentsTournamentIdSettingsRoute
+  '/tournaments/$tournamentId': typeof TournamentsTournamentIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/draws': typeof DrawsRoute
+  '/explore': typeof ExploreRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
-  '/pools': typeof PoolsRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/tournaments/$tournamentId': typeof TournamentsTournamentIdRouteRouteWithChildren
+  '/me/tournaments': typeof MeTournamentsRoute
+  '/tournaments/new': typeof TournamentsNewRoute
+  '/tournaments/$tournamentId/access': typeof TournamentsTournamentIdAccessRoute
+  '/tournaments/$tournamentId/desk': typeof TournamentsTournamentIdDeskRoute
+  '/tournaments/$tournamentId/draws': typeof TournamentsTournamentIdDrawsRoute
+  '/tournaments/$tournamentId/entries': typeof TournamentsTournamentIdEntriesRoute
+  '/tournaments/$tournamentId/knockout': typeof TournamentsTournamentIdKnockoutRoute
+  '/tournaments/$tournamentId/placement': typeof TournamentsTournamentIdPlacementRoute
+  '/tournaments/$tournamentId/pools': typeof TournamentsTournamentIdPoolsRoute
+  '/tournaments/$tournamentId/registrations': typeof TournamentsTournamentIdRegistrationsRoute
+  '/tournaments/$tournamentId/schedule': typeof TournamentsTournamentIdScheduleRoute
+  '/tournaments/$tournamentId/scores': typeof TournamentsTournamentIdScoresRoute
+  '/tournaments/$tournamentId/settings': typeof TournamentsTournamentIdSettingsRoute
+  '/tournaments/$tournamentId/': typeof TournamentsTournamentIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/auth'
-    | '/draws'
+    | '/explore'
     | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
-    | '/pools'
     | '/registration'
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/tournaments/$tournamentId'
+    | '/me/tournaments'
+    | '/tournaments/new'
+    | '/tournaments/$tournamentId/access'
+    | '/tournaments/$tournamentId/desk'
+    | '/tournaments/$tournamentId/draws'
+    | '/tournaments/$tournamentId/entries'
+    | '/tournaments/$tournamentId/knockout'
+    | '/tournaments/$tournamentId/placement'
+    | '/tournaments/$tournamentId/pools'
+    | '/tournaments/$tournamentId/registrations'
+    | '/tournaments/$tournamentId/schedule'
+    | '/tournaments/$tournamentId/scores'
+    | '/tournaments/$tournamentId/settings'
+    | '/tournaments/$tournamentId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
-    | '/draws'
+    | '/explore'
     | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
-    | '/pools'
     | '/registration'
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/me/tournaments'
+    | '/tournaments/new'
+    | '/tournaments/$tournamentId/access'
+    | '/tournaments/$tournamentId/desk'
+    | '/tournaments/$tournamentId/draws'
+    | '/tournaments/$tournamentId/entries'
+    | '/tournaments/$tournamentId/knockout'
+    | '/tournaments/$tournamentId/placement'
+    | '/tournaments/$tournamentId/pools'
+    | '/tournaments/$tournamentId/registrations'
+    | '/tournaments/$tournamentId/schedule'
+    | '/tournaments/$tournamentId/scores'
+    | '/tournaments/$tournamentId/settings'
+    | '/tournaments/$tournamentId'
   id:
     | '__root__'
     | '/'
     | '/auth'
-    | '/draws'
+    | '/explore'
     | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
-    | '/pools'
     | '/registration'
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/tournaments/$tournamentId'
+    | '/me/tournaments'
+    | '/tournaments/new'
+    | '/tournaments/$tournamentId/access'
+    | '/tournaments/$tournamentId/desk'
+    | '/tournaments/$tournamentId/draws'
+    | '/tournaments/$tournamentId/entries'
+    | '/tournaments/$tournamentId/knockout'
+    | '/tournaments/$tournamentId/placement'
+    | '/tournaments/$tournamentId/pools'
+    | '/tournaments/$tournamentId/registrations'
+    | '/tournaments/$tournamentId/schedule'
+    | '/tournaments/$tournamentId/scores'
+    | '/tournaments/$tournamentId/settings'
+    | '/tournaments/$tournamentId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
-  DrawsRoute: typeof DrawsRoute
+  ExploreRoute: typeof ExploreRoute
   KnockoutRoute: typeof KnockoutRoute
   MatchesRoute: typeof MatchesRoute
   PlacementRoute: typeof PlacementRoute
   PlacementScheduleRoute: typeof PlacementScheduleRoute
-  PoolsRoute: typeof PoolsRoute
   RegistrationRoute: typeof RegistrationRoute
   ScheduleRoute: typeof ScheduleRoute
   SetupRoute: typeof SetupRoute
   StaffRoute: typeof StaffRoute
+  TournamentsTournamentIdRouteRoute: typeof TournamentsTournamentIdRouteRouteWithChildren
+  MeTournamentsRoute: typeof MeTournamentsRoute
+  TournamentsNewRoute: typeof TournamentsNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -202,11 +383,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/draws': {
-      id: '/draws'
-      path: '/draws'
-      fullPath: '/draws'
-      preLoaderRoute: typeof DrawsRouteImport
+    '/explore': {
+      id: '/explore'
+      path: '/explore'
+      fullPath: '/explore'
+      preLoaderRoute: typeof ExploreRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/knockout': {
@@ -237,13 +418,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlacementScheduleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pools': {
-      id: '/pools'
-      path: '/pools'
-      fullPath: '/pools'
-      preLoaderRoute: typeof PoolsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/registration': {
       id: '/registration'
       path: '/registration'
@@ -272,22 +446,168 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/me/tournaments': {
+      id: '/me/tournaments'
+      path: '/me/tournaments'
+      fullPath: '/me/tournaments'
+      preLoaderRoute: typeof MeTournamentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tournaments/$tournamentId': {
+      id: '/tournaments/$tournamentId'
+      path: '/tournaments/$tournamentId'
+      fullPath: '/tournaments/$tournamentId'
+      preLoaderRoute: typeof TournamentsTournamentIdRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tournaments/new': {
+      id: '/tournaments/new'
+      path: '/tournaments/new'
+      fullPath: '/tournaments/new'
+      preLoaderRoute: typeof TournamentsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tournaments/$tournamentId/': {
+      id: '/tournaments/$tournamentId/'
+      path: '/'
+      fullPath: '/tournaments/$tournamentId/'
+      preLoaderRoute: typeof TournamentsTournamentIdIndexRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/access': {
+      id: '/tournaments/$tournamentId/access'
+      path: '/access'
+      fullPath: '/tournaments/$tournamentId/access'
+      preLoaderRoute: typeof TournamentsTournamentIdAccessRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/desk': {
+      id: '/tournaments/$tournamentId/desk'
+      path: '/desk'
+      fullPath: '/tournaments/$tournamentId/desk'
+      preLoaderRoute: typeof TournamentsTournamentIdDeskRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/draws': {
+      id: '/tournaments/$tournamentId/draws'
+      path: '/draws'
+      fullPath: '/tournaments/$tournamentId/draws'
+      preLoaderRoute: typeof TournamentsTournamentIdDrawsRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/entries': {
+      id: '/tournaments/$tournamentId/entries'
+      path: '/entries'
+      fullPath: '/tournaments/$tournamentId/entries'
+      preLoaderRoute: typeof TournamentsTournamentIdEntriesRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/knockout': {
+      id: '/tournaments/$tournamentId/knockout'
+      path: '/knockout'
+      fullPath: '/tournaments/$tournamentId/knockout'
+      preLoaderRoute: typeof TournamentsTournamentIdKnockoutRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/placement': {
+      id: '/tournaments/$tournamentId/placement'
+      path: '/placement'
+      fullPath: '/tournaments/$tournamentId/placement'
+      preLoaderRoute: typeof TournamentsTournamentIdPlacementRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/pools': {
+      id: '/tournaments/$tournamentId/pools'
+      path: '/pools'
+      fullPath: '/tournaments/$tournamentId/pools'
+      preLoaderRoute: typeof TournamentsTournamentIdPoolsRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/registrations': {
+      id: '/tournaments/$tournamentId/registrations'
+      path: '/registrations'
+      fullPath: '/tournaments/$tournamentId/registrations'
+      preLoaderRoute: typeof TournamentsTournamentIdRegistrationsRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/schedule': {
+      id: '/tournaments/$tournamentId/schedule'
+      path: '/schedule'
+      fullPath: '/tournaments/$tournamentId/schedule'
+      preLoaderRoute: typeof TournamentsTournamentIdScheduleRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/scores': {
+      id: '/tournaments/$tournamentId/scores'
+      path: '/scores'
+      fullPath: '/tournaments/$tournamentId/scores'
+      preLoaderRoute: typeof TournamentsTournamentIdScoresRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
+    '/tournaments/$tournamentId/settings': {
+      id: '/tournaments/$tournamentId/settings'
+      path: '/settings'
+      fullPath: '/tournaments/$tournamentId/settings'
+      preLoaderRoute: typeof TournamentsTournamentIdSettingsRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
   }
 }
+
+interface TournamentsTournamentIdRouteRouteChildren {
+  TournamentsTournamentIdAccessRoute: typeof TournamentsTournamentIdAccessRoute
+  TournamentsTournamentIdDeskRoute: typeof TournamentsTournamentIdDeskRoute
+  TournamentsTournamentIdDrawsRoute: typeof TournamentsTournamentIdDrawsRoute
+  TournamentsTournamentIdEntriesRoute: typeof TournamentsTournamentIdEntriesRoute
+  TournamentsTournamentIdKnockoutRoute: typeof TournamentsTournamentIdKnockoutRoute
+  TournamentsTournamentIdPlacementRoute: typeof TournamentsTournamentIdPlacementRoute
+  TournamentsTournamentIdPoolsRoute: typeof TournamentsTournamentIdPoolsRoute
+  TournamentsTournamentIdRegistrationsRoute: typeof TournamentsTournamentIdRegistrationsRoute
+  TournamentsTournamentIdScheduleRoute: typeof TournamentsTournamentIdScheduleRoute
+  TournamentsTournamentIdScoresRoute: typeof TournamentsTournamentIdScoresRoute
+  TournamentsTournamentIdSettingsRoute: typeof TournamentsTournamentIdSettingsRoute
+  TournamentsTournamentIdIndexRoute: typeof TournamentsTournamentIdIndexRoute
+}
+
+const TournamentsTournamentIdRouteRouteChildren: TournamentsTournamentIdRouteRouteChildren =
+  {
+    TournamentsTournamentIdAccessRoute: TournamentsTournamentIdAccessRoute,
+    TournamentsTournamentIdDeskRoute: TournamentsTournamentIdDeskRoute,
+    TournamentsTournamentIdDrawsRoute: TournamentsTournamentIdDrawsRoute,
+    TournamentsTournamentIdEntriesRoute: TournamentsTournamentIdEntriesRoute,
+    TournamentsTournamentIdKnockoutRoute: TournamentsTournamentIdKnockoutRoute,
+    TournamentsTournamentIdPlacementRoute:
+      TournamentsTournamentIdPlacementRoute,
+    TournamentsTournamentIdPoolsRoute: TournamentsTournamentIdPoolsRoute,
+    TournamentsTournamentIdRegistrationsRoute:
+      TournamentsTournamentIdRegistrationsRoute,
+    TournamentsTournamentIdScheduleRoute: TournamentsTournamentIdScheduleRoute,
+    TournamentsTournamentIdScoresRoute: TournamentsTournamentIdScoresRoute,
+    TournamentsTournamentIdSettingsRoute: TournamentsTournamentIdSettingsRoute,
+    TournamentsTournamentIdIndexRoute: TournamentsTournamentIdIndexRoute,
+  }
+
+const TournamentsTournamentIdRouteRouteWithChildren =
+  TournamentsTournamentIdRouteRoute._addFileChildren(
+    TournamentsTournamentIdRouteRouteChildren,
+  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
-  DrawsRoute: DrawsRoute,
+  ExploreRoute: ExploreRoute,
   KnockoutRoute: KnockoutRoute,
   MatchesRoute: MatchesRoute,
   PlacementRoute: PlacementRoute,
   PlacementScheduleRoute: PlacementScheduleRoute,
-  PoolsRoute: PoolsRoute,
   RegistrationRoute: RegistrationRoute,
   ScheduleRoute: ScheduleRoute,
   SetupRoute: SetupRoute,
   StaffRoute: StaffRoute,
+  TournamentsTournamentIdRouteRoute:
+    TournamentsTournamentIdRouteRouteWithChildren,
+  MeTournamentsRoute: MeTournamentsRoute,
+  TournamentsNewRoute: TournamentsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

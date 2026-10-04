@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Contract tests for the hardening migration. They document required RPC/RLS
- * behavior so a live database can be checked without embedding credentials here.
+ * Contract tests for the hardening migration and the role-redesign migration. They
+ * document required RPC/RLS behavior so a live database can be checked without
+ * embedding credentials here.
  */
 describe("database invariant contract", () => {
   it("requires transactional RPCs for generation and scoring", () => {
@@ -20,8 +21,12 @@ describe("database invariant contract", () => {
       "reschedule_live_match",
       "reset_match_with_note",
       "shift_live_schedule_after_match",
-      "current_staff_role",
-      "is_invited_email",
+      // The two lifecycle verbs. They replaced `current_staff_role` and
+      // `is_invited_email`, which were never really in this list's subject matter: the
+      // list is about writes going through a transaction, and a role lookup was only
+      // ever here because it was the thing an RPC guard called.
+      "start_tournament",
+      "complete_tournament",
     ];
     expect(required).toHaveLength(12);
   });
@@ -47,8 +52,15 @@ describe("database invariant contract", () => {
  * `anon` unless the revoke is repeated. That is exactly what happened to
  * `activate_tournament` here, and it is the kind of thing a live check would only
  * catch from outside.
+ *
+ * Historical. `20260919000000` is an applied migration and immutable, so these
+ * assertions read what it did and still pass. What that migration *established*, though,
+ * has since been replaced: `activate_tournament` was dropped and its Draft -> In Progress
+ * meaning moved to `start_tournament`, and `set_active_tournament` was narrowed to the
+ * platform-admin public default. See the role-redesign block below for the current
+ * contract; read this one as the state the redesign started from.
  */
-describe("set_active_tournament migration", () => {
+describe("set_active_tournament migration (superseded by the role redesign)", () => {
   const sql = readFileSync(
     join(__dirname, "../../../supabase/migrations/20260919000000_set_active_tournament.sql"),
     "utf8",
@@ -75,6 +87,543 @@ describe("set_active_tournament migration", () => {
       );
       expect(sql).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${fn}\\(uuid\\)`));
     }
+  });
+});
+
+/**
+ * The role redesign.
+ *
+ * The migration is written so that it fails on a catalogue question rather than on a
+ * diff: it runs its own `do $verify$ ... $verify$` before it drops the legacy helpers.
+ * These assertions are the same questions asked again, from the repository, for the
+ * reason the migration states in its own header - the migration must not be able to pass
+ * its own gate while the suite says something different.
+ *
+ * The two that are not merely restatements are the closed lists. `assert_tournament_writable`
+ * is the only guard with a platform-admin override, and its call sites are the enumerated
+ * repair paths; asserting the set rather than a count is what makes a widened override
+ * fail here instead of surfacing as a tournament a platform admin could score after it was
+ * completed. `assert_tournament_live`'s call sites are the mirror image: every scoring and
+ * live path, none of which may acquire the override.
+ */
+describe("role redesign migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const FILE = "20260927000000_tournova_role_redesign.sql";
+  const sql = readFileSync(join(dir, FILE), "utf8");
+  /** The executable SQL with line comments stripped, so prose cannot satisfy a check. */
+  const code = (source: string) => source.replace(/--.*$/gm, "");
+  const executable = code(sql);
+  /**
+   * The same SQL with the migration's own `do $verify$ ... $verify$;` block removed.
+   *
+   * The verification block has to name the literals it scans the catalogue for, so it
+   * contains strings a scan of the *migration* would read as a violation. Assertions about
+   * what the migration does are made against this, not against the raw file.
+   */
+  const withoutVerify = executable.replace(/do \$verify\$[\s\S]*?\$verify\$;/, "");
+
+  it("is not re-opened by any later migration", () => {
+    // This block used to assert that the redesign was the last migration. Phase 2's
+    // identity canon deliberately follows it, so "last" stopped being the right question.
+    // What still has to hold is what the assertion was protecting: nothing after the
+    // redesign re-creates the vocabulary it retired, in a table, a function or a grant.
+    const files = readdirSync(dir)
+      .filter((name) => name.endsWith(".sql"))
+      .sort();
+    const later = files.slice(files.indexOf(FILE) + 1);
+    expect(later.length).toBeGreaterThan(0);
+    for (const name of later) {
+      const body = code(readFileSync(join(dir, name), "utf8"));
+      for (const helper of ["has_staff_role", "current_staff_role", "is_invited_email"]) {
+        expect(body, name).not.toMatch(
+          new RegExp(`create (or replace )?function public\\.${helper}`),
+        );
+      }
+      expect(body, name).not.toMatch(/create table public\.staff_roles/);
+    }
+  });
+
+  it("renames the staff vocabulary instead of adding a parallel one", () => {
+    // A rename rather than a new table: the existing rows are the same people, and the
+    // recovery runbook and the auth trigger both key on the email column that a fresh
+    // table would lose.
+    expect(sql).toMatch(/alter table public\.staff_roles rename to profiles/);
+    expect(sql).toMatch(/alter table public\.profiles rename column role to system_role/);
+    expect(sql).toMatch(/check \(system_role in \('admin', 'user'\)\)/);
+    // The three tournament-scoped roles map to `user`, and they are converted before the
+    // new check is added, because a CHECK validates against the rows already present.
+    const convert = executable.indexOf("set system_role = 'user'");
+    const addCheck = executable.indexOf("profiles_system_role_check");
+    expect(convert).toBeGreaterThan(-1);
+    expect(addCheck).toBeGreaterThan(convert);
+  });
+
+  it("retires draft and published as statuses, converting before constraining", () => {
+    const convert = executable.indexOf("set status = 'upcoming' where status = 'draft'");
+    const addCheck = executable.indexOf("tournaments_status_check");
+    expect(convert).toBeGreaterThan(-1);
+    expect(addCheck).toBeGreaterThan(-1);
+    expect(convert).toBeLessThan(executable.indexOf("check (status in ('upcoming'"));
+    expect(executable).toMatch(/check \(status in \('upcoming', 'in_progress', 'completed'\)\)/);
+    expect(executable).toMatch(/alter column status set default 'upcoming'/);
+    // The old constraint that tied `is_active` to a lifecycle state is what made the two
+    // ideas inseparable; dropping it is what lets two tournaments run at once.
+    expect(executable).toMatch(/drop constraint tournaments_active_status_check/);
+    // No literal `'published'` anywhere, and `'draft'` only in the conversion above.
+    // Checked outside the verification block: that block has to name the literals it
+    // scans the catalogue for, so reading them as violations would be reading its own
+    // pattern as the thing it forbids.
+    expect(withoutVerify).not.toMatch(/'published'/);
+    const drafts = withoutVerify.match(/'draft'/g) ?? [];
+    expect(drafts).toHaveLength(1);
+  });
+
+  it("makes ownership a profile, not an auth identity", () => {
+    // The load-bearing choice: a profile exists before its identity does, and survives that
+    // identity being recreated, which is what the recovery runbook does.
+    expect(sql).toMatch(
+      /add column owner_user_id uuid references public\.profiles\(id\) on delete restrict/,
+    );
+    // Nullable so the backfill can run, then tightened. Asserted in that order.
+    const backfill = executable.indexOf("owner_user_id =");
+    const notNull = executable.search(/alter column owner_user_id set not null/);
+    expect(backfill).toBeGreaterThan(-1);
+    expect(notNull).toBeGreaterThan(backfill);
+  });
+
+  it("withholds UPDATE on the three lifecycle columns at the privilege layer", () => {
+    // Column privileges rather than a trigger, because a generic BEFORE UPDATE guard cannot
+    // both forbid client writes and permit the SECURITY DEFINER lifecycle RPCs.
+    expect(executable).toMatch(
+      /revoke insert, update, delete, truncate, references, trigger\s+on public\.tournaments from anon, authenticated/,
+    );
+    const grant = executable.match(/grant update \(([\s\S]*?)\) on public\.tournaments/);
+    expect(grant, "the migration must list the editable columns explicitly").toBeTruthy();
+    const columns = [...(grant?.[1] ?? "").matchAll(/([a-z_]+)/g)].map((m) => m[1] as string);
+    // Withheld, each for its own reason: the state machine owns `status`, `is_active` is
+    // the public default pointer, `owner_user_id` is ownership.
+    for (const withheld of ["status", "is_active", "owner_user_id"]) {
+      expect(columns).not.toContain(withheld);
+    }
+    // And the setup surface an editor is allowed to type into is present, so the revoke
+    // did not quietly close the two direct writers the app still uses.
+    for (const editable of [
+      "name",
+      "format",
+      "venue_timezone",
+      "registration_opens_at",
+      "registration_closes_at",
+    ]) {
+      expect(columns).toContain(editable);
+    }
+  });
+
+  it("adds no column-protection trigger on tournaments", () => {
+    // The temptation is a BEFORE UPDATE trigger over `status`/`is_active`. It cannot work:
+    // it has to permit the lifecycle RPCs, which means either making them platform-admin
+    // only or treating `auth.uid() IS NULL` as the signal, both of which are worse than the
+    // privilege it replaces.
+    for (const m of sql.matchAll(/create trigger ([a-z_]+)/g)) {
+      expect(m[1]).not.toMatch(/tournaments_(status|lifecycle|active|owner)_guard/);
+    }
+  });
+
+  it("drops the legacy helpers only after asserting nothing names them", () => {
+    // Ordering is the whole safety argument: a helper dropped while an object still
+    // references it fails the migration, and one referenced after being dropped fails at
+    // runtime. The verification block is asserted to come first, and to scan for all three.
+    const verify = sql.indexOf("do $verify$");
+    const drop = sql.indexOf("drop function if exists public.current_staff_role()");
+    expect(verify).toBeGreaterThan(-1);
+    expect(drop).toBeGreaterThan(verify);
+    for (const helper of ["has_staff_role", "current_staff_role", "is_invited_email"]) {
+      expect(executable).toMatch(new RegExp(`drop function if exists public\\.${helper}`));
+      // Each scan excludes the drop list, or it would be asking whether a function calls
+      // itself while it still exists - the one question that cannot be answered yes.
+      expect(executable).toMatch(
+        new RegExp(`p\\.proname not in \\('current_staff_role', 'has_staff_role', 'is_invited_email'\\)`),
+      );
+    }
+  });
+
+  it("carries the lifecycle guard classification as closed lists", () => {
+    // The override is the dangerous half, so it is pinned to its call sites. Adding one is
+    // how a completed tournament becomes scoreable again.
+    const writable = sql.match(
+      /p\.prosrc like '%PERFORM public\.assert_tournament_writable\(%'[\s\S]*?distinct from\s*'([^']+)'/,
+    );
+    expect(writable?.[1]?.split(",").sort()).toEqual(
+      [
+        "add_tournament_day",
+        "apply_day_schedule",
+        "apply_placement_day_schedule",
+        "decide_tournament_registration",
+        "remove_tournament_day",
+        "reset_placement_schedule",
+        "reset_placement_stage",
+        "set_tournament_courts",
+      ].sort(),
+    );
+
+    // The live guard is the mirror: every scoring and live-operation path, and nothing that
+    // should keep working on a completed tournament.
+    const live = sql.match(
+      /p\.prosrc like '%PERFORM public\.assert_tournament_live\(%'[\s\S]*?distinct from\s*'([^']+)'/,
+    );
+    expect(live?.[1]?.split(",").sort()).toEqual(
+      [
+        "apply_placement_round_two",
+        "apply_tier_draws",
+        "report_draw_result",
+        "report_placement_result",
+        "report_pool_result",
+        "report_tier_draw_result",
+        "reschedule_live_match",
+        "reschedule_placement_match",
+        "reset_and_repair_match",
+        "reset_match_with_note",
+        "reset_placement_result",
+        "reset_tier_draw_result",
+        "resolve_match_exception",
+        "start_match_safe",
+        "start_placement_match",
+        "start_tier_draw_match",
+      ].sort(),
+    );
+
+    // Only the writable guard consults the platform role. Either of the other two
+    // acquiring it would give an admin a way around a state rather than a way through a
+    // repair.
+    expect(executable).toMatch(
+      /prosrc like '%is_platform_admin%'\s*\)\s*then\s+raise exception 'PART 9: assert_tournament_live must not consult the platform role'/,
+    );
+  });
+
+  it("keeps readiness independent of participation", () => {
+    // This is the property registration depends on, and it is easy to lose by adding an
+    // entry-count check to the checklist - which would make a tournament need entrants
+    // before it could start, and entrants need a started tournament.
+    //
+    // Both readers are scanned, not just the boolean: the six checks live in
+    // `tournament_readiness_checks`, so an entry count added there would not appear in
+    // `tournament_is_ready` at all.
+    const start = executable.indexOf("FUNCTION public.tournament_readiness_checks");
+    const reader = executable.indexOf("FUNCTION public.tournament_readiness(");
+    const end = executable.indexOf("$$;", reader) + 3;
+    expect(start).toBeGreaterThan(-1);
+    expect(reader).toBeGreaterThan(start);
+    const body = executable.slice(start, end);
+    expect(body.length).toBeGreaterThan(0);
+    for (const table of [
+      "teams",
+      "placement_entrants",
+      "placement_matches",
+      "tier_draws",
+      "tier_draw_matches",
+    ]) {
+      expect(body).not.toMatch(new RegExp(`public\\.${table}`));
+    }
+  });
+
+  it("refuses direct writes to the request and membership tables", () => {
+    // No client write policy at all, and the grant closed too, so the refusal does not
+    // depend on a policy staying absent.
+    for (const table of ["tournament_editors", "tournament_registrations"]) {
+      expect(executable).toMatch(
+        new RegExp(`revoke insert, update, delete on public\\.${table} from anon, authenticated`),
+      );
+    }
+    expect(executable).toMatch(
+      /policies\s+where schemaname = 'public' and tablename = 'tournament_registrations'\s+and cmd in \('INSERT', 'UPDATE', 'DELETE', 'ALL'\)/,
+    );
+  });
+
+  it("resolves the five renames and leaves no legacy name behind", () => {
+    // Four renamed entry points plus the dropped overload. Each old name has to be gone,
+    // or there are two ways to do one thing and only one of them is guarded.
+    //
+    // Matched case-insensitively: the schema DDL at the top of the migration is lowercase
+    // while these later `DROP`s are uppercase, and the assertion is about the statement
+    // rather than about the casing.
+    for (const dropped of [
+      "create_tournament_draft",
+      "save_tournament_draft",
+      "delete_tournament_draft",
+      "activate_tournament",
+      "reopen_tournament",
+    ]) {
+      expect(executable).toMatch(
+        new RegExp(`drop function if exists public\\.${dropped}`, "i"),
+      );
+    }
+    // The unused legacy overload took a day count and a start date, both now derived.
+    expect(executable).toMatch(
+      /drop function if exists public\.create_tournament\(text, integer, integer, date, jsonb\)/i,
+    );
+    // And the five that replace them exist.
+    for (const kept of [
+      "create_tournament",
+      "save_tournament_config",
+      "discard_tournament",
+      "start_tournament",
+      "complete_tournament",
+    ]) {
+      expect(executable).toMatch(new RegExp(`function public\\.${kept}\\(`, "i"));
+    }
+  });
+
+  it("narrows set_active_tournament to the public default", () => {
+    // The one verb that is still global, and the only one that should be. It no longer
+    // writes `status`, and it is no longer ownership - moving everybody's default is a
+    // platform decision.
+    const body = executable.slice(executable.indexOf("FUNCTION public.set_active_tournament"));
+    const until = body.indexOf("$$;");
+    const fn = code(body.slice(0, until));
+    expect(fn).toMatch(/IF NOT public\.is_platform_admin\(\) THEN/);
+    expect(fn).not.toMatch(/status\s*=/);
+    expect(fn).toMatch(/SET is_active = false WHERE is_active/);
+  });
+
+  it("publishes the two new tables to the realtime publication", () => {
+    expect(sql).toMatch(
+      /tables text\[\] := array\['tournament_editors', 'tournament_registrations'\]/,
+    );
+    // `staff_roles` is not re-added under its new name: a publication tracks the relation,
+    // so the rename follows it. Re-adding would be a duplicate ADD and would raise.
+    // Checked outside the verification block, whose FK-target assertion legitimately names
+    // the table.
+    expect(withoutVerify).not.toMatch(/'profiles'/);
+  });
+
+  it("asserts its own gates before it commits", () => {
+    // The migration raises rather than warns. A warning printed into a CI log is not a
+    // failure, and this is the one migration where a silent partial result is worse than
+    // no result at all.
+    expect(sql).toMatch(/do \$verify\$/);
+    expect(sql).not.toMatch(/raise warning 'PART 9/);
+    expect(sql).toMatch(/raise exception 'PART 9:/);
+  });
+});
+
+/**
+ * Identity canon.
+ *
+ * Phase 1 held ownership on a `profiles` row but left membership and registration requests
+ * keyed on `auth.users.id`, so an editor grant or a request died with the identity instead
+ * of surviving it - which is the failure `profiles` exists to prevent. This migration
+ * renames all four relationships onto a profile id and moves every per-person predicate
+ * onto `current_profile_id()`.
+ *
+ * The assertions below are the same questions the migration asks its own catalogue, asked
+ * again from the repository, for the reason the role-redesign block states: a migration
+ * must not be able to pass its own gate while the suite says something different.
+ */
+describe("identity canon migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const FILE = "20260929000000_identity_canon.sql";
+  const PHASE_ONE = "20260927000000_tournova_role_redesign.sql";
+  const sql = readFileSync(join(dir, FILE), "utf8");
+  /** The executable SQL with line comments stripped, so prose cannot satisfy a check. */
+  const code = (source: string) => source.replace(/--.*$/gm, "");
+  const executable = code(sql);
+
+  /** One function's source, from its `CREATE` to its closing dollar-quote. */
+  const fnBody = (signature: string, source = executable): string => {
+    const start = source.indexOf(`FUNCTION public.${signature}`);
+    expect(start, `${signature} is not defined`).toBeGreaterThan(-1);
+    const opener = source.slice(start).match(/AS \$([a-z_]*)\$/);
+    const tag = opener?.[1] ?? "";
+    const close = source.indexOf(`$${tag}$;`, start);
+    expect(close, `${signature} has no closing dollar-quote`).toBeGreaterThan(start);
+    return source.slice(start, close + tag.length + 4);
+  };
+
+  it("checks for unmatched identities before it changes anything", () => {
+    // The pre-flight has to precede the DDL: its whole value is that it aborts a migration
+    // whose conversion would silently drop a person.
+    const preflight = executable.indexOf("from public.tournament_editors e");
+    const firstDdl = executable.search(/alter table public\.tournaments rename column/);
+    expect(preflight).toBeGreaterThan(-1);
+    expect(firstDdl).toBeGreaterThan(preflight);
+    // Both member-bearing tables are counted, and the raise names the counts rather than
+    // failing on a constraint with a code.
+    expect(executable).toMatch(/from public\.tournament_registrations r/);
+    expect(executable).toMatch(/tournament_editors row\(s\) and % tournament_registrations row\(s\)/);
+  });
+
+  it("converts both kinds of column, with opposite answers for an unmatched value", () => {
+    // Members and requesters are the relationship, so they map totally - guaranteed by the
+    // pre-flight rather than by a coalesce that would hide a missing person.
+    for (const [table, alias] of [
+      ["tournament_editors", "e"],
+      ["tournament_registrations", "r"],
+    ] as const) {
+      expect(executable).toMatch(
+        new RegExp(
+          `update public\\.${table} ${alias}\\s+set profile_id = \\(\\s*select p\\.id from public\\.profiles p where p\\.user_id = ${alias}\\.profile_id\\s*\\)`,
+        ),
+      );
+    }
+    // Actors are attribution, so an unmatched value becomes NULL instead of keeping an
+    // auth uuid in a profile column. A correlated subquery, not `update ... from`, which
+    // would leave the unmatched rows untouched - an auth uid left in a profile column.
+    for (const [table, alias, col] of [
+      ["tournament_editors", "e", "added_by_profile_id"],
+      ["tournament_registrations", "r", "decided_by_profile_id"],
+    ] as const) {
+      expect(executable).toMatch(
+        new RegExp(
+          `update public\\.${table} ${alias}\\s+set ${col} = \\(\\s*select p\\.id from public\\.profiles p where p\\.user_id = ${alias}\\.${col}\\s*\\)`,
+        ),
+      );
+    }
+  });
+
+  it("keeps the member and requester columns NOT NULL through the rename", () => {
+    // A rename carries the column's constraints and grants with it, so the risk is not the
+    // rename - it is the conversion widening the column to admit a NULL person.
+    const phase1 = readFileSync(join(dir, PHASE_ONE), "utf8");
+    const declaredNotNull =
+      phase1.match(/user_id uuid not null references auth\.users\(id\) on delete cascade/g) ?? [];
+    expect(declaredNotNull).toHaveLength(2);
+    expect(executable).not.toMatch(/alter column profile_id (drop not null|set default null)/);
+    // And the new constraints keep the same delete behaviour the old ones had, so a rename
+    // is not a quiet change of what a delete cascades to.
+    expect(executable).toMatch(
+      /foreign key \(profile_id\) references public\.profiles\(id\) on delete cascade/,
+    );
+    expect(executable).toMatch(
+      /foreign key \(added_by_profile_id\) references public\.profiles\(id\) on delete set null/,
+    );
+    expect(executable).toMatch(
+      /foreign key \(decided_by_profile_id\) references public\.profiles\(id\) on delete set null/,
+    );
+  });
+
+  it("drops the auth foreign keys by catalogue lookup, not by an assumed name", () => {
+    // An auto-generated name that differed would leave an FK to auth.users behind, and the
+    // migration would still succeed - which is precisely the silent failure it guards.
+    expect(executable).toMatch(/confrelid = 'auth\.users'::regclass/);
+    expect(executable).toMatch(/c\.relname in \('tournament_editors', 'tournament_registrations'\)/);
+  });
+
+  it("resolves every per-person rule through current_profile_id", () => {
+    expect(sql).toMatch(/FUNCTION public\.current_profile_id\(\)/);
+    // The two arms of `current_system_role()`: the auth link, and the normalized JWT email
+    // that resolves before the trigger has run - which is what lets a recreated identity
+    // recover its access rather than lose it.
+    const definition = fnBody("current_profile_id()");
+    expect(definition).toMatch(/p\.user_id = auth\.uid\(\)/);
+    expect(definition).toMatch(/normalize_email\(auth\.jwt\(\) ->> 'email'\)/);
+
+    for (const fn of [
+      "is_tournament_owner(p_tournament_id uuid)",
+      "is_tournament_editor(p_tournament_id uuid)",
+      "has_any_tournament_edit()",
+      "tournament_registrations_guard_insert()",
+      "tournament_registrations_guard_update()",
+      "submit_tournament_registration(p_tournament_id uuid)",
+      "my_tournament_registration(p_tournament_id uuid)",
+      "add_tournament_editor(p_tournament_id uuid, p_email text)",
+    ]) {
+      const body = fnBody(fn);
+      expect(body, fn).toMatch(/current_profile_id\(\)/);
+      // And none of them compares a profile column to the auth uid, which would type-check
+      // in SQL and silently match nothing.
+      expect(body, fn).not.toMatch(/(owner_|added_by_|decided_by_)?profile_id\s*=\s*auth\.uid\(\)/);
+    }
+  });
+
+  it("covers the two arms Phase 1's own verification did not", () => {
+    // PART 9 checked that `owner_user_id` is never compared to `auth.uid()`. The
+    // `tournament_editors` read arm and the registration own-read arm were not covered,
+    // and both named a `user_id` column that no longer exists.
+    expect(executable).toMatch(/or added_by_profile_id = public\.current_profile_id\(\)/);
+    expect(executable).toMatch(/using \(profile_id = public\.current_profile_id\(\)\)/);
+  });
+
+  it("scans the catalogue for a profile id held under a user_id name", () => {
+    // A `..._user_id` that references `profiles` reads as an auth uid and joins to the
+    // wrong table. Asserted at apply time, and re-asserted here so the scan cannot be
+    // deleted without the suite noticing.
+    expect(executable).toMatch(/a profile id is held under a user_id name/);
+    expect(executable).toMatch(/a\.attname ~ '_user_id\$'/);
+    expect(executable).toMatch(/con\.confrelid = 'public\.profiles'::regclass/);
+  });
+
+  it("keeps the caller's profile out of the request payload", () => {
+    // The requester is stamped from the caller, never read from the row being written, so
+    // a request cannot be filed on somebody else's behalf.
+    const guard = fnBody("tournament_registrations_guard_insert()");
+    expect(guard).toMatch(/NEW\.profile_id := public\.current_profile_id\(\)/);
+    expect(guard).toMatch(/NEW\.status := 'pending'/);
+    expect(guard).toMatch(/NEW\.decided_by_profile_id := NULL/);
+  });
+
+  it("re-issues the tournaments column grant under the new name", () => {
+    // The privilege is held per column attribute, so a rename alone would not require it.
+    // Re-issuing is what lets this file - rather than an applied migration - be the place
+    // the withheld set is asserted from.
+    const grant = executable.match(/grant update \(([\s\S]*?)\) on public\.tournaments/);
+    expect(grant, "the migration must list the editable columns explicitly").toBeTruthy();
+    const columns = [...(grant?.[1] ?? "").matchAll(/([a-z_]+)/g)].map((m) => m[1] as string);
+    // Both withheld columns: ownership is the FK's business, and `is_active` was the global
+    // presentation pointer - a client write to either is the failure this asserts away.
+    expect(columns).not.toContain("owner_profile_id");
+    expect(columns).not.toContain("is_active");
+    expect(columns).toContain("name");
+    expect(columns).toContain("registration_opens_at");
+    expect(executable).toMatch(
+      /has_column_privilege\('authenticated', 'public\.tournaments', 'owner_profile_id', 'update'\)/,
+    );
+  });
+
+  it("grants the new predicate and repeats the grants its drops removed", () => {
+    // `current_profile_id()` is called from inside RLS policies, which are evaluated as
+    // the querying role, so that role needs EXECUTE. The three re-created functions lost
+    // their grant with the DROP and have to get it back.
+    expect(executable).toMatch(
+      /grant execute on function public\.current_profile_id\(\) to authenticated/,
+    );
+    for (const sig of [
+      "review_tournament_registrations(uuid)",
+      "list_tournament_editors(uuid)",
+      "remove_tournament_editor(uuid, uuid)",
+    ]) {
+      expect(executable).toContain(`GRANT EXECUTE ON FUNCTION public.${sig} TO authenticated`);
+    }
+  });
+
+  it("re-creates the three functions whose signature it changes", () => {
+    // Postgres refuses to change an OUT parameter name - or an input parameter name - in
+    // place, so a rename of the returned `user_id` or of `p_user_id` requires DROP first.
+    // Leaving the CREATE OR REPLACE form would fail the migration at apply time.
+    for (const sig of [
+      "list_tournament_editors(uuid)",
+      "review_tournament_registrations(uuid)",
+      "remove_tournament_editor(uuid, uuid)",
+    ]) {
+      expect(executable).toContain(`DROP FUNCTION IF EXISTS public.${sig}`);
+    }
+    // And the roster and the two reviewer-facing functions carry profile ids out.
+    expect(fnBody("list_tournament_editors(p_tournament_id uuid)")).toMatch(
+      /RETURNS TABLE \(profile_id uuid, email text, is_owner boolean, created_at timestamptz\)/,
+    );
+    expect(fnBody("review_tournament_registrations(p_tournament_id uuid)")).toMatch(
+      /profile_id uuid/,
+    );
+    expect(fnBody("remove_tournament_editor(p_tournament_id uuid, p_profile_id uuid)")).toMatch(
+      /DELETE FROM public\.tournament_editors\s+WHERE tournament_id = p_tournament_id AND profile_id = p_profile_id/,
+    );
+  });
+
+  it("leaves the auth-link comparisons alone", () => {
+    // `profiles.user_id` IS the auth link, and the pointer update in `create_tournament`
+    // is about the caller's own row. Rewriting those onto `current_profile_id()` would be
+    // the same mistake in the other direction.
+    expect(fnBody("create_tournament(p_payload jsonb)")).toMatch(
+      /SET current_tournament_id = new_id\s+WHERE user_id = auth\.uid\(\)/,
+    );
   });
 });
 
@@ -185,7 +734,9 @@ describe("trimmed readiness migration", () => {
 
   it("is the last word on tournament_readiness", () => {
     // The gate is only as strict as its newest definition, so a later migration that
-    // redefines the function has to come through this test rather than around it.
+    // redefines the function has to come through this test rather than around it. The role
+    // redesign is that later migration: it re-creates the checklist to move the guard from
+    // a global admin role onto the per-tournament edit right.
     const definers = readdirSync(dir)
       .filter((name) => name.endsWith(".sql"))
       .sort()
@@ -194,7 +745,7 @@ describe("trimmed readiness migration", () => {
           readFileSync(join(dir, name), "utf8"),
         ),
       );
-    expect(definers.at(-1)).toBe(file);
+    expect(definers.at(-1)).toBe("20260927000000_tournova_role_redesign.sql");
   });
 });
 
@@ -348,6 +899,8 @@ describe("tournament day management migration", () => {
  */
 describe("the two placement resets keep their scopes", () => {
   const dir = join(__dirname, "../../../supabase/migrations");
+  /** The migration that re-creates both resets onto the per-tournament edit right. */
+  const REDESIGN_FILE = "20260927000000_tournova_role_redesign.sql";
   const scheduleFile = "20260926000000_placement_schedule_reset.sql";
   const scheduleSql = readFileSync(join(dir, scheduleFile), "utf8");
 
@@ -370,8 +923,42 @@ describe("the two placement resets keep their scopes", () => {
   const stageFile = stageDefiners.at(-1) as string;
   const stageSql = readFileSync(join(dir, stageFile), "utf8");
 
+  /**
+   * The same for `reset_placement_schedule`, and for the same reason: the role redesign
+   * re-creates it to move its guard off the retired staff role, so the last definer is now
+   * that migration rather than the one that introduced the reset.
+   */
+  const scheduleDefiners = readdirSync(dir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .filter((name) =>
+      /FUNCTION public\.reset_placement_schedule\(p_tournament_id uuid\)/.test(
+        readFileSync(join(dir, name), "utf8"),
+      ),
+    );
+  const effectiveScheduleFile = scheduleDefiners.at(-1) as string;
+  const effectiveScheduleSql = readFileSync(join(dir, effectiveScheduleFile), "utf8");
+
   /** The executable SQL with line comments stripped, so prose cannot satisfy a check. */
   const code = (sql: string) => sql.replace(/--.*$/gm, "");
+
+  /**
+   * One function's source, from its `CREATE` to its closing dollar-quote.
+   *
+   * Needed because a whole-file scan cannot tell a function body from the verification
+   * block that scans every function by name: `has_staff_role` appears in the latter as a
+   * literal, and a `not.toMatch` over the file would fail on the checker rather than on
+   * the thing it checks.
+   */
+  const fnBody = (source: string, signature: string): string => {
+    const start = source.indexOf(`FUNCTION public.${signature}`);
+    expect(start, `${signature} is not defined`).toBeGreaterThan(-1);
+    const opener = source.slice(start).match(/AS \$([a-z_]*)\$/);
+    const tag = opener?.[1] ?? "";
+    const close = source.indexOf(`$${tag}$;`, start);
+    expect(close, `${signature} has no closing dollar-quote`).toBeGreaterThan(start);
+    return source.slice(start, close + tag.length + 4);
+  };
 
   it("clears the schedule and the derived tier only", () => {
     expect(scheduleSql).toMatch(
@@ -401,11 +988,18 @@ describe("the two placement resets keep their scopes", () => {
     expect(stageSql).toMatch(/excluded = false/);
   });
 
-  it("is admin-only and takes the build's advisory lock", () => {
-    expect(scheduleSql).toMatch(/has_staff_role\(ARRAY\['admin'\]\)/);
+  it("is editable-only and takes the build's advisory lock", () => {
+    // The guard moved from `has_staff_role(ARRAY['admin'])` to `can_edit_tournament` with
+    // the redesign, so the effective definition is the one that has to be asserted - the
+    // original file is immutable history and still names the retired helper. The check is
+    // on the executable SQL, because the redesign's header comments name the old helper
+    // while explaining that it is gone.
+    const effective = code(fnBody(effectiveScheduleSql, "reset_placement_schedule(p_tournament_id uuid)"));
+    expect(effective).toMatch(/can_edit_tournament\(p_tournament_id\)/);
+    expect(effective).not.toMatch(/has_staff_role/);
     // The same key as `apply_placement_day_schedule` and the live reflow, so a reset
     // cannot delete rows out from under a build that is halfway through writing slots.
-    expect(scheduleSql).toMatch(/pg_advisory_xact_lock\(hashtext\('live-schedule'\)\)/);
+    expect(effective).toMatch(/pg_advisory_xact_lock\(hashtext\('live-schedule'\)\)/);
   });
 
   it("closes the implicit PUBLIC grant it restores by creating the function", () => {
@@ -419,15 +1013,10 @@ describe("the two placement resets keep their scopes", () => {
 
   it("is the last word on reset_placement_schedule", () => {
     // A later migration that redefines it has to come through this test, not around it.
-    const definers = readdirSync(dir)
-      .filter((name) => name.endsWith(".sql"))
-      .sort()
-      .filter((name) =>
-        /FUNCTION public\.reset_placement_schedule\(p_tournament_id uuid\)/.test(
-          readFileSync(join(dir, name), "utf8"),
-        ),
-      );
-    expect(definers.at(-1)).toBe(scheduleFile);
+    // The role redesign is that later migration: it re-creates the function to move the
+    // guard onto `can_edit_tournament`.
+    expect(scheduleDefiners).toEqual([scheduleFile, REDESIGN_FILE]);
+    expect(effectiveScheduleFile).toBe(REDESIGN_FILE);
   });
 
   it("refuses the stage reset until the schedule that depends on the seeding is gone", () => {
@@ -458,28 +1047,44 @@ describe("the two placement resets keep their scopes", () => {
     expect(gate).toBeGreaterThan(lock);
   });
 
-  it("keeps the stage reset admin-only when it is replaced", () => {
+  it("keeps a guard on the stage reset when it is replaced", () => {
     // Replacing the function to add the gate must not cost the guard it already had.
-    expect(stageSql).toMatch(/has_staff_role\(ARRAY\['admin'\]\)/);
+    // It moved from the retired staff role to the per-tournament edit right; what must not
+    // happen is the re-creation losing the guard altogether.
+    const effective = code(fnBody(stageSql, "reset_placement_stage(p_tournament_id uuid)"));
+    expect(effective).toMatch(/can_edit_tournament\(p_tournament_id\)/);
+    expect(effective).not.toMatch(/has_staff_role/);
   });
 
   it("re-issues the revoke and grant for the replaced function", () => {
     // `CREATE OR REPLACE FUNCTION` restores the implicit EXECUTE grant to PUBLIC, so a
     // replaced function that does not repeat the pair re-opens to `anon`. This is the
     // failure mode these contract tests exist to catch.
-    expect(stageSql).toMatch(
-      /REVOKE ALL ON FUNCTION public\.reset_placement_stage\(uuid\) FROM anon, PUBLIC/,
+    //
+    // The redesign does this through the same generated loop as every other RPC, so the
+    // assertion is that both resets are listed in it rather than that four literal
+    // statements were retyped. Membership of the loop *is* the revoke-and-grant.
+    const grantLoop = code(effectiveScheduleSql);
+    for (const sig of ["reset_placement_schedule(uuid)", "reset_placement_stage(uuid)"]) {
+      expect(grantLoop).toContain(`'${sig}'`);
+    }
+    expect(grantLoop).toMatch(
+      /execute format\('revoke all on function public\.%s from public, anon', f\)/,
     );
-    expect(stageSql).toMatch(
-      /GRANT EXECUTE ON FUNCTION public\.reset_placement_stage\(uuid\) TO authenticated/,
+    expect(grantLoop).toMatch(
+      /execute format\('grant execute on function public\.%s to authenticated', f\)/,
     );
   });
 
   it("is the last word on reset_placement_stage", () => {
-    // Symmetric with the schedule reset above: the gate migration is the definition that
-    // runs, and a later one has to come through this test rather than around it.
-    expect(stageDefiners).toHaveLength(2);
-    expect(stageFile).toBe("20260926010000_placement_stage_reset_gate.sql");
+    // Symmetric with the schedule reset above: the redesign is the definition that runs,
+    // and a later migration has to come through this test rather than around it.
+    expect(stageDefiners).toEqual([
+      "20260917050000_placement_stage_reset.sql",
+      "20260926010000_placement_stage_reset_gate.sql",
+      REDESIGN_FILE,
+    ]);
+    expect(stageFile).toBe(REDESIGN_FILE);
   });
 });
 
@@ -575,5 +1180,605 @@ describe("realtime publication membership migration", () => {
     const withoutComments = sql.replace(/--.*$/gm, "");
     expect(withoutComments).not.toMatch(/\bGRANT\b/);
     expect(withoutComments).not.toMatch(/\bREVOKE\b/);
+  });
+});
+
+/**
+ * Registration entries and the identity bridge.
+ *
+ * Phase 1 answered "whose row is this" with an email address, which is not an identity: it
+ * is a string a person types, it is neither unique nor normalized on `players`, and a
+ * participant could therefore be handed somebody else's contact data by typing that address
+ * into a form. This migration gives a player row an owner, and it does so with **two**
+ * mechanisms rather than one - a column privilege and a trigger - because each alone has a
+ * way round it that the other closes: a later migration can re-issue a table-wide grant,
+ * and a policy cannot distinguish the one writer that is allowed to set the column.
+ *
+ * The assertions below are mostly questions the migration asks its own catalogue, asked
+ * again from the repository, for the reason the role-redesign block states: the migration
+ * must not be able to pass its own gate while the suite says something different. The two
+ * that are not restatements are the ordering inside the guard's transition table and what
+ * `can_manage_player` is allowed to read membership from - neither is visible to a
+ * catalogue query.
+ */
+describe("registration entries and the identity bridge", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const FILE = "20260929020000_registration_entries_and_identity.sql";
+  const sql = readFileSync(join(dir, FILE), "utf8");
+  /** The executable SQL with line comments stripped, so prose cannot satisfy a check. */
+  const executable = sql.replace(/--.*$/gm, "");
+  /**
+   * The same SQL with the migration's own `do $verify$ ... $verify$;` block removed. That
+   * block has to name the literals it scans the catalogue for, so its strings would read as
+   * violations of the rules it checks.
+   */
+  const withoutVerify = executable.replace(/do \$verify\$[\s\S]*?\$verify\$;/, "");
+
+  /**
+   * One function's source, from its `CREATE` to its closing dollar-quote.
+   *
+   * Anchored on `create ... function`, not on `function` alone: `comment on function
+   * public.x(...)` contains the same substring and would otherwise capture the comment
+   * following the definition instead of the definition.
+   */
+  const fnBody = (signature: string, source = executable): string => {
+    const start = source.search(new RegExp(`create (or replace )?function public\\.${signature}`, "i"));
+    expect(start, `${signature} is not defined`).toBeGreaterThan(-1);
+    const opener = source.slice(start).match(/as \$([a-z_]*)\$/i);
+    const tag = opener?.[1] ?? "";
+    const close = source.indexOf(`$${tag}$;`, start);
+    expect(close, `${signature} has no closing dollar-quote`).toBeGreaterThan(start);
+    return source.slice(start, close + tag.length + 4);
+  };
+
+  it("withholds the link at the privilege layer, and only the link", () => {
+    // The grants are read as a set rather than matched one column at a time: the editable
+    // list is the whole contract, and a column added to it in a later edit is exactly the
+    // change that has to fail here.
+    const grants = [
+      ...executable.matchAll(/grant (insert|update) \(([^)]*)\) on public\.players/gi),
+    ];
+    expect(grants.map((g) => g[1]?.toLowerCase()).sort()).toEqual(["insert", "update"]);
+    for (const grant of grants) {
+      const columns = [...(grant[2] ?? "").matchAll(/[a-z_]+/gi)].map((m) => m[0].toLowerCase());
+      expect(columns.sort()).toEqual(["email", "gender", "name", "phone"]);
+    }
+    // Withheld, not merely absent from the list: the table-wide write is closed first, so
+    // the column grants are the only way in.
+    expect(executable).toMatch(
+      /revoke insert, update, truncate, references, trigger\s+on public\.players from anon, authenticated/,
+    );
+    // DELETE is deliberately *not* in that revoke. The policy restricts deletion to a
+    // platform admin, and withdrawing the privilege as well would make that path
+    // unreachable rather than restricted.
+    expect(executable).toMatch(/create policy "players delete" on public\.players[\s\S]*?is_platform_admin\(\)/);
+  });
+
+  it("keeps the guard's transition table, in the order the arms depend on", () => {
+    const guard = fnBody("players_profile_link_guard\\(\\)");
+    // A rename or an email edit carries no transition, so it must be admitted first - or
+    // every ordinary edit would have to raise the flag.
+    const unchanged = guard.indexOf("is not distinct from old.profile_id");
+    // The de-link is unconditional, ahead of the flag, because the FK's
+    // `ON DELETE SET NULL` arrives as exactly this transition and has no recognisable
+    // actor. Ordering is what makes it expressible; there is no arm that identifies it.
+    const delink = guard.indexOf("if new.profile_id is null then");
+    // A -> B is refused *before* the flag is consulted, so an approved link is not a
+    // licence to hand the row to somebody else.
+    const relink = guard.indexOf("old.profile_id is not null");
+    const flag = guard.indexOf("if not v_linking then");
+    expect(unchanged).toBeGreaterThan(-1);
+    expect(delink).toBeGreaterThan(unchanged);
+    expect(relink).toBeGreaterThan(delink);
+    expect(flag).toBeGreaterThan(relink);
+
+    // The flag is transaction-local (`true`), so it cannot leak into a later statement on
+    // a pooled connection, and it is read as a setting rather than as a role name - which
+    // is what keeps the sanctioned writer recognisable without naming it.
+    expect(guard).toMatch(/current_setting\('tournova\.allow_profile_link', true\)/);
+    expect(guard).toMatch(/raise exception/);
+  });
+
+  it("reads membership from the entry, never from derived placement data", () => {
+    // `placement_entrants` is built by `sync_placement_entrants` after a draw exists and
+    // cleared by `reset_placement_stage`, so membership derived from it would appear and
+    // disappear with the placement stage - access that comes and goes, and refused for
+    // exactly the entrants who have not been placed yet.
+    const predicate = fnBody("can_manage_player\\(p_player_id uuid\\)");
+    expect(predicate).toMatch(/public\.teams t/);
+    expect(predicate).toMatch(/t\.player_1_id = p_player_id OR t\.player_2_id = p_player_id/);
+    expect(predicate).toMatch(/tr\.owner_profile_id = public\.current_profile_id\(\)/);
+    expect(predicate).toMatch(/public\.tournament_editors e/);
+    expect(predicate).toMatch(/public\.is_platform_admin\(\)/);
+    expect(predicate).not.toMatch(/placement_entrants/);
+    // The entry's own tournament column, not the category it derives from: NOT NULL,
+    // indexed, and the same hop the rest of the authorization surface reads.
+    expect(predicate).toMatch(/t\.tournament_id/);
+    expect(predicate).not.toMatch(/public\.categories/);
+    // And the identity-canon rule: a profile column is compared to a profile id, never to
+    // the auth uid, which would type-check and silently match nothing.
+    expect(predicate).toMatch(/pl\.profile_id = public\.current_profile_id\(\)/);
+    expect(predicate).not.toMatch(/profile_id\s*=\s*auth\.uid\(\)/);
+  });
+
+  it("replaces the Phase 1 editor policy with one per verb", () => {
+    // The role redesign shipped a single `FOR ALL` policy admitting any tournament editor,
+    // while `docs/authorization.md` documented UPDATE and DELETE as admin-only. Four verbs,
+    // because they answer four different questions - and no `FOR ALL` left, which is what
+    // an editor policy would be.
+    expect(executable).toMatch(/drop policy if exists "players editor write" on public\.players/);
+    const policies = [
+      ...executable.matchAll(/create policy "players (\w+)" on public\.players\s+for (\w+)/gi),
+    ];
+    expect(
+      policies.map((p) => `${p[1]}:${p[2]?.toLowerCase()}`).sort(),
+      "the players policies are the four verbs and nothing else",
+    ).toEqual(["delete:delete", "insert:insert", "read:select", "update:update"]);
+
+    // The insert arm keeps `profile_id is null` even though the grant already withholds the
+    // column: a policy that is only safe because of a grant two sections above reopens if
+    // the grant is ever re-issued, and this is the half the trigger backstops.
+    const insert = executable.slice(executable.indexOf('create policy "players insert"'));
+    expect(insert.slice(0, insert.indexOf(";"))).toMatch(/profile_id is null/);
+    // Both halves on the update policy. A `FOR UPDATE` policy with only `USING` restricts
+    // which rows may be updated and not what they may be updated *to*.
+    const update = executable.slice(executable.indexOf('create policy "players update"'));
+    const updateBody = update.slice(0, update.indexOf(";"));
+    expect(updateBody).toMatch(/using \(/);
+    expect(updateBody).toMatch(/with check \(/);
+  });
+
+  it("gives the entries table a shape that cannot claim a partner", () => {
+    // A partner is a name and an email, never a `players.id`: they have not claimed
+    // anything, may not be an account holder, and resolving them at submission time would
+    // either invent a person or claim one.
+    //
+    // Scoped to the table body rather than scanned across the file: the same file adds an
+    // FK to `profiles`, and a whole-file scan would be asserting about the wrong statement.
+    const table = executable.slice(executable.indexOf("create table public.tournament_registration_entries"));
+    const body = table.slice(0, table.indexOf(");"));
+    expect(body).toMatch(/registration_id uuid not null/);
+    expect(body).toMatch(/category_id uuid not null/);
+    expect(body).toMatch(/partner_name text/);
+    expect(body).toMatch(/partner_email text/);
+    // No partner *id* of any kind, which is the claim this table must never be able to make.
+    expect(body).not.toMatch(/player_id/);
+    expect(body).toMatch(/unique \(registration_id, category_id\)/);
+    // Both foreign keys cascade, so a deleted category cannot leave a request asking for
+    // something that no longer exists.
+    expect(body.match(/on delete cascade/g)).toHaveLength(2);
+    // Read by the requester and by nobody else through a policy: the reviewer path is the
+    // definer RPC, because a policy's subquery runs as the caller.
+    expect(executable).toMatch(
+      /alter table public\.tournament_registration_entries enable row level security/,
+    );
+    expect(executable).toMatch(
+      /create policy "registration entries own read" on public\.tournament_registration_entries/,
+    );
+    // And closed at the privilege layer too, so a direct write is refused whether or not a
+    // policy stays absent - the same treatment the request and membership tables get.
+    expect(executable).toMatch(
+      /revoke insert, update, delete, truncate, references, trigger\s+on public\.tournament_registration_entries from anon, authenticated/,
+    );
+    // And published, because a table outside the publication drops its events with no
+    // error at all - the stage the plan trusts rather than verifies.
+    expect(executable).toMatch(
+      /array\['tournament_registration_entries'\]/,
+    );
+    expect(executable).toMatch(
+      /alter publication supabase_realtime add table public\.%I/,
+    );
+  });
+
+  it("makes a rejection re-appliable, and moves the arbiter with the index", () => {
+    // An unconditional unique key makes a rejection permanent: the row stays, the key keeps
+    // it, and a person turned down once can never apply again. That is not a policy anybody
+    // chose - it is what the constraint means.
+    expect(executable).toMatch(
+      /create unique index tournament_registrations_live_request_idx\s+on public\.tournament_registrations \(tournament_id, profile_id\)\s+where status <> 'rejected'/,
+    );
+    expect(executable).toMatch(
+      /alter table public\.tournament_registrations\s+drop constraint if exists tournament_registrations_unique_request/,
+    );
+    // The Phase 1 body inferred the dropped constraint, and an `ON CONFLICT` clause that no
+    // longer resolves raises at run time rather than at apply time - so it has to move in
+    // the same file as the index it infers, and both reads have to carry the predicate or a
+    // rejected row and a live row can coexist and the read could return either.
+    //
+    // Read from the *two-argument* body Step 9 leaves in place, not from the one-argument
+    // form it drops: the S8 body still carries the clause, so a signature that matched the
+    // first definition would pass here while the shipped function had lost the predicate.
+    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
+    expect(fn).toMatch(/on conflict \(tournament_id, profile_id\) where status <> 'rejected' do nothing/);
+    expect(fn.match(/status <> 'rejected'/g)).toHaveLength(2);
+  });
+
+  it("closes the executable surface it adds", () => {
+    // `create function` grants EXECUTE to PUBLIC, so a new predicate is an API until it is
+    // closed - and a new function that is not closed is the failure this project has hit
+    // before with `activate_tournament`.
+    expect(executable).toMatch(/revoke all on function public\.can_manage_player\(uuid\) from public, anon/);
+    expect(executable).toMatch(/grant execute on function public\.can_manage_player\(uuid\) to authenticated/);
+    // The predicate has to stay callable: an RLS policy is evaluated as the querying role.
+    expect(executable).toMatch(
+      /revoke all on function public\.players_profile_link_guard\(\) from public, anon, authenticated/,
+    );
+  });
+
+  it("adds the link once, as a null-able reference that survives the person", () => {
+    // The link is `ON DELETE SET NULL`, not `CASCADE`: deleting a person must not delete
+    // the player rows that record what they did in a tournament, and it must not fail
+    // either. The guard's unconditional de-link arm is what makes this FK legal.
+    expect(withoutVerify).toMatch(
+      /alter table public\.players\s+add column profile_id uuid references public\.profiles\(id\) on delete set null/,
+    );
+    const additions = executable.match(/add column profile_id/g) ?? [];
+    expect(additions).toHaveLength(1);
+    // One row per person, and NULL is the common case - a walk-in and a partner supplied by
+    // name both have no account. A plain unique index would allow exactly one of them.
+    expect(executable).toMatch(
+      /create unique index players_profile_id_key\s+on public\.players \(profile_id\)\s+where profile_id is not null/,
+    );
+    // The projection anon reads must not gain the link, and a `create or replace view` here
+    // is the one-line change that would publish who is who.
+    expect(withoutVerify).not.toMatch(/create or replace view public\.public_players/);
+  });
+
+  it("replaces the one-argument submission rather than shadowing it", () => {
+    // A leftover one-argument function wins for a client that sends only the tournament id,
+    // and that client would file the entry-less request this step exists to make
+    // impossible. Dropped, not merely superseded - and the default keeps the refusal
+    // reachable, so the same client reads the sentence about choosing an event instead of
+    // PostgREST's "function does not exist".
+    const drop = executable.indexOf("drop function if exists public.submit_tournament_registration(uuid);");
+    expect(drop, "the Phase 1 one-argument submission is not dropped").toBeGreaterThan(-1);
+    const create = executable.indexOf(
+      "create or replace function public.submit_tournament_registration(",
+      drop,
+    );
+    expect(create).toBeGreaterThan(drop);
+    const header = executable.slice(create, executable.indexOf("returns uuid", create));
+    expect(header).toMatch(/p_tournament_id uuid/);
+    expect(header).toMatch(/p_entries jsonb default '\[\]'::jsonb/);
+
+    // The two reads grow entry columns, and Postgres refuses to change an OUT parameter
+    // name in place - so they are dropped too, and the drop has to precede the create.
+    for (const name of ["review_tournament_registrations", "my_tournament_registration"]) {
+      const droppedAt = executable.indexOf(`drop function if exists public.${name}(uuid);`);
+      const created = executable.indexOf(`create function public.${name}(`, droppedAt);
+      expect(droppedAt, name).toBeGreaterThan(-1);
+      expect(created, name).toBeGreaterThan(droppedAt);
+    }
+  });
+
+  it("files the entries, and replaces them rather than accumulating on a retry", () => {
+    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
+    // The refusal is on the payload *shape* first, so a client that sends an object where an
+    // array belongs reads a sentence rather than a cast error.
+    expect(fn).toMatch(/jsonb_typeof\(p_entries\) <> 'array'/);
+    expect(fn).toMatch(/jsonb_array_length\(p_entries\) = 0/);
+    expect(fn).toMatch(/raise exception 'Choose at least one event to enter'/);
+    // Delete-then-insert, in that order: a retry has to replace the set, and the delete is
+    // only safe because the whole function is one transaction that rolls it back on refusal.
+    const del = fn.indexOf("delete from public.tournament_registration_entries");
+    const ins = fn.indexOf("insert into public.tournament_registration_entries");
+    expect(del).toBeGreaterThan(-1);
+    expect(ins).toBeGreaterThan(del);
+    // A decided request is an approved entrant's row, and replacing its entries would rewrite
+    // what they were approved for - so a live non-pending request is refused, not updated.
+    expect(fn).toMatch(/v_status <> 'pending'/);
+    expect(fn).toMatch(/raise exception 'Your registration has already been decided'/);
+    // The one insert into the entries table carries the partner as supplied, never a player.
+    expect(fn).toMatch(
+      /insert into public\.tournament_registration_entries\s+\(registration_id, category_id, partner_name, partner_email\)/,
+    );
+  });
+
+  it("refuses each entry mistake with the sentence that names it", () => {
+    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
+    // "not in this tournament", "not open" and "unknown" are three different mistakes, and a
+    // single generic refusal would leave the person guessing which one they made.
+    expect(fn).toMatch(/if v_cat_tournament <> p_tournament_id/);
+    expect(fn).toMatch(/raise exception 'That event belongs to another tournament'/);
+    expect(fn).toMatch(/if not v_cat_active/);
+    expect(fn).toMatch(/raise exception 'That event is not open for registration'/);
+    expect(fn).toMatch(/raise exception 'Unknown event'/);
+    // One event per entry, or the same category can be filed twice and approved twice.
+    expect(fn).toMatch(/v_category = any \(v_seen\)/);
+    expect(fn).toMatch(/raise exception 'Each event may only be chosen once'/);
+    // Per-player cap, then the doubles rules. Singles discards the partner fields rather than
+    // refusing them - a form that always sends them is not an error - which is what keeps a
+    // singles entry from leaving a row claiming a partner.
+    expect(fn).toMatch(/v_cap is not null and jsonb_array_length\(p_entries\) > v_cap/);
+    expect(fn).toMatch(
+      /if v_cat_entry_type = 'pair' then[\s\S]*?raise exception 'A doubles event needs a partner name and email'/,
+    );
+    // The self-partner comparison is by *normalized* address, the same normalization the
+    // approval deduplicates by, so the two agree about who counts as the same person.
+    expect(fn).toMatch(
+      /normalize_email\(v_partner_email\) = v_caller_email[\s\S]*?raise exception 'You cannot enter a doubles event with yourself as your partner'/,
+    );
+    expect(fn).toMatch(/v_partner_name := null;/);
+    expect(fn).toMatch(/v_partner_email := null;/);
+  });
+
+  it("withdraws the requester's own pending request, and deletes nothing else", () => {
+    const fn = fnBody("withdraw_tournament_registration\\(p_registration_id uuid\\)");
+    expect(fn).toMatch(/if not found then\s*raise exception 'Unknown registration request'/);
+    // `is distinct from`, not `<>`: an anonymous caller's profile is NULL, and `<> NULL` is
+    // never true, which would let through exactly the caller this refuses.
+    expect(fn).toMatch(/v_profile is distinct from public\.current_profile_id\(\)/);
+    expect(fn).toMatch(/v_status <> 'pending'/);
+    expect(fn).toMatch(/raise exception 'This request has already been decided'/);
+    // One delete, and it targets the request table only. The entries follow by cascade; no
+    // player, team or entrant is touched, which is what keeps withdrawal from being a quiet
+    // deletion of competition data.
+    const deletes = [...fn.matchAll(/delete from public\.(\w+)/g)].map((m) => m[1]);
+    expect(deletes).toEqual(["tournament_registrations"]);
+    expect(fn).not.toMatch(/can_edit_tournament/);
+  });
+
+  it("keeps the requester's link the approval's only writer, and the partner an unlinked row", () => {
+    const fn = fnBody("decide_tournament_registration\\(\\s*p_registration_id uuid,\\s*p_decision text,\\s*p_note text",
+    );
+    // The transaction-local flag (`true`) is what the guard reads as the sanction, so it
+    // cannot ride a later statement on a pooled connection.
+    expect(fn).toMatch(/set_config\('tournova\.allow_profile_link', 'on', true\)/);
+    // The requester's row: reused by `profile_id`, created only when there is none.
+    expect(fn).toMatch(/where pl\.profile_id = v_requester_profile/);
+    // The partner match is restricted to unlinked rows *and* to the normalized address: a
+    // linked row is not a candidate and is never touched, because email deduplicates and
+    // never identifies. A single candidate is reused; zero or several create a fresh row.
+    expect(fn).toMatch(/where pl\.profile_id is null/);
+    expect(fn).toMatch(
+      /public\.normalize_email\(pl\.email\) = public\.normalize_email\(v_entry\.partner_email\)/,
+    );
+    expect(fn).toMatch(/if array_length\(v_candidates, 1\) = 1 then/);
+    // The partner's insert says NULL explicitly, which is what makes "this branch never
+    // links" visible where it is read rather than inferred from a default.
+    expect(fn).toMatch(
+      /insert into public\.players \(name, email, profile_id\)\s+values \(coalesce\(v_entry\.partner_name, 'Partner'\), v_entry\.partner_email, null\)/,
+    );
+    // Two kinds of player insert only, and the team insert is the entry.
+    expect((fn.match(/insert into public\.players/g) ?? []).length).toBe(2);
+    expect(fn).toMatch(/insert into public\.teams \(category_id, player_1_id, player_2_id\)/);
+    // The caps are checked before the insert so the refusal can name the category, and the
+    // player count mirrors the trigger's - including entries this approval already inserted.
+    expect(fn).toMatch(/raise exception 'Category % \(%\) is full: % of % entries'/);
+    expect(fn).toMatch(/this tournament allows %/);
+    expect(fn).toMatch(/and t\.category_id <> v_entry\.category_id/);
+    // Rejection creates nothing: the reject branch returns before the bridge is reached.
+    const reject = fn.indexOf("if p_decision = 'rejected' then");
+    const bridge = fn.indexOf("select r.profile_id into v_requester_profile");
+    expect(reject).toBeGreaterThan(-1);
+    expect(bridge).toBeGreaterThan(reject);
+    // And the decision still cannot be made once the event is completed - the writable guard,
+    // not the configurable one, because a request may legitimately be decided after the
+    // window closes.
+    expect(fn).toMatch(/perform public\.assert_tournament_writable\(v_tournament\)/);
+    expect(fn).not.toMatch(/assert_tournament_configurable/);
+  });
+
+  it("gives both reads one row per entry, with the reviewer's the only player-resolution", () => {
+    const review = fnBody("review_tournament_registrations\\(p_tournament_id uuid\\)");
+    for (const column of [
+      "registration_id uuid",
+      "entry_id uuid",
+      "category_code text",
+      "entry_type text",
+      "partner_name text",
+      "partner_email text",
+      "player_id uuid",
+      "partner_player_id uuid",
+    ]) {
+      expect(review, column).toMatch(new RegExp(column.replace(/ /g, "\\s+")));
+    }
+    // Editor-gated: the queue is the reviewer's, and a policy's subquery runs as the caller,
+    // which is why this is a definer RPC rather than a table read.
+    expect(review).toMatch(
+      /if not public\.can_edit_tournament\(p_tournament_id\) then\s*raise exception 'Not authorized'/,
+    );
+    // The count and the row cannot disagree, and player_id comes from the partial unique
+    // index so it needs no ordering. A request with no entries still appears, once, with null
+    // entry columns - which is what a Phase 1 row decided under the old form looks like.
+    expect(review).toMatch(/left join public\.tournament_registration_entries e/);
+    expect(review).toMatch(
+      /\(select pl\.id from public\.players pl where pl\.profile_id = r\.profile_id\) as player_id/,
+    );
+    // The partner is found by elimination - they are never the linked row - and only once the
+    // request has been approved, so a pending one reports what happened rather than a preview.
+    expect(review).toMatch(/when t\.player_1_id = r\.player_id then t\.player_2_id/);
+    expect(review).toMatch(/and r\.player_id is not null/);
+
+    const mine = fnBody("my_tournament_registration\\(p_tournament_id uuid\\)");
+    for (const column of ["entry_id uuid", "category_code text", "decision_note text"]) {
+      expect(mine, column).toMatch(new RegExp(column.replace(/ /g, "\\s+")));
+    }
+    // The caller's own row only, and the live request outranks a rejected older one - `false`
+    // sorts after `true`, so the predicate is `desc` on purpose.
+    expect(mine).toMatch(/r\.profile_id = public\.current_profile_id\(\)/);
+    expect(mine).toMatch(/order by \(r\.status <> 'rejected'\) desc, r\.created_at desc\s*limit 1/);
+    expect(mine).toMatch(/left join public\.tournament_registration_entries e/);
+  });
+
+  it("closes the five names it adds, and leaves them callable by a session", () => {
+    // `create function` grants EXECUTE to PUBLIC, so each name is an API until it is closed.
+    // The REVOKE is repeated for the replaced functions because that is this repository's
+    // shape, not because a replacement loses its grant.
+    const lowered = executable.toLowerCase();
+    const signatures = [
+      "submit_tournament_registration(uuid, jsonb)",
+      "withdraw_tournament_registration(uuid)",
+      "review_tournament_registrations(uuid)",
+      "my_tournament_registration(uuid)",
+      "decide_tournament_registration(uuid, text, text)",
+    ];
+    for (const sig of signatures) {
+      expect(lowered, sig).toContain(`revoke all on function public.${sig} from public, anon;`);
+      expect(lowered, sig).toContain(`grant execute on function public.${sig} to authenticated;`);
+    }
+  });
+
+  it("asserts its own Step 9 gates before it commits", () => {
+    // Same shape as the Step 8 block, and the same reason: a warning in a CI log is not a
+    // failure, and the two failures a later edit is most likely to introduce here are the
+    // one-argument submission reappearing and a second function opening the link flag.
+    expect(sql).toMatch(/do \$verify_rpcs\$/);
+    expect(sql).toMatch(/raise exception 'registration rpcs:/);
+    expect(sql).toMatch(
+      /if to_regprocedure\('public\.submit_tournament_registration\(uuid\)'\) is not null then/,
+    );
+    expect(sql).toMatch(/and p\.proname <> 'decide_tournament_registration'/);
+  });
+
+  it("asserts its own gates before it commits", () => {
+    // The migration raises rather than warns, for the reason the role redesign states: a
+    // warning in a CI log is not a failure, and this is a change whose half-applied state
+    // is worse than no change at all.
+    expect(sql).toMatch(/do \$verify\$/);
+    expect(sql).toMatch(/raise exception 'registration:/);
+    expect(sql.replace(/--.*$/gm, "")).not.toMatch(/raise warning/i);
+  });
+});
+
+/**
+ * Retiring `is_active`.
+ *
+ * Phase 2 moved global navigation state onto the per-user pointer, so the Phase 1 boolean
+ * is reader-less by the time this migration lands. The repository-side contract is that
+ * the reader was re-scoped before the writer went, and that the column, its index and the
+ * global verb are all gone without a cascade that could hide an unexpected dependency. The
+ * migration asks the catalogue the same questions itself; these assertions are what stop
+ * the file from drifting from that claim.
+ */
+describe("retire is_active migration", () => {
+  const RETIRE_FILE = "20260929010000_retire_is_active.sql";
+  const sql = readFileSync(
+    join(__dirname, "../../../supabase/migrations", RETIRE_FILE),
+    "utf8",
+  );
+  const executable = sql.replace(/--.*$/gm, "");
+
+  const fnBody = (signature: string): string => {
+    const start = executable.search(
+      new RegExp(`create (or replace )?function public\\.${signature}`, "i"),
+    );
+    expect(start, `${signature} is not defined`).toBeGreaterThan(-1);
+    const opener = executable.slice(start).match(/as \$([a-z_]*)\$/i);
+    const tag = opener?.[1] ?? "";
+    const close = executable.indexOf(`$${tag}$;`, start);
+    expect(close, `${signature} has no closing dollar-quote`).toBeGreaterThan(start);
+    return executable.slice(start, close + tag.length + 4);
+  };
+
+  it("re-scopes current_tournament_id() to the caller's pointer alone", () => {
+    const fn = fnBody("current_tournament_id\\(\\)");
+    // The fallback read a global row; the replacement reads only the caller's profile.
+    expect(fn).not.toMatch(/is_active/);
+    expect(fn).not.toMatch(/from public\.tournaments/);
+    expect(fn).toMatch(/from public\.profiles p\s+where p\.user_id = auth\.uid\(\)/);
+    // An anonymous caller - which is also the server-rendering request - gets NULL, so a
+    // server-side call can never redirect a bookmark to somebody's live desk.
+    expect(fn).toMatch(/if auth\.uid\(\) is null then\s+return null;/);
+  });
+
+  it("drops the writer, then the index, then the column", () => {
+    const dropFn = executable.indexOf(
+      "drop function if exists public.set_active_tournament(uuid);",
+    );
+    const dropIndex = executable.indexOf(
+      "drop index if exists public.tournaments_single_active;",
+    );
+    const dropColumn = executable.indexOf("drop column if exists is_active");
+    expect(dropFn, "set_active_tournament is not dropped").toBeGreaterThan(-1);
+    expect(dropIndex, "tournaments_single_active is not dropped").toBeGreaterThan(dropFn);
+    expect(dropColumn, "is_active is not dropped").toBeGreaterThan(dropIndex);
+  });
+
+  it("drops the column without a cascade", () => {
+    // A cascade would silently take a view or constraint nobody meant to remove. There is
+    // no dependent left by design, so the drop must be able to say so.
+    expect(executable).not.toMatch(/drop column if exists is_active\s+cascade/i);
+  });
+
+  it("verifies the retirement against the catalogue before it commits", () => {
+    expect(sql).toMatch(/do \$verify\$/);
+    expect(sql).toMatch(/raise exception 'retire is_active:/);
+    expect(executable).not.toMatch(/raise warning/i);
+  });
+});
+
+/**
+ * Naming the walk-in arm.
+ *
+ * Phase 1's `has_any_tournament_edit()` described the wrong thing: it authorises adding an
+ * unlinked person to the *global* roster, not an edit of any tournament, and a reader looking
+ * for a per-tournament capability already has `can_edit_tournament(uuid)`. Phase 2 narrowed
+ * the read side of the `players` surface with `can_manage_player(uuid)`; this migration
+ * finishes the pair on the create side.
+ *
+ * It is a rename and nothing else, which is what makes the contract small and worth pinning:
+ * the three arms are unchanged, the policy is re-pointed before the old function is dropped,
+ * and the old name survives in neither the catalogue nor any function body.
+ */
+describe("walk-in predicate migration", () => {
+  const FILE = "20260929030000_walk_in_player_predicate.sql";
+  const sql = readFileSync(join(__dirname, "../../../supabase/migrations", FILE), "utf8");
+  const executable = sql.replace(/--.*$/gm, "");
+
+  it("keeps the authorization the old name carried, under a name that says it", () => {
+    const start = executable.search(
+      /create (or replace )?function public\.can_add_walk_in_player\(\)/i,
+    );
+    expect(start, "can_add_walk_in_player() is not defined").toBeGreaterThan(-1);
+    const body = executable.slice(start, executable.indexOf("$$;", start));
+    expect(body).toMatch(/is_platform_admin\(\)/);
+    expect(body).toMatch(
+      /from public\.tournaments t\s+where t\.owner_profile_id = public\.current_profile_id\(\)/,
+    );
+    expect(body).toMatch(
+      /from public\.tournament_editors e\s+where e\.profile_id = public\.current_profile_id\(\)/,
+    );
+    // Every arm resolves the caller through the one predicate, never by comparing a profile
+    // column to the auth uid - which type-checks and silently matches nothing.
+    expect(body).not.toMatch(/profile_id\s*=\s*auth\.uid\(\)/);
+  });
+
+  it("re-points the policy before it drops the old function", () => {
+    // A policy is a dependent object: dropping first makes the migration fail, and skipping
+    // the alter leaves the dropped name referenced, so the order *is* the change.
+    const alter = executable.indexOf('alter policy "players insert" on public.players');
+    const drop = executable.indexOf("drop function public.has_any_tournament_edit();");
+    expect(alter, "the policy is not re-pointed").toBeGreaterThan(-1);
+    expect(drop, "the old predicate is not dropped").toBeGreaterThan(alter);
+    expect(executable.slice(alter, drop)).toMatch(/can_add_walk_in_player\(\)/);
+  });
+
+  it("leaves the policy's self-service arm untouched", () => {
+    // The other arm grants nothing - the row it admits is unlinked - and a rename that
+    // quietly dropped it would close self-insertion for a person adding themselves.
+    const alter = executable.slice(executable.indexOf('alter policy "players insert"'));
+    expect(alter).toMatch(/profile_id is null/);
+    expect(alter).toMatch(
+      /public\.normalize_email\(email\) = public\.normalize_email\(auth\.jwt\(\) ->> 'email'\)/,
+    );
+  });
+
+  it("closes the implicit PUBLIC grant and opens it to authenticated alone", () => {
+    expect(executable).toMatch(
+      /revoke all on function public\.can_add_walk_in_player\(\) from anon, public/,
+    );
+    expect(executable).toMatch(
+      /grant execute on function public\.can_add_walk_in_player\(\) to authenticated/,
+    );
+    expect(executable).not.toMatch(
+      /grant execute on function public\.can_add_walk_in_player\(\) to anon/,
+    );
+  });
+
+  it("verifies the rename against the catalogue before it commits", () => {
+    expect(sql).toMatch(/do \$verify\$/);
+    expect(sql).toMatch(/raise exception 'walk-in predicate:/);
+    expect(executable).not.toMatch(/raise warning/i);
   });
 });

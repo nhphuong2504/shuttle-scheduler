@@ -87,11 +87,59 @@ export const REFERENCE = new Date(DAY_START.getTime() + 12 * 60 * MINUTE);
 const at = (minutes: number): string =>
   new Date(REFERENCE.getTime() + minutes * MINUTE).toISOString();
 
+/**
+ * The fixture day's own window, as instants: midnight and 23:59 of the reference day.
+ *
+ * `REFERENCE` is noon, so these are the two ends of the same local day the day row describes
+ * (`00:00:00`-`23:59:00`). They exist for `tournament_summary`'s derived start and end.
+ */
+const DAY_OPEN = at(-12 * 60);
+const DAY_CLOSE = at(12 * 60 - 1);
+
 const TID = "00000000-0000-4000-8000-00000000ffff";
 const CREATED = new Date(DAY_START.getTime() - DAY_MS).toISOString();
 
 /** Deterministic UUID-shaped ids, so nothing depends on a random generator. */
 const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+/**
+ * The auth identity the hermetic mock signs in as, and the profile that identity is
+ * linked to.
+ *
+ * Every tournament relationship is stored as a *profile* id
+ * (`tournaments.owner_profile_id`, `tournament_editors.profile_id`), which is a
+ * different value from the auth user id. Both live here, beside the tournament they
+ * belong to, because the mock's session, its `profiles` row and the fixture tournament
+ * all have to agree - and three copies of a UUID is how they stop agreeing.
+ *
+ * `app-mock.ts` imports the auth id for the synthetic session; nothing in `src/` knows
+ * either value.
+ */
+export const E2E_USER_ID = "00000000-0000-4000-8000-0000000000e2";
+export const OWNER_PROFILE_ID = uid(1000);
+
+/**
+ * The profile that owns the fixture tournament when the session's profile does not.
+ *
+ * A viewer and an editor are not the owner, and `tournaments.owner_profile_id` is how
+ * the app decides that - so serving a viewer the same owner id the session holds would
+ * make the fixture lie, and the surface that reads the row (`/setup`'s list) would
+ * disagree with the surface that reads `tournament_access`.
+ */
+export const OTHER_OWNER_PROFILE_ID = uid(1001);
+
+/**
+ * What the signed-in session is to the fixture tournament.
+ *
+ * One value rather than three separate overrides, because the three answers have to move
+ * together: the `owner_profile_id` on the row, the membership rows, and the
+ * `tournament_access` summary are three views of one fact, and a fixture that let them
+ * disagree would be testing the disagreement rather than the app.
+ */
+export type MockMembership = "owner" | "editor" | "viewer";
+
+/** The one tournament every preset serves. */
+export const TOURNAMENT_ID = TID;
 
 const courtId = (n: number) => uid(100 + n);
 const playerId = (n: number) => uid(200 + n);
@@ -206,6 +254,16 @@ const categories = [
   },
 ];
 
+/**
+ * The fixture's two events, by id.
+ *
+ * Exported because a spec that has to name an event - the registration queue showing capacity
+ * for the event a request asked for - should name one that exists in the fixture rather than
+ * paste a uuid that nothing guarantees.
+ */
+export const CATEGORY_MD = uid(800);
+export const CATEGORY_XD = uid(801);
+
 const courts = Array.from({ length: COURT_COUNT }, (_, i) => ({
   id: courtId(i + 1),
   tournament_id: TID,
@@ -230,7 +288,6 @@ const tournament = {
   knockout_rest_gap_minutes: 30,
   court_count: COURT_COUNT,
   day_count: 1,
-  is_active: true,
   status: "in_progress",
   format: "two_round_placement",
   max_categories_per_player: 3,
@@ -244,6 +301,11 @@ const tournament = {
   knockout_win_by: 2,
   knockout_best_of: 3,
   notes: null,
+  // Ownership is a profile, not the auth identity. The fixture's session is that profile.
+  owner_profile_id: OWNER_PROFILE_ID,
+  // Registration is optional and absent here, which exercises the "no window" read.
+  registration_opens_at: null,
+  registration_closes_at: null,
   created_at: CREATED,
 };
 
@@ -502,37 +564,240 @@ const PRESETS: Record<DeskMockPreset, MockPreset> = {
 /**
  * Table name to rows. Anything absent resolves to an empty array, which is the correct
  * answer for tables this surface does not read and keeps the mock from failing closed.
+ *
+ * The `profiles` row carries `system_role`, because the authorization model reads the
+ * platform role from the profile as well as from `current_system_role()`. Both have to
+ * say the same thing, or a surface that reads the row would disagree with one that reads
+ * the RPC.
  */
-const tables = (
+/**
+ * The lifecycle word the fixture tournament is served as.
+ *
+ * Narrowed to the three states that exist rather than left a `string`, so a spec cannot
+ * ask for `"draft"` and quietly get a row the app labels unpredictably.
+ */
+export type MockTournamentStatus = "upcoming" | "in_progress" | "completed";
+
+/**
+ * The competition format the fixture tournament is served as.
+ *
+ * The fixture runs the two-round placement format, which is the one the app creates. The
+ * round-robin word exists here so the day-by-day planner - the other view the single
+ * `schedule` route can render - still has a rendered surface to be measured on, now that
+ * format rather than URL decides which of the two renders.
+ */
+export type MockTournamentFormat = "two_round_placement" | "round_robin";
+
+/**
+ * The `tournament_summary` row for the fixture, in the wire shape the RPC returns.
+ *
+ * `access_level` is the caller's relationship to the row in the database's own order - the
+ * platform role first, then ownership, then membership - so a spec cannot be served a card
+ * that disagrees with `tournament_access` about the same caller.
+ */
+export interface MockTournamentSummary {
+  id: string;
+  name: string;
+  venue_name: string;
+  status: MockTournamentStatus | string;
+  starts_at: string | null;
+  ends_at: string | null;
+  registration_state: string;
+  entry_count: number;
+  category_count: number;
+  access_level: string;
+}
+
+/** The filters `tournament_summary` takes that this fixture models. */
+export interface MockSummaryArgs {
+  p_query?: string | null;
+  p_status?: string | null;
+  p_ids?: readonly string[] | null;
+}
+
+/**
+ * Everything the mock serves for one page load: the table rows, and the RPC reads that are
+ * derived from them.
+ *
+ * The summary is a *derived* read - its start and end come from the days, its counts from the
+ * teams and the events, its registration state from the lifecycle and the window - so the
+ * fixture derives it here rather than letting the transport invent one. Explore and My
+ * Tournaments both draw cards from it, and a card that disagreed with the rows behind it
+ * would be a spec measuring the disagreement.
+ */
+export interface DeskFixture {
+  tables: Record<string, unknown[]>;
+  /**
+   * `tournament_summary`'s answer for one request.
+   *
+   * A function rather than a value because the read takes filters, and the filters belong to
+   * the fixture that knows what the rows mean rather than to the transport that only knows
+   * how to answer. It mirrors the function's semantics for `p_ids`, `p_status` and `p_query`
+   * - `p_query` matching the name, the venue and the events, as the database does.
+   *
+   * Two things it deliberately does not restate: the unknown-status refusal (the function
+   * raises, and a spec for that belongs in the integration suite where the real function
+   * answers), and `p_limit`/`p_offset` (one row, so pagination is not a behaviour this
+   * fixture can show).
+   */
+  tournamentSummaries: (args: MockSummaryArgs) => MockTournamentSummary[];
+}
+
+const buildFixture = (
   specs: MatchSpec[],
   draws: unknown[],
   pools: unknown[],
   entries: unknown[],
   poolMatches: unknown[],
-): Record<string, unknown[]> => ({
-  tournaments: [tournament],
-  tournament_days: days,
-  tournament_day_courts: [],
-  tournament_day_breaks: [],
-  courts,
-  categories,
-  players,
-  player_roster: players,
-  teams,
-  placement_entrants: entrants,
-  placement_matches: [],
-  draws: [],
-  draw_matches: [],
-  pools,
-  pool_entries: entries,
-  pool_matches: poolMatches,
-  tier_draws: draws,
-  tier_draw_matches: toRows(specs),
-  staff_roles: [],
-});
+  systemRole: string,
+  status: MockTournamentStatus | undefined,
+  membership: MockMembership,
+  format: MockTournamentFormat | undefined,
+): DeskFixture => {
+  // The lifecycle word is the one thing a spec needs to vary and cannot click its way
+  // to: the fixture is a running event, and `Upcoming` and `Completed` are the other two
+  // states the vocabulary has.
+  const served: Record<string, unknown> =
+    status || membership !== "owner" || format
+      ? {
+          ...tournament,
+          ...(status ? { status } : {}),
+          ...(format ? { format } : {}),
+          ...(membership === "owner" ? {} : { owner_profile_id: OTHER_OWNER_PROFILE_ID }),
+        }
+      : tournament;
+
+  const servedStatus = (served["status"] as MockTournamentStatus | undefined) ?? "in_progress";
+
+  /**
+   * The registration window as the database would compute it, for the fixture's own
+   * configuration.
+   *
+   * The lifecycle answers first and the fixture configures no window at all, so a running or
+   * finished tournament reads `started` / `completed` and an upcoming one reads `not_offered`.
+   * The remaining words (`open`, `opens_soon`, `closed`) need a window this fixture does not
+   * have; a spec that wants them arrives with one in the commit that ships registration.
+   */
+  const registrationState =
+    servedStatus === "completed"
+      ? "completed"
+      : servedStatus === "in_progress"
+        ? "started"
+        : "not_offered";
+
+  const summary: MockTournamentSummary = {
+    id: TID,
+    name: tournament.name,
+    venue_name: tournament.venue_name,
+    status: servedStatus,
+    // The fixture day is the whole local day (00:00 to 23:59 in the venue's timezone), and
+    // these are those two instants. The venue-timezone conversion is `tournament_starts_at`'s
+    // job rather than a transport double's, so what is asserted about them is ordering and
+    // presence, not an offset arithmetic the mock would have to reimplement.
+    starts_at: DAY_OPEN,
+    ends_at: DAY_CLOSE,
+    registration_state: registrationState,
+    // The entry is `teams` and the events are `categories` - never a derived projection.
+    entry_count: teams.length,
+    category_count: categories.length,
+    access_level:
+      systemRole === "admin"
+        ? "admin"
+        : membership === "owner"
+          ? "owner"
+          : membership === "editor"
+            ? "editor"
+            : "viewer",
+  };
+
+  /** What `p_query` matches. The events are the third thing a person remembers. */
+  const searchText = [
+    tournament.name,
+    tournament.venue_name,
+    ...categories.flatMap((category) => [category.name, category.code]),
+  ];
+
+  return {
+    tables: {
+      tournaments: [served],
+      tournament_days: days,
+      tournament_day_courts: [],
+      tournament_day_breaks: [],
+      courts,
+      categories,
+      players,
+      // The roster the app reads is the definer projection, not `players`: the table's own
+      // policy keys on tournament edit access, which a participant does not have.
+      public_players: players,
+      teams,
+      placement_entrants: entrants,
+      placement_matches: [],
+      draws: [],
+      draw_matches: [],
+      pools,
+      pool_entries: entries,
+      pool_matches: poolMatches,
+      tier_draws: draws,
+      tier_draw_matches: toRows(specs),
+      tournament_editors:
+        membership === "editor"
+          ? [
+              {
+                tournament_id: TID,
+                // The session's *profile*, not its auth id. Membership is held by a person
+                // now, and serving the auth id here is exactly the mismatch identity canon
+                // exists to remove.
+                profile_id: OWNER_PROFILE_ID,
+                added_by_profile_id: OTHER_OWNER_PROFILE_ID,
+                created_at: CREATED,
+              },
+            ]
+          : [],
+      tournament_registrations: [],
+      profiles: [
+        {
+          id: OWNER_PROFILE_ID,
+          user_id: E2E_USER_ID,
+          email: "desk@example.test",
+          system_role: systemRole,
+          current_tournament_id: TID,
+          created_at: CREATED,
+        },
+        /**
+         * The other owner: the person who owns the fixture tournament whenever the session
+         * does not.
+         *
+         * It is a `profiles` row rather than a bare id because ownership is held by a
+         * profile, and a surface that names the owner joins through this table to do it -
+         * the access list is the one that does today, and without this row it drew the
+         * owner's address as "—". `user_id` is NULL, which is the state the schema allows
+         * and the phase-1 model described: a profile that owns a tournament before its
+         * person has signed in. A read filtered by `user_id` therefore never returns it,
+         * which is what keeps it out of the session's own lookup.
+         */
+        {
+          id: OTHER_OWNER_PROFILE_ID,
+          user_id: null,
+          email: "host@example.test",
+          system_role: "user",
+          current_tournament_id: null,
+          created_at: CREATED,
+        },
+      ],
+    },
+
+    tournamentSummaries: (args) => {
+      const term = (args.p_query ?? "").trim().toLowerCase();
+      if (args.p_ids && !args.p_ids.includes(TID)) return [];
+      if (args.p_status && summary.status !== args.p_status) return [];
+      if (term && !searchText.some((text) => text.toLowerCase().includes(term))) return [];
+      return [summary];
+    },
+  };
+};
 
 /**
- * The rows this fixture serves, as a table-name keyed map.
+ * The rows this fixture serves, plus the reads derived from them.
  *
  * Built on every call rather than held at module scope, so a long test run cannot drift
  * the "minutes ago" values apart from the rows actually being served. The result is
@@ -541,13 +806,23 @@ const tables = (
  * Installing it is `installAppMock`'s job (`./app-mock`), which owns the transport,
  * the auth session and the safety net. This module is now data only.
  */
-export function deskTables(preset: DeskMockPreset = "layout"): Record<string, unknown[]> {
+export function deskFixture(
+  preset: DeskMockPreset = "layout",
+  systemRole = "user",
+  status?: MockTournamentStatus,
+  membership: MockMembership = "owner",
+  format?: MockTournamentFormat,
+): DeskFixture {
   const chosen = PRESETS[preset];
-  return tables(
+  return buildFixture(
     chosen.specs,
     chosen.tierDraws,
     chosen.pools,
     chosen.entries,
     chosen.poolMatches,
+    systemRole,
+    status,
+    membership,
+    format,
   );
 }
