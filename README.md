@@ -85,7 +85,7 @@ review the diff.
 | Document | Contents |
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | Working rules: design system, security, workflow, gates, review tiering |
-| [`docs/design-system.md`](docs/design-system.md) | Tokens, typography, states, components, do/don't |
+| [`docs/design-system.md`](docs/design-system.md) | Invariants and conventions (Part 1); tokens, states, components (Part 2) |
 | [`docs/authorization.md`](docs/authorization.md) | Who may do what: platform role vs per-tournament access, the lifecycle guards, registration, and the column privileges |
 | [`docs/information-architecture.md`](docs/information-architecture.md) | The URL scheme, the two shells, and the flows between them |
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |

@@ -1,19 +1,19 @@
 # UX review checklist
 
-The checks no automated gate can make, plus the record that says whether they were run.
+The manual checks no automated gate can make, plus the record that says whether they were run.
+
+**Automated invariants are intentionally not repeated here.** The 12px floor, token-only
+colour, theme parity and the match-status tiers are checked by tests (see
+[Part 1 of the design system](./design-system.md#invariants)). If a test already fails when the
+rule breaks, a person is not asked to look for it as well.
 
 ## Why this is a document and not a test
 
-Axe reads the DOM and the computed cascade. It reliably catches a missing accessible name,
-a wrong role, a resolvable contrast failure, and a duplicate id. It cannot judge whether the
-focus order is logical, whether a heading hierarchy communicates priority, or whether a
-moderator can read a court state from three metres away. Those are judgements, and the only
-instrument for them is a person looking at the screen.
-
-That leaves a gap with a familiar shape: the machine-checked gates are green, so the phase
-looks verified, and nothing records whether anyone actually looked. This file closes that by
-requiring a written record, including an explicit statement of how many tests were skipped.
-A skipped test is never a passing test, and an unrun checklist is never a green light.
+Axe reads the DOM and the computed cascade. It cannot judge whether the focus order is
+logical, whether a hierarchy communicates priority, or whether a moderator can read a court
+state from three metres away. Those are judgements, and the only instrument is a person
+looking at the screen. This file asks for the judgements and requires a written record that
+they were made, including an explicit skip count: a skipped test is never a passing test.
 
 ## Before you start
 
@@ -21,100 +21,53 @@ A skipped test is never a passing test, and an unrun checklist is never a green 
 npm run dev          # then open http://localhost:8080
 ```
 
-The Desk is the surface that matters most. If you have no tournament with data in it, the
-rendered Playwright fixture is the reference for what populated looks like:
-`e2e/fixtures/desk-mock.ts` describes eight live courts, long doubles pairings, three-game
+The Desk matters most. With no populated tournament, `e2e/fixtures/desk-mock.ts` is the
+reference for what populated looks like: eight live courts, long doubles pairings, three-game
 scores at the 30-point cap, and every court state.
 
-The checks below are grouped by what they need. Mark each one **pass**, **fail** (with a
-note), or **not applicable** (with a reason). "Not applicable" is a decision, not a skip.
+Mark each check **pass**, **fail** (with a note) or **not applicable** (with a reason).
+"Not applicable" is a decision, not a skip.
+
+### Viewports and themes
+
+- Check **both themes**.
+- Check **at least one representative wide viewport** - the Desk uses 1920x1080 and 1366x768.
+- For **responsive or public-facing surfaces**, also check a **narrow/mobile viewport**
+  (about 375-390px wide).
 
 ---
 
-## 1. Status recognition
+## Checks
 
-The design's central claim is that a state is readable from shape and label without relying
-on colour. Each check is done twice: once normally, once in a grayscale screenshot.
-
-| # | Check | How to set it up |
+| # | Area | Check |
 | --- | --- | --- |
-| 1.1 | Every match status is distinguishable in grayscale | Screenshot the Desk, convert to grayscale, and check each row is still identifiable |
-| 1.2 | Every court state has a distinct label, not just a distinct tint | Compare `playing`, `overrun`, `free-ready`, `free-blocked`, `idle` side by side |
-| 1.3 | `void` does not read as simply absent or empty data | It is tier 3, a filled neutral chip with a heavier ring |
-| 1.4 | `walkover` and `void` are not confusable | They are the closest pair in the vocabulary; check glyph and label carry it |
-| 1.5 | A bye reads as a draw condition, not a played match | Dashed edge, "Bye" label, no status pill |
-| 1.6 | `completed` and `walkover` recede without becoming illegible | Tier 4 is ink only; verify it is still readable, not merely quiet |
-
-## 2. Hierarchy and scan speed
-
-| # | Check | How to set it up |
-| --- | --- | --- |
-| 2.1 | The most urgent item on each screen is the most visually prominent | Desk with an overrun court and a ready court |
-| 2.2 | Player names, court id, score and timer are readable at a glance | Desk at 1920x1080, then at 1366x768 |
-| 2.3 | No more than roughly three saturated elements compete on one view | Count the brand action, live state, and any destructive action |
-| 2.4 | The heading order communicates the hierarchy | `h1` is the page, `h2` is a panel; no level is skipped |
-| 2.5 | An operator can tell what to do next without reading a paragraph | Time yourself: under five seconds from looking to knowing |
-
-## 3. Legibility and fit
-
-| # | Check |
-| --- | --- |
-| 3.1 | Nothing clips or overlaps — check the longest doubles pairing and the widest score (`30-29, 29-30, 30-28`) |
-| 3.2 | The scale holds at 1366x768 and at 1920x1080 — nothing cramped, nothing sparse |
-| 3.3 | At 1366x768, the tables do not require horizontal scrolling for their primary columns |
-| 3.4 | Nothing renders below the 12px floor, including the smallest reference text |
-
-## 4. Focus and keyboard
-
-| # | Check |
-| --- | --- |
-| 4.1 | The focus ring is visible on every control, including the active nav pill and the active segmented-control button |
-| 4.2 | Tab order follows the visual reading order, including inside the score dialog |
-| 4.3 | The focus ring is never hidden behind a sticky header as you tab down |
-| 4.4 | A dialog traps focus while open and returns it to its opener on close |
-| 4.5 | The score dialog can be completed with the keyboard alone |
-
-## 5. Empty, loading and error states
-
-These are the states a fixture is least likely to produce, and the ones an operator meets
-first on the day.
-
-| # | Check | How to set it up |
-| --- | --- | --- |
-| 5.1 | Every route renders a deliberate empty state, not a blank panel | Point the mock at an empty dataset, or use a tournament with nothing generated |
-| 5.2 | Empty states say what will appear and what to do | Read them; "No data" is a failure |
-| 5.3 | A failed request shows an error state, not an empty one | Block `**/rest/v1/**` in devtools and reload |
-| 5.4 | The signed-out view is clearly read-only and explains how to sign in | Load the Desk with no session |
-| 5.5 | The realtime indicator's offline and error states are distinguishable from live | Toggle the browser offline |
-
-## 6. Wording
-
-| # | Check |
-| --- | --- |
-| 6.1 | The day's latest finish is stated as a fact about the schedule, never as a prediction. `finish-wording.ts` reports "Last match scheduled to finish …"; no forecast of when the event *will* end exists in this app, so no wording may imply one |
-| 6.2 | No label uses a raw database value (`in-progress`, `reported`) instead of its display label (`Live`, `Completed`) |
-| 6.3 | Destructive actions name what they destroy, and the confirmation does not soften it |
-
-## 7. Themes
-
-| # | Check |
-| --- | --- |
-| 7.1 | Every screen above is checked in **both** light and dark |
-| 7.2 | Nothing looks "half-dark": scrollbars, inputs and native controls follow the theme |
-| 7.3 | The dark theme is not a dimmed light theme — check the neutral ramp separates surfaces |
+| C1 | Status | Each state is still identifiable in a grayscale screenshot, and the closest pair, `walkover` and `void`, are not confusable. A bye reads as a draw condition, not a played match |
+| C2 | Hierarchy | The most urgent item on the screen is the most prominent, and the action hierarchy is obvious: an operator knows what to do next without reading a paragraph |
+| C3 | Hierarchy | Headings communicate the structure: `h1` is the page, `h2` a panel, no level skipped |
+| C4 | Scan | Player names, court id, score and timer read at a glance, at both the wide and the narrow-laptop viewport |
+| C5 | Fit | Nothing clips or overlaps with the longest doubles pairing and the widest score (`30-29, 29-30, 30-28`); primary table columns do not need horizontal scrolling at 1366x768 |
+| C6 | Focus | The focus ring is visible on every control and never hidden behind sticky chrome; tab order follows reading order; a dialog traps focus and returns it to its opener; the score dialog is completable by keyboard alone |
+| C7 | Empty | Every route shows a deliberate empty state that says what will appear and what to do ("No data" is a failure) |
+| C8 | Error | A failed request shows an error state, not an empty one (block `**/rest/v1/**` and reload). The realtime indicator's offline and error states are distinguishable from live |
+| C9 | Access | Where signed-out access exists, the view clearly reads as read-only and explains how to sign in |
+| C10 | Wording | The day's latest finish is stated as a fact about the schedule, never a prediction (`finish-wording.ts`); no label shows a raw database value (`in-progress`) in place of its display label (`Live`); a destructive action names what it destroys |
+| C11 | Themes | Nothing looks half-dark (scrollbars, inputs, native controls), and the dark theme is not a dimmed light theme - the neutral ramp still separates surfaces |
 
 ---
 
 ## The record
 
-Every PR or phase close that includes a **user-visible** change appends exactly one row.
-A change with no user-visible surface requires no UX review run and no row — state that
-plainly in the PR instead. The one exception is a PR/phase-close artifact that must record,
-for the record's sake, that no user-visible review applied: that row's Checks run is
-`none` and its Result is `not yet run`.
+A row is owed only when a change alters **state treatment, visual hierarchy, interaction or
+layout**. Copy changes, token-only changes and refactors that move no pixel take no review run
+and no row - say so plainly in the PR instead. A change that does qualify is never recorded as
+`not yet run`; the one exception is a PR or phase-close artifact that must document that no
+review applied, whose Checks run is `none` and Result is `not yet run`.
 
-The skip count is **required**: write `0` if zero, and if it is not zero, say which tests
-skipped and why. A PR or phase close cannot be recorded with a blank count.
+Each row states the **themes and viewports covered** and the **skip count**. The skip count is
+required: write `0` if zero, and if it is not zero, say which tests skipped and why.
+
+Rows dated before 2026-10-03 cite the earlier numbering (sections 1-7, e.g. "3.4", "7.1"); that
+numbering is retained in history and is not renumbered. Rows from that date on cite C1-C11.
 
 | Date | Phase / change | Reviewer | Checks run | Result | Skips | Notes |
 | --- | --- | --- | --- | --- | --- | --- |

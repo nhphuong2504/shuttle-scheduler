@@ -34,30 +34,24 @@ operator at all, and no surface should present participation as authority.
    moving or redirecting an address.
 5. Check the repository state and do not discard existing work.
 
-## Design system rules
+## Design system
 
-The full system is in [`docs/design-system.md`](docs/design-system.md). The rules
-that matter most when writing code:
+Read [`docs/design-system.md`](docs/design-system.md). Part 1 is mandatory. Some invariants
+are enforced by tests; others require review or measurement. The document says which is
+which, so this file does not restate them.
 
-- **No hardcoded colour.** Every colour utility must resolve to a `--color-*` key
-  defined in [`src/styles.css`](src/styles.css). Use tokens, not hex, `rgb()`, or
-  Tailwind's default palette.
-- **No hardcoded font size.** Use the tier utilities (`text-t1` … `text-t4`). 12px
-  is the floor; nothing may render below it.
-- **Status is never colour alone.** Every state carries a colour, a distinct glyph
-  and a text label.
-- **Hue is reserved for state, brand action and destructive.** Do not use a state
-  hue for decoration, and do not use `--accent` as a brand colour — it is the neutral
-  hover surface.
-- **A fill colour and its text twin are separate tokens.** If text sits on a new
-  fill, it needs an ink token solved against it.
-- **Theme takes no pathname.** Its fallback is the operating system, not the route, so
-  navigating must never change the lighting.
-- **Tier-4 match states render as ink only**, with no chip.
+### What a UI change must justify
 
-The design system is the current, shipped system: a cool neutral slate chassis with
-blue as the brand hue. Ignore any document describing a warm earth, terracotta, sage,
-indigo or mint palette, or a different font pairing — those are superseded.
+A change must improve the actual user experience, a clearly defined design-system
+invariant, or maintainability with an explicit downstream benefit. "Technically conforms" on
+its own is not enough.
+
+- **State the screen's audience and its primary job in one sentence before editing it.**
+- **No broad mechanical sweeps as drive-by work.** A bulk class or token migration takes its
+  own commit, a stated reason, and ideally a test that enforces the end state. Never mix it
+  with a design change, so the real diff stays readable.
+- **Shared UI primitives (`src/components/ui`) stay out of broad mechanical sweeps** unless
+  the primitive itself is intentionally being redesigned or corrected.
 
 ## Security rules
 
@@ -107,9 +101,9 @@ every small change is wasted effort; reaching a PR without it is a broken branch
 
 | Tier | When | Required | Optional |
 | --- | --- | --- | --- |
-| **UI-only iteration** | Tightening a screen while it is still moving — layout, copy, spacing, token or markup changes that alter no behaviour | Local visual check (`npm run dev`) + `npm run typecheck` | Focused tests (`npx vitest run <path>`) |
+| **UI-only iteration** | Tightening a screen while it is still moving — layout, copy, spacing, token or markup changes that alter no behaviour | Local visual check (`npm run dev`) in both themes, at one wide viewport (and a mobile viewport for public-facing surfaces) + `npm run typecheck` | Focused tests (`npx vitest run <path>`) |
 | **Feature checkpoint** | The feature is finished and about to be reviewed or handed over | `npm run typecheck` + the relevant tests + the UX review ([`docs/ux-review-checklist.md`](docs/ux-review-checklist.md)) | — |
-| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run typecheck` + `npm run test` + `npm run test:e2e` + `npm run build` + `npm run test:e2e:final` + a UX record row if the change is user-visible | — |
+| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run typecheck` + `npm run test` + `npm run test:e2e` + `npm run build` + `npm run test:e2e:final` + a UX record row if the change alters state treatment, hierarchy, interaction or layout | — |
 
 **A high-risk change takes the PR / phase-close bar at every stage.** Scheduling, scoring,
 authorization, the database and RPCs get the full verification regardless of how small the
@@ -190,21 +184,19 @@ tests are the floor, not the argument.
 - Never force-push or rewrite published commits; they are shared history.
 - Keep `main` working. Every commit on it should build and pass tests.
 
-## When a change is user-visible
+## When a change alters how the UI looks or behaves
 
 Run the manual checklist in
-[`docs/ux-review-checklist.md`](docs/ux-review-checklist.md). It covers what no
-automated gate can judge: focus order, visual hierarchy, status recognition at a
-glance, truncation, legibility at the target widths, and empty and error states.
+[`docs/ux-review-checklist.md`](docs/ux-review-checklist.md). It covers what no automated
+gate can judge; automated invariants are deliberately not repeated there.
 
 What that costs depends on the tier:
 
-- **UI-only iteration** — a local visual check, in both themes. No record yet.
+- **UI-only iteration** — a local visual check, in both themes and at the viewports above.
+  No record.
 - **Feature checkpoint** — work the checklist and fix what it finds.
-- **PR / phase close** — append the row to the record and state the skip count
-  explicitly.
+- **PR / phase close** — append a record row *if* the change alters state treatment, visual
+  hierarchy, interaction or layout, and state the skip count explicitly.
 
-The record row is owed only when the change is user-visible. A change with no user-visible
-surface takes no run and no row; record `not yet run` only if the PR/phase-close artifact
-needs to document that no user-visible review applied. A user-visible change is never
-recorded as `not yet run`.
+Copy changes, token-only changes and refactors that move no pixel take no run and no row.
+A change that does qualify is never recorded as `not yet run`.
