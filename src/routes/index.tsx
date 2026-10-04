@@ -94,6 +94,20 @@ function Landing() {
       title="Run a badminton tournament from one console"
       subtitle="Tournova takes a tournament from its first entry to its last result: who is in, who plays whom, which court and when, and the score as it is called."
     >
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Button asChild>
+          <Link to="/explore">Explore tournaments</Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/auth" search={signInSearch(href)}>
+            Sign in
+          </Link>
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Signing in is for running a tournament. Following one needs nothing.
+        </p>
+      </div>
+
       <ul className="grid gap-3 lg:grid-cols-3">
         <li className="min-w-0">
           <Panel title="The desk runs one court" className="h-full">
@@ -123,21 +137,6 @@ function Landing() {
         </li>
       </ul>
 
-      <Panel className="mt-3" title="Start here">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" asChild>
-            <Link to="/explore">Explore tournaments</Link>
-          </Button>
-          <Button size="sm" variant="outline" asChild>
-            <Link to="/auth" search={signInSearch(href)}>
-              Sign in
-            </Link>
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Signing in is for running a tournament. Following one needs nothing.
-          </p>
-        </div>
-      </Panel>
     </PublicShell>
   );
 }
