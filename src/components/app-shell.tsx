@@ -252,6 +252,12 @@ function BrandMark() {
  * the email and role beside it carry the meaning — so it stays out of the accessibility
  * tree.
  *
+ * The chip names its own tier (`text-t4`) rather than inheriting: the shell sets no size
+ * on the header row, so without it this label renders at the browser's 16px - a step above
+ * every control beside it, all of which name 12px. The tier is the point, not the number:
+ * `text-t4` is the 12px floor, and naming it keeps the chip on the scale when the scale
+ * moves.
+ *
  * ## Signing in returns you to the page you were on
  *
  * The button carries the current address as `/auth`'s `redirect`, so a visitor reading a
@@ -281,7 +287,7 @@ function SessionBlock() {
 
   return (
     <>
-      <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-muted-foreground sm:inline-flex">
+      <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-t4 text-muted-foreground sm:inline-flex">
         <span aria-hidden className="size-1.5 rounded-full bg-state-live-ink" />
         {session?.userEmail}
         {systemRole ? ` · ${systemRole}` : ""}
