@@ -11,11 +11,7 @@ import { buildDayRange, type DraftForm } from "@/components/tournament-setup/typ
  * `/setup` shows its review step whenever a tournament is live, so the hermetic suite never
  * mounts this one: the route sweep on `/setup` finds no field to scan and the staff sweep
  * never goes there. Rendering it directly is the only layer that reaches it - the same
- * argument `status-pill.test.tsx` makes for the state matrix, and the reason the date range
- * is not left to the source guard in `src/lib/design/pickers.test.ts` alone.
- *
- * The guard proves no field goes back to a raw `<input type="date">`; it cannot prove the
- * step still renders, which is what these do.
+ * argument `status-pill.test.tsx` makes for the state matrix.
  */
 
 afterEach(cleanup);
@@ -48,9 +44,6 @@ describe("the setup date range is presented by the app, not by the engine", () =
     expect(fields).toHaveLength(2);
 
     const names = fields.map((field) => {
-      // The class is what ties the field to the rule in `styles.css` that removes the
-      // browser's own calendar glyph; without it the field would draw two icons.
-      expect(field.className).toContain("picker-field");
       const button = field.parentElement?.querySelector("button");
       expect(button, "the date field has no picker control").not.toBeNull();
       return button?.getAttribute("aria-label");

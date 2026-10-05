@@ -22,8 +22,8 @@ import {
  *
  * ## Why the whole suite, and not just the two specs that already mocked
  *
- * Before this, only `states.spec.ts` and `desk-layout.spec.ts` intercepted the network.
- * The other eight reached the hosted project. That was wrong for three separate reasons,
+ * Before this, only two specs intercepted the network.
+ * The others reached the hosted project. That was wrong for three separate reasons,
  * and each one alone would have justified the change:
  *
  *   1. A test run could read production data. Nothing was writing, but a suite whose

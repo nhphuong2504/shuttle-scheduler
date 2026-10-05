@@ -16,8 +16,8 @@ import { extendTailwindMerge } from "tailwind-merge";
  * colours were never the problem.
  *
  * Registering the four tier names here makes the tier utility resolve as a font
- * size, so it coexists with a colour the way `text-sm` already did.
- * `src/lib/design/merge.test.ts` pins this, including the case that used to fail.
+ * size, so it coexists with a colour the way `text-sm` already did. If the type
+ * scale is renamed, update this list with it.
  */
 const twMerge = extendTailwindMerge({
   extend: {

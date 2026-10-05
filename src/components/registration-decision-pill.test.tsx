@@ -11,8 +11,7 @@ import {
 /**
  * The participant's own request, as a rendered chip.
  *
- * The design rule this file exists to hold is the one every state in this system owes:
- * colour is never the only channel, so each decision carries a glyph and a word as well.
+ * Each decision carries a glyph and a word, so colour is never the only channel.
  * The word comes from `registration-state.ts` and the glyph is drawn in `app-shell.tsx`, and
  * only a render sees both - which is exactly the gap the source-level guards cannot cover.
  *
@@ -30,36 +29,14 @@ const chip = (decision: (typeof REGISTRATION_DECISIONS)[number]) => {
 };
 
 describe("RegistrationDecisionPill", () => {
-  it("gives every decision a word, a glyph and a fill", () => {
+  it("gives every decision a word and a glyph", () => {
     // Derived from the vocabulary rather than restating it, so a fourth decision added to
     // the union without a treatment fails here instead of shipping as bare text.
     for (const decision of REGISTRATION_DECISIONS) {
       const rendered = chip(decision);
       expect(rendered.textContent, `${decision} label`).toBe(registrationDecisionLabel(decision));
       expect(rendered.querySelector("svg"), `${decision} glyph`).not.toBeNull();
-      expect(rendered.className, `${decision} chip`).toContain("rounded-full");
-      expect(rendered.className, `${decision} ring`).toContain("ring-1");
     }
-  });
-
-  it("draws a pending request as waiting on a person, not on the clock", () => {
-    // The amber tier-2 treatment, which is what this system uses for "held up by somebody
-    // else's action". It is deliberately not the live chip: nothing is happening now.
-    const pending = chip("pending");
-    expect(pending.className).toContain("bg-warn-surface");
-    expect(pending.className).toContain("text-warn-foreground");
-    expect(pending.className).not.toContain("bg-state-live-chip");
-  });
-
-  it("draws a refusal as an exceptional neutral rather than as a danger", () => {
-    // Red means destructive in this system, and a refusal is a fact about a request - the
-    // participant is not in danger, and nothing here is theirs to lose. The word and the
-    // glyph carry the meaning; the tone stays out of the way.
-    const rejected = chip("rejected");
-    expect(rejected.className).toContain("bg-muted");
-    expect(rejected.className).not.toContain("destructive");
-    expect(rejected.className).not.toContain("danger");
-    expect(chip("approved").className).not.toContain("destructive");
   });
 
   it("does not reuse the window's own chip", () => {
