@@ -55,18 +55,21 @@ jobs:
     # One runner, and this time from measurement on CI rather than from the shape of the
     # old job.
     #
-    #   1 shard, 90 tests                      3m48s
-    #   2 shards, ~45 each                     3m30s and 3m25s
-    #   checks (typecheck, unit, build)        1m18s
+    #   1 shard, 90 tests     3m48s, and 5m12s on a later run of the same commit's work
+    #   2 shards, ~45 each    3m30s and 3m25s
+    #   checks                1m18s - 1m22s (typecheck, unit tests, build)
     #
-    # Halving the tests bought 18 seconds, so the job is not machine-bound any more - the
-    # per-runner *fixed* cost is what dominates it. Each runner pays `npm ci`, a
-    # `--with-deps chromium` install (apt packages plus the browser) and a cold Vite dev
-    # server, and that is roughly three minutes before the first test runs. Sharding now
-    # buys about twenty seconds for about three and a half billed minutes, which is not a
-    # trade worth making. Four shards was the right answer while the contrast, typography
-    # and criteria sweeps multiplied the same routes by one another and the test time was
-    # large enough to divide; that is no longer the case.
+    # Two things follow. Halving the tests bought about twenty seconds, so the job is not
+    # machine-bound any more - the per-runner *fixed* cost dominates it. And the run-to-run
+    # spread on one shard (about ninety seconds) is larger than the whole difference
+    # sharding made, so a second runner mostly adds a second roll of the same dice.
+    #
+    # That fixed cost is `npm ci`, a `--with-deps chromium` install (apt packages plus the
+    # browser) and a cold Vite dev server - roughly three minutes before the first test
+    # runs, and the part that varies with the runner's mood. Sharding multiplies it by the
+    # number of runners. Four shards was the right answer while the contrast, typography and
+    # criteria sweeps multiplied the same routes by one another and the test time was large
+    # enough to divide; that is no longer the case.
     #
     # The fixed cost is where the remaining minutes are. Caching the Chromium download or
     # running the suite against `npm run build` output instead of a dev server are the two
