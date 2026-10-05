@@ -55,14 +55,15 @@ jobs:
     # One runner, and this time from measurement on CI rather than from the shape of the
     # old job.
     #
-    #   1 shard, 90 tests     3m48s, and 5m12s on a later run of the same commit's work
+    #   1 shard, 90 tests     3m48s, 5m12s and 5m30s on three runs of this configuration
     #   2 shards, ~45 each    3m30s and 3m25s
-    #   checks                1m18s - 1m22s (typecheck, unit tests, build)
+    #   checks                58s - 1m22s (typecheck, unit tests, build)
     #
     # Two things follow. Halving the tests bought about twenty seconds, so the job is not
     # machine-bound any more - the per-runner *fixed* cost dominates it. And the run-to-run
-    # spread on one shard (about ninety seconds) is larger than the whole difference
-    # sharding made, so a second runner mostly adds a second roll of the same dice.
+    # spread on one shard (about a hundred seconds across three runs) is larger than the
+    # whole difference sharding made, so a second runner mostly adds a second roll of the
+    # same dice.
     #
     # That fixed cost is `npm ci`, a `--with-deps chromium` install (apt packages plus the
     # browser) and a cold Vite dev server - roughly three minutes before the first test
