@@ -2,8 +2,6 @@
 @source "../src";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 /*
  * Tournova — Tournament Operations Console design system.
  * All colors are oklch semantic tokens. Never hardcode colors in components.
@@ -115,11 +113,7 @@
 
   /* Tells the browser which scheme its own chrome should use - scrollbars, form
      control interiors, the canvas behind the page, and the default text colour
-     before any token resolves. Pinned here rather than only declared in the `meta`
-     tag, because the meta tag can only say "both are supported"; this says which
-     one is actually in effect, and it follows the same class the tokens do. A dark
-     page with light scrollbars is the most common way a dark theme looks
-     unfinished. */
+     before any token resolves. Light is the only theme. */
   color-scheme: light;
 
   --elev-1: 0 1px 2px -1px color-mix(in oklab, var(--ink) 12%, transparent),
@@ -137,9 +131,9 @@
      thing. Solved at L 0.44 / C 0.072, the deepest value that stays in sRGB.
 
      FILL TOKEN. It is used only as bg-success/10 through /50, which is what the
-     eleven former --mint sites did. It is NOT text-safe in dark mode (2.95:1 on
-     a card), so a text use must add a separate ink twin - the same rule this
-     file already states for every fill colour. */
+     eleven former --mint sites did. It is a fill, not an ink, so a text use must
+     add a separate ink twin - the same rule this file already states for every
+     fill colour. */
   --success: oklch(0.44 0.072 190);
 
   /* PRINCIPLE, kept for future hues: a fill colour and its text twin are
@@ -148,8 +142,8 @@
      THE TOKENS ARE GONE, NOT THE RULE: gold went with the warm chassis
      and `--amber` / `--amber-ink` were deleted rather than left unowned.
      THE RULE HAS SINCE BEEN APPLIED AGAIN: `--primary-ink` exists because
-     `--primary` is used for both a chip fill and chip text, and the dark
-     variant failed the second role. See the pair at `--primary` below. */
+     `--primary` is used for both a chip fill and chip text, and the two roles
+     are solved against different neighbours. See the pair at `--primary` below. */
 
   /* Chassis: cool neutral slate. Hue 250-258, chroma <= 0.008. Hierarchy is
      carried by lightness and weight; hue is reserved for state, brand action
@@ -167,17 +161,12 @@
   --primary: oklch(0.52 0.16 255);
   --primary-foreground: oklch(1 0 0);
 
-  /* PRIMARY'S INK TWIN, and the file said this day would come.
+  /* PRIMARY'S INK TWIN.
      `--primary` is used two ways: as a solid fill with `--primary-foreground` on it,
      and as ink on a translucent primary tint (`bg-primary/10` chips, the free-ready
-     court state). Those are different requirements, and dark mode is where they part:
-     the dark `--primary` is lightened to 0.635 so it reads as a bright blue fill, and
-     at that lightness it measures 4.37:1 as ink on a primary-tinted striped row -
-     under the 4.5:1 that 14px semibold text needs. It is a marginal miss, which makes
-     it the dangerous kind: invisible in review, caught only by measuring.
-     Light mode does not have the problem (0.52 on a tint over white is comfortable),
-     so here the twin is deliberately the same value as `--primary`. Having the token
-     exist as a pair from the start is what lets dark diverge without a second audit. */
+     court state). Those are different requirements solved against different
+     neighbours, so the ink is its own token - the same fill/ink split this file
+     states for every colour. */
   --primary-ink: oklch(0.52 0.16 255);
   --secondary: oklch(0.945 0.006 250);
   --secondary-foreground: oklch(0.255 0.010 255);
@@ -206,27 +195,23 @@
   --ring: oklch(0.52 0.16 255);
 
   /* The edge that marks a control as *selected*. A third weight, and it earns its
-     own token for two reasons.
+     own token because it is solved against a different neighbour than
+     `border-control` is. That one is solved against the page, because inputs sit on
+     the page. This one is solved against the muted container a segmented control or
+     a tab list is painted in, and against the selected segment's own fill - a ring
+     sits on a boundary, so it has to clear both.
 
-     It is solved against a different neighbour than `border-control` is. That one is
-     solved against the page, because inputs sit on the page. This one is solved
-     against the muted container a segmented control or a tab list is painted in, and
-     against the selected segment's own fill - a ring sits on a boundary, so it has to
-     clear both. Those are not the same colour and the numbers are not the same either.
+     And the defect it closes was invisible to every gate. No axe rule maps to WCAG
+     1.4.11 at all, so the rule this system states in prose - 3:1 for anything the
+     user must locate - had never been checked against the one case it most applies
+     to. Marking "selected" with a fill that is the surface colour sitting on a muted
+     container measures 1.09:1, so the selected segment was not a shape at all: the
+     only remaining cues were the label's text colour and a soft shadow, neither of
+     which is the 3:1 that state information requires.
 
-     And the defect it closes was invisible to every gate. Phase 7 measured that no axe
-     rule maps to WCAG 1.4.11 at all, so the rule this system states in prose - 3:1 for
-     anything the user must locate - had never been checked against the one case it most
-     applies to. Marking "selected" with a fill that is the surface colour sitting on a
-     muted container measures 1.09:1 in light and 1.02:1 in dark. In dark the segment and
-     its container are two points of OKLCH lightness apart, so the selected segment is
-     not a shape at all; the only remaining cues were the label's text colour and a soft
-     shadow, neither of which is a 3:1 boundary.
-
-     0.60 in both themes, which is the number the solver landed on rather than a shared
-     convenience: the two containers are inverted around it, so one perceptual lightness
-     clears both. Measured, this token reads 3.6:1 against the light container and 4.3:1
-     against the dark one, and only marginally less against each segment's own fill. */
+     0.60 is the number the solver landed on rather than a convenience. Measured, this
+     token reads 3.6:1 against the container and only marginally less against the
+     segment's own fill. */
   --border-selected: oklch(0.60 0.008 250);
 
   /* Feedback callouts. `warn` stays amber by convention; the amber hue is
@@ -297,11 +282,11 @@
   --state-void-chip: oklch(0.9 0.008 255);
   --state-void-ink: oklch(0.4 0.014 255);
 
-  /* Session presence, light. Solved against the ACCOUNT PILL rather than the page,
+  /* Session presence. Solved against the ACCOUNT PILL rather than the page,
      because that is the surface the dot is painted on: `bg-surface/85` over the
-     page, then `bg-muted/60` over that, which composites to #f4f6f8. Light mode is
-     the binding one - the literal green this replaces measured 2.27:1 here against
-     6.95:1 in dark, because one value cannot serve both surfaces.
+     page, then `bg-muted/60` over that, which composites to #f4f6f8. The literal
+     green this replaces measured 2.27:1 here, which is why the value is its own
+     token rather than a borrowed hue.
 
      Solved to 4.00:1 rather than as bright as it could be: the dot is decorative,
      so the aim is a mark that is clearly present without becoming the loudest thing
@@ -331,106 +316,6 @@
   --type-t4-size: 0.75rem;   /* 12 */
   --type-t4-lh: 1rem;        /* 16 */
   --row-height: 2.75rem;     /* 44 */
-}
-
-/*
- * Low-light venue theme. Same token names, re-solved rather than filtered or
- * opacity-flipped — either of those would break the measured ratios. Applied
- * by putting `.dark` on <html>; the `dark:` variant is already declared above.
- *
- * `color-scheme` is part of the theme, not decoration: it is what makes the
- * scrollbars and native control interiors dark, and without it a correctly dark
- * layout still reads as half-finished.
- */
-.dark {
-  color-scheme: dark;
-  --ink: oklch(0.10 0.006 260);
-
-  /* Blue stays blue in both themes: same hue family 255, lightened - never a
-     hue swap. The old brown-to-gold flip between themes is gone. */
-  --success: oklch(0.72 0.09 190);
-
-  --background: oklch(0.17 0.008 260);
-  --foreground: oklch(0.95 0.005 255);
-  --surface: oklch(0.215 0.008 262);
-  --hairline: oklch(0.30 0.008 258);
-
-  --card: oklch(0.215 0.008 262);
-  --card-foreground: oklch(0.95 0.005 255);
-  --popover: oklch(0.245 0.008 262);
-  --popover-foreground: oklch(0.95 0.005 255);
-
-  --primary: oklch(0.635 0.16 255);
-  --primary-foreground: oklch(0.17 0.02 255);
-
-  /* Solved for the ink role, not the fill role. Lifted to 0.66 with chroma eased to
-     0.14, which measures 4.84:1 on the lightest primary tint in this theme (the
-     striped row) - clearing 4.5:1 with headroom rather than landing on it. The hue is
-     unchanged at 255, so it still reads as the same blue, only brighter; a hue shift
-     would have been the wrong fix, because the problem is lightness, not identity. */
-  --primary-ink: oklch(0.66 0.14 255);
-  --secondary: oklch(0.245 0.008 262);
-  --secondary-foreground: oklch(0.95 0.005 255);
-  --muted: oklch(0.235 0.008 260);
-  --muted-foreground: oklch(0.633 0.009 252);
-  /* Solved as a LIFT above --surface, not a drop: a hover state must read as
-     raised. L 0.250 vs surface L 0.215, chroma held to 0.007. */
-  --accent: oklch(0.25 0.007 255);
-  --accent-foreground: oklch(0.95 0.005 255);
-  --destructive: oklch(0.654 0.17 25);
-  --destructive-foreground: oklch(0.17 0.02 25);
-
-  --border: oklch(0.30 0.008 258);
-  --border-control: oklch(0.513 0.008 250);
-  /* Same lightness as the light theme, and that is the solved answer rather than a
-     shortcut. This container is rgb(26,28,31) and the light one is rgb(246,249,252) -
-     they are inverted around 0.60, so one value clears both, reading 4.3:1 here and
-     3.6:1 there. Choosing a lighter edge "because the theme is dark" would be reasoning
-     about the background's name rather than about the contrast. */
-  --border-selected: oklch(0.60 0.008 250);
-  --input: var(--border-control);
-  --ring: oklch(0.516 0.16 255);
-
-  --warn-surface: oklch(0.30 0.045 82);
-  --warn-border: oklch(0.42 0.06 82);
-  --warn-foreground: oklch(0.86 0.095 72);
-  --info-surface: oklch(0.30 0.04 252);
-  --info-border: oklch(0.42 0.055 252);
-  --info-foreground: oklch(0.85 0.10 250);
-  --danger-surface: oklch(0.30 0.045 27);
-  --danger-border: oklch(0.42 0.065 27);
-  --danger-foreground: oklch(0.84 0.13 27);
-
-  /* Same three hues, four tiers, re-solved for the low-light hall. Tier 4 still
-     has no chip token and both its members still share one ink. */
-  --state-live-chip: oklch(0.245 0.045 150);
-  --state-live-ink: oklch(0.83 0.12 150);
-  --state-scheduled-chip: oklch(0.275 0.005 250);
-  --state-scheduled-ink: oklch(0.745 0.009 252);
-  --state-completed-ink: oklch(0.633 0.009 252);
-
-  /* Void, re-solved for low light. Measured: ink on chip 5.41:1.
-
-     The dark neutral ramp is far more compressed than the light one - muted,
-     scheduled and the page background all sit inside 0.04 of lightness - so
-     lightness alone cannot separate void from scheduled here the way it does in
-     light mode: the best available gap is 7.2%, against 14.2% in light. That is
-     recorded rather than papered over, because it is the concrete case behind
-     this system's rule that a state is never distinguished by colour alone. In
-     dark mode the chip's heavier ring, its glyph and its label are what carry the
-     distinction, and they are load-bearing rather than decorative. */
-  --state-void-chip: oklch(0.44 0.008 255);
-  --state-void-ink: oklch(0.88 0.012 255);
-
-  /* Session presence, dark. The same pill composited in this theme is #191c1f, and
-     the same hue and chroma are re-solved against it rather than reused: here
-     contrast RISES with lightness, so the answer is the lowest L that clears the
-     target instead of the highest. Measures 5.50:1.
-
-     Lighter than the light value on purpose - it is not a dimmed light theme, it is
-     the same mark on a surface of the opposite polarity, which is how every other
-     token in this block is solved too. */
-  --presence-ink: oklch(0.648 0.11 150);
 }
 
 @layer base {

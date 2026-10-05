@@ -17,9 +17,8 @@
  *    corresponding token in `styles.css` for the theme it belongs to;
  *  - it declares no colour the palette does not, so it cannot introduce a hue the
  *    design system has not solved;
- *  - it follows the **operating system** rather than a stored choice, because the
- *    stored choice is unreachable from here - which is exactly the fallback the
- *    design system documents for a caller that has nothing stored.
+ *  - it declares the application's light palette, the only theme the app ships, so
+ *    the crash page and the running app paint the same way.
  *
  * Type is on the shipped tiers (T3 for prose, T1 for the heading) rather than the
  * ad-hoc sizes this document used to carry, and the font stack is `system-ui`
@@ -35,7 +34,7 @@ export function renderErrorPage(): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: light;
         --color-background: oklch(0.975 0.004 250);
         --color-foreground: oklch(0.255 0.010 255);
         --color-surface: oklch(1 0 0);
@@ -43,17 +42,6 @@ export function renderErrorPage(): string {
         --color-border-control: oklch(0.643 0.008 250);
         --color-primary: oklch(0.52 0.16 255);
         --color-primary-foreground: oklch(1 0 0);
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --color-background: oklch(0.17 0.008 260);
-          --color-foreground: oklch(0.95 0.005 255);
-          --color-surface: oklch(0.215 0.008 262);
-          --color-muted-foreground: oklch(0.633 0.009 252);
-          --color-border-control: oklch(0.513 0.008 250);
-          --color-primary: oklch(0.635 0.16 255);
-          --color-primary-foreground: oklch(0.17 0.02 255);
-        }
       }
       body {
         font-family: system-ui, -apple-system, sans-serif;
