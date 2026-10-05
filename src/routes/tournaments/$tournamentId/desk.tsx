@@ -708,15 +708,16 @@ function Desk() {
                         `--primary-ink` is solved against `bg-primary/10` over a *surface*.
                         This badge sits on a court tile, whose background is not a surface -
                         it is `COURT_STATE_TILE[state]`, so it is a green live chip, a danger
-                        tint, a primary wash or a plain surface depending on the state. On
-                        the dark live chip the pair measured 4.53:1 against the 4.5:1 that
-                        14px needs: technically passing, with no headroom at all, and only
-                        visible at all once the fixture put a real match on a court.
+                        tint, a primary wash or a plain surface depending on the state. An
+                        ink solved against a *surface* therefore has no fixed pair to clear
+                        here: the same badge sits on five different fills, so whether it
+                        passes or not is decided by the tile underneath it - a fact that was
+                        only visible at all once the fixture put a real match on a court.
 
                         An ink is only valid against the fill it was solved for, so an
                         element that can sit on five different backgrounds cannot use one.
                         `foreground` on a `foreground/10` wash is backdrop-agnostic and
-                        clears the requirement on every tile in both themes, and it also
+                        clears the requirement on every tile, and it also
                         respects the system's own rule that hue is reserved for state -
                         a brand-blue chip inside a state-coloured tile was already the one
                         place that broke it.

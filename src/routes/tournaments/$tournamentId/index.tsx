@@ -441,7 +441,7 @@ function RegisterForm({
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   "disabled:cursor-not-allowed disabled:opacity-60",
                   // The pressed state carries a fill *and* a ring, and the ring is the part
-                  // that matters: in light mode the tint alone measures about 1.1:1 against
+                  // that matters: the tint alone measures about 1.1:1 against
                   // the panel behind it, which is a selected state that is not a shape at
                   // all. `--border-selected` is the token solved for exactly this pair.
                   choice

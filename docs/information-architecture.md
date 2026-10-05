@@ -196,8 +196,6 @@ requests, "Entries" is the roster.
 - **A shipped link resolves.** Every literal `to=` target is checked against the router's own
   generated route ids, so a link to an address with no route fails the unit suite rather than a
   click.
-- **The theme takes no pathname.** Navigating must never change the lighting; the fallback is
-  the operating system, not the route.
 - **Nothing global decides where you are.** No default tournament, no server-side pointer read,
   no redirect that happens before the session is known.
 

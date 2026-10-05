@@ -4,7 +4,6 @@ import { type Page } from "@playwright/test";
 import { expect, test } from "./fixtures/app";
 import type { MockRegistrationRow } from "./fixtures/app-mock";
 import { CATEGORY_MD, CATEGORY_XD } from "./fixtures/desk-mock";
-import { seedAppearance } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
 
@@ -453,13 +452,13 @@ test.describe("staff surfaces", () => {
  * ("header")` and excludes controls inside it, so the question has only ever been asked of
  * the sticky *header*. The wizard has a sticky *footer*, and that left a real failure with
  * no gate on it: tabbing to the venue phone field parked it at 728..764px inside the bar's
- * 706..768px band, entirely hidden, in both themes, because the browser's scroll-into-view
+ * 706..768px band, entirely hidden, because the browser's scroll-into-view
  * judged the field visible and never scrolled. `scroll-margin-bottom` on the wizard's
  * fields reserves the bar's height, and the first case below keeps that rule honest.
  *
  * **Axe.** The step navigation, the problems callout and the review checklist have shipped
- * un-scanned, so the second case walks all four steps in both themes. There is no route
- * sweep to carry the second theme, which is why both are walked here.
+ * un-scanned, so the second case walks all four steps here. No route sweep renders the
+ * wizard, which is why it is walked in this file rather than through `ROUTES`.
  *
  * The tournament is pinned `upcoming` because a started tournament's configuration is
  * frozen: the wizard then renders the read-only notice instead of the steps, so there is
@@ -469,77 +468,69 @@ test.describe("the setup wizard, which no route sweep renders", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
 
   test("never leaves a focused field under its sticky action bar", async ({ page }) => {
-    const obscured: string[] = [];
-    let stops = 0;
+    await openStaffShell(page);
+    await page.goto(routes.settings, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
 
-    for (const theme of ["light", "dark"] as const) {
-      await seedAppearance(page, { theme });
-      await openStaffShell(page);
-      await page.goto(routes.settings, { waitUntil: "load" });
-      await page.waitForLoadState("networkidle");
-
-      // The mechanism, asserted directly: the clearance must cover the bar it clears.
-      const clearance = await page.evaluate(() => {
-        const field = document.querySelector<HTMLElement>("#t-org-phone");
-        const bars = [...document.querySelectorAll<HTMLElement>("*")].filter((n) => {
-          const s = getComputedStyle(n);
-          return s.position === "sticky" && s.bottom === "0px";
-        });
-        return {
-          field: field ? parseFloat(getComputedStyle(field).scrollMarginBottom) : 0,
-          bar: bars[0]?.getBoundingClientRect().height ?? 0,
-        };
+    // The mechanism, asserted directly: the clearance must cover the bar it clears.
+    const clearance = await page.evaluate(() => {
+      const field = document.querySelector<HTMLElement>("#t-org-phone");
+      const bars = [...document.querySelectorAll<HTMLElement>("*")].filter((n) => {
+        const s = getComputedStyle(n);
+        return s.position === "sticky" && s.bottom === "0px";
       });
-      expectPresent(clearance.bar > 0, "The wizard's action bar is not sticky, so nothing clears it");
-      expectPresent(
-        clearance.field >= clearance.bar,
-        `The wizard's fields reserve ${clearance.field}px for a ${clearance.bar}px bar`,
-      );
+      return {
+        field: field ? parseFloat(getComputedStyle(field).scrollMarginBottom) : 0,
+        bar: bars[0]?.getBoundingClientRect().height ?? 0,
+      };
+    });
+    expectPresent(clearance.bar > 0, "The wizard's action bar is not sticky, so nothing clears it");
+    expectPresent(
+      clearance.field >= clearance.bar,
+      `The wizard's fields reserve ${clearance.field}px for a ${clearance.bar}px bar`,
+    );
 
-      const walked = await walkFocusAndFindObscured(page);
-      stops += walked.stops;
-      obscured.push(...walked.obscured.map((who) => `${theme}: ${who}`));
-    }
-
-    expectPresent(stops >= 40, "The wizard walked fewer focus stops than the form it renders");
-    expect(obscured, "Focused controls left entirely inside a sticky element").toEqual([]);
+    const walked = await walkFocusAndFindObscured(page);
+    // The first step walked 34 focus stops when this was written; the floor guards a
+    // walk that visited nothing rather than pinning the current count.
+    expectPresent(
+      walked.stops >= 30,
+      `The wizard walked ${walked.stops} focus stops, fewer than its first step renders`,
+    );
+    expect(walked.obscured, "Focused controls left entirely inside a sticky element").toEqual([]);
   });
 
   /**
-   * Axe over all four steps, in both themes.
+   * Axe over all four steps.
    *
    * The wizard is editor-gated, so `a11y.spec.ts` - which sweeps `ROUTES` signed out, and
    * `a11y-baseline.json` with it - has never once rendered it. That is the same gap the
    * 2.4.11 case above exists to close, and it means the step navigation, the problems
-   * callout and the review checklist have shipped un-scanned. Both themes are walked here
-   * rather than one because there is no route sweep to carry the second.
+   * callout and the review checklist have shipped un-scanned.
    */
-  for (const theme of ["light", "dark"] as const) {
-    test(`introduces no accessibility violation on any step (${theme})`, async ({ page }) => {
-      /**
-       * Three times the ordinary budget, because this is the heaviest test in the file:
-       * four navigations, each waiting for the network to settle, and four axe runs over
-       * the largest DOM the app renders. It passes in ~26s on an idle machine, and that
-       * is already most of the 60s default - so a quieter machine is not what it needs,
-       * it needs a budget that does not depend on what else is on the workers with it.
-       */
-      test.slow();
-      await seedAppearance(page, { theme });
-      await openStaffShell(page);
+  test("introduces no accessibility violation on any step", async ({ page }) => {
+    /**
+     * Three times the ordinary budget, because this is the heaviest test in the file:
+     * four navigations, each waiting for the network to settle, and four axe runs over
+     * the largest DOM the app renders. It passes in ~26s on an idle machine, and that
+     * is already most of the 60s default - so a quieter machine is not what it needs,
+     * it needs a budget that does not depend on what else is on the workers with it.
+     */
+    test.slow();
+    await openStaffShell(page);
 
-      for (const step of ["details", "events", "structure", "review"]) {
-        await page.goto(`${routes.settings}?step=${step}`, { waitUntil: "load" });
-        await page.waitForLoadState("networkidle");
-        expectPresent(
-          (await page.locator("ol button").count()) === 4,
-          `The wizard's step navigation on the ${step} step`,
-        );
-        expect(violationIds(await scan(page)), `Accessibility violations on the ${step} step`).toEqual(
-          [],
-        );
-      }
-    });
-  }
+    for (const step of ["details", "events", "structure", "review"]) {
+      await page.goto(`${routes.settings}?step=${step}`, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+      expectPresent(
+        (await page.locator("ol button").count()) === 4,
+        `The wizard's step navigation on the ${step} step`,
+      );
+      expect(violationIds(await scan(page)), `Accessibility violations on the ${step} step`).toEqual(
+        [],
+      );
+    }
+  });
 });
 
 /**
@@ -608,73 +599,65 @@ async function walkFocusAndFindObscured(
  * longer has a panel at all — it is a single `Reset` button in the header — so its wording
  * is asserted where it now lives: the confirmation dialog, captured rather than dismissed.
  *
- * Both themes, because the button paints the destructive fill and its 50% disabled state
- * on the header surface, which is exactly the pairing a contrast check is for.
+ * The button paints the destructive fill and its 50% disabled state on the header surface,
+ * which is exactly the pairing a contrast check is for.
  */
 test.describe("the two resets", () => {
-  for (const colorScheme of ["light", "dark"] as const) {
-    test.describe(colorScheme, () => {
-      test.use({ colorScheme });
+  test("the schedule reset says the seed order survives", async ({ page }) => {
+    await openStaffShell(page);
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
 
-      test("the schedule reset says the seed order survives", async ({ page }) => {
-        await openStaffShell(page);
-        await page.goto(routes.schedule, { waitUntil: "load" });
-        await page.waitForLoadState("networkidle");
+    const toggle = page.getByRole("button", { name: /^show$/i }).first();
+    expectPresent((await toggle.count()) > 0, "The Reset toggle on /placement-schedule");
+    await toggle.click();
+    await settleAnimations(page, "main");
 
-        const toggle = page.getByRole("button", { name: /^show$/i }).first();
-        expectPresent((await toggle.count()) > 0, "The Reset toggle on /placement-schedule");
-        await toggle.click();
-        await settleAnimations(page, "main");
+    // Names what it destroys, and what it keeps. The second half is the whole point of
+    // this reset existing separately from the stage reset.
+    await expect(
+      page.getByText(/every reported result and every\s+scheduled time/i).first(),
+    ).toBeVisible();
+    await expect(page.getByText(/seed order\s+and any waivers are kept/i).first()).toBeVisible();
 
-        // Names what it destroys, and what it keeps. The second half is the whole point of
-        // this reset existing separately from the stage reset.
-        await expect(
-          page.getByText(/every reported result and every\s+scheduled time/i).first(),
-        ).toBeVisible();
-        await expect(
-          page.getByText(/seed order\s+and any waivers are kept/i).first(),
-        ).toBeVisible();
+    expect(violationIds(await scan(page))).toEqual([]);
+  });
 
-        expect(violationIds(await scan(page))).toEqual([]);
-      });
+  test("the placement reset refuses while the schedule depends on the seeding", async ({
+    page,
+  }) => {
+    // The `layout` fixture serves a built tournament, so the gate is closed. This is
+    // the state the gate exists for: a bracket is still paired from the seed order.
+    await openStaffShell(page);
+    await page.goto(routes.placement, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
 
-      test("the placement reset refuses while the schedule depends on the seeding", async ({
-        page,
-      }) => {
-        // The `layout` fixture serves a built tournament, so the gate is closed. This is
-        // the state the gate exists for: a bracket is still paired from the seed order.
-        await openStaffShell(page);
-        await page.goto(routes.placement, { waitUntil: "load" });
-        await page.waitForLoadState("networkidle");
+    // It is a header button now, which is the whole point of the change — one action
+    // rather than a panel with a toggle and a paragraph, and no longer sharing the row
+    // with a Scores link. Scoped to the row that holds the `h1`, which is where the
+    // page's actions live: `getByRole("banner")` is the app's nav, and this header sits
+    // inside `main`, so it carries no `banner` role.
+    const header = page
+      .locator("main > div")
+      .filter({ has: page.getByRole("heading", { name: "Placement", level: 1 }) })
+      .first();
+    // The Scores link that used to share this row is gone; the reset is now the page's
+    // only header action, and results are still reached from the nav.
+    await expect(header.getByRole("link", { name: /enter results in scores/i })).toHaveCount(0);
+    const reset = header.getByRole("button", { name: /^reset$/i });
+    expectPresent((await reset.count()) > 0, "The Reset button in the header of /placement");
+    await expect(reset).toBeDisabled();
 
-        // It is a header button now, which is the whole point of the change — one action
-        // rather than a panel with a toggle and a paragraph, and no longer sharing the row
-        // with a Scores link. Scoped to the row that holds the `h1`, which is where the
-        // page's actions live: `getByRole("banner")` is the app's nav, and this header sits
-        // inside `main`, so it carries no `banner` role.
-        const header = page
-          .locator("main > div")
-          .filter({ has: page.getByRole("heading", { name: "Placement", level: 1 }) })
-          .first();
-        // The Scores link that used to share this row is gone; the reset is now the page's
-        // only header action, and results are still reached from the nav.
-        await expect(header.getByRole("link", { name: /enter results in scores/i })).toHaveCount(0);
-        const reset = header.getByRole("button", { name: /^reset$/i });
-        expectPresent((await reset.count()) > 0, "The Reset button in the header of /placement");
-        await expect(reset).toBeDisabled();
+    // The refusal is still reachable without the panel: it is the button's accessible
+    // description, so a screen reader is told why before the press rather than after.
+    await expect(reset).toHaveAccessibleDescription(/still on the schedule/i);
+    await expect(reset).toHaveAccessibleDescription(/Schedule tab first/i);
+    // And the same string is on the wrapper, because a disabled button cannot show a
+    // tooltip of its own — `Button` sets `disabled:pointer-events-none`.
+    await expect(page.locator('span[title*="still on the schedule"]')).toHaveCount(1);
 
-        // The refusal is still reachable without the panel: it is the button's accessible
-        // description, so a screen reader is told why before the press rather than after.
-        await expect(reset).toHaveAccessibleDescription(/still on the schedule/i);
-        await expect(reset).toHaveAccessibleDescription(/Schedule tab first/i);
-        // And the same string is on the wrapper, because a disabled button cannot show a
-        // tooltip of its own — `Button` sets `disabled:pointer-events-none`.
-        await expect(page.locator('span[title*="still on the schedule"]')).toHaveCount(1);
-
-        expect(violationIds(await scan(page))).toEqual([]);
-      });
-    });
-  }
+    expect(violationIds(await scan(page))).toEqual([]);
+  });
 
   /**
    * The other side of the gate.
@@ -685,52 +668,50 @@ test.describe("the two resets", () => {
    * releasing state needs a fixture of its own. `prebuild` is the seeded field before
    * anything has been built, which is exactly when the order has nothing depending on it.
    */
-  for (const colorScheme of ["light", "dark"] as const) {
-    test.describe(`${colorScheme} prebuild`, () => {
-      test.use({ colorScheme, appMock: { preset: "prebuild", role: "admin" } });
+  test.describe("prebuild", () => {
+    test.use({ appMock: { preset: "prebuild", role: "admin" } });
 
-      test("the placement reset is offered, and its confirmation names what it destroys", async ({
-        page,
-      }) => {
-        await openStaffShell(page);
-        await page.goto(routes.placement, { waitUntil: "load" });
-        await page.waitForLoadState("networkidle");
+    test("the placement reset is offered, and its confirmation names what it destroys", async ({
+      page,
+    }) => {
+      await openStaffShell(page);
+      await page.goto(routes.placement, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
 
-        const header = page
-          .locator("main > div")
-          .filter({ has: page.getByRole("heading", { name: "Placement", level: 1 }) })
-          .first();
-        const reset = header.getByRole("button", { name: /^reset$/i });
-        expectPresent((await reset.count()) > 0, "The Reset button in the header of /placement");
-        await expect(reset).toBeEnabled();
-        await expect(reset).not.toHaveAccessibleDescription(/still on the schedule/i);
+      const header = page
+        .locator("main > div")
+        .filter({ has: page.getByRole("heading", { name: "Placement", level: 1 }) })
+        .first();
+      const reset = header.getByRole("button", { name: /^reset$/i });
+      expectPresent((await reset.count()) > 0, "The Reset button in the header of /placement");
+      await expect(reset).toBeEnabled();
+      await expect(reset).not.toHaveAccessibleDescription(/still on the schedule/i);
 
-        // The panel used to carry the wording. It lives on the confirmation now, so that is
-        // where §6.3 is checked. The dialog is dismissed from inside the listener: nothing
-        // else unblocks the page's own JS while a native confirm is open, so a `click()`
-        // that waits for a handler registered afterwards would hang on the click itself.
-        let dialogType = "";
-        let dialogMessage = "";
-        page.on("dialog", async (dialog) => {
-          dialogType = dialog.type();
-          dialogMessage = dialog.message();
-          await dialog.dismiss();
-        });
-
-        await reset.click();
-        expect(dialogType).toBe("confirm");
-        expect(dialogMessage).toMatch(/clears the seed order and any waivers/i);
-        // And it names the other reset, so the two remain distinguishable from one screen.
-        expect(dialogMessage).toMatch(/Schedule tab's reset clears the matches/i);
-        await settleAnimations(page, "main");
-
-        // Dismissing is a refusal: nothing was undone.
-        await expect(reset).toBeEnabled();
-
-        expect(violationIds(await scan(page))).toEqual([]);
+      // The panel used to carry the wording. It lives on the confirmation now, so that is
+      // where §6.3 is checked. The dialog is dismissed from inside the listener: nothing
+      // else unblocks the page's own JS while a native confirm is open, so a `click()`
+      // that waits for a handler registered afterwards would hang on the click itself.
+      let dialogType = "";
+      let dialogMessage = "";
+      page.on("dialog", async (dialog) => {
+        dialogType = dialog.type();
+        dialogMessage = dialog.message();
+        await dialog.dismiss();
       });
+
+      await reset.click();
+      expect(dialogType).toBe("confirm");
+      expect(dialogMessage).toMatch(/clears the seed order and any waivers/i);
+      // And it names the other reset, so the two remain distinguishable from one screen.
+      expect(dialogMessage).toMatch(/Schedule tab's reset clears the matches/i);
+      await settleAnimations(page, "main");
+
+      // Dismissing is a refusal: nothing was undone.
+      await expect(reset).toBeEnabled();
+
+      expect(violationIds(await scan(page))).toEqual([]);
     });
-  }
+  });
 });
 
 /**

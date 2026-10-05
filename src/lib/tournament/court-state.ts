@@ -51,7 +51,7 @@ export const COURT_STATE_CHIP: Record<CourtState, string> = {
   overrun: "bg-danger-surface text-danger-foreground",
   // `/10`, not the `/12` this started as, because `/12` is a tint no ink was solved
   // against. `--primary-ink` was solved against `bg-primary/10` in phase 3; carrying a
-  // slightly darker tint here put the pair at 4.41:1 in light mode, under the 4.5:1
+  // slightly darker tint here put the pair at 4.41:1, under the 4.5:1
   // that 14px needs, and nothing could see it: this chip only exists on a court board
   // with a tournament in it, so the only scan that had ever run had no tile to measure.
   // Reusing the validated tint is the principled fix - a second tint would mean a
@@ -72,8 +72,8 @@ export const COURT_STATE_CHIP: Record<CourtState, string> = {
  * state without exception. `playing` was the exception and it was a defect: its tile
  * painted the full `--state-live-chip`, which is the same fill the pill paints, so
  * the "Playing" chip had no edge at all and read as uppercase text on green. Measured
- * on the rendered board, the pill's fill was byte-identical to its own tile's in both
- * themes - 1.000:1, against 1.087:1 for the weakest other state. `states.spec.ts`
+ * on the rendered board, the pill's fill was byte-identical to its own tile's -
+ * 1.000:1, against 1.087:1 for the weakest other state. `states.spec.ts`
  * now sweeps every pill against its own tile, and `court-state.test.ts` asserts the
  * two fills differ at the vocabulary level so the collision cannot return.
  *

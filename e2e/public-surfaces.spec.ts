@@ -107,7 +107,7 @@ test.describe("Home, for a caller working in a tournament", () => {
     await expect(main.getByRole("heading", { name: TOURNAMENT_NAME })).toHaveCount(1);
   });
 
-  test("introduces no accessibility violation, in either theme", async ({ page }) => {
+  test("introduces no accessibility violation", async ({ page }) => {
     // Home cannot be swept by the shared route matrix, because its content depends on a
     // session and the matrix runs signed out. So it is scanned here, against the same rule
     // set - and to zero rather than to a baseline: a surface added in this commit has no
@@ -117,7 +117,7 @@ test.describe("Home, for a caller working in a tournament", () => {
       const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
       expect(
         results.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.length} node(s)`),
-        `axe on ${routes.home} in ${cell.theme}`,
+        `axe on ${routes.home}`,
       ).toEqual([]);
     }
   });

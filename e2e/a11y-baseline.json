@@ -34,41 +34,5 @@
   },
   "/schedule": {
     "rules": []
-  },
-  "/#dark": {
-    "rules": []
-  },
-  "/registration#dark": {
-    "rules": []
-  },
-  "/placement#dark": {
-    "rules": []
-  },
-  "/draws#dark": {
-    "rules": []
-  },
-  "/knockout#dark": {
-    "rules": []
-  },
-  "/placement-schedule#dark": {
-    "rules": []
-  },
-  "/matches#dark": {
-    "rules": []
-  },
-  "/setup#dark": {
-    "rules": []
-  },
-  "/staff#dark": {
-    "rules": []
-  },
-  "/auth#dark": {
-    "rules": []
-  },
-  "/pools#dark": {
-    "rules": []
-  },
-  "/schedule#dark": {
-    "rules": []
   }
 }

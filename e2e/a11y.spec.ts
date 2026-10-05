@@ -23,7 +23,7 @@ import { routes } from "./fixtures/routes";
  * already failing may keep failing until its phase fixes it; a rule that starts
  * failing when it was not failing before fails the suite immediately.
  *
- * The scan covers the full infrastructure matrix - every route in both themes - for the
+ * The scan covers the full infrastructure matrix - every route - for the
  * reason recorded in `fixtures/matrix.ts`: each axis was a blind spot in turn, and each
  * was found by widening the sweep rather than by reading the code.
  *
@@ -63,7 +63,7 @@ test.describe("rendered accessibility", () => {
         const surfaced = await scan(page);
         const rules = surfaced.map((violation) => violation.id).sort();
 
-        const key = cellKey(route, cell);
+        const key = cellKey(route);
         recorded[key] = { rules };
 
         if (RECORD) return;

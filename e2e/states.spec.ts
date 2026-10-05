@@ -25,8 +25,8 @@ import { settleAnimations } from "./fixtures/settle";
  *
  * Phase 5 gave `void` a treatment and routed byes to a marker, and proved both in
  * jsdom. What jsdom cannot show is whether they resolve - whether the tokens a
- * component names produce a colour in a real cascade, in both themes, at both
- * densities, against a court tile that is itself tinted. A class name that exists and
+ * component names produce a colour in a real cascade, at both densities, against a
+ * court tile that is itself tinted. A class name that exists and
  * a colour that renders are different facts, and only one of them was checked.
  *
  * The other thing it does is populate the pages the existing gates scan. Every
@@ -226,8 +226,8 @@ async function readCourtChipsOnce(page: Page): Promise<Chips[]> {
     ];
 
     // The page itself is the bottom of the stack. `--background` is the token the
-    // stylesheet paints the page with, so reading it keeps this honest in dark mode
-    // rather than assuming white.
+    // stylesheet paints the page with, so reading it keeps this honest rather than
+    // assuming white.
     const rootBackground = getComputedStyle(document.documentElement)
       .getPropertyValue("--background")
       .trim();
@@ -344,7 +344,7 @@ for (const cell of MATRIX_CELLS) {
      * `playing` shipped with its tile painting the full `--state-live-chip` - the same fill
      * the pill paints - so a moderator saw the word "Playing" in green ink on a green card
      * with no chip around it, while "Ready" read clearly because its tile is a 5% wash under
-     * a 10% pill. Measured on the board the two were byte-identical in both themes.
+     * a 10% pill. Measured on the board the two were byte-identical.
      *
      * So this states the requirement the design has for every state: the chip's fill must
      * differ from the tile it sits on. A colour alone is not the whole signal - the label
@@ -352,7 +352,7 @@ for (const cell of MATRIX_CELLS) {
      * discrete indicator at all, and nothing was measuring that.
      *
      * The floor is not chosen to pass. It is the smallest separation the *already shipped*
-     * treatments produce, measured on this board: dark `free-ready` at 8.1 of Euclidean RGB
+     * treatments produce, measured on this board: `free-ready` at 8.1 of Euclidean RGB
      * distance against the 0.0 that `playing` had, with the other states running 18-40. A
      * change can therefore improve on the design's own tightest case but cannot go below it
      * and call itself a chip.

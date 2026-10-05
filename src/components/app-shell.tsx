@@ -4,14 +4,12 @@ import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
-import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
 import {
   normalizeTournamentStatus,
   tournamentStatusLabel,
   type TournamentStatus,
 } from "@/lib/auth/authorization";
-import type { Theme } from "@/lib/design/theme";
 import { signInSearch } from "@/lib/routing/redirect";
 import {
   registrationDecisionHint,
@@ -143,11 +141,6 @@ const PUBLIC_SECTIONS = [
   { label: "New tournament", to: "/tournaments/new" },
 ] as const;
 
-const THEME_OPTIONS: { value: Theme; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
-
 /** Shared so the two nav branches cannot drift into two different-looking navs. */
 const NAV_ITEM_CLASS =
   "rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
@@ -163,70 +156,6 @@ const NAV_ACTIVE_CLASS =
  */
 const NAV_BADGE_CLASS =
   "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full border border-warn-border bg-warn-surface px-1 font-score text-t4 leading-tight text-warn-foreground";
-
-/**
- * Theme switch.
- *
- * The shell's only appearance control. A `role="group"` of pressed buttons rather
- * than a radiogroup, on the same reasoning as any other immediate-apply control:
- * themes take effect as they are pressed and are not a form field awaiting
- * submission, so `aria-pressed` describes them accurately while a radio role would
- * imply a pending value.
- *
- * The honesty rule: the pressed button reflects what is actually rendering,
- * including when that came from the operating system rather than from a choice made
- * here. On a first visit nothing is stored, the system supplies the theme, and the
- * button for it reads as pressed — which is the state the operator can see, so it is
- * the state the control reports.
- *
- * There are two buttons and no third. The reset that returned to following the
- * operating system used to sit beside them and is gone, and its cost is real rather
- * than cosmetic: a chosen theme is now the only reachable state, so an operator who
- * picks one cannot go back to following the system. What is *not* gone is the
- * fallback itself — an unset preference still resolves from the operating system, as
- * `resolveTheme` has always done, which is why the controls work without a choice
- * having been made. See `useTheme` for why nothing ever writes that preference.
- */
-function ThemeToggle({
-  theme,
-  onChange,
-}: {
-  theme: Theme;
-  onChange: (next: Theme) => void;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label="Colour theme"
-      className="hidden items-center rounded-full border border-hairline bg-muted/60 p-0.5 sm:flex"
-    >
-      {THEME_OPTIONS.map((option) => {
-        const active = theme === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "rounded-full px-2.5 py-1 font-semibold transition-colors",
-              "text-t4",
-              // The ring is the selected-state boundary. Without it the active segment
-              // is `bg-surface` on a `bg-muted` container, which measures 1.09:1 in
-              // light and 1.02:1 in dark - a selected state a low-vision user cannot
-              // see. `ring` draws a box-shadow, so this costs no layout.
-              active
-                ? "bg-surface text-foreground shadow-panel ring-1 ring-border-selected"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /** The mark, shared by both shells so the two headers cannot drift apart. */
 function BrandMark() {
@@ -566,7 +495,6 @@ export function RegistrationDecisionPill({ decision }: { decision: RegistrationD
 export function WorkspaceShell({ children }: { children: ReactNode }) {
   const { tournament, tournamentId, access, accessLoading } = useTournamentContext();
   const { signedIn } = useSession();
-  const { theme, setTheme } = useTheme();
 
   const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : SECTIONS;
   const readOnly = !accessLoading && !access.can_edit;
@@ -623,7 +551,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle theme={theme} onChange={setTheme} />
             <SessionBlock />
           </div>
         </div>
@@ -698,8 +625,6 @@ export function PublicShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { theme, setTheme } = useTheme();
-
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
       <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
@@ -720,7 +645,6 @@ export function PublicShell({
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle theme={theme} onChange={setTheme} />
             <SessionBlock />
           </div>
         </div>
@@ -851,7 +775,7 @@ export function StatTile({
    *
    * Phase 6 found this by scanning the desk with data in it for the first time, which
    * is the only way it could be found: on an empty tournament no tile is ever toned,
-   * so the pair was never rendered and never measured. In dark mode the label measured
+   * so the pair was never rendered and never measured. The label measured
    * 3.95:1 on the warning surface against the 4.5:1 that 12px needs - a real AA failure
    * on three tiles at once, on the row a moderator reads to decide what to do next.
    *
@@ -921,11 +845,11 @@ const STATE_CLASS: Record<string, string> = {
    * Void is the exceptional neutral, and the ring is the exception.
    *
    * A heavier, more opaque inset ring is what makes it read as marked rather
-   * than merely empty, and it is the channel that survives dark mode - where the
-   * neutral ramp is too compressed for a lightness step to separate void from
-   * scheduled at all (7.2% of luminance, against 14.2% in light). Expressing it
-   * as an edge rather than a hue keeps it inside the three-hue rule and away from
-   * the destructive red, which means disputed or destructive and nothing else.
+   * than merely empty, and it is the redundant channel that carries the exception
+   * when the lightness step between two neutrals is not enough on its own.
+   * Expressing it as an edge rather than a hue keeps it inside the three-hue rule
+   * and away from the destructive red, which means disputed or destructive and
+   * nothing else.
    */
   void: "bg-state-void-chip text-state-void-ink ring-2 ring-state-void-ink/50",
 };
