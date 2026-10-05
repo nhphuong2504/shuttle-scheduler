@@ -52,14 +52,28 @@ jobs:
       - run: npm run build
 
   browser:
-    # One runner. The suite is small now that the rendered UI sweeps are gone - 90 tests
-    # spanning routing, access, hydration and the staff/public surfaces - and they finish
-    # in well under two minutes on a 4 vCPU runner, so sharding would only add startup
-    # cost. It was sharded across four while the contrast, typography and criteria sweeps
-    # multiplied the same routes; re-measure with a plain `npm run test:e2e` if the suite
-    # grows an expensive spec again.
-    name: Rendered app, hermetic
+    # Two runners, from measurement rather than from the shape of the old job.
+    #
+    # The suite is 90 tests now that the rendered UI sweeps are gone - routing, access,
+    # hydration and the staff/public surfaces - and on one runner CI measured **3m48s**
+    # against 1m24s for the checks job. That makes this the job the pull request waits on,
+    # so the second runner buys back about two minutes of wall time for about two billed
+    # minutes. Four runners was the count while the contrast, typography and criteria
+    # sweeps multiplied the same routes by one another; that is what made the old job
+    # machine-bound, and it is why two is now enough rather than a compromise.
+    #
+    # `strategy.job-total` is the denominator, so the matrix and the argument cannot
+    # disagree about how many shards there are. Re-measure after adding or removing a spec
+    # file: the split is by test count, so a new file reshuffles every boundary - and a
+    # local `npm run test:e2e` was 41s, which is not the number to judge this by.
+    name: Rendered app, hermetic (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
+    strategy:
+      # Both shards report even when one fails, so one shard's failure cannot hide the
+      # other's.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       # A missing prerequisite fails rather than skips. The skip guard below makes a skip a
       # failure anyway; this fails at the point of skipping with a clearer message.
@@ -76,15 +90,17 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
-      - run: npx playwright test
+      - run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
-      # The skip guard, run against the JSON report the config always writes. A skipped
-      # test is never a passing test.
+      # The skip guard, run against the JSON report the config always writes. It runs per
+      # shard: each shard is a separate runner with its own report, and a skipped test is
+      # never a passing test whichever slice of the suite it was in.
       - run: node scripts/assert-no-skips.mjs
 
+      # Named per shard: a matrix job cannot upload two artifacts under one name.
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
