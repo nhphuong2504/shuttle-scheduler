@@ -72,14 +72,12 @@ export const ROUTES = [
   routes.pools,
 ] as const;
 
-export const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
-
 /**
  * The one rendering the route sweeps share.
  *
  * Dark mode is gone, so there is no appearance axis to cross a route with: every surface
- * renders the light palette. The cell keeps its shape so the sweeps' fixtures and test
- * titles do not have to change while the last of them are removed.
+ * renders the light palette. The cell keeps its shape so the two remaining sweeps -
+ * `hydration.spec.ts` and `desk-transitions.spec.ts` - do not have to change.
  */
 export type MatrixCell = { theme: "light" };
 

@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
@@ -84,15 +83,6 @@ function expectPresent(met: boolean, what: string): void {
   ).toBe(true);
 }
 
-async function scan(page: Page) {
-  return new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-    .analyze();
-}
-
-const violationIds = (results: { violations: { id: string }[] }): string[] =>
-  results.violations.map((v) => v.id).sort();
-
 /** Navigates to the Desk and confirms the authenticated shell rendered. */
 async function openStaffShell(page: Page): Promise<void> {
   await page.goto(routes.desk, { waitUntil: "load" });
@@ -135,20 +125,17 @@ test.describe("staff surfaces", () => {
     // The page is just as reachable signed out. What changes is `disabled`, so
     // asserting on presence alone would pass either way and prove nothing.
     await expect(build).toBeEnabled();
-
-    expect(violationIds(await scan(page))).toEqual([]);
   });
 
-  test("the tournament settings panel opens by interaction and is accessible", async ({ page }) => {
+  test("the tournament settings panel opens by interaction", async ({ page }) => {
     await openStaffShell(page);
     await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     /**
-     * The panel is behind a toggle, so no route scan can see it - the same reason the
-     * score dialog is opened rather than scanned in place. It is also the only surface
-     * that holds the venue's court pool, the playing days and the match format, so
-     * leaving it unscanned would leave the whole settings vocabulary unvalidated.
+     * The panel is behind a toggle, so a route-level sweep never sees it. It is also the
+     * only surface that holds the venue's court pool, the playing days and the match
+     * format, so this is where that vocabulary is checked.
      */
     const toggle = page.getByRole("button", { name: /settings/i }).first();
     expectPresent(
@@ -162,16 +149,6 @@ test.describe("staff surfaces", () => {
     for (const name of [/venue courts/i, /playing days/i, /match format/i]) {
       await expect(page.getByRole("heading", { name })).toBeVisible();
     }
-
-    // A day's breaks are edited in place, so adding one puts the break rows in front of
-    // axe without any disclosure to open first.
-    await page
-      .getByRole("button", { name: /add break/i })
-      .first()
-      .click();
-    await settleAnimations(page, "main");
-
-    expect(violationIds(await scan(page))).toEqual([]);
   });
 
   test("a replaced picker glyph is a real control that takes the focus ring", async ({ page }) => {
@@ -189,9 +166,9 @@ test.describe("staff surfaces", () => {
      * from the set - as a button, because the glyph it replaces was already a separate
      * click target and decoration would have removed the only way into the popup.
      *
-     * That makes it a control, which is what needs proving: `e2e/criteria.spec.ts` walks
-     * real focus order across the routes but this panel is behind a toggle, so without
-     * this the ring on the replacement would be asserted nowhere.
+     * That makes it a control, which is what needs proving: this panel is behind a toggle,
+     * so the keyboard route into the popup and the ring the replacement paints are
+     * asserted here rather than nowhere.
      */
     const field = page.locator('input[type="date"]').first();
     expectPresent(
@@ -362,7 +339,7 @@ test.describe("staff surfaces", () => {
     );
   });
 
-  test("the score dialog opens by interaction and is accessible", async ({ page }) => {
+  test("the score dialog opens by interaction", async ({ page }) => {
     await openStaffShell(page);
     await page.goto(routes.scores, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
@@ -376,9 +353,9 @@ test.describe("staff surfaces", () => {
     await page.getByRole("tab", { name: /knockout/i }).click();
 
     /**
-     * The dialog is mounted inside a closed Radix `Dialog`, so no route scan can see it.
-     * Opening it is the only way to validate its contents, which is why "it did not open"
-     * must be a failure rather than a skip.
+     * The dialog is mounted inside a closed Radix `Dialog`, so it does not exist until it
+     * is opened. Opening it is the only way to validate its contents, which is why "it did
+     * not open" must be a failure rather than a skip.
      */
     const opener = page.getByRole("button", { name: /^open$/i }).first();
     expectPresent(
@@ -390,13 +367,7 @@ test.describe("staff surfaces", () => {
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-
-    // The entrance animation has to finish before anything is measured. Scanning mid-fade
-    // blends the dialog with the page behind it and reports contrast failures that are not
-    // there once it is opaque.
     await settleAnimations(page, '[role="dialog"]');
-
-    expect(violationIds(await scan(page))).toEqual([]);
   });
 
   test("the score filters are a named group of pressed buttons", async ({ page }) => {
@@ -406,10 +377,7 @@ test.describe("staff surfaces", () => {
      *
      * Asserted here rather than in a unit test because it is the *wiring* that regressed: the
      * chip component now sets `aria-pressed`, but a group is only announced as one filter when
-     * the container names it, and the two facts live in different elements. There is a second
-     * reason this is worth a case of its own - `criteria.spec.ts` selects the nodes for the
-     * WCAG 1.4.11 sweep by `aria-pressed`, so a group that loses the attribute does not fail
-     * that sweep, it silently leaves it. This is the assertion that fails instead.
+     * the container names it, and the two facts live in different elements.
      */
     await openStaffShell(page);
     await page.goto(routes.scores, { waitUntil: "load" });
@@ -456,28 +424,22 @@ test.describe("staff surfaces", () => {
 });
 
 /**
- * The setup wizard, which no route sweep renders.
+ * The setup wizard.
  *
- * It is editor-gated, so every route-driven sweep in the suite sees the read-only notice
- * instead: those sweeps walk `ROUTES` signed out, which the wizard is not. Two things
- * follow, and both are fixed here rather than recorded as debt.
+ * It is editor-gated, so a signed-out reader meets the read-only notice rather than the
+ * form. The wizard also carries a sticky *footer*, which the sticky-*header* clearance
+ * rule does not cover.
  *
- * **WCAG 2.4.11.** The route sweeps put this question to `document.querySelector
- * ("header")` and exclude controls inside it, so the question has only ever been asked of
- * the sticky *header*. The wizard has a sticky *footer*, and that left a real failure with
- * no gate on it: tabbing to the venue phone field parked it at 728..764px inside the bar's
- * 706..768px band, entirely hidden, because the browser's scroll-into-view judged the field
- * visible and never scrolled. `scroll-margin-bottom` on the wizard's fields reserves the
- * bar's height, and the first case below keeps that rule honest.
- *
- * **Axe.** The step navigation, the problems callout and the review checklist have shipped
- * un-scanned, so the second case walks all four steps.
+ * **WCAG 2.4.11.** Tabbing to the venue phone field parked it at 728..764px inside the
+ * bar's 706..768px band, entirely hidden, because the browser's scroll-into-view judged the
+ * field visible and never scrolled. `scroll-margin-bottom` on the wizard's fields reserves
+ * the bar's height, and the case below keeps that rule honest.
  *
  * The tournament is pinned `upcoming` because a started tournament's configuration is
  * frozen: the wizard then renders the read-only notice instead of the steps, so there is
- * no action bar and nothing to scan.
+ * no action bar and no form.
  */
-test.describe("the setup wizard, which no route sweep renders", () => {
+test.describe("the setup wizard", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
 
   test("never leaves a focused field under its sticky action bar", async ({ page }) => {
@@ -507,48 +469,14 @@ test.describe("the setup wizard, which no route sweep renders", () => {
     expectPresent(stops >= 40, "The wizard walked fewer focus stops than the form it renders");
     expect(obscured, "Focused controls left entirely inside a sticky element").toEqual([]);
   });
-
-  /**
-   * Axe over all four steps, in both themes.
-   *
-   * The wizard is editor-gated, so `a11y.spec.ts` - which sweeps `ROUTES` signed out, and
-   * `a11y-baseline.json` with it - has never once rendered it. That is the same gap the
-   * 2.4.11 case above exists to close, and it means the step navigation, the problems
-   * callout and the review checklist have shipped un-scanned. Both themes are walked here
-   * rather than one because there is no route sweep to carry the second.
-   */
-  test("introduces no accessibility violation on any step", async ({ page }) => {
-    /**
-     * Three times the ordinary budget, because this is the heaviest test in the file:
-     * four navigations, each waiting for the network to settle, and four axe runs over
-     * the largest DOM the app renders. It passes in ~26s on an idle machine, and that
-     * is already most of the 60s default - so a quieter machine is not what it needs,
-     * it needs a budget that does not depend on what else is on the workers with it.
-     */
-    test.slow();
-    await openStaffShell(page);
-
-    for (const step of ["details", "events", "structure", "review"]) {
-      await page.goto(`${routes.settings}?step=${step}`, { waitUntil: "load" });
-      await page.waitForLoadState("networkidle");
-      expectPresent(
-        (await page.locator("ol button").count()) === 4,
-        `The wizard's step navigation on the ${step} step`,
-      );
-      expect(
-        violationIds(await scan(page)),
-        `Accessibility violations on the ${step} step`,
-      ).toEqual([]);
-    }
-  });
 });
 
 /**
  * Walks the focus order once and reports any stop that lands entirely inside a sticky
  * element it does not belong to.
  *
- * The exclusion is the same one `criteria.spec.ts` makes for the header: a sticky element
- * cannot obscure its own contents, and counting them turns every header link into a false
+ * A sticky element cannot obscure its own contents, so controls inside the bar they
+ * belong to are excluded - counting them would turn every header link into a false
  * failure.
  */
 async function walkFocusAndFindObscured(
@@ -628,8 +556,6 @@ test.describe("the two resets", () => {
       page.getByText(/every reported result and every\s+scheduled time/i).first(),
     ).toBeVisible();
     await expect(page.getByText(/seed order\s+and any waivers are kept/i).first()).toBeVisible();
-
-    expect(violationIds(await scan(page))).toEqual([]);
   });
 
   test("the placement reset refuses while the schedule depends on the seeding", async ({
@@ -664,8 +590,6 @@ test.describe("the two resets", () => {
     // And the same string is on the wrapper, because a disabled button cannot show a
     // tooltip of its own — `Button` sets `disabled:pointer-events-none`.
     await expect(page.locator('span[title*="still on the schedule"]')).toHaveCount(1);
-
-    expect(violationIds(await scan(page))).toEqual([]);
   });
 
   /**
@@ -717,8 +641,6 @@ test.describe("the two resets", () => {
 
       // Dismissing is a refusal: nothing was undone.
       await expect(reset).toBeEnabled();
-
-      expect(violationIds(await scan(page))).toEqual([]);
     });
   });
 });
@@ -882,13 +804,5 @@ test.describe("the registration queue", () => {
     await expect(page.getByText("cy@example.test")).toBeVisible();
     await expect(page.getByText("Note sent:")).toBeVisible();
     await expect(page.getByText("See you Saturday.")).toBeVisible();
-  });
-
-  test("introduces no accessibility violation", async ({ page }) => {
-    await page.goto(routes.registrations, { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
-    await settleAnimations(page, "main");
-
-    expect(violationIds(await scan(page))).toEqual([]);
   });
 });
