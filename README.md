@@ -21,7 +21,7 @@ audience — participants — signs in to enter:
 | UI | React + TypeScript, [Tailwind v4](https://tailwindcss.com), Radix primitives |
 | Data | [Supabase](https://supabase.com) — Postgres, Row Level Security, RPCs |
 | Deploy | Cloudflare Workers |
-| Tests | Vitest (unit and component), Playwright + Axe (rendered) |
+| Tests | Vitest (unit and component), Playwright (rendered) |
 
 ## Getting started
 
@@ -75,11 +75,6 @@ deterministic fixture data, including a synthetic staff session and role. That m
 it needs no credentials, never touches the production project, and produces the same
 result on any machine. See [`e2e/fixtures/`](e2e/fixtures).
 
-The accessibility sweep is a **pinned baseline**, not a zero-violation target. A rule
-that was already failing may keep failing; a rule that starts failing when it was not
-failing before fails the suite. Re-record with `A11Y_RECORD=1 npm run test:e2e` and
-review the diff.
-
 ## Documentation
 
 | Document | Contents |
@@ -90,7 +85,6 @@ review the diff.
 | [`docs/information-architecture.md`](docs/information-architecture.md) | The URL scheme, the two shells, and the flows between them |
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
-| [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md) | The manual checks no automated gate covers |
 | [`docs/recovery-runbook.md`](docs/recovery-runbook.md) | Getting the database back after data loss: what a backup does and does not contain, and the restore procedure |
 | [`docs/cleanup-deferred.md`](docs/cleanup-deferred.md) | What an earlier cleanup removed, and the candidates it deliberately left alone |
 | [`supabase/migrations/README.md`](supabase/migrations/README.md) | Applying and verifying database migrations |

@@ -36,22 +36,9 @@ operator at all, and no surface should present participation as authority.
 
 ## Design system
 
-Read [`docs/design-system.md`](docs/design-system.md). Part 1 is mandatory. Some invariants
-are enforced by tests; others require review or measurement. The document says which is
-which, so this file does not restate them.
-
-### What a UI change must justify
-
-A change must improve the actual user experience, a clearly defined design-system
-invariant, or maintainability with an explicit downstream benefit. "Technically conforms" on
-its own is not enough.
-
-- **State the screen's audience and its primary job in one sentence before editing it.**
-- **No broad mechanical sweeps as drive-by work.** A bulk class or token migration takes its
-  own commit, a stated reason, and ideally a test that enforces the end state. Never mix it
-  with a design change, so the real diff stays readable.
-- **Shared UI primitives (`src/components/ui`) stay out of broad mechanical sweeps** unless
-  the primitive itself is intentionally being redesigned or corrected.
+Read [`docs/design-system.md`](docs/design-system.md) before changing anything that
+renders. It is short: the token vocabulary, and the rule that the three audiences stay
+apart.
 
 ## Security rules
 
@@ -77,58 +64,36 @@ migration — add a new one.
 ## Workflow
 
 Short-lived branches and pull requests. Every CI job must be green before merge. The browser
-job is **sharded across four runners** - the suite is CPU-bound, not worker-bound, so its wall
-time comes from running fewer tests per machine rather than more workers on one.
+job is sharded across runners - the suite is CPU-bound, not worker-bound, so its wall time
+comes from running fewer tests per machine rather than more workers on one.
 
 ```mermaid
 flowchart LR
   branch["Short-lived branch"] --> dev[Implement]
-  dev --> tier{"Change tier"}
-  tier -->|"UI-only iteration"| ui["local visual check + typecheck"]
-  tier -->|"Feature checkpoint"| cp["typecheck + relevant tests + UX review"]
-  tier -->|"PR / phase close"| gate1["typecheck + test"]
+  dev --> gate1["typecheck + test"]
   gate1 --> gate2["hermetic Playwright"]
-  gate2 --> final["build + final e2e + UX record"]
+  gate2 --> final["build"]
   final --> pr["Pull request"]
-  pr --> ci["CI: checks + 4 browser shards"]
+  pr --> ci["CI: checks + browser shards"]
   ci --> merge["Merge to main"]
 ```
 
-### Verification tiers
-
-Match the verification to the stage, not the size of the diff. Running the full bar after
-every small change is wasted effort; reaching a PR without it is a broken branch.
-
-| Tier | When | Required | Optional |
-| --- | --- | --- | --- |
-| **UI-only iteration** | Tightening a screen while it is still moving — layout, copy, spacing, token or markup changes that alter no behaviour | Local visual check (`npm run dev`) in both themes, at one wide viewport (and a mobile viewport for public-facing surfaces) + `npm run typecheck` | Focused tests (`npx vitest run <path>`) |
-| **Feature checkpoint** | The feature is finished and about to be reviewed or handed over | `npm run typecheck` + the relevant tests + the UX review ([`docs/ux-review-checklist.md`](docs/ux-review-checklist.md)) | — |
-| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run typecheck` + `npm run test` + `npm run test:e2e` + `npm run build` + `npm run test:e2e:final` + a UX record row if the change alters state treatment, hierarchy, interaction or layout | — |
-
-**A high-risk change takes the PR / phase-close bar at every stage.** Scheduling, scoring,
-authorization, the database and RPCs get the full verification regardless of how small the
-change looks or which tier it is nominally in — there is no "run the e2e later" for those
-paths. [Review tiering](#review-tiering) names the same areas and their review requirement.
+The full bar, run locally, is what a PR or phase close owes, and what any high-risk change
+owes at every stage - not a per-edit ritual.
 
 ### Gate order
 
-The full bar, run locally. This is what a PR / phase close owes, and what any high-risk change
-owes at every stage — not a per-edit ritual. The order matters: each is cheaper than the next.
+The order matters: each is cheaper than the next.
 
 ```
 npm run typecheck
 npm run test
 npm run test:e2e
-npm run test:e2e:final    # PR / phase close, also runs assert-no-skips
 npm run build
 ```
 
-- `npm run test:e2e:final` sets `E2E_REQUIRE_STAFF=1`, which turns any skipped test
-  into a failure, and then asserts that the run contained **zero** skips. A skipped
-  test is never a passing test.
-- CI shards that same suite across four runners. If you add or rename a spec file, run
-  `npm run ci:shard-plan` — the split is by test count, so a new file reshuffles every
-  shard boundary, and it reports the wall time and billed minutes for each shard count.
+- CI also asserts that the browser run contained **zero skips**. A skipped test is never a
+  passing test.
 - **`npm run test:integration` is not part of that list.** It runs the real application
   against a real Supabase project — authentication, RLS and RPC authorization per role,
   realtime delivery, and the tournament lifecycle. Run it by hand whenever a change touches
@@ -183,20 +148,3 @@ tests are the floor, not the argument.
 - **Squash is not mandatory.** Preserve independent commits where they carry meaning.
 - Never force-push or rewrite published commits; they are shared history.
 - Keep `main` working. Every commit on it should build and pass tests.
-
-## When a change alters how the UI looks or behaves
-
-Run the manual checklist in
-[`docs/ux-review-checklist.md`](docs/ux-review-checklist.md). It covers what no automated
-gate can judge; automated invariants are deliberately not repeated there.
-
-What that costs depends on the tier:
-
-- **UI-only iteration** — a local visual check, in both themes and at the viewports above.
-  No record.
-- **Feature checkpoint** — work the checklist and fix what it finds.
-- **PR / phase close** — append a record row *if* the change alters state treatment, visual
-  hierarchy, interaction or layout, and state the skip count explicitly.
-
-Copy changes, token-only changes and refactors that move no pixel take no run and no row.
-A change that does qualify is never recorded as `not yet run`.
