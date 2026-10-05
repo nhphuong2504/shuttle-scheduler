@@ -20,8 +20,10 @@ tournament format or scoring rule was touched, and no rendered surface was remov
 | `supabase/.temp/cli-latest` (untracked) | Machine-local CLI scratch state. `.gitignore` already ignored `supabase/.temp/`; the file was tracked anyway. |
 | `.cursor/plans/sport-agnostic_scheduling_core_3ca401f1.plan.md` | A superseded planning artifact. The scheduling core it describes is shipped under `src/lib/scheduling`, and its decisions are recorded in [`scheduling-decisions.md`](scheduling-decisions.md). |
 
-`KNOWN_DEAD` in [`tokens.test.ts`](../src/lib/design/tokens.test.ts) shrank from 11 to 6
-tokens with the same change.
+`tokens.test.ts` used to pin a `KNOWN_DEAD` list of tokens that no component renders; it
+shrank from 11 to 6 tokens with the same change. That test has since been removed along with
+the other rendered-UI sweeps, so the tokens described below are kept as design vocabulary and
+recorded here rather than guarded by a test.
 
 ## Deferred, with the evidence
 
@@ -61,14 +63,14 @@ with two callers. Do not merge them without reading
 
 `--info-surface`, `--info-border` and `--info-foreground` are defined in both themes and
 rendered by nothing. They are design vocabulary rather than scaffolding, so retiring them is
-a design-system decision. They stay pinned in `KNOWN_DEAD`.
+a design-system decision. They stay in the palette, recorded here.
 
 ### `card` / `card-foreground`
 
-Also pinned in `KNOWN_DEAD`. No component renders `bg-card`, but they are the third step of
-the chassis ramp (`--background` -> `--surface` -> `--card`) named in
-[`design-system.md`](design-system.md), so the token is kept and the dead-token list records
-why rather than deleting a documented surface.
+No component renders `bg-card`, but they are the third step of the chassis ramp
+(`--background` -> `--surface` -> `--card`) named in
+[`design-system.md`](design-system.md), so the token is kept and this note records why rather
+than deleting a documented surface.
 
 ### `@tanstack/router-plugin` is a direct dependency
 

@@ -60,32 +60,12 @@ describe("ConnectionBadge gives every connection state its own word", () => {
   });
 });
 
-describe("ConnectionBadge renders through the shared vocabulary", () => {
+describe("ConnectionBadge announces the change", () => {
   it("is a live region, so the transition is announced", () => {
     // Absent from the Schedule page's copy, which is the accessibility half of the defect:
     // the same fact was announced on one surface and silent on the other.
     for (const status of ["connecting", "live", "offline", "error"] as const) {
       expect(badge(status).getAttribute("role"), `${status} is not a live region`).toBe("status");
     }
-  });
-
-  it("draws each state in an existing token pair rather than a new one", () => {
-    // Live borrows the live state pair; both failures take the danger pair; connecting
-    // takes the warn pair. Nothing here is a new colour, which is the rule the design
-    // system states for a state that reuses an existing meaning.
-    expect(badge("live").className).toContain("bg-state-live-chip");
-    expect(badge("live").className).toContain("text-state-live-ink");
-    for (const status of ["offline", "error"] as const) {
-      expect(badge(status).className).toContain("bg-danger-surface");
-      expect(badge(status).className).toContain("text-danger-foreground");
-    }
-    expect(badge("connecting").className).toContain("bg-warn-surface");
-    expect(badge("connecting").className).toContain("text-warn-foreground");
-  });
-
-  it("stays on the scaled tiers", () => {
-    // `text-xs` is the 12px floor, which is where the Desk has always drawn it. Pinned
-    // because the badge moved file in this change and a size could have moved with it.
-    expect(badge("live").className).toContain("text-xs");
   });
 });

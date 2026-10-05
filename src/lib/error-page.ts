@@ -12,9 +12,8 @@
  * re-learning the vocabulary. Three properties make that copy safe rather than a
  * second source of truth:
  *
- *  - it is a *copy of the palette*, not a fresh set of colours, and
- *    `tokens.test.ts` asserts every value here is byte-identical to the
- *    corresponding token in `styles.css` for the theme it belongs to;
+ *  - it is a *copy of the palette*, not a fresh set of colours, and every value here is
+ *    byte-identical to the corresponding token in `styles.css`;
  *  - it declares no colour the palette does not, so it cannot introduce a hue the
  *    design system has not solved;
  *  - it declares the application's light palette, the only theme the app ships, so

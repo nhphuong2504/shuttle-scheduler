@@ -6,7 +6,7 @@
  * because the answer was previously duplicated across four places that could disagree:
  *
  *   - `StatusPill` held the alias, label, tier and glyph tables
- *   - `tokens.test.ts` re-declared the alias map and the tier-4 sharing by hand
+ *   - the token tests re-declared the alias map and the tier-4 sharing by hand
  *   - the render sites tested for byes three different ways
  *
  * That duplication is what let a pinned gap survive: a test that re-states a vocabulary
