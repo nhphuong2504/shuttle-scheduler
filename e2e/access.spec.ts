@@ -79,10 +79,9 @@ test.describe("a viewer", () => {
     await expect(page.getByText(TOURNAMENT_NAME)).toHaveCount(0);
 
     // Scoped to `main`, which is the list, because the header is not this page's to assert:
-    // since S6 it carries the public nav (Explore, My tournaments, New tournament), whose
-    // entries are about the caller rather than about a row - so an act on *this* tournament
-    // is a `main` question, and the nav's absence of `Setup` is asserted where the workspace
-    // nav lives.
+    // since S6 it carries the public nav (now just Browse tournaments), whose entry is about
+    // browsing rather than about a row - so an act on *this* tournament is a `main` question,
+    // and the nav's absence of `Setup` is asserted where the workspace nav lives.
     const main = page.getByRole("main");
     await expect(main.getByRole("button", { name: /^delete$/i })).toHaveCount(0);
     await expect(main.getByRole("link", { name: /^setup$/i })).toHaveCount(0);
@@ -131,18 +130,39 @@ test.describe("a viewer", () => {
     await expect(page.getByText(/ask its owner for edit access/i).first()).toBeVisible();
   });
 
-  test("is not offered the sections that exist to change the tournament", async ({ page }) => {
-    await page.goto(routes.desk, { waitUntil: "load" });
+  test("is offered the read-only sections, and none of the acts", async ({ page }) => {
+    await page.goto(routes.entries, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
+    const nav = page.getByRole("navigation", { name: /tournament sections/i });
+    // The five sections reading a tournament is made of: who is in, the draws, when it
+    // plays, and the results. Entries is the first of them, and the read-only workspace
+    // opens on it.
+    for (const label of ["Entries", "Placement", "Knockout", "Schedule", "Scores"]) {
+      await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
+    }
+    // What is withheld is the two kinds of act on the tournament. The Desk is a live console
+    // for one court rather than a page about the event, so it is not part of reading one; and
     // Setup and Access are about configuring this tournament and deciding who else may
     // operate it. A nav entry that leads to a page saying no is a worse answer than not
     // offering the trip, so the entries are absent rather than disabled.
-    const nav = page.getByRole("navigation", { name: /tournament sections/i });
+    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Setup", exact: true })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Access", exact: true })).toHaveCount(0);
-    // The operations are still offered: reading the board is what a viewer is here for.
-    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toBeVisible();
+  });
+
+  test("sends the brand to its own first section, not to a Desk it is not offered", async ({
+    page,
+  }) => {
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The logo is the one link outside the nav, and for a read-only reader it has to point
+    // somewhere they are offered: Entries, the first of their five, rather than the Desk the
+    // row above deliberately leaves out.
+    const header = page.getByRole("banner");
+    await header.getByRole("link", { name: /tournova/i }).click();
+    await expect(page).toHaveURL(new RegExp(`${routes.entries}$`));
   });
 });
 

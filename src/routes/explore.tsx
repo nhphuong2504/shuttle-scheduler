@@ -256,7 +256,12 @@ function ExplorePage() {
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {rows.map((summary) => (
               <li key={summary.id} className="min-w-0">
-                <TournamentCard summary={summary} />
+                {/*
+                  Opened on Entries rather than on the participant page: this is the surface
+                  for reading a tournament, so a card leads into the read-only workspace -
+                  the five sections a viewer is offered, the first of which is Entries.
+                */}
+                <TournamentCard summary={summary} to="/tournaments/$tournamentId/entries" />
               </li>
             ))}
           </ul>

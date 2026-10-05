@@ -41,6 +41,11 @@ choose, and existing styling is not a constraint. Keep the result accessible —
 accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
 `states.spec.ts`) still run.
 
+**The landing page is a placeholder.** What a signed-out visitor sees at `/` (the Landing
+branch of [`src/routes/index.tsx`](src/routes/index.tsx)) has not been designed yet. Its
+current copy and layout are stand-ins, not decisions, so don't treat them as a reference
+for other pages and don't polish them. Redesign it from scratch when it is picked up.
+
 ## Security rules
 
 - **Never commit credentials, tokens or session files.** `.env` and `e2e/.auth/` are

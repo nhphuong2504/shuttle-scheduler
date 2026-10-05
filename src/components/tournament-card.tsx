@@ -28,12 +28,12 @@ import { countText, dateRangeText } from "@/lib/tournament/summary-format";
  * card is not. A card-sized click target swallows the footer's own buttons on a touch
  * screen, and a link whose text is a whole paragraph tells a screen reader nothing.
  *
- * The destination is the tournament's own page - the participant surface at
- * `/tournaments/:id`, which draws the registration window and the way in for somebody who
- * has not entered yet. An operator reading the same card still reaches the desk from the
- * workspace nav or from My Tournaments' own "work in this one", so nothing is lost by
- * sending the card at the public reading: for a visitor it is the only page that can do
- * anything for them.
+ * The destination defaults to the tournament's own page - the participant surface at
+ * `/tournaments/:id`. A page whose reader is there to *read* the tournament overrides it:
+ * Explore opens a card on the read-only workspace at `…/entries`, which is the first of the
+ * five sections a reader without the edit right is offered. An operator reading the same card
+ * still reaches the desk from the workspace nav or from My Tournaments' own "work in this
+ * one", so nothing is lost by a page choosing the reading it wants.
  *
  * ## Why the card is `min-w-0`, and why its facts are a plain list
  *
@@ -52,19 +52,26 @@ export function TournamentCard({
   summary,
   actions,
   footnote,
+  to = "/tournaments/$tournamentId",
 }: {
   summary: TournamentSummary;
   /** Page-specific controls, rendered in the footer beside the window pill. */
   actions?: ReactNode;
   /** One line under the counts for something the page knows and the summary does not. */
   footnote?: ReactNode;
+  /**
+   * Where the title links, for a page that sends the card somewhere other than the
+   * tournament's public page. Explore points it at the read-only workspace; every other
+   * caller keeps the default.
+   */
+  to?: "/tournaments/$tournamentId" | "/tournaments/$tournamentId/entries";
 }) {
   return (
     <article className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-hairline bg-surface p-4 shadow-panel transition-shadow hover:shadow-raise">
       <div className="flex items-start justify-between gap-3">
         <h2 className="min-w-0 font-display text-sm font-semibold">
           <Link
-            to="/tournaments/$tournamentId"
+            to={to}
             params={{ tournamentId: summary.id }}
             className="block truncate rounded-sm hover:text-primary-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >

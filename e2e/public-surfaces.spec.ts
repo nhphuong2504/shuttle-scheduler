@@ -133,6 +133,14 @@ test.describe("Explore", () => {
     await expect(page.getByRole("heading", { name: /explore tournaments/i, level: 1 })).toBeVisible();
     await expect(page.getByText(TOURNAMENT_NAME)).toBeVisible();
 
+    // A card opens the tournament's read-only workspace rather than the participant page:
+    // Browse is where somebody reads an event, and Entries is the first of the five sections
+    // a reader without the edit right is offered.
+    await expect(page.getByRole("link", { name: TOURNAMENT_NAME })).toHaveAttribute(
+      "href",
+      routes.entries,
+    );
+
     // A visitor is offered the trip that changes what they can do; creating a tournament is
     // not offered because the database refuses it for an anonymous caller, and a link that
     // can only fail is worse than no link.

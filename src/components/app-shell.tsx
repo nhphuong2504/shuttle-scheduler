@@ -62,6 +62,15 @@ import { cn } from "@/lib/utils";
  */
 
 /**
+ * The Desk's address, named rather than repeated.
+ *
+ * It is the one operational section the read-only nav withholds, so the two lists have to
+ * point at the same address without either owning the literal - a second spelling of it is
+ * how "drop the Desk" would drop the wrong entry.
+ */
+const DESK_PATH = "/tournaments/$tournamentId/desk" as const;
+
+/**
  * The workspace navigation.
  *
  * Pools and Draws are deliberately absent: the tournament creation flow replaced
@@ -86,13 +95,28 @@ import { cn } from "@/lib/utils";
  * tournament, which is what "Entries" says and "Registration" no longer does.
  */
 const SECTIONS = [
-  { label: "Desk", scoped: "/tournaments/$tournamentId/desk" },
+  { label: "Desk", scoped: DESK_PATH },
   { label: "Entries", scoped: "/tournaments/$tournamentId/entries" },
   { label: "Placement", scoped: "/tournaments/$tournamentId/placement" },
   { label: "Knockout", scoped: "/tournaments/$tournamentId/knockout" },
   { label: "Schedule", scoped: "/tournaments/$tournamentId/schedule" },
   { label: "Scores", scoped: "/tournaments/$tournamentId/scores" },
 ] as const;
+
+/**
+ * What a reader without the edit right is offered: the operational sections, minus the Desk.
+ *
+ * The Desk is a live console for one court rather than a page about the tournament: it is
+ * where a moderator works in real time, with the day's board in front of them. Reading a
+ * tournament is a different job - who is in, the draws, when it plays and what the results
+ * were - so the read-only workspace opens on Entries and carries these five, and the Desk is
+ * not one of them.
+ *
+ * Derived from `SECTIONS` rather than restated, so a section added to the operational list
+ * later is offered to *everyone* reading the tournament rather than to editors alone by
+ * accident. The Desk is the deliberate exception, not the shape of the list.
+ */
+const READ_ONLY_SECTIONS = SECTIONS.filter((section) => section.scoped !== DESK_PATH);
 
 /**
  * The entries that belong to the people who run the tournament.
@@ -121,25 +145,22 @@ const EDITOR_SECTIONS = [
 const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as const;
 
 /**
- * The public navigation: the three addresses that are not about one tournament.
+ * The public navigation: the address that is not about one tournament.
  *
  * The workspace nav resolves its sections against a tournament id, and outside a
  * workspace there is none - so until S6 this shell rendered the *flat* legacy paths and
  * let them resolve on the caller's pointer. That is gone, and it is the better answer
  * rather than merely the tidier one: a nav entry that silently moves a reader to
  * whichever tournament their pointer names is a nav entry that lies about where it goes.
- * These three say what they are.
+ * This one says where it goes.
  *
- * It does not change with the session. "My tournaments" and "New tournament" lead a
- * visitor to a page that states plainly what it needs rather than to a dead link, and a
- * nav that grows an entry once the session settles would move the row the reader is
- * aiming at.
+ * It carries browsing and nothing else. "My tournaments" and "New tournament" used to sit
+ * beside it, and they are still reachable from the pages that need them (Home's panels,
+ * the create flow's neighbours), but a bar that a signed-out visitor also reads should not
+ * be a list of the caller's own work. What is left does not change with the session, so
+ * the row does not move once the session settles.
  */
-const PUBLIC_SECTIONS = [
-  { label: "Explore", to: "/explore" },
-  { label: "My tournaments", to: "/me/tournaments" },
-  { label: "New tournament", to: "/tournaments/new" },
-] as const;
+const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as const;
 
 /** Shared so the two nav branches cannot drift into two different-looking navs. */
 const NAV_ITEM_CLASS =
@@ -496,7 +517,23 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const { tournament, tournamentId, access, accessLoading } = useTournamentContext();
   const { signedIn } = useSession();
 
-  const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : SECTIONS;
+  /**
+   * The row, split by the edit right rather than by a session.
+   *
+   * Someone who may edit gets the operational sections and the three that change the
+   * tournament. Everyone else gets the read-only five: the operations without the Desk, and
+   * none of the editor acts. See `READ_ONLY_SECTIONS` for why the Desk is the odd one out.
+   */
+  const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : READ_ONLY_SECTIONS;
+  /**
+   * Where the logo goes: the first section this caller is offered.
+   *
+   * For an editor that is the Desk, which is where the work is. For anyone else it is
+   * Entries, because the Desk is not one of their sections - a logo that led somewhere the
+   * nav does not offer would be the one link on the page contradicting the row under the
+   * tournament's name.
+   */
+  const homeSection = sections[0]?.scoped ?? DESK_PATH;
   const readOnly = !accessLoading && !access.can_edit;
   /**
    * How much is waiting on the Registrations queue.
@@ -520,14 +557,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             point at `/` always, which after the workspace move would send an operator
             working in tournament B to whatever their pointer happened to name - possibly
             A. A logo that moves you to a different event than the one on screen is worse
-            than one that does nothing.
+            than one that does nothing. It points at the first section this caller is
+            offered, so a read-only reader lands on Entries rather than on a Desk their nav
+            does not carry.
           */}
           {tournamentId ? (
-            <Link
-              to="/tournaments/$tournamentId/desk"
-              params={{ tournamentId }}
-              className="flex items-center gap-2"
-            >
+            <Link to={homeSection} params={{ tournamentId }} className="flex items-center gap-2">
               <BrandMark />
             </Link>
           ) : (
@@ -610,8 +645,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
  * The pages that are not about one tournament.
  *
  * Sign-in, Explore, My Tournaments, the create flow and the front door. It has no
- * tournament to name and no section nav, and it renders the public nav instead - three
- * addresses that need no id, rather than the flat legacy paths that used to resolve on
+ * tournament to name and no section nav, and it renders the public nav instead - one
+ * address that needs no id, rather than the flat legacy paths that used to resolve on
  * the caller's pointer. See `PUBLIC_SECTIONS` for why that matters.
  */
 export function PublicShell({

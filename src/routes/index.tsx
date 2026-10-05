@@ -41,9 +41,9 @@ export const Route = createFileRoute("/")({
  * `/` serves the two audiences this app has before either of them is inside a
  * tournament, and it decides between them on one fact - whether there is a session:
  *
- *  - **Landing**, for a visitor: what Tournova is, and the two ways in. It describes the
- *    app rather than selling it, because the person reading it is usually a host who has
- *    been given the link and wants to know what they are looking at.
+ *  - **Landing**, for a visitor: what Tournova is, and the two ways in. **Placeholder:**
+ *    this page has not been designed yet, and its copy and layout are stand-ins to be
+ *    replaced, not decisions to preserve.
  *  - **Home**, for somebody signed in: the tournament they were last working in, the rest
  *    of their own, and what else is on. This is a *resume* surface, not a catalogue -
  *    Explore is the catalogue, and it is one link away in both the nav and the panels.
@@ -80,63 +80,33 @@ function HomePage() {
 }
 
 /**
- * What Tournova is, for somebody who has not signed in.
+ * PLACEHOLDER - the signed-out front door has not been designed.
  *
- * Three paragraphs and two doors. The paragraphs are the shape of the work rather than a
- * feature list - one court, one day, and reading without an account - because that shape
- * is what a host has to recognise before any of the rest is useful.
+ * This is a stand-in, not a decision. It exists only so a visitor has somewhere to land
+ * and two working ways forward: browse what is on, or sign in. The copy, the layout and
+ * the explanatory panels that used to live here are all to be replaced wholesale when the
+ * landing page is picked up - do not treat any of it as a pattern to copy, and do not
+ * polish it. (The equivalent note is in `AGENTS.md`, under "The landing page is a
+ * placeholder".)
  */
 function Landing() {
   const href = useLocation({ select: (location) => location.href });
 
   return (
     <PublicShell
-      title="Run a badminton tournament from one console"
-      subtitle="Tournova takes a tournament from its first entry to its last result: who is in, who plays whom, which court and when, and the score as it is called."
+      title="Tournova"
+      subtitle="A placeholder front door. The real landing page has not been designed yet; for now, browse what is on or sign in to run a tournament."
     >
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button asChild>
-          <Link to="/explore">Explore tournaments</Link>
+          <Link to="/explore">Browse tournaments</Link>
         </Button>
         <Button variant="outline" asChild>
           <Link to="/auth" search={signInSearch(href)}>
             Sign in
           </Link>
         </Button>
-        <p className="text-xs text-muted-foreground">
-          Signing in is for running a tournament. Following one needs nothing.
-        </p>
       </div>
-
-      <ul className="grid gap-3 lg:grid-cols-3">
-        <li className="min-w-0">
-          <Panel title="The desk runs one court" className="h-full">
-            <p className="text-sm text-muted-foreground">
-              A moderator works a single court in real time: who is on it, what is next, and the
-              result as it is called. Tournament-wide numbers are kept off that screen, because the
-              person calling a score cannot act on a forecast.
-            </p>
-          </Panel>
-        </li>
-        <li className="min-w-0">
-          <Panel title="The organiser runs the day" className="h-full">
-            <p className="text-sm text-muted-foreground">
-              Which days play, how long a match takes and how many courts the hall has. The running
-              order is built from those numbers, so a match that overruns is visible while there is
-              still time to move it.
-            </p>
-          </Panel>
-        </li>
-        <li className="min-w-0">
-          <Panel title="Reading needs no account" className="h-full">
-            <p className="text-sm text-muted-foreground">
-              Every tournament can be read signed out: the day&apos;s board, the draws, the results.
-              Anyone who wants to run one signs in and creates it, and owns it.
-            </p>
-          </Panel>
-        </li>
-      </ul>
-
     </PublicShell>
   );
 }

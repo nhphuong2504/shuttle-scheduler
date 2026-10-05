@@ -25,17 +25,20 @@ Three audiences, and the address says which one it belongs to:
 
 | Address | Surface |
 | --- | --- |
-| `/` | Landing for a visitor (what Tournova is, Explore, sign in); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
+| `/` | **Placeholder** Landing for a visitor (a bare "browse or sign in", not yet designed); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
 | `/explore` | Every tournament, searchable over name, venue and event, with a status filter |
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me** |
 | `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, against a new row |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
-| `/tournaments/$tournamentId/` | One tournament's public page: the card, and the Register panel |
+| `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. **Currently unlinked** — Explore opens a tournament on its read-only workspace (`…/entries`) instead, so this address is reachable only by URL while the read-only experience is being designed |
 
 These are the only addresses that can be reached without naming a tournament. Each draws
 `PublicShell`, because there is no tournament for a header to describe. `/tournaments/new` is a
 sibling of `$tournamentId`, not a child, precisely because creating a tournament happens before
 there is one to be inside.
+
+`…/entries` is where reading a tournament begins: a card in `/explore` links there, and it is
+the first of the five sections the read-only workspace offers (see [The shells](#3-the-shells)).
 
 ### Tournament-scoped
 
@@ -101,28 +104,43 @@ Two shells, and which one a page draws is decided by whether it is about one tou
   access-aware actions. No page below it renders a shell of its own; a page composes `Page`,
   which puts a title row over the page's own content.
 - **`PublicShell`** — drawn by each of the five public routes above, since no layout knows what
-  to put in a header outside a tournament. It carries the public nav (Explore, My tournaments,
-  New tournament), which does not change with the session: a nav row that grows an entry once
-  the session settles moves the row the reader is aiming at.
+  to put in a header outside a tournament. It carries the public nav, which is one entry
+  (**Browse tournaments**, at `/explore`): a bar a signed-out visitor reads should not be a
+  list of the caller's own work, and what is left does not change with the session, so the row
+  does not move once the session settles. `/me/tournaments` and `/tournaments/new` stay
+  reachable from the pages that link them.
 
-The workspace nav is two lists. The operational six (`desk`, `entries`, `placement`, `knockout`,
-`schedule`, `scores`) are offered to anyone who can read the tournament. The three editor
-entries (`registrations`, `settings`, `access`) are gated on `can_edit`, because a nav entry
-that leads to a page saying no is a worse answer than not offering the trip; the pages
-themselves still refuse, since the nav is presentation.
+The workspace nav is split by the edit right, not by the session. A caller who may edit gets
+the operational six (`desk`, `entries`, `placement`, `knockout`, `schedule`, `scores`) plus the
+three editor entries (`registrations`, `settings`, `access`). The editor entries are gated on
+`can_edit`, because a nav entry that leads to a page saying no is a worse answer than not
+offering the trip; the pages themselves still refuse, since the nav is presentation.
+
+A read-only reader — a signed-in viewer or an anonymous visitor — gets five of them: the
+operational sections **without the Desk**. The Desk is a live console for one court rather than
+a page about the tournament, so it is the one operational entry that is not part of reading an
+event. The list is derived from the operational one minus the Desk rather than restated, so a
+section added later is offered to everyone reading the tournament by default. A read-only
+workspace therefore opens on `entries` (the logo points at the first offered section, not at
+the Desk), and the tournament's participant page at `/tournaments/$tournamentId/` is not part of
+that experience.
 
 ## 4. The flows
 
-### Finding and entering a tournament
+### Finding a tournament
 
 ```mermaid
 flowchart LR
   visitor["Visitor"] --> landing["/" ]
   landing --> explore["/explore"]
-  explore --> card["/tournaments/:id/"]
-  card -->|"Register, signed in"| auth["/auth?redirect=/tournaments/:id/"]
-  auth -->|"returns"| card
+  explore --> card["/tournaments/:id/entries"]
+  card --> sections["the read-only five:<br/>entries, placement,<br/>knockout, schedule, scores"]
 ```
+
+The participant page at `/tournaments/:id/` — the card and the Register panel — is no longer one
+of the linked steps. Explore sends a card to the read-only workspace so the browse surface opens
+on the event's state rather than on a form, and registration is out of the read-only experience
+while it is redesigned. The address still resolves for anyone who has it.
 
 Explore is the only search surface, and it renders one shape per row — `tournament_summary`,
 which computes the status, the derived start and end, the registration state, the entry counts

@@ -117,10 +117,19 @@ test.describe("the bare domain", () => {
     // The session decides which reading renders, in the page rather than in a guard: a
     // `beforeLoad` would decide during server rendering, where there is never a session, and
     // would show every signed-in caller the visitor's page on their first paint.
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      /run a badminton tournament from one console/i,
+    //
+    // The visitor reading is a placeholder and its copy is expected to change, so this asserts
+    // the *shape* it owes - a title, and two working ways forward - rather than the wording
+    // somebody will one day replace.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/tournova/i);
+    // Scoped to `main`, because the nav carries the same label: the assertion is that the
+    // page offers a way forward, not that the bar does.
+    const main = page.getByRole("main");
+    await expect(main.getByRole("link", { name: "Browse tournaments" })).toHaveAttribute(
+      "href",
+      routes.explore,
     );
-    await expect(page.getByRole("link", { name: "Explore tournaments" })).toBeVisible();
+    await expect(main.getByRole("link", { name: /sign in/i })).toBeVisible();
   });
 });
 
