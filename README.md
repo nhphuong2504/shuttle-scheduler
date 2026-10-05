@@ -46,9 +46,7 @@ fails without them.
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run test` | Vitest — unit and component tests |
 | `npm run test:integration` | Vitest against a **real** backend: auth, RLS, RPC authorization per role, realtime, the lifecycle. Targets the local stack — see [`AGENTS.md`](AGENTS.md) |
-| `npm run ci:shard-plan` | Reports the browser suite's CI shard split and its wall time; re-run it when a spec file is added or renamed |
 | `npm run test:e2e` | Playwright — rendered app, hermetic (no network to Supabase) |
-| `npm run test:e2e:final` | The phase-close gate: fails on any skip, then asserts zero skips |
 | `npm run test:e2e:record-auth` | Optional. Records a real staff session for manual checks against a live backend |
 | `npm run bench:scheduling` | Scheduler benchmark; prints its report to stdout. Compares greedy against the hybrid at 1/5/10/25 runs across six shapes — `small`, `medium`, `large`, `contended`, `multi-event` and `straggler`. The report adds stage-close times and the median change in progression and churn per run-count step, so it answers "did the change close stages earlier, and at what cost to finish time" rather than only `unscheduled` / `afterCutoff` / `makespan`. Overrides: `BENCH_ONLY`, `BENCH_REPS`, `BENCH_SEEDS`, and `BENCH_OUT` to also write the markdown to a file (e.g. `BENCH_OUT=.benchmark/hybrid-core.md`, git-ignored) |
 | `npm run lint` | ESLint. **Not a gate** — see below |
@@ -60,8 +58,8 @@ fails without them.
 npm run typecheck && npm run test && npm run test:e2e && npm run build
 ```
 
-All of these run in CI on every pull request except `test:e2e:final`, which is a
-local phase-close gate because it needs no credentials but does need a full run.
+All of these run in CI on every pull request. CI also asserts that the browser run
+contained zero skips: a skipped test is never a passing test.
 
 `npm run lint` is deliberately **not** a gate. It reports a large pre-existing
 Prettier backlog that predates the current design work, so it is noise rather than
@@ -80,7 +78,7 @@ result on any machine. See [`e2e/fixtures/`](e2e/fixtures).
 | Document | Contents |
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | Working rules: design system, security, workflow, gates, review tiering |
-| [`docs/design-system.md`](docs/design-system.md) | Invariants and conventions (Part 1); tokens, states, components (Part 2) |
+| [`docs/design-system.md`](docs/design-system.md) | The palette, the state vocabulary, and the rule that the three audiences stay separate |
 | [`docs/authorization.md`](docs/authorization.md) | Who may do what: platform role vs per-tournament access, the lifecycle guards, registration, and the column privileges |
 | [`docs/information-architecture.md`](docs/information-architecture.md) | The URL scheme, the two shells, and the flows between them |
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |

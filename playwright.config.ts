@@ -3,10 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Rendered-app validation.
  *
- * Vitest covers pure logic and, since P0, component rendering in jsdom. Neither
- * can see the things this config exists for: computed contrast in a real browser,
- * whether a focus ring is actually visible, and whether a control is reachable
- * from the keyboard. Those need a layout engine and a real cascade.
+ * Vitest covers pure logic and component rendering in jsdom. Neither can see the things
+ * this config exists for: whether a route hydrates cleanly, whether a redirect lands where
+ * it should, and whether a control is reachable from the keyboard. Those need a browser.
  *
  * The dev server is started by Playwright unless one is already listening, so
  * running the suite beside an open browser session reuses it instead of
@@ -32,20 +31,12 @@ export default defineConfig({
     ["json", { outputFile: "test-results/e2e-report.json" }],
   ],
   /**
-   * Bounded so a slow route cannot take the whole run down with it.
-   *
-   * The default worker count is derived from the machine, and the default test timeout is
-   * 30s. Together those were the cause of a cascading failure: the four contrast sweeps
-   * each visit all 12 routes, so under a busy dev server they would sit on every worker
-   * for 30s at a time, and the tests queued behind them would then hit their own 30s limit
-   * and fail for a reason that had nothing to do with what they assert. Two changes fix
-   * that structurally rather than by hoping the machine is quiet: a worker count that is
-   * stated rather than inferred (so a run is reproducible across machines, which matters
-   * more here than squeezing out the last second), and a test timeout with realistic room
-   * for a cold Vite transform of the heaviest route.
+   * The worker count is stated rather than inferred, so a run is reproducible across
+   * machines. `ubuntu-latest` has 4 vCPU and a Playwright worker drives a whole Chromium,
+   * so two workers already saturate a CI runner; a local machine gets one more.
    */
   workers: process.env["CI"] ? 2 : 4,
-  timeout: 60_000,
+  timeout: 30_000,
   expect: { timeout: 10_000 },
   use: {
     baseURL: BASE_URL,

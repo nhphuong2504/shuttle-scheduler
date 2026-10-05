@@ -15,11 +15,9 @@
     "integration:target": "node scripts/integration-target.mjs",
     "backup:production": "node scripts/backup-production.mjs",
     "restore:to-local": "node scripts/restore-backup.mjs",
-    "ci:shard-plan": "node scripts/shard-plan.mjs",
     "bench:scheduling": "vitest run --config vitest.benchmark.config.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:final": "E2E_REQUIRE_STAFF=1 playwright test && node scripts/assert-no-skips.mjs",
     "test:all": "npm run test && npm run test:e2e",
     "test:e2e:record-auth": "node scripts/record-staff-session.mjs",
     "db:link": "supabase link --project-ref \"$SUPABASE_PROJECT_ID\"",
@@ -59,7 +57,6 @@
     "vite-tsconfig-paths": "^6.0.2"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.63.0",
     "@testing-library/react": "^16.3.3",

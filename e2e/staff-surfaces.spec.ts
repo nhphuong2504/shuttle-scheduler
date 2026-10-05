@@ -466,7 +466,9 @@ test.describe("the setup wizard", () => {
     );
 
     const { stops, obscured } = await walkFocusAndFindObscured(page);
-    expectPresent(stops >= 40, "The wizard walked fewer focus stops than the form it renders");
+    // The walk used to run once per theme and sum the two counts, so the bound was set for
+    // a double walk. Light is the only theme now: the form renders a couple of dozen stops.
+    expectPresent(stops >= 20, `The wizard walked only ${stops} focus stops`);
     expect(obscured, "Focused controls left entirely inside a sticky element").toEqual([]);
   });
 });
