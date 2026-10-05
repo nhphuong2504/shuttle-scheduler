@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
  *
  * `input[type=date]` and `input[type=time]` each draw their own glyph in the field's right
  * edge. It is painted by the browser, so it takes no `--color-*` token, no size the design
- * system can set, and no focus ring - and on a dark surface the only lever the theme has
- * over it is `color-scheme`. `PickerInput` removes it and draws an icon from the set
+ * system can set, and no focus ring - and `color-scheme` was the only lever the page had
+ * over it. `PickerInput` removes it and draws an icon from the set
  * instead, as a real button: the glyph it replaces was already a separate click target, so
  * a decorative swap would have quietly removed the only way into the popup.
  *

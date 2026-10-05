@@ -26,9 +26,9 @@ import { routes } from "./fixtures/routes";
  * The overdue case is reached by advancing the pinned clock past the fixture's own scheduled
  * starts rather than by adding a late row to `desk-mock.ts`. That matters: the fixture's rows
  * are chosen backwards from the five court states, so appending a match would change which
- * states the board derives and put this file in conflict with `states.spec.ts`. Advancing the
- * clock changes only "now", which is the one input the panel is a function of - and it keeps
- * the rows under test the same rows the rest of the suite measures.
+ * states the board derives, and every other assertion about the board's rows would move with
+ * it. Advancing the clock changes only "now", which is the one input the panel is a function
+ * of - and it keeps the rows under test the same rows the rest of the suite measures.
  */
 
 const PANEL = "section";

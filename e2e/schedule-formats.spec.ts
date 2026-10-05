@@ -10,8 +10,8 @@ import { routes } from "./fixtures/routes";
  *
  * That distinction is easy to lose. The rest of the suite runs against one fixture tournament
  * (a two-round placement event), so the day-by-day planner would silently stop being rendered
- * anywhere in the suite; a page nothing renders is a page nothing measures, and the a11y,
- * typography and layout sweeps would all keep passing while covering one view instead of two.
+ * anywhere in the suite; a page nothing renders is a page nothing measures, and the remaining
+ * route sweeps would all keep passing while covering one view instead of two.
  * Hence the `format` override on the mock, and this file: it is the only place that reaches
  * the round-robin planner, so it is also the only place that can notice it breaking.
  */

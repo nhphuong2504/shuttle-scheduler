@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * The browsers paint their own calendar and clock affordances inside `input[type=date]`
  * and `input[type=time]`. They are drawn by the engine rather than by the page, so they
  * never belonged to the design system: their size was whatever the engine chose, no token
- * could colour them, and the only thing the theme could do to them was `color-scheme`. On
+ * could colour them, and `color-scheme` was the only lever the page had over them. On
  * a surface built from tokens they were the one element that did not follow.
  *
  * The glyph is therefore removed (`.picker-field` in `styles.css`) and replaced with the

@@ -259,11 +259,10 @@ function BracketSection({
                       // so the size follows the branch it is chosen against rather than `text-xs`.
                       //
                       // The glyph inherits the row's ink rather than taking `text-success`.
-                      // `--success` is a fill token: `styles.css` states it is not text-safe in
-                      // dark mode at 2.95:1 and that a text use must add an ink twin. No such
-                      // twin exists, and no sweep would catch the mistake - axe reads text nodes,
-                      // and the 1.4.11 sweep measures selected markers and control edges, not
-                      // icons. The measured ink is the one already on the surface.
+                      // `--success` is a fill token: `styles.css` states that a text use must
+                      // add an ink twin. No such twin exists, and no automated check would
+                      // catch the mistake either - contrast rules read text nodes and control
+                      // edges, not icons. The measured ink is the one already on the surface.
                       <p className="flex items-center gap-1.5 rounded-md border border-hairline bg-success/10 px-3 py-2 text-t4">
                         <Trophy className="size-3.5 shrink-0" aria-hidden />
                         <span>

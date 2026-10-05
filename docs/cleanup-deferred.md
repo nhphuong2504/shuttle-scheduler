@@ -13,12 +13,13 @@ tournament format or scoring rule was touched, and no rendered surface was remov
 | --- | --- |
 | 36 of the 46 `src/components/ui/*` primitives | No import from outside `src/components/ui` in `src`, `e2e`, `scripts` or `docs`, and no barrel, dynamic import or Storybook consumer. Five of them (`separator`, `sheet`, `skeleton`, `toggle`, `tooltip`) were reachable only through `sidebar.tsx`, which was itself unused. |
 | `src/hooks/use-mobile.tsx` | Only consumer was the deleted `sidebar.tsx`. |
-| The `chart-*` and `sidebar-*` colour tokens | Their only consumers were `chart.tsx` and `sidebar.tsx`. Their `--color-*` keys and both theme declarations went with the primitives. |
+| The `chart-*` and `sidebar-*` colour tokens | Their only consumers were `chart.tsx` and `sidebar.tsx`. Their `--color-*` keys and their declarations went with the primitives. |
 | `createTournament` and its `CreateTournamentInput` / `TournamentCategoryInput` types in `src/lib/tournament/actions.ts` | Superseded and marked deprecated; no caller. The wizard writes a draft with `createTournamentDraft` and activates it with `activateTournament`. The `create_tournament` RPC is untouched. |
 | `src/integrations/supabase/auth-middleware.ts` | Exported `requireSupabaseAuth` with no importer. The live path is `auth-attacher.ts`, wired in `src/start.ts`. |
 | 32 packages | The eight shadcn-only runtime packages, the twenty `@radix-ui` packages whose only consumers were the deleted wrappers, and `@hookform/resolvers`, `date-fns`, `zod` and `@testing-library/jest-dom`, which had no import or test registration anywhere. 85 transitive packages left with them. |
 | `supabase/.temp/cli-latest` (untracked) | Machine-local CLI scratch state. `.gitignore` already ignored `supabase/.temp/`; the file was tracked anyway. |
 | `.cursor/plans/sport-agnostic_scheduling_core_3ca401f1.plan.md` | A superseded planning artifact. The scheduling core it describes is shipped under `src/lib/scheduling`, and its decisions are recorded in [`scheduling-decisions.md`](scheduling-decisions.md). |
+| Dark mode | The `.dark` token block, `useTheme`, the toggle in the app shell and the first-paint bootstrap script in `__root.tsx`. A tournament is operated at a desk in a lit hall and one theme is all that was maintained, so the second was a palette, a toggle and a class-flipping script to keep in step for no reader. The rendered contrast, typography and layout sweeps went with it; `e2e/fixtures/matrix.ts` now has no appearance axis. Comments elsewhere that cite a dark-mode measurement are history rather than current behaviour. |
 
 `tokens.test.ts` used to pin a `KNOWN_DEAD` list of tokens that no component renders; it
 shrank from 11 to 6 tokens with the same change. That test has since been removed along with
@@ -61,7 +62,7 @@ with two callers. Do not merge them without reading
 
 ### `info-*` tone tokens
 
-`--info-surface`, `--info-border` and `--info-foreground` are defined in both themes and
+`--info-surface`, `--info-border` and `--info-foreground` are defined in `:root` and
 rendered by nothing. They are design vocabulary rather than scaffolding, so retiring them is
 a design-system decision. They stay in the palette, recorded here.
 

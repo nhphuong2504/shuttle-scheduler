@@ -457,9 +457,10 @@ function Desk() {
    * Deliberately left ungated while the row lists are not: this alert names no result, it
    * chases one that is missing, and it is the only destructive treatment the Act-now panel
    * defines. Gating it on the format removed the destructive tier from the format this app
-   * runs, which `states.spec.ts` caught by driving that treatment through a pool planted
-   * inside a placement tournament. Whether the placement stage should raise an overdue-result
-   * alert of its own is a design question rather than a rendering one, so the alert stays.
+   * runs, which a desk-layout assertion used to catch by driving that treatment through a
+   * pool planted inside a placement tournament. Whether the placement stage should raise an
+   * overdue-result alert of its own is a design question rather than a rendering one, so the
+   * alert stays.
    */
   const latePools = useMemo(() => {
     return (pools ?? []).filter((pool) => {
@@ -716,7 +717,7 @@ function Desk() {
                         An ink is only valid against the fill it was solved for, so an
                         element that can sit on five different backgrounds cannot use one.
                         `foreground` on a `foreground/10` wash is backdrop-agnostic and
-                        clears the requirement on every tile in both themes, and it also
+                        clears the requirement on every tile, and it also
                         respects the system's own rule that hue is reserved for state -
                         a brand-blue chip inside a state-coloured tile was already the one
                         place that broke it.
@@ -1498,8 +1499,8 @@ export function MatchOperationsDialog({
 }
 
 function CourtStatePill({ state }: { state: CourtState }) {
-  // The label, the fill and the ink all come from `court-state.ts`, so the sweep in
-  // `e2e/states.spec.ts` and this component read one vocabulary rather than two.
+  // The label, the fill and the ink all come from `court-state.ts`, so the vocabulary the
+  // tests assert and the one this component paints are the same object rather than two.
   return (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ${COURT_STATE_CHIP[state]}`}

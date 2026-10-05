@@ -130,12 +130,12 @@ describe("the court-state vocabulary", () => {
     // The defect this exists for: `playing` shipped with its tile painting the full
     // `--state-live-chip` - the same fill its chip paints - so the "Playing" pill had
     // no edge and read as uppercase text on green. Measured on the rendered board the
-    // two were byte-identical in both themes, while every other state separated.
+    // two were byte-identical, while every other state separated.
     //
     // Comparing the class strings alone would not catch it: `/30` and `/100` are
     // different strings and the same colour. So this compares the resolved pair of
-    // token and alpha, which is what the browser actually paints, and is the cheap
-    // half of the sweep in `e2e/states.spec.ts` - no browser, no credentials.
+    // token and alpha, which is what the browser actually paints - the same check the
+    // rendered sweep used to make, without needing a browser or credentials.
     const fills = (state: CourtState) => {
       const parse = (classes: string, where: string) => {
         const match = classes.match(/\bbg-([a-z0-9-]+)(?:\/(\d+))?/);
@@ -178,10 +178,9 @@ describe("the court-state vocabulary", () => {
     // needs. Nothing could see it: this chip only exists on a court board with a
     // tournament in it, and the only scan that had ever run had no tile to measure.
     //
-    // The rendered sweep in `e2e/states.spec.ts` measures the pair and is the authority
-    // on whether it passes. This is the cheap half that says why there is only ever one
-    // allowed answer: a fill and its ink are solved together, so a second tint of the
-    // same hue is a second pair to solve, not a cosmetic nudge.
+    // This test says why there is only ever one allowed answer: a fill and its ink are
+    // solved together, so a second tint of the same hue is a second pair to solve, not a
+    // cosmetic nudge.
     const primaryFills = COURT_STATES.flatMap(
       (state) => COURT_STATE_CHIP[state].match(/bg-primary\/\d+/g) ?? [],
     );

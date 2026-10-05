@@ -201,7 +201,7 @@
      a tab list is painted in, and against the selected segment's own fill - a ring
      sits on a boundary, so it has to clear both.
 
-     And the defect it closes was invisible to every gate. No axe rule maps to WCAG
+     And the defect it closes was invisible to every gate. No automated rule maps to WCAG
      1.4.11 at all, so the rule this system states in prose - 3:1 for anything the
      user must locate - had never been checked against the one case it most applies
      to. Marking "selected" with a fill that is the surface colour sitting on a muted
@@ -337,7 +337,7 @@
    *
    * The bar is `sticky bottom-0`, so it floats over the flow - and the browser does not
    * know that. Tabbing to the venue phone field left it at 728..764px inside the bar's
-   * 706..768px band, entirely hidden, in both themes: WCAG 2.4.11's failure exactly, on
+   * 706..768px band, entirely hidden: WCAG 2.4.11's failure exactly, on
    * a form where the browser's own scroll-into-view decided the field was already
    * visible. `scroll-margin-bottom` reserves the bar's height, and it belongs on the
    * fields rather than the bar because scroll-margin is a property of the element being
