@@ -64,8 +64,8 @@ migration — add a new one.
 ## Workflow
 
 Short-lived branches and pull requests. Every CI job must be green before merge. The browser
-job runs as two shards: the suite is 90 tests and the job is the slow one, so the second
-runner buys back about two minutes of wall time for about two billed minutes.
+job is a single runner: it is no longer machine-bound, so sharding only adds a runner's fixed
+cost. The measurements are in the workflow comment.
 
 ```mermaid
 flowchart LR
@@ -74,7 +74,7 @@ flowchart LR
   gate1 --> gate2["hermetic Playwright"]
   gate2 --> final["build"]
   final --> pr["Pull request"]
-  pr --> ci["CI: checks + 2 browser shards"]
+  pr --> ci["CI: checks + browser run"]
   ci --> merge["Merge to main"]
 ```
 

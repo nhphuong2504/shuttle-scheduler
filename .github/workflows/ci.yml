@@ -52,28 +52,30 @@ jobs:
       - run: npm run build
 
   browser:
-    # Two runners, from measurement rather than from the shape of the old job.
+    # One runner, and this time from measurement on CI rather than from the shape of the
+    # old job.
     #
-    # The suite is 90 tests now that the rendered UI sweeps are gone - routing, access,
-    # hydration and the staff/public surfaces - and on one runner CI measured **3m48s**
-    # against 1m24s for the checks job. That makes this the job the pull request waits on,
-    # so the second runner buys back about two minutes of wall time for about two billed
-    # minutes. Four runners was the count while the contrast, typography and criteria
-    # sweeps multiplied the same routes by one another; that is what made the old job
-    # machine-bound, and it is why two is now enough rather than a compromise.
+    #   1 shard, 90 tests                      3m48s
+    #   2 shards, ~45 each                     3m30s and 3m25s
+    #   checks (typecheck, unit, build)        1m18s
     #
-    # `strategy.job-total` is the denominator, so the matrix and the argument cannot
-    # disagree about how many shards there are. Re-measure after adding or removing a spec
-    # file: the split is by test count, so a new file reshuffles every boundary - and a
-    # local `npm run test:e2e` was 41s, which is not the number to judge this by.
-    name: Rendered app, hermetic (${{ matrix.shard }}/${{ strategy.job-total }})
+    # Halving the tests bought 18 seconds, so the job is not machine-bound any more - the
+    # per-runner *fixed* cost is what dominates it. Each runner pays `npm ci`, a
+    # `--with-deps chromium` install (apt packages plus the browser) and a cold Vite dev
+    # server, and that is roughly three minutes before the first test runs. Sharding now
+    # buys about twenty seconds for about three and a half billed minutes, which is not a
+    # trade worth making. Four shards was the right answer while the contrast, typography
+    # and criteria sweeps multiplied the same routes by one another and the test time was
+    # large enough to divide; that is no longer the case.
+    #
+    # The fixed cost is where the remaining minutes are. Caching the Chromium download or
+    # running the suite against `npm run build` output instead of a dev server are the two
+    # obvious levers, and neither belongs in this change.
+    #
+    # Re-measure with the job's own wall time after adding or removing a spec file. A local
+    # `npm run test:e2e` was 41s, which is not the number to judge this by.
+    name: Rendered app, hermetic
     runs-on: ubuntu-latest
-    strategy:
-      # Both shards report even when one fails, so one shard's failure cannot hide the
-      # other's.
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     env:
       # A missing prerequisite fails rather than skips. The skip guard below makes a skip a
       # failure anyway; this fails at the point of skipping with a clearer message.
@@ -90,17 +92,15 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
-      - run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+      - run: npx playwright test
 
-      # The skip guard, run against the JSON report the config always writes. It runs per
-      # shard: each shard is a separate runner with its own report, and a skipped test is
-      # never a passing test whichever slice of the suite it was in.
+      # The skip guard, run against the JSON report the config always writes. A skipped
+      # test is never a passing test.
       - run: node scripts/assert-no-skips.mjs
 
-      # Named per shard: a matrix job cannot upload two artifacts under one name.
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report-${{ matrix.shard }}
+          name: playwright-report
           path: test-results/
           retention-days: 7
