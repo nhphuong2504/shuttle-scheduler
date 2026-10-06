@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Check } from "lucide-react";
 
 import { PublicShell } from "@/components/app-shell";
 import { ExploreCard } from "@/components/explore-card";
@@ -168,6 +169,20 @@ function ExplorePage() {
           visible at once and the current one answers "what am I looking at" - which is a
           state, not a menu. `aria-pressed` describes it accurately; a radio role would
           imply a value awaiting submission.
+
+          The tick is the redundant channel, and a filter row is where it matters most:
+          four chips sit in a row and only one is pressed, so a fill alone asks a reader to
+          compare four shapes and remember which colour meant "on". The tick states it
+          locally, which is the same rule the rest of the system follows - every state
+          carries a word and a glyph, never colour alone. It is `aria-hidden`, so the
+          button's accessible name stays exactly the label rather than becoming
+          "tick Upcoming".
+
+          It costs 22px of width on the pressed chip (16px glyph + the gap), so pressing one
+          nudges its neighbours. That is accepted rather than overlooked: reserving the slot
+          on every chip would make the row ~88px wider at all times and buy a second wrap line
+          on a phone, and the chip that grows is the one under the pointer - the pointer does
+          not leave the control it just pressed.
         */}
         <div
           role="group"
@@ -189,10 +204,11 @@ function ExplorePage() {
                 }
                 className={
                   selected
-                    ? "min-h-11 rounded-lg border border-primary bg-primary px-4 text-sm font-semibold text-primary-foreground"
-                    : "min-h-11 rounded-lg border border-border-control bg-surface px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                    ? "inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-primary bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+                    : "inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border-control bg-surface px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
                 }
               >
+                {selected ? <Check aria-hidden="true" className="size-4 shrink-0" /> : null}
                 {option.label}
               </button>
             );
