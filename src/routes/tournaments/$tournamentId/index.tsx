@@ -224,11 +224,16 @@ function TournamentPage() {
           {/* The signed-out reading of the same affordance: the trip that changes what a
               visitor can do, carrying this page as the place to come back to. Offered only
               while the window is open, because a sign-in that leads to a closed form is a
-              longer way round to a refusal. */}
+              longer way round to a refusal.
+
+              The errand is named too, so the sign-in page can say where this ends - which
+              matters most here, because the caller is standing on the destination already and
+              the useful thing to know is that they come back to it. Explore's Register
+              control offers the same trip with the same word. */}
           {open && !signedIn ? (
             <div className="mt-3">
               <Button asChild>
-                <Link to="/auth" search={signInSearch(href)}>
+                <Link to="/auth" search={signInSearch(href, "register")}>
                   Sign in to register
                 </Link>
               </Button>

@@ -133,12 +133,19 @@ export interface AppMockOptions {
   registrationQueue?: readonly MockRegistrationRow[];
 
   /**
-   * What `tournament_registration_state` answers, as the database's own word.
+   * The registration window, as the database's own word, for *both* reads that carry it.
    *
    * `null` is the un-migrated/absent answer, which reads as `not_offered` - the honest
    * default, and the reason the Register panel is not drawn in any spec that does not ask
    * for a window. A spec about the participant surface arrives with `"open"`, because the
    * whole point of that surface is the form the window opens.
+   *
+   * One option rather than two because the database has one value: `tournament_summary`
+   * selects `tournament_registration_state(t.id)` for its own `registration_state` column, so
+   * the card on Explore and the panel on the participant page are the same answer and a
+   * fixture that varied them independently could pass a spec against a state no tournament
+   * can be in. Set it and both reads move; leave it out and the word is derived from the
+   * lifecycle, which is what every spec that is not about registration wants.
    */
   registrationState?: string | null;
 
@@ -455,7 +462,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     : access.is_editor
       ? "editor"
       : "viewer";
-  const fixture = deskFixture(preset, role ?? "user", status, membership, format);
+  const fixture = deskFixture(preset, role ?? "user", status, membership, format, registrationState);
 
   /**
    * REST, which is every table read and every RPC in this app.

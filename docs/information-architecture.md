@@ -30,7 +30,7 @@ Three audiences, and the address says which one it belongs to:
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me** |
 | `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, against a new row |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
-| `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. **Currently unlinked** — Explore opens a tournament on its read-only workspace (`…/entries`) instead, so this address is reachable only by URL while the read-only experience is being designed |
+| `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card on `…/entries` instead, so a visitor who only came to read never sees this page |
 
 These are the only addresses that can be reached without naming a tournament. Each draws
 `PublicShell`, because there is no tournament for a header to describe. `/tournaments/new` is a
@@ -148,9 +148,11 @@ flowchart LR
 ```
 
 The participant page at `/tournaments/:id/` — the card and the Register panel — is no longer one
-of the linked steps. Explore sends a card to the read-only workspace so the browse surface opens
-on the event's state rather than on a form, and registration is out of the read-only experience
-while it is redesigned. The address still resolves for anyone who has it.
+of the *reading* steps. Explore sends a card to the read-only workspace so the browse surface opens
+on the event's state rather than on a form. It is still the destination of **Register**, which is
+the one action on the card that means "I want to enter" rather than "I want to look": a signed-in
+caller lands on the form, and a visitor is sent to sign in first, carrying this page as the place
+to come back to.
 
 Explore is the only search surface, and it renders one shape per row — `tournament_summary`,
 which computes the status, the derived start and end, the registration state, the entry counts

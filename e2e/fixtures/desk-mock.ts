@@ -653,6 +653,7 @@ const buildFixture = (
   status: MockTournamentStatus | undefined,
   membership: MockMembership,
   format: MockTournamentFormat | undefined,
+  registrationState: string | null | undefined,
 ): DeskFixture => {
   // The lifecycle word is the one thing a spec needs to vary and cannot click its way
   // to: the fixture is a running event, and `Upcoming` and `Completed` are the other two
@@ -676,14 +677,25 @@ const buildFixture = (
    * The lifecycle answers first and the fixture configures no window at all, so a running or
    * finished tournament reads `started` / `completed` and an upcoming one reads `not_offered`.
    * The remaining words (`open`, `opens_soon`, `closed`) need a window this fixture does not
-   * have; a spec that wants them arrives with one in the commit that ships registration.
+   * have; a spec that wants them arrives with one.
+   *
+   * ## Why `registrationState` overrides the two *reads* rather than one
+   *
+   * `tournament_summary` does not compute this word, it *calls*
+   * `tournament_registration_state(t.id)` for it - so in the database the card on Explore and
+   * the Register panel on the participant page are the same value from the same function, and
+   * they cannot disagree. The fixture has to reproduce that or it is weaker than the system it
+   * stands in for: a summary read saying `not_offered` beside an RPC saying `open` would let a
+   * spec pass against a state no tournament can be in. So one option drives both, and the
+   * lifecycle derivation below is only the *default* for a spec that asks for neither.
    */
-  const registrationState =
+  const lifecycleState =
     servedStatus === "completed"
       ? "completed"
       : servedStatus === "in_progress"
         ? "started"
         : "not_offered";
+  const servedRegistrationState = registrationState ?? lifecycleState;
 
   const summary: MockTournamentSummary = {
     id: TID,
@@ -696,7 +708,7 @@ const buildFixture = (
     // presence, not an offset arithmetic the mock would have to reimplement.
     starts_at: DAY_OPEN,
     ends_at: DAY_CLOSE,
-    registration_state: registrationState,
+    registration_state: servedRegistrationState,
     // The entry is `teams` and the events are `categories` - never a derived projection.
     entry_count: teams.length,
     category_count: categories.length,
@@ -812,6 +824,7 @@ export function deskFixture(
   status?: MockTournamentStatus,
   membership: MockMembership = "owner",
   format?: MockTournamentFormat,
+  registrationState?: string | null,
 ): DeskFixture {
   const chosen = PRESETS[preset];
   return buildFixture(
@@ -824,5 +837,6 @@ export function deskFixture(
     status,
     membership,
     format,
+    registrationState,
   );
 }
