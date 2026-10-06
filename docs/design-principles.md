@@ -49,6 +49,13 @@ Rules:
 - **Success, warning and danger each have two forms.** A saturated fill (a button, a dot, an
   icon) and a darker ink for text. Do not use the fill as text: amber `#C97812` is 3.4:1 on white,
   the text ink `#8F5300` is 5.5:1.
+- **A filled control darkens on hover, and never lightens.** The fill exists to carry white text
+  at 4.5:1, and lightening it spends that headroom. `--destructive` is 4.93:1 at rest, so the
+  shadcn `hover:bg-destructive/90` default composited to 4.22:1 — under the floor, in the one
+  state a pointer left resting on a control produces. Hover therefore moves *toward* the ink
+  (`--primary-hover` 8.76:1, `--destructive-hover` 6.31:1) rather than away from it, so the
+  hovered state can never be the state that fails. Lightness moves and the hue does not, so the
+  control reads as the same colour pressed in.
 - **Colour is never the only signal.** Every state also has a word and a glyph. Green and red
   are close under red-green colour blindness, so completed and overrun must differ by label and
   icon, not by hue.

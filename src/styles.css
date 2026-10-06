@@ -33,6 +33,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-ink: var(--primary-ink);
+  --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -41,6 +42,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-hover: var(--destructive-hover);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -144,6 +146,25 @@
   /* Interaction: buttons, links, active nav, selected tab. Nothing else is violet. */
   --primary: #5B4FC7;
   --primary-foreground: #FFFFFF;
+  /**
+   * Hover darkens rather than lightens, and that direction is the requirement.
+   *
+   * The shadcn default is `hover:bg-primary/90`, which composites the fill 10% toward
+   * whatever is behind it. Over white that lifts `--primary` from 6.20:1 to 5.00:1 and
+   * `--destructive` from 4.93:1 to 4.22:1 - so the *hovered* state, which is the state
+   * axe measures whenever a pointer is left resting on a control after a click, fell
+   * under 4.5:1 on every destructive button and on `badge`'s `/80` variants. A fill
+   * that is only 0.43 above the floor has no headroom to spend on a hover tint.
+   *
+   * Darkening means hover can never be the state that fails: the direction of the change
+   * is fixed by the requirement rather than by taste, and each value below is solved for
+   * the pair it carries. Lightness alone moves - the hue does not - so the two read as
+   * the same colour pressed in.
+   *
+   * `--primary-hover` 8.76:1 and `--destructive-hover` 6.31:1 against white, both with
+   * more headroom than the fills they replace.
+   */
+  --primary-hover: #4337AE;
 
   /* Primary as ink on a translucent primary tint (chips, ready court). Same value as --primary, kept as a pair so the two roles can diverge. */
   --primary-ink: #5B4FC7;
@@ -157,6 +178,10 @@
   --accent-foreground: #171A1D;
   --destructive: #C83F49;
   --destructive-foreground: #FFFFFF;
+  /* See `--primary-hover`: hover darkens so the hovered state can never be the one that
+     fails. This fill is the tightest in the palette - 4.93:1 against white, 0.43 above
+     the floor - which is exactly why it was the one the lightening default broke. */
+  --destructive-hover: #AF323B;
 
   /* Two edge weights: --border is decorative and soft, --border-control is for anything the user must locate (inputs, selects) and clears 3:1 on the page. */
   --border: #D9DDDF;

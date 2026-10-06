@@ -14,7 +14,7 @@ import { countText, dateRangeText } from "@/lib/tournament/summary-format";
  * different offer rather than as the same one behind a door.
  */
 const ACTION_PRIMARY =
-  "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90";
+  "inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover";
 const ACTION_OUTLINE =
   "inline-flex min-h-11 items-center rounded-lg border border-border-control px-5 text-sm font-semibold transition-colors hover:bg-muted";
 
