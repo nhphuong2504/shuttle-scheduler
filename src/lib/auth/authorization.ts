@@ -146,6 +146,12 @@ export function useTournamentAccess(tournamentId: string | null | undefined) {
     // else, and held briefly to avoid a request per mount.
     staleTime: 30_000,
     queryFn: async (): Promise<TournamentAccess> => {
+      // `tournament_access` is not executable by `anon`, so a signed-out visitor would get
+      // a permission error and sit through React Query's retries before the read-only
+      // notice could show. The answer for no session is known: deny, immediately.
+      const { data: auth } = await supabase.auth.getSession();
+      if (!auth.session) return NO_ACCESS;
+
       const { data, error } = await supabase.rpc("tournament_access", {
         p_tournament_id: tournamentId as string,
       });
