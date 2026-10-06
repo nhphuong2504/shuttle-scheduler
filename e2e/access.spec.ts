@@ -385,6 +385,17 @@ test.describe("a signed-out visitor", () => {
     // Above the section row rather than inside it, which is what "same place as the landing
     // page" means concretely and is the part a name-only assertion cannot see.
     const sections = header.getByRole("navigation", { name: /tournament sections/i });
+    // Both are measured, so both are waited for. The section nav is drawn from the
+    // tournament's own sections, which resolve *after* the header itself does, so measuring
+    // straight after the click raced it. `boundingBox()` answers `null` for an element that
+    // is not in the DOM yet, so the race surfaced as `Cannot read properties of null
+    // (reading 'y')` on the line below rather than as a layout failure - and it was
+    // intermittent, which is worse: it read as a flaky assertion instead of a measurement
+    // taken too early. The `toHaveAttribute` above does not cover it, because an attribute
+    // assertion is happy with an element that is present and says nothing about whether the
+    // row this one must sit above has been drawn.
+    await expect(back).toBeVisible();
+    await expect(sections).toBeVisible();
     const [backBox, sectionsBox] = await Promise.all([back.boundingBox(), sections.boundingBox()]);
     expect(backBox!.y + backBox!.height).toBeLessThanOrEqual(sectionsBox!.y);
     // And it does not answer a reader by offering to start a tournament of their own.
