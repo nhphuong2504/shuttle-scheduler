@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 
-import { EmptyState, Panel, PublicShell } from "@/components/app-shell";
-import { TournamentCard } from "@/components/tournament-card";
+import { PublicShell } from "@/components/app-shell";
+import { ExploreCard } from "@/components/explore-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import {
   type TournamentStatus,
 } from "@/lib/auth/authorization";
 import { signInSearch } from "@/lib/routing/redirect";
-import { useExploreTournaments } from "@/lib/tournament/data";
+import { useExploreTournaments, type TournamentSummary } from "@/lib/tournament/data";
 
 interface ExploreSearch {
   /** The search term, matched by the database over name, venue and events. */
@@ -30,13 +30,21 @@ interface StatusOption {
  *
  * "Any status" is a member of the group rather than the absence of a choice, because
  * "show me everything" and "I have not chosen yet" are the same intent here, and a cleared
- * group would read as an unanswered question.
+ * group would read as an unanswered question. The order follows the groups below: what is
+ * happening now comes first.
  */
 const STATUS_OPTIONS: StatusOption[] = [
   { value: "all", label: "Any status" },
-  { value: "upcoming", label: "Upcoming" },
   { value: "in_progress", label: "In progress" },
+  { value: "upcoming", label: "Upcoming" },
   { value: "completed", label: "Completed" },
+];
+
+/** The list is grouped in this order, so a live tournament is never buried under a past one. */
+const GROUPS: { status: TournamentStatus; heading: string }[] = [
+  { status: "in_progress", heading: "In progress" },
+  { status: "upcoming", heading: "Upcoming" },
+  { status: "completed", heading: "Completed" },
 ];
 
 export const Route = createFileRoute("/explore")({
@@ -62,12 +70,12 @@ export const Route = createFileRoute("/explore")({
       { title: "Explore tournaments | Tournova Tournament Ops" },
       {
         name: "description",
-        content: "Find a badminton tournament to follow or enter, or start one of your own.",
+        content: "Find a badminton tournament to follow or enter: who is playing, when and where.",
       },
       { property: "og:title", content: "Explore tournaments | Tournova Tournament Ops" },
       {
         property: "og:description",
-        content: "Find a badminton tournament to follow or enter, or start one of your own.",
+        content: "Find a badminton tournament to follow or enter: who is playing, when and where.",
       },
       { property: "og:type", content: "website" },
       { property: "twitter:card", content: "summary" },
@@ -128,145 +136,192 @@ function ExplorePage() {
 
   const rows = summaries.data ?? [];
   const filtered = query.trim().length > 0 || statusFilter !== null;
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    rows: rows.filter((row) => row.status === group.status),
+  })).filter((group) => group.rows.length > 0);
 
   return (
     <PublicShell
       title="Explore tournaments"
-      subtitle="Every tournament on Tournova. Open one to follow it, or start your own."
+      subtitle="Open a tournament to see who is playing, when and where, and the scores as they come in."
       actions={
         signedIn ? (
-          <Button size="sm" asChild>
+          <Button asChild>
             <Link to="/tournaments/new">New tournament</Link>
           </Button>
-        ) : (
-          <Button size="sm" asChild>
-            <Link to="/auth" search={signInSearch(href)}>
-              Sign in
-            </Link>
-          </Button>
-        )
+        ) : undefined
       }
     >
-      <Panel className="mb-4">
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-          <div className="space-y-1.5">
-            <Label htmlFor="explore-search">Search</Label>
-            <Input
-              id="explore-search"
-              value={query}
-              placeholder="Tournament, venue or event"
-              onChange={(event) => setSearch({ q: event.target.value, status: statusFilter })}
-            />
-          </div>
-          {/*
-            A group of pressed buttons rather than a select, because all four options are
-            visible at once and the current one answers "what am I looking at" - which is a
-            state, not a menu. `aria-pressed` describes it accurately; a radio role would
-            imply a value awaiting submission.
-          */}
-          <div
-            role="group"
-            aria-label="Filter by status"
-            className="flex flex-wrap items-center gap-1"
-          >
-            {STATUS_OPTIONS.map((option) => {
-              const selected =
-                option.value === "all" ? !statusFilter : statusFilter === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() =>
-                    setSearch({
-                      q: query,
-                      status: option.value === "all" ? null : option.value,
-                    })
-                  }
-                  className={
-                    selected
-                      ? "rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground shadow-panel"
-                      : "rounded-full border border-input bg-surface px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  }
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+      <div className="mb-8 grid gap-4 sm:grid-cols-[minmax(0,24rem)_1fr] sm:items-end">
+        <div className="space-y-1.5">
+          <Label htmlFor="explore-search">Search</Label>
+          <Input
+            id="explore-search"
+            value={query}
+            placeholder="Name, venue or event"
+            onChange={(event) => setSearch({ q: event.target.value, status: statusFilter })}
+          />
         </div>
-      </Panel>
+        {/*
+          A group of pressed buttons rather than a select, because all four options are
+          visible at once and the current one answers "what am I looking at" - which is a
+          state, not a menu. `aria-pressed` describes it accurately; a radio role would
+          imply a value awaiting submission.
+        */}
+        <div
+          role="group"
+          aria-label="Filter by status"
+          className="flex flex-wrap items-center gap-2 sm:justify-end"
+        >
+          {STATUS_OPTIONS.map((option) => {
+            const selected = option.value === "all" ? !statusFilter : statusFilter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={selected}
+                onClick={() =>
+                  setSearch({
+                    q: query,
+                    status: option.value === "all" ? null : option.value,
+                  })
+                }
+                className={
+                  selected
+                    ? "min-h-11 rounded-lg border border-primary bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                    : "min-h-11 rounded-lg border border-border-control bg-surface px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                }
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {summaries.isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading tournaments…</p>
+        <LoadingList />
       ) : summaries.isError ? (
-        <Panel title="Could not read tournaments">
-          <p className="text-sm text-muted-foreground">
-            {summaries.error instanceof Error
+        <div role="alert" className="rounded-xl border border-danger-border bg-danger-surface p-6">
+          <h2 className="font-display text-xl font-bold text-danger-foreground">
+            Couldn't load tournaments
+          </h2>
+          <p className="mt-2 max-w-xl text-base">
+            {summaries.error instanceof Error && summaries.error.message
               ? summaries.error.message
-              : "The tournament read failed. Try again in a moment."}
+              : "Your connection may have dropped. Try again in a moment."}
           </p>
-        </Panel>
+          <Button variant="outline" className="mt-4" onClick={() => void summaries.refetch()}>
+            Try again
+          </Button>
+        </div>
       ) : rows.length === 0 ? (
-        <Panel>
+        <div className="rounded-xl border border-hairline bg-surface px-6 py-10 text-center shadow-panel">
           {filtered ? (
-            <EmptyState
-              title="No tournament matches that search"
-              hint="Try a shorter term, or clear the status filter to widen it."
-              action={
-                <Button size="sm" variant="outline" onClick={() => setSearch({})}>
-                  Clear filters
-                </Button>
-              }
-            />
+            <>
+              <h2 className="font-display text-xl font-bold">No tournament matches that search</h2>
+              <p className="mx-auto mt-2 max-w-md text-base text-muted-foreground">
+                Check the spelling, or clear the filters to see everything.
+              </p>
+              <Button className="mt-5" onClick={() => setSearch({})}>
+                Clear filters
+              </Button>
+            </>
           ) : (
-            <EmptyState
-              title="No tournaments yet"
-              hint={
-                signedIn
+            <>
+              <h2 className="font-display text-xl font-bold">No tournaments yet</h2>
+              <p className="mx-auto mt-2 max-w-md text-base text-muted-foreground">
+                {signedIn
                   ? "Nothing has been created on Tournova yet. Yours would be the first."
-                  : "Nothing has been created on Tournova yet. Sign in to create the first one."
-              }
-              action={
-                signedIn ? (
-                  <Button size="sm" asChild>
+                  : "Tournaments appear here as soon as an organiser creates one."}
+              </p>
+              {signedIn ? (
+                <div className="mt-5 flex justify-center">
+                  <Button asChild>
                     <Link to="/tournaments/new">New tournament</Link>
                   </Button>
-                ) : (
-                  <Button size="sm" asChild>
-                    <Link to="/auth" search={signInSearch(href)}>
-                      Sign in
-                    </Link>
-                  </Button>
-                )
-              }
-            />
+                </div>
+              ) : null}
+            </>
           )}
-        </Panel>
+        </div>
       ) : (
-        <>
+        <div className="space-y-10">
           {/*
-            The count is announced rather than only drawn, because the grid below changes
+            The count is announced rather than only drawn, because the groups below change
             without the page moving: a reader on a screen reader would otherwise get no
             signal that a keystroke did anything.
           */}
-          <p aria-live="polite" className="mb-3 font-score text-sm text-muted-foreground">
+          <p aria-live="polite" className="font-score text-sm tabular-nums text-muted-foreground">
             {rows.length} tournament{rows.length === 1 ? "" : "s"}
           </p>
-          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {rows.map((summary) => (
-              <li key={summary.id} className="min-w-0">
-                {/*
-                  Opened on Entries rather than on the participant page: this is the surface
-                  for reading a tournament, so a card leads into the read-only workspace -
-                  the five sections a viewer is offered, the first of which is Entries.
-                */}
-                <TournamentCard summary={summary} to="/tournaments/$tournamentId/entries" />
-              </li>
-            ))}
-          </ul>
-        </>
+          {groups.map((group) => (
+            <GroupSection key={group.status} heading={group.heading} rows={group.rows} signedIn={signedIn} />
+          ))}
+        </div>
       )}
     </PublicShell>
+  );
+}
+
+function GroupSection({
+  heading,
+  rows,
+  signedIn,
+}: {
+  heading: string;
+  rows: TournamentSummary[];
+  /** Passed down rather than re-read per card; see `ExploreCard`. */
+  signedIn: boolean;
+}) {
+  return (
+    <section aria-label={heading}>
+      <h2 className="mb-4 flex items-baseline gap-2 font-display text-xl font-bold">
+        {heading}
+        <span className="font-body text-base font-medium text-muted-foreground tabular-nums">
+          {rows.length}
+        </span>
+      </h2>
+      <ul className="grid gap-4 sm:grid-cols-2">
+        {rows.map((summary) => (
+          <li key={summary.id} className="min-w-0">
+            {/*
+              Opened on Entries rather than on the participant page: this is the surface
+              for reading a tournament, so a card leads into the read-only workspace - the
+              five sections a viewer is offered, the first of which is Entries.
+
+              Registering is the one exception, and it is drawn inside the card rather than
+              here, because it is gated on the window and on the session while the reading
+              trip is neither. See `ExploreCard`.
+            */}
+            <ExploreCard summary={summary} signedIn={signedIn} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Placeholders in the shape of the cards, so the page does not jump when the list arrives.
+ */
+function LoadingList() {
+  return (
+    <div role="status" aria-label="Loading tournaments" className="grid gap-4 sm:grid-cols-2">
+      {[0, 1].map((key) => (
+        <div
+          key={key}
+          aria-hidden="true"
+          className="space-y-3 rounded-xl border border-hairline bg-surface p-5"
+        >
+          <div className="h-6 w-24 rounded-full bg-muted" />
+          <div className="h-8 w-3/4 rounded-md bg-muted" />
+          <div className="h-4 w-1/2 rounded bg-muted" />
+          <div className="h-4 w-2/3 rounded bg-muted" />
+          <div className="h-11 w-40 rounded-lg bg-muted" />
+        </div>
+      ))}
+    </div>
   );
 }

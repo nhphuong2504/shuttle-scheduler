@@ -140,14 +140,14 @@ test.describe("the sign-in return address", () => {
     await page.goto(`${routes.explore}?q=Forker`, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    await page.getByRole("main").getByRole("link", { name: /sign in/i }).first().click();
+    await page.getByRole("banner").getByRole("button", { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/auth/);
 
     // The search is part of the page's address, and the point of a return address is that it
     // is the address you left: somebody who signs in from a filtered list has to come back to
     // the list they were reading, not to an unfiltered one they then have to repeat.
     expect(new URL(page.url()).searchParams.get("redirect")).toBe(`${routes.explore}?q=Forker`);
-    await expect(page.getByRole("heading", { name: /control desk sign in/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /sign in to tournova/i })).toBeVisible();
   });
 
   test("writes nothing when a bare sign-in would land there anyway", async ({ page }) => {
@@ -169,7 +169,7 @@ test.describe("the sign-in return address", () => {
     // a link to it that bounces on to another origin is a credible-looking phishing trip. The
     // rules live in `src/lib/routing/redirect.ts` and are unit-tested there; this is the route
     // actually applying them, and dropping the value rather than merely ignoring it.
-    await expect(page.getByRole("heading", { name: /control desk sign in/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /sign in to tournova/i })).toBeVisible();
     expect(new URL(page.url()).searchParams.get("redirect")).toBeNull();
   });
 });

@@ -141,11 +141,12 @@ test.describe("Explore", () => {
       routes.entries,
     );
 
-    // A visitor is offered the trip that changes what they can do; creating a tournament is
+    // A visitor is offered the trip that changes what they can do, once, in the header bar; creating a tournament is
     // not offered because the database refuses it for an anonymous caller, and a link that
     // can only fail is worse than no link.
     const pageActions = page.getByRole("main");
-    await expect(pageActions.getByRole("link", { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole("banner").getByRole("button", { name: /sign in/i })).toBeVisible();
+    await expect(pageActions.getByRole("link", { name: /sign in/i })).toHaveCount(0);
     await expect(pageActions.getByRole("link", { name: /new tournament/i })).toHaveCount(0);
   });
 });
@@ -223,6 +224,80 @@ test.describe("Explore, searched", () => {
     // And the word is gone from the address rather than merely ignored, so the URL a person
     // copies on is one the page can read.
     await expect(page).not.toHaveURL(/status=/);
+  });
+});
+
+/**
+ * Registering, which needs a session the visitor does not have.
+ *
+ * The fixture answers `tournament_registration_state` with "not offered" everywhere else, so
+ * the Register control is drawn in these two cases only - which is why the gate can be swept
+ * without disturbing the specs above.
+ */
+test.describe("Explore, with the window open", () => {
+  test.use({ appMock: { preset: "layout", role: null, registrationState: "open" } });
+
+  test("sends a visitor to sign in, carrying the form to come back to", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // Registering needs a session, so the control says so rather than offering a form the
+    // caller cannot submit. The wording is the participant page's own, so the two surfaces
+    // name one trip the same way.
+    const register = page.getByRole("link", { name: /sign in to register/i });
+    await expect(register).toBeVisible();
+
+    // The errand travels in the address: the return address is the participant page, which
+    // is where the form is, and the intent is what lets the sign-in page say why.
+    const href = (await register.getAttribute("href")) ?? "";
+    expect(href.startsWith("/auth?")).toBe(true);
+    expect(href).toContain(`redirect=${encodeURIComponent(routes.tournament)}`);
+    expect(href).toContain("intent=register");
+
+    await register.click();
+    await page.waitForLoadState("networkidle");
+
+    // The message, which is the difference between "sign in" and "sign in to continue":
+    // somebody who clicked Register has a reason to fill the form, and the page says what
+    // happens *next*. The heading already told them to sign in, so repeating that would be
+    // the page telling them what they are looking at; naming the destination is the new fact.
+    await expect(page.getByText(/go straight to that tournament's registration form/i)).toBeVisible();
+    await expect(page).toHaveURL(/intent=register/);
+
+    // And not the generic sentence, which is what a page with no errand says.
+    await expect(page.getByText(/go back to the page you were on/i)).toHaveCount(0);
+  });
+
+  test("ignores an intent word it has no sentence for", async ({ page }) => {
+    // A shared or hand-edited address can name anything, and this parameter selects copy the
+    // page prints. An unrecognised word is dropped rather than rendered, so an address cannot
+    // put somebody else's words on a page this app owns.
+    await page.goto("/auth?redirect=%2Fexplore&intent=win", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The return address still arrives, so the page keeps the sentence it owns - and nothing
+    // is built from the value that did arrive.
+    await expect(page.getByText(/go back to the page you were on/i)).toBeVisible();
+    await expect(page.getByText(/registration form/i)).toHaveCount(0);
+    // The word is gone from the address too, so the URL a person copies on is one the page
+    // can read - the same rule the Explore status filter follows.
+    await expect(page).not.toHaveURL(/intent=/);
+  });
+});
+
+test.describe("Explore, signed in with the window open", () => {
+  test.use({ appMock: { preset: "layout", role: "user", registrationState: "open" } });
+
+  test("sends a member straight to the form", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // With a session there is nothing to ask for, so the control is the plain act and it goes
+    // where the form is. Signing in is not on the path at all.
+    await expect(page.getByRole("link", { name: /^register$/i })).toHaveAttribute(
+      "href",
+      routes.tournament,
+    );
   });
 });
 
@@ -518,6 +593,10 @@ test.describe("The window is open, and nobody is signed in", () => {
     // A sign-in that dropped the reader on Home would be a longer way round to a page they
     // were already on, so the trip carries the address it started from.
     await expect(door).toHaveAttribute("href", /\/auth\?redirect=/);
+    // And it carries the errand, so the sign-in page can say that the caller comes back here
+    // rather than leaving them to guess. Explore's Register control makes the same trip with
+    // the same word, which is the one thing the two surfaces have to agree about.
+    await expect(door).toHaveAttribute("href", /intent=register/);
     await expect(page.getByRole("button", { name: "Send registration request" })).toHaveCount(0);
   });
 });
