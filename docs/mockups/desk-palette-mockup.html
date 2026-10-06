@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tournova — Desk palette mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap"
+  rel="stylesheet"
+/>
+<style>
+  /*
+   * Standalone palette mockup for the Desk.
+   *
+   * The tokens below are copied verbatim from `src/styles.css` (:root). The real source of
+   * truth is that file — this artifact exists so every state can be seen at once while the
+   * palette is being settled. If a token changes there, mirror it here.
+   */
+  :root {
+    color-scheme: light;
+
+    --ink: #171A1D;
+    --shuttle: #D6F25A;
+    --court-tint: #E1EFE8;
+    --success: #16865C;
+
+    --background: #F4F5F4;
+    --foreground: #171A1D;
+    --surface: #FFFFFF;
+    --hairline: #D9DDDF;
+
+    --card: #FFFFFF;
+    --card-foreground: #171A1D;
+    --popover: #FFFFFF;
+    --popover-foreground: #171A1D;
+
+    --primary: #5B4FC7;
+    --primary-foreground: #FFFFFF;
+    --primary-ink: #5B4FC7;
+    --secondary: #ECEEED;
+    --secondary-foreground: #171A1D;
+    --muted: #EDEFEE;
+    --muted-foreground: #5B656C;
+    --accent: #E9ECEB;
+    --accent-foreground: #171A1D;
+    --destructive: #C83F49;
+    --destructive-foreground: #FFFFFF;
+
+    --border: #D9DDDF;
+    --border-control: #7F8A91;
+    --input: var(--border-control);
+    --ring: #5B4FC7;
+    --border-selected: #6F7A82;
+
+    --warn-surface: #FAF0E1;
+    --warn-border: #E8CFA3;
+    --warn-foreground: #8F5300;
+    --info-surface: #ECEAFA;
+    --info-border: #C9C4F0;
+    --info-foreground: #3F35A0;
+    --danger-surface: #FBEAEB;
+    --danger-border: #EDB9BD;
+    --danger-foreground: #B3343D;
+
+    --state-live-chip: #D8FF4F;
+    --state-live-ink: #171A1D;
+    --state-scheduled-chip: #ECEEED;
+    --state-scheduled-ink: #4F5A61;
+    --state-completed-ink: #4F5A61;
+    --state-void-chip: #DADEE0;
+    --state-void-ink: #2A3238;
+    --presence-ink: #16865C;
+
+    --elev-1: 0 1px 2px -1px color-mix(in oklab, var(--ink) 12%, transparent),
+      0 4px 14px -8px color-mix(in oklab, var(--ink) 18%, transparent);
+    --elev-2: 0 2px 6px -2px color-mix(in oklab, var(--ink) 14%, transparent),
+      0 18px 38px -20px color-mix(in oklab, var(--ink) 30%, transparent);
+
+    --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+    --font-body: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+    --row-height: 2.75rem;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.018em; margin: 0; }
+  a { color: inherit; }
+  button { font: inherit; }
+
+  .font-score { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .t1 { font-size: 1.5rem; line-height: 1.75rem; }
+  .t2, .t3 { font-size: 0.875rem; line-height: 1.25rem; }
+  .t4 { font-size: 0.75rem; line-height: 1rem; }
+  .muted { color: var(--muted-foreground); }
+  .glyph { width: 0.75rem; height: 0.75rem; flex: none; fill: none; stroke: currentColor;
+    stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- page chrome ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    background: color-mix(in oklab, var(--surface) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .topbar .inner { max-width: 1360px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .brand { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+  .brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 14px;
+    background: var(--primary); color: var(--primary-foreground); font-family: var(--font-display);
+    font-weight: 700; font-size: 0.875rem; box-shadow: var(--elev-1); }
+  .brand-word { font-family: var(--font-display); font-size: 0.875rem; font-weight: 700; letter-spacing: -0.02em; color: var(--primary); }
+  .brand-word span { color: var(--muted-foreground); }
+  .topbar .note { margin-left: auto; font-size: 0.75rem; color: var(--muted-foreground); }
+  .topbar .note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground); }
+
+  .wrap { max-width: 1360px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 28px; }
+  .toc a { font-size: 0.75rem; text-decoration: none; color: var(--muted-foreground);
+    border: 1px solid var(--hairline); background: var(--surface); border-radius: 999px;
+    padding: 4px 10px; }
+  .toc a:hover { border-color: var(--border-selected); color: var(--foreground); }
+
+  .sec { margin: 0 0 40px; scroll-margin-top: 70px; }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .sec-head h2 { font-size: 1.0625rem; }
+  .sec-head .idx { font-family: var(--font-display); font-size: 0.75rem; font-weight: 700; color: var(--primary); }
+  .sec-sub { margin: 0 0 14px; font-size: 0.8125rem; color: var(--muted-foreground); max-width: 78ch; }
+  .sec-sub code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; color: var(--foreground); }
+
+  /* ---------- panel ---------- */
+  .panel { background: var(--surface); border: 1px solid var(--hairline); border-radius: 20px; box-shadow: var(--elev-1); }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    border-bottom: 1px solid var(--hairline); padding: 10px 16px; }
+  .panel-title { margin: 0; font-family: var(--font-display); font-size: 0.75rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted-foreground); }
+  .panel-body { padding: 16px; }
+  .grid { display: grid; gap: 12px; }
+  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .split { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  @media (max-width: 900px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .split, .g2 { grid-template-columns: 1fr; } }
+
+  /* ---------- pills ---------- */
+  .pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px;
+    padding: 2px 8px; font-size: 0.875rem; line-height: 1.25rem; text-transform: uppercase;
+    letter-spacing: 0.05em; white-space: nowrap; }
+  .pill--ink { padding: 0; }
+  .pill-live { background: var(--state-live-chip); color: var(--state-live-ink);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-live-ink) 25%, transparent); }
+  .pill-scheduled { background: var(--state-scheduled-chip); color: var(--state-scheduled-ink);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-scheduled-ink) 25%, transparent); }
+  .pill-void { background: var(--state-void-chip); color: var(--state-void-ink);
+    box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--state-void-ink) 50%, transparent); }
+  .pill-ink { color: var(--state-completed-ink); }
+  .pill-warn { background: var(--warn-surface); color: var(--warn-foreground);
+    box-shadow: inset 0 0 0 1px var(--warn-border); }
+  .pill-danger { background: var(--danger-surface); color: var(--danger-foreground); }
+  .pill-muted { background: var(--muted); color: var(--muted-foreground);
+    box-shadow: inset 0 0 0 1px var(--hairline); }
+  .pill-bye { background: transparent; color: var(--muted-foreground); border: 1px dashed var(--hairline); }
+
+  /* court pill variants */
+  .pill-play { background: var(--state-live-chip); color: var(--state-live-ink);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-live-ink) 60%, transparent); }
+  .pill-over { background: var(--danger-surface); color: var(--danger-foreground); }
+  .pill-ready { background: color-mix(in oklab, var(--primary) 10%, transparent); color: var(--primary-ink); }
+  .pill-wait { background: var(--warn-surface); color: var(--warn-foreground); }
+  .pill-idle { background: var(--muted); color: var(--muted-foreground); }
+
+  /* ---------- court tile ---------- */
+  .court { border: 1px solid var(--hairline); border-radius: 20px; padding: 14px;
+    box-shadow: var(--elev-1); background: var(--surface); text-align: left; }
+  .court.playing { border-color: color-mix(in oklab, var(--state-live-ink) 50%, transparent); background: var(--surface); }
+  .court.overrun { border-color: var(--danger-border); background: color-mix(in oklab, var(--danger-surface) 40%, transparent); }
+  .court.free-ready { border-color: color-mix(in oklab, var(--primary) 40%, transparent); background: color-mix(in oklab, var(--primary) 5%, transparent); }
+  .court.free-blocked { border-color: var(--hairline); background: var(--surface); }
+  .court.idle { border-color: var(--hairline); background: var(--surface); }
+  .court-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .court-id { display: flex; align-items: center; gap: 6px; font-family: var(--font-display);
+    font-size: 0.875rem; font-weight: 700; }
+  .num { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 14px;
+    background: color-mix(in oklab, var(--foreground) 10%, transparent); font-size: 0.875rem; }
+  .court-body { margin: 8px 0 0; }
+  .court-next { margin-top: 8px; border-top: 1px solid var(--hairline); padding-top: 8px; color: var(--muted-foreground); }
+  .court-next p { margin: 0; }
+  .court-cta { margin: 8px 0 0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted-foreground); }
+  .overrun-ink { color: var(--danger-foreground); font-weight: 600; }
+  .ready-ink { color: var(--primary); font-weight: 500; }
+  .rest-ink { color: var(--warn-foreground); }
+  .busy-ink { color: var(--danger-foreground); }
+
+  /* ---------- table ---------- */
+  table.tx { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
+  table.tx th { padding: 4px 12px 4px 0; font-size: 0.75rem; line-height: 1rem; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-foreground);
+    border-bottom: 1px solid var(--hairline); }
+  table.tx td { height: var(--row-height); padding: 4px 12px 4px 0; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+  table.tx tr:last-child td { border-bottom: 0; }
+  .r { text-align: right; }
+  .hair { border-color: var(--hairline); }
+  .warn-ink { color: var(--warn-foreground); }
+  .danger-ink { color: var(--danger-foreground); }
+
+  /* ---------- progress ---------- */
+  .prog { display: flex; align-items: center; gap: 12px; min-height: var(--row-height); padding: 4px 0;
+    border-bottom: 1px solid var(--hairline); font-size: 0.875rem; }
+  .prog:last-child { border-bottom: 0; }
+  .prog-id { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 14px; flex: none;
+    background: color-mix(in oklab, var(--primary) 10%, transparent); color: var(--primary-ink); font-size: 0.875rem; }
+  .bar { height: 6px; flex: 1; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+
+  /* ---------- tiles / notices / controls ---------- */
+  .tile { border: 1px solid var(--hairline); border-radius: 20px; padding: 12px; box-shadow: var(--elev-1); background: var(--surface); }
+  .tile-label { margin: 0; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted-foreground); }
+  .tile-value { margin: 4px 0 0; font-size: 1.5rem; line-height: 1; font-weight: 600; letter-spacing: -0.02em; }
+  .tile-hint { margin: 4px 0 0; font-size: 0.75rem; }
+  .tile.warn { border-color: var(--warn-border); background: var(--warn-surface); }
+  .tile.warn .tile-label, .tile.warn .tile-hint { color: var(--warn-foreground); }
+  .tile.danger { border-color: var(--danger-border); background: var(--danger-surface); }
+  .tile.danger .tile-label, .tile.danger .tile-hint { color: var(--danger-foreground); }
+  .tile.good { border-color: var(--hairline); background: color-mix(in oklab, var(--success) 10%, transparent); }
+
+  .notice { border: 1px solid; border-radius: 16px; padding: 8px 12px; font-size: 0.75rem; line-height: 1rem; font-weight: 500; }
+  .notice.warn { border-color: var(--warn-border); background: var(--warn-surface); color: var(--warn-foreground); }
+  .notice.info { border-color: var(--info-border); background: var(--info-surface); color: var(--info-foreground); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border: 0; border-radius: 14px; padding: 0 16px; height: 36px; font-size: 0.875rem; font-weight: 500;
+    cursor: pointer; text-decoration: none; }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); box-shadow: var(--elev-1); }
+  .btn-destructive { background: var(--destructive); color: var(--destructive-foreground); }
+  .btn-outline { background: var(--background); color: var(--foreground); border: 1px solid var(--input); box-shadow: var(--elev-1); }
+  .btn-secondary { background: var(--secondary); color: var(--secondary-foreground); }
+  .btn-ghost { background: transparent; color: var(--foreground); }
+  .btn-sm { height: 32px; padding: 0 12px; font-size: 0.75rem; }
+  .btn-lg { height: 40px; padding: 0 32px; }
+  .btn-cta { height: 44px; width: 100%; border-radius: 14px; font-size: 1rem; font-weight: 600; box-shadow: var(--elev-2); }
+  .btn[aria-disabled="true"], .btn.is-disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .field { display: flex; height: 36px; width: 100%; align-items: center; border-radius: 16px;
+    border: 1px solid var(--input); background: transparent; padding: 0 12px; font-size: 0.875rem; }
+  .score-field { height: 48px; width: 100%; border-radius: 16px; border: 1px solid var(--input);
+    background: transparent; text-align: center; font-size: 1.5rem; font-family: var(--font-body);
+    font-variant-numeric: tabular-nums; padding: 0 12px; }
+  .score-field::placeholder { color: var(--muted-foreground); }
+  .score-field:disabled { opacity: 0.5; }
+  .focus-ring { outline: 2px solid var(--ring); outline-offset: 2px; border-color: var(--ring); }
+
+  .day { border: 0; border-radius: 14px; padding: 4px 8px; font-size: 0.875rem; cursor: pointer; }
+  .day.on { background: var(--primary); color: var(--primary-foreground); }
+  .day.off { background: var(--muted); color: var(--muted-foreground); }
+
+  .nav-item { border-radius: 16px; padding: 6px 12px; font-size: 0.75rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-foreground); text-decoration: none; }
+  .nav-item.active { background: var(--primary); color: var(--primary-foreground); box-shadow: var(--elev-1); }
+  .nav-badge { display: inline-flex; min-width: 1.25rem; align-items: center; justify-content: center;
+    border-radius: 999px; border: 1px solid var(--warn-border); background: var(--warn-surface);
+    padding: 0 4px; color: var(--warn-foreground); font-size: 0.75rem; line-height: 1.15; margin-left: 6px; }
+
+  .session-pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+    border: 1px solid var(--hairline); background: color-mix(in oklab, var(--muted) 60%, transparent);
+    padding: 4px 10px; font-size: 0.75rem; color: var(--muted-foreground); }
+  .presence { width: 6px; height: 6px; border-radius: 999px; background: var(--presence-ink); }
+
+  .fake-header { background: color-mix(in oklab, var(--surface) 85%, transparent); border: 1px solid var(--hairline);
+    border-radius: 24px; padding: 10px 16px; box-shadow: var(--elev-1); }
+  .fake-header .row1 { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .fake-header .row2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tname { font-family: var(--font-display); font-size: 0.875rem; font-weight: 600; }
+
+  .alert-row { border: 0; width: 100%; text-align: left; border-radius: 14px; padding: 8px 10px; font-size: 0.875rem; }
+  .alert-primary { background: color-mix(in oklab, var(--primary) 15%, transparent); color: var(--foreground); font-weight: 500; cursor: pointer; }
+  .alert-warn { background: var(--warn-surface); color: var(--warn-foreground); cursor: pointer; }
+  .alert-danger { background: var(--danger-surface); color: var(--danger-foreground); }
+  .alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+  .empty { display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 16px;
+    border: 1px dashed var(--hairline); background: color-mix(in oklab, var(--muted) 30%, transparent);
+    padding: 32px 16px; text-align: center; }
+  .empty p { margin: 0; }
+  .empty .et { font-family: var(--font-display); font-size: 0.875rem; font-weight: 600; }
+  .empty .eh { font-size: 0.75rem; color: var(--muted-foreground); max-width: 44ch; }
+
+  .count-badge { border-radius: 14px; background: var(--warn-surface); padding: 2px 6px;
+    font-size: 0.75rem; font-weight: 600; color: var(--warn-foreground); }
+
+  /* ---------- swatches ---------- */
+  .sw-group { margin-bottom: 24px; }
+  .sw-group h3 { font-size: 0.875rem; margin: 0 0 4px; }
+  .sw-group p { margin: 0 0 12px; font-size: 0.75rem; color: var(--muted-foreground); }
+  .sw-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+  .sw { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 16px; padding: 10px; box-shadow: var(--elev-1); }
+  .sw-chip { width: 46px; height: 46px; border-radius: 14px; flex: none;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ink) 14%, transparent); }
+  .sw-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; font-weight: 600; }
+  .sw-hex { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; color: var(--muted-foreground); }
+  .sw-role { font-size: 0.75rem; color: var(--muted-foreground); margin-top: 2px; }
+
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted-foreground); min-width: 150px; }
+  .state-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+  .state-row:last-child { border-bottom: 0; }
+  .state-row .why { font-size: 0.75rem; color: var(--muted-foreground); margin-left: auto; text-align: right; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="g-scheduled" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.25"/><path d="M9 5.75V9l2.25 1.5"/></symbol>
+  <symbol id="g-live" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.25"/><circle cx="9" cy="9" r="2.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-walkover" viewBox="0 0 18 18"><path d="M5.6 6.1 9.4 9l-3.8 2.9z" fill="currentColor" stroke="none"/><path d="M11.9 6.1v5.8"/></symbol>
+  <symbol id="g-completed" viewBox="0 0 18 18"><path d="M5 9.4l2.7 2.7L13 6.4"/></symbol>
+  <symbol id="g-void" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.25"/><path d="M5.6 12.4 12.4 5.6"/></symbol>
+  <symbol id="g-unknown" viewBox="0 0 18 18"><circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-bye" viewBox="0 0 18 18"><path d="M4.5 9h9"/><path d="M10.5 5.75 13.75 9l-3.25 3.25"/></symbol>
+  <symbol id="g-pending" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.25"/><circle cx="6.6" cy="9" r="0.95" fill="currentColor" stroke="none"/><circle cx="9" cy="9" r="0.95" fill="currentColor" stroke="none"/><circle cx="11.4" cy="9" r="0.95" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-hourglass" viewBox="0 0 18 18"><path d="M6 3.5h6"/><path d="M6 14.5h6"/><path d="M6.75 3.5v2.4L9 9l2.25-3.1V3.5"/><path d="M6.75 14.5v-2.4L9 9l2.25 3.1v2.4"/></symbol>
+  <symbol id="g-sliders" viewBox="0 0 18 18"><path d="M3.5 6.25h11"/><path d="M3.5 11.75h11"/><circle cx="7" cy="6.25" r="1.6"/><circle cx="11.5" cy="11.75" r="1.6"/></symbol>
+  <symbol id="g-lock" viewBox="0 0 18 18"><rect x="4.25" y="8" width="9.5" height="6.75" rx="1.5"/><path d="M6.5 8V6.4a2.5 2.5 0 0 1 5 0V8"/></symbol>
+  <symbol id="g-play" viewBox="0 0 18 18"><path d="M6.75 4.9 13.5 9l-6.75 4.1z"/></symbol>
+</defs></svg>
+
+<div class="topbar">
+  <div class="inner">
+    <span class="brand"><span class="brand-mark">T</span><span class="brand-word">TOURNOVA<span> / ops</span></span></span>
+    <span class="note">Desk palette mockup · tokens mirrored from <code>src/styles.css</code></span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <a href="#desk">Desk in context</a>
+    <a href="#court">Court states</a>
+    <a href="#match">Match states</a>
+    <a href="#connection">Connection</a>
+    <a href="#readiness">Readiness</a>
+    <a href="#alerts">Alerts</a>
+    <a href="#transitions">Transitions</a>
+    <a href="#progress">Progress</a>
+    <a href="#tiles">Stat tiles</a>
+    <a href="#notices">Notices</a>
+    <a href="#controls">Controls</a>
+    <a href="#lifecycle">Lifecycle &amp; registration</a>
+    <a href="#palette">Palette tokens</a>
+  </nav>
+
+  <!-- ================= 1. DESK IN CONTEXT ================= -->
+  <section class="sec" id="desk">
+    <div class="sec-head"><span class="idx">01</span><h2>Desk in context</h2></div>
+    <p class="sec-sub">Every desk treatment at once: the header, the day bar, the Act-now panel, the court board with all five states, the transitions table and court progress. This is the screen the palette has to hold together.</p>
+
+    <div class="stack">
+      <!-- faux workspace header -->
+      <div class="fake-header">
+        <div class="row1">
+          <span class="brand"><span class="brand-mark">T</span><span class="brand-word">TOURNOVA<span> / ops</span></span></span>
+          <span class="tname">KL Open 2026</span>
+          <span class="pill pill-live pill--ink" style="padding:2px 8px"><svg class="glyph"><use href="#g-live"/></svg>In progress</span>
+          <span style="margin-left:auto"></span>
+          <span class="session-pill"><span class="presence" aria-hidden="true"></span>nhphuong@shuttle.my · organizer</span>
+          <a class="btn btn-outline btn-sm" href="#desk">Sign out</a>
+        </div>
+        <div class="row2">
+          <a class="nav-item active" href="#desk">Desk</a>
+          <a class="nav-item" href="#desk">Entries</a>
+          <a class="nav-item" href="#desk">Placement</a>
+          <a class="nav-item" href="#desk">Knockout</a>
+          <a class="nav-item" href="#desk">Schedule</a>
+          <a class="nav-item" href="#desk">Scores</a>
+          <a class="nav-item" href="#desk">Registrations<span class="nav-badge">3</span></a>
+          <a class="nav-item" href="#desk">Setup</a>
+          <a class="nav-item" href="#desk">Access</a>
+        </div>
+      </div>
+
+      <!-- page header -->
+      <div class="row" style="justify-content:space-between; align-items:flex-end">
+        <div>
+          <h1 style="font-size:1.5rem">Control desk</h1>
+          <p class="sec-sub" style="margin:4px 0 0">Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing.</p>
+        </div>
+        <div class="row">
+          <span class="pill-live" style="border-radius:999px;padding:4px 10px;font-size:0.75rem;font-weight:600;display:inline-flex">Live · last change 2m ago</span>
+          <a class="btn btn-outline btn-sm" href="#desk">Refresh</a>
+        </div>
+      </div>
+
+      <!-- day bar -->
+      <div class="row" style="justify-content:space-between; gap:12px; border:1px solid var(--hairline); background:var(--surface); border-radius:16px; padding:8px 12px; font-size:0.75rem">
+        <div class="row" style="gap:10px">
+          <span style="font-weight:600; text-transform:uppercase; letter-spacing:0.12em; color:var(--muted-foreground)">Day</span>
+          <button class="day on font-score" type="button">Sat, Sep 19</button>
+          <button class="day off font-score" type="button">Sun, Sep 20</button>
+          <button class="day off font-score" type="button">Mon, Sep 21</button>
+        </div>
+        <span class="muted">Last match scheduled to finish 17:05 · Day closes 18:00 · <span class="warn-ink" style="font-weight:600">Scheduled 12 min past the day's close</span></span>
+      </div>
+
+      <p class="muted t4" style="margin:0">2 matches have no scheduled time, so they are not counted on any day.</p>
+
+      <div class="split">
+        <!-- Act now -->
+        <div class="panel">
+          <div class="panel-head">
+            <h3 class="panel-title">Act now</h3>
+            <span class="t4 muted">09:42 · updates every 30s</span>
+          </div>
+          <div class="panel-body">
+            <ul class="alert-list">
+              <li><button class="alert-row alert-primary" type="button">Court 3 is free — start Park / Kim vs Dao / Le</button></li>
+              <li><div class="alert-row alert-warn">2 matches are ready with no court yet — build or rebuild the schedule to lay them across the days. <a href="#alerts" style="font-weight:600;text-decoration:underline">open the schedule</a>.</div></li>
+              <li><div class="alert-row alert-danger">Pool B (MD) is more than 15 minutes past its scheduled finish with results still missing — <a href="#alerts" style="font-weight:600;text-decoration:underline">enter results</a>.</div></li>
+              <li><button class="alert-row alert-warn" type="button">Lim / Wong vs Tan / Vo has been on court 34 minutes — open the score desk.</button></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- All clear -->
+        <div class="panel">
+          <div class="panel-head">
+            <h3 class="panel-title">Act now — all clear</h3>
+            <span class="t4 muted">no alerts</span>
+          </div>
+          <div class="panel-body">
+            <div class="empty">
+              <p class="et">All clear</p>
+              <p class="eh">No urgent desk actions right now.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Court board -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">Court board</h3>
+          <span class="t4 muted">Sat, Sep 19 · 5 courts</span>
+        </div>
+        <div class="panel-body">
+          <div class="grid g4">
+            <!-- playing -->
+            <div class="court playing">
+              <div class="court-top">
+                <span class="court-id"><span class="num font-score">1</span>Court 1</span>
+                <span class="pill pill-play">Playing</span>
+              </div>
+              <p class="court-body t3">
+                <span class="font-score t4 muted">A-MD R1</span><br />
+                Nguyen / Tran vs Lim / Wong<br />
+                <span class="font-score t2 muted">12′ on court</span>
+              </p>
+              <div class="court-next t2">
+                <p>Next: 09:55 · Park / Kim vs Dao / Le</p>
+                <span class="ready-ink">Ready now</span>
+              </div>
+              <p class="court-cta">Open score desk</p>
+            </div>
+
+            <!-- overrun -->
+            <div class="court overrun">
+              <div class="court-top">
+                <span class="court-id"><span class="num font-score">2</span>Court 2</span>
+                <span class="pill pill-over">Overrun</span>
+              </div>
+              <p class="court-body t3">
+                <span class="font-score t4 muted">B-WS R2</span><br />
+                Lim / Wong vs Tan / Vo<br />
+                <span class="font-score t2 overrun-ink">34′ on court · started 6 min late</span>
+              </p>
+              <div class="court-next t2">
+                <p>Next: 10:05 · Cheah / Ng vs Ong / Foo</p>
+                <span class="rest-ink">Aisyah · ready in 4 min</span>
+              </div>
+              <p class="court-cta">Open score desk</p>
+            </div>
+
+            <!-- free-ready -->
+            <div class="court free-ready">
+              <div class="court-top">
+                <span class="court-id"><span class="num font-score">3</span>Court 3</span>
+                <span class="pill pill-ready">Ready</span>
+              </div>
+              <p class="court-body t3"><span style="font-weight:500">Free — next match ready</span></p>
+              <div class="court-next t2">
+                <p>Next: 09:45 · Park / Kim vs Dao / Le</p>
+                <span class="ready-ink">Ready now</span>
+              </div>
+              <p class="court-cta">Open next match</p>
+            </div>
+
+            <!-- free-blocked -->
+            <div class="court free-blocked">
+              <div class="court-top">
+                <span class="court-id"><span class="num font-score">4</span>Court 4</span>
+                <span class="pill pill-wait">Waiting</span>
+              </div>
+              <p class="court-body t3"><span style="font-weight:500">Free — waiting for players</span></p>
+              <div class="court-next t2">
+                <p>Next: 10:10 · Teo / Goh vs Yap / Sim</p>
+                <span class="busy-ink">Wei Ming · on Court 2</span>
+              </div>
+              <p class="court-cta">Open next match</p>
+            </div>
+
+            <!-- idle -->
+            <div class="court idle">
+              <div class="court-top">
+                <span class="court-id"><span class="num font-score">5</span>Court 5</span>
+                <span class="pill pill-idle">Idle</span>
+              </div>
+              <p class="court-body t3"><span style="font-weight:500">Idle</span></p>
+              <div class="court-next t2"><p class="t4">nothing queued</p></div>
+              <p class="court-cta">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split">
+        <!-- transitions -->
+        <div class="panel">
+          <div class="panel-head">
+            <h3 class="panel-title">Next transitions</h3>
+            <span class="count-badge font-score">2 overdue</span>
+          </div>
+          <div class="panel-body" style="padding-top:8px">
+            <table class="tx">
+              <thead><tr>
+                <th>Court</th><th>Match</th><th>Transition</th><th class="r">Due</th><th class="r">Status</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td class="font-score" style="font-weight:600">C2</td>
+                  <td style="font-weight:600">B-WS R2</td>
+                  <td class="t4 muted">Expected finish</td>
+                  <td class="t4 muted r font-score">~09:38</td>
+                  <td class="r font-score" style="font-weight:600"><span class="warn-ink">4 min overdue</span></td>
+                </tr>
+                <tr>
+                  <td class="font-score" style="font-weight:600">C4</td>
+                  <td style="font-weight:600">C-XD R1</td>
+                  <td class="t4 muted">Scheduled start</td>
+                  <td class="t4 muted r font-score">09:42</td>
+                  <td class="r font-score" style="font-weight:600"><span class="warn-ink">2 min overdue</span></td>
+                </tr>
+                <tr>
+                  <td class="font-score" style="font-weight:600">C1</td>
+                  <td style="font-weight:600">A-MD R1</td>
+                  <td class="t4 muted">Expected finish</td>
+                  <td class="t4 muted r font-score">~09:51</td>
+                  <td class="r font-score" style="font-weight:600">in 9 min</td>
+                </tr>
+                <tr>
+                  <td class="font-score" style="font-weight:600">C3</td>
+                  <td style="font-weight:600">D-WD R2</td>
+                  <td class="t4 muted">Scheduled start</td>
+                  <td class="t4 muted r font-score">10:20</td>
+                  <td class="r font-score" style="font-weight:600">in 38 min</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- court progress -->
+        <div class="panel">
+          <div class="panel-head">
+            <h3 class="panel-title">Court progress</h3>
+            <span class="t4 muted">21/48 matches done</span>
+          </div>
+          <div class="panel-body" style="padding-top:8px">
+            <div class="prog"><span class="prog-id font-score">1</span><span class="bar"><i style="width:75%"></i></span><span class="font-score muted" style="width:64px;text-align:right">9/12</span><span class="font-score t2 muted" style="width:80px;text-align:right">3 left</span></div>
+            <div class="prog"><span class="prog-id font-score">2</span><span class="bar"><i style="width:50%"></i></span><span class="font-score muted" style="width:64px;text-align:right">6/12</span><span class="font-score t2 muted" style="width:80px;text-align:right">6 left</span></div>
+            <div class="prog"><span class="prog-id font-score">3</span><span class="bar"><i style="width:100%"></i></span><span class="font-score muted" style="width:64px;text-align:right">11/11</span><span class="font-score t2 muted" style="width:80px;text-align:right">complete</span></div>
+            <div class="prog"><span class="prog-id font-score">4</span><span class="bar"><i style="width:0%"></i></span><span class="font-score muted" style="width:64px;text-align:right">0/8</span><span class="font-score t2 muted" style="width:80px;text-align:right">8 left</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. COURT STATES ================= -->
+  <section class="sec" id="court">
+    <div class="sec-head"><span class="idx">02</span><h2>Court states</h2></div>
+    <p class="sec-sub">The five derived court states, each as the tile edge/tint plus the pill. Source: <code>COURT_STATE_TILE</code> / <code>COURT_STATE_CHIP</code>.</p>
+    <div class="stack">
+      <div class="state-row">
+        <span class="label" style="min-width:120px">playing</span>
+        <div class="court playing" style="width:300px">
+          <div class="court-top"><span class="court-id"><span class="num font-score">1</span>Court 1</span><span class="pill pill-play">Playing</span></div>
+          <p class="court-body t3 muted" style="font-size:0.75rem">edge <span class="mono">state-live-ink/50</span> · fill <span class="mono">surface</span></p>
+        </div>
+        <span class="why">pill: live chip + inset live-ink/60<br />shares the match <span class="mono">live</span> tokens on purpose</span>
+      </div>
+      <div class="state-row">
+        <span class="label" style="min-width:120px">overrun</span>
+        <div class="court overrun" style="width:300px">
+          <div class="court-top"><span class="court-id"><span class="num font-score">2</span>Court 2</span><span class="pill pill-over">Overrun</span></div>
+          <p class="court-body t3 muted" style="font-size:0.75rem">edge <span class="mono">danger-border</span> · fill <span class="mono">danger-surface/40</span></p>
+        </div>
+        <span class="why">pill: danger surface + danger ink</span>
+      </div>
+      <div class="state-row">
+        <span class="label" style="min-width:120px">free-ready</span>
+        <div class="court free-ready" style="width:300px">
+          <div class="court-top"><span class="court-id"><span class="num font-score">3</span>Court 3</span><span class="pill pill-ready">Ready</span></div>
+          <p class="court-body t3 muted" style="font-size:0.75rem">edge <span class="mono">primary/40</span> · fill <span class="mono">primary/5</span></p>
+        </div>
+        <span class="why">pill: <span class="mono">primary/10</span> + primary-ink<br />the validated ink pair</span>
+      </div>
+      <div class="state-row">
+        <span class="label" style="min-width:120px">free-blocked</span>
+        <div class="court free-blocked" style="width:300px">
+          <div class="court-top"><span class="court-id"><span class="num font-score">4</span>Court 4</span><span class="pill pill-wait">Waiting</span></div>
+          <p class="court-body t3 muted" style="font-size:0.75rem">edge <span class="mono">hairline</span> · fill <span class="mono">surface</span></p>
+        </div>
+        <span class="why">pill: warn surface + warn ink<br />tile stays calm on purpose</span>
+      </div>
+      <div class="state-row">
+        <span class="label" style="min-width:120px">idle</span>
+        <div class="court idle" style="width:300px">
+          <div class="court-top"><span class="court-id"><span class="num font-score">5</span>Court 5</span><span class="pill pill-idle">Idle</span></div>
+          <p class="court-body t3 muted" style="font-size:0.75rem">edge <span class="mono">hairline</span> · fill <span class="mono">surface</span></p>
+        </div>
+        <span class="why">pill: muted + muted-foreground</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3. MATCH STATES ================= -->
+  <section class="sec" id="match">
+    <div class="sec-head"><span class="idx">03</span><h2>Match states</h2></div>
+    <p class="sec-sub">The persisted statuses as the app draws them: tiers 1/3 are chips, tier 4 is ink only, plus a bye and an unrecognised value.</p>
+    <div class="panel">
+      <div class="panel-body stack">
+        <div class="state-row"><span class="label">live (tier 1)</span><span class="pill pill-live"><svg class="glyph"><use href="#g-live"/></svg>Live</span><span class="why"><span class="mono">state-live-chip</span> / <span class="mono">state-live-ink</span></span></div>
+        <div class="state-row"><span class="label">scheduled (tier 3)</span><span class="pill pill-scheduled"><svg class="glyph"><use href="#g-scheduled"/></svg>Scheduled</span><span class="why"><span class="mono">state-scheduled-chip</span> / <span class="mono">-ink</span></span></div>
+        <div class="state-row"><span class="label">void (tier 3)</span><span class="pill pill-void"><svg class="glyph"><use href="#g-void"/></svg>Void</span><span class="why"><span class="mono">state-void-chip</span> / <span class="mono">-ink</span> + 2px ring</span></div>
+        <div class="state-row"><span class="label">completed (tier 4)</span><span class="pill pill--ink pill-ink pill"><svg class="glyph"><use href="#g-completed"/></svg>Completed</span><span class="why">no chip — <span class="mono">state-completed-ink</span></span></div>
+        <div class="state-row"><span class="label">walkover (tier 4)</span><span class="pill pill--ink pill-ink pill"><svg class="glyph"><use href="#g-walkover"/></svg>Walkover</span><span class="why">same ink — told apart by glyph + word</span></div>
+        <div class="state-row"><span class="label">bye (draw condition)</span><span class="pill pill-bye"><svg class="glyph"><use href="#g-bye"/></svg>Bye</span><span class="why">dashed edge, not a status</span></div>
+        <div class="state-row"><span class="label">unrecognised</span><span class="pill pill-muted" style="text-transform:none"><svg class="glyph"><use href="#g-unknown"/></svg>in progress (raw)</span><span class="why">neutral fallback, prints the value</span></div>
+        <div class="state-row"><span class="label">dialog chip</span>
+          <span class="row" style="gap:8px">
+            <span style="border-radius:999px;padding:4px 12px;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.18em;color:var(--state-completed-ink)">Reported</span>
+            <span style="border-radius:999px;padding:4px 12px;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.18em;background:var(--state-scheduled-chip);color:var(--state-scheduled-ink)">Not started</span>
+            <span style="border-radius:999px;padding:4px 12px;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.18em;background:var(--state-live-chip);color:var(--state-live-ink)">Live</span>
+          </span>
+          <span class="why">match operations dialog</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. CONNECTION ================= -->
+  <section class="sec" id="connection">
+    <div class="sec-head"><span class="idx">04</span><h2>Connection badge</h2></div>
+    <p class="sec-sub">Realtime status. Live reuses the match live pair; offline/error share danger; connecting takes warn.</p>
+    <div class="panel"><div class="panel-body row" style="gap:16px">
+      <span style="border-radius:999px;padding:4px 10px;font-size:0.75rem;font-weight:600;background:var(--state-live-chip);color:var(--state-live-ink)">Live · last change 12m ago</span>
+      <span style="border-radius:999px;padding:4px 10px;font-size:0.75rem;font-weight:600;background:var(--warn-surface);color:var(--warn-foreground)">Connecting</span>
+      <span style="border-radius:999px;padding:4px 10px;font-size:0.75rem;font-weight:600;background:var(--danger-surface);color:var(--danger-foreground)">Offline · changes unavailable</span>
+      <span style="border-radius:999px;padding:4px 10px;font-size:0.75rem;font-weight:600;background:var(--danger-surface);color:var(--danger-foreground)">Connection error</span>
+    </div></div>
+  </section>
+
+  <!-- ================= 5. READINESS ================= -->
+  <section class="sec" id="readiness">
+    <div class="sec-head"><span class="idx">05</span><h2>Readiness text</h2></div>
+    <p class="sec-sub">The four readiness answers on a court tile, in the ink each one owns.</p>
+    <div class="panel"><div class="panel-body stack t2">
+      <div class="state-row"><span class="label">ready</span><span class="ready-ink">Ready now</span><span class="why"><span class="mono">primary</span></span></div>
+      <div class="state-row"><span class="label">resting</span><span class="rest-ink">Aisyah · ready in 4 min</span><span class="why"><span class="mono">warn-foreground</span></span></div>
+      <div class="state-row"><span class="label">player-busy</span><span class="busy-ink">Wei Ming · on Court 2</span><span class="why"><span class="mono">danger-foreground</span></span></div>
+      <div class="state-row"><span class="label">teams-missing</span><span>Teams not assigned</span><span class="why">inherits muted ink</span></div>
+    </div></div>
+  </section>
+
+  <!-- ================= 6. ALERTS ================= -->
+  <section class="sec" id="alerts">
+    <div class="sec-head"><span class="idx">06</span><h2>Act-now alerts</h2></div>
+    <p class="sec-sub">Four alert tones plus the all-clear empty state. The primary row is the one action the desk offers; warn is a chase; danger is the only destructive treatment.</p>
+    <div class="panel"><div class="panel-body">
+      <ul class="alert-list">
+        <li><button class="alert-row alert-primary" type="button">Court 3 is free — start Park / Kim vs Dao / Le</button></li>
+        <li><div class="alert-row alert-warn">2 matches are ready with no court yet — build or rebuild the schedule. <a href="#alerts" style="font-weight:600;text-decoration:underline">open the schedule</a>.</div></li>
+        <li><div class="alert-row alert-danger">Pool B (MD) is more than 15 minutes past its scheduled finish with results still missing — <a href="#alerts" style="font-weight:600;text-decoration:underline">enter results</a>.</div></li>
+        <li><button class="alert-row alert-warn" type="button">Lim / Wong vs Tan / Vo has been on court 34 minutes — open the score desk.</button></li>
+      </ul>
+      <div class="empty" style="margin-top:16px">
+        <p class="et">All clear</p>
+        <p class="eh">No urgent desk actions right now.</p>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ================= 7. TRANSITIONS ================= -->
+  <section class="sec" id="transitions">
+    <div class="sec-head"><span class="idx">07</span><h2>Next transitions</h2></div>
+    <p class="sec-sub">The only hue in the table is <code>warn-foreground</code> on a late status. Kind and Due are muted; the status carries the state.</p>
+    <div class="panel"><div class="panel-body" style="padding-top:8px">
+      <table class="tx">
+        <thead><tr><th>Court</th><th>Match</th><th>Transition</th><th class="r">Due</th><th class="r">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="font-score" style="font-weight:600">C2</td><td style="font-weight:600">B-WS R2</td><td class="t4 muted">Expected finish</td><td class="t4 muted r font-score">~09:38</td><td class="r font-score" style="font-weight:600"><span class="warn-ink">6h 2m overdue</span></td></tr>
+          <tr><td class="font-score" style="font-weight:600">C1</td><td style="font-weight:600">A-MD R1</td><td class="t4 muted">Expected finish</td><td class="t4 muted r font-score">~09:51</td><td class="r font-score" style="font-weight:600">in 9 min</td></tr>
+          <tr><td class="font-score" style="font-weight:600">C3</td><td style="font-weight:600">D-WD R2</td><td class="t4 muted">Scheduled start</td><td class="t4 muted r font-score">10:20</td><td class="r font-score" style="font-weight:600">in 38 min</td></tr>
+          <tr><td class="font-score" style="font-weight:600">C5</td><td style="font-weight:600">C-XD R1</td><td class="t4 muted">Scheduled start</td><td class="t4 muted r font-score">11:05</td><td class="r font-score" style="font-weight:600">in 1h 23m</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </section>
+
+  <!-- ================= 8. PROGRESS ================= -->
+  <section class="sec" id="progress">
+    <div class="sec-head"><span class="idx">08</span><h2>Court progress</h2></div>
+    <p class="sec-sub">Complete, part-done and not-started bars. The fill is brand primary; the track is muted.</p>
+    <div class="panel"><div class="panel-body" style="padding-top:8px">
+      <div class="prog"><span class="prog-id font-score">1</span><span class="bar"><i style="width:75%"></i></span><span class="font-score muted" style="width:64px;text-align:right">9/12</span><span class="font-score t2 muted" style="width:80px;text-align:right">3 left</span></div>
+      <div class="prog"><span class="prog-id font-score">2</span><span class="bar"><i style="width:50%"></i></span><span class="font-score muted" style="width:64px;text-align:right">6/12</span><span class="font-score t2 muted" style="width:80px;text-align:right">6 left</span></div>
+      <div class="prog"><span class="prog-id font-score">3</span><span class="bar"><i style="width:100%"></i></span><span class="font-score muted" style="width:64px;text-align:right">11/11</span><span class="font-score t2 muted" style="width:80px;text-align:right">complete</span></div>
+      <div class="prog"><span class="prog-id font-score">4</span><span class="bar"><i style="width:0%"></i></span><span class="font-score muted" style="width:64px;text-align:right">0/8</span><span class="font-score t2 muted" style="width:80px;text-align:right">8 left</span></div>
+    </div></div>
+  </section>
+
+  <!-- ================= 9. STAT TILES ================= -->
+  <section class="sec" id="tiles">
+    <div class="sec-head"><span class="idx">09</span><h2>Stat tiles</h2></div>
+    <p class="sec-sub">The four tones. The label takes each tone's own ink, not the neutral muted ink.</p>
+    <div class="grid g4">
+      <div class="tile"><p class="tile-label">Courts in play</p><p class="tile-value font-score">7</p><p class="tile-hint">normal</p></div>
+      <div class="tile good"><p class="tile-label">On schedule</p><p class="tile-value font-score">92%</p><p class="tile-hint">success/10 · muted ink</p></div>
+      <div class="tile warn"><p class="tile-label">Running late</p><p class="tile-value font-score">3</p><p class="tile-hint">warn-surface · warn ink</p></div>
+      <div class="tile danger"><p class="tile-label">Overdue results</p><p class="tile-value font-score">2</p><p class="tile-hint">danger-surface · danger ink</p></div>
+    </div>
+  </section>
+
+  <!-- ================= 10. NOTICES ================= -->
+  <section class="sec" id="notices">
+    <div class="sec-head"><span class="idx">10</span><h2>Notices</h2></div>
+    <p class="sec-sub">The page-level callout, in both declared tones.</p>
+    <div class="stack" style="max-width:680px">
+      <div class="notice warn">Read-only view. Sign in to start, score and schedule matches.</div>
+      <div class="notice info">This tournament is already configured, so its match format is fixed. Editing the format later regenerates the draw.</div>
+    </div>
+  </section>
+
+  <!-- ================= 11. CONTROLS ================= -->
+  <section class="sec" id="controls">
+    <div class="sec-head"><span class="idx">11</span><h2>Controls</h2></div>
+    <p class="sec-sub">Buttons, inputs, day pills and the score field. Includes the disabled and focus treatments.</p>
+    <div class="panel"><div class="panel-body stack">
+      <div class="state-row"><span class="label">buttons</span>
+        <span class="row">
+          <button class="btn btn-primary">Start match</button>
+          <button class="btn btn-outline">Refresh</button>
+          <button class="btn btn-secondary">Secondary</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-destructive">Void</button>
+          <button class="btn btn-primary btn-sm">Small</button>
+          <button class="btn btn-primary is-disabled" disabled>Disabled</button>
+        </span>
+      </div>
+      <div class="state-row"><span class="label">primary CTA</span>
+        <span style="width:260px"><button class="btn btn-primary btn-cta">▶ Start match</button></span>
+        <span class="why">h-11 · semibold · elev-2</span>
+      </div>
+      <div class="state-row"><span class="label">inputs</span>
+        <span class="row" style="flex:1">
+          <input class="field" style="max-width:200px" placeholder="Operator note" />
+          <input class="field focus-ring" style="max-width:200px" value="Focused field" />
+          <input class="field" style="max-width:200px" value="Disabled" disabled />
+        </span>
+      </div>
+      <div class="state-row"><span class="label">score field</span>
+        <span class="row">
+          <input class="score-field font-score" style="width:84px" value="21" />
+          <span class="font-score muted" style="font-size:1.125rem">:</span>
+          <input class="score-field font-score" style="width:84px" value="18" />
+          <input class="score-field font-score" style="width:84px" placeholder="—" />
+        </span>
+        <span class="why">t1 · tabular · centered</span>
+      </div>
+      <div class="state-row"><span class="label">day pills</span>
+        <span class="row">
+          <button class="day on font-score">Sat, Sep 19</button>
+          <button class="day off font-score">Sun, Sep 20</button>
+          <button class="day off font-score">Mon, Sep 21</button>
+        </span>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ================= 12. LIFECYCLE & REGISTRATION ================= -->
+  <section class="sec" id="lifecycle">
+    <div class="sec-head"><span class="idx">12</span><h2>Lifecycle &amp; registration</h2></div>
+    <p class="sec-sub">Tournament lifecycle, the registration window and the request decision. Green means "happening now" in all three; the receding states drop their chip.</p>
+    <div class="panel"><div class="panel-body stack">
+      <div class="state-row"><span class="label">lifecycle</span>
+        <span class="row">
+          <span class="pill pill-live pill--ink" style="padding:2px 8px"><svg class="glyph"><use href="#g-live"/></svg>In progress</span>
+          <span class="pill pill-muted" style="padding:2px 8px"><svg class="glyph"><use href="#g-scheduled"/></svg>Upcoming</span>
+          <span class="pill pill-ink pill--ink"><svg class="glyph"><use href="#g-completed"/></svg>Completed</span>
+        </span>
+      </div>
+      <div class="state-row" style="align-items:flex-start"><span class="label">registration window</span>
+        <span class="row" style="max-width:820px">
+          <span class="pill pill-live" style="padding:2px 8px"><svg class="glyph"><use href="#g-live"/></svg>Open</span>
+          <span class="pill pill-muted" style="padding:2px 8px"><svg class="glyph"><use href="#g-hourglass"/></svg>Opens soon</span>
+          <span class="pill pill-muted" style="padding:2px 8px"><svg class="glyph"><use href="#g-sliders"/></svg>Not ready</span>
+          <span class="pill pill-muted" style="padding:2px 8px"><svg class="glyph"><use href="#g-lock"/></svg>Closed</span>
+          <span class="pill pill-muted" style="padding:2px 8px"><svg class="glyph"><use href="#g-play"/></svg>Started</span>
+          <span class="pill pill-muted" style="padding:2px 8px"><svg class="glyph"><use href="#g-void"/></svg>Not offered</span>
+          <span class="pill pill-ink pill--ink"><svg class="glyph"><use href="#g-completed"/></svg>Completed</span>
+        </span>
+      </div>
+      <div class="state-row"><span class="label">request decision</span>
+        <span class="row">
+          <span class="pill pill-warn" style="padding:2px 8px"><svg class="glyph"><use href="#g-pending"/></svg>Awaiting decision</span>
+          <span class="pill" style="padding:2px 8px;background:color-mix(in oklab, var(--success) 10%, transparent);color:var(--muted-foreground);box-shadow:inset 0 0 0 1px var(--hairline)"><svg class="glyph"><use href="#g-completed"/></svg>Approved</span>
+          <span class="pill pill-muted" style="padding:2px 8px"><svg class="glyph"><use href="#g-void"/></svg>Not accepted</span>
+        </span>
+      </div>
+      <div class="state-row"><span class="label">nav badge</span>
+        <span class="row">
+          <a class="nav-item" href="#lifecycle">Registrations<span class="nav-badge">3</span></a>
+        </span>
+        <span class="why">warn pair — work is waiting</span>
+      </div>
+    </div></div>
+  </section>
+
+  <!-- ================= 13. PALETTE ================= -->
+  <section class="sec" id="palette">
+    <div class="sec-head"><span class="idx">13</span><h2>Palette tokens</h2></div>
+    <p class="sec-sub">Every token in <code>:root</code>, with the role it plays. This is the set to review before it is frozen.</p>
+
+    <div class="sw-group">
+      <h3>Ground &amp; chassis</h3>
+      <p>Cool neutral slate. Hierarchy is carried by lightness and weight; hue is reserved for state, brand action and destructive.</p>
+      <div class="sw-grid">
+        <div class="sw"><span class="sw-chip" style="background:#F4F5F4"></span><div><div class="sw-name">--background</div><div class="sw-hex">#F4F5F4</div><div class="sw-role">Page ground</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#FFFFFF"></span><div><div class="sw-name">--surface</div><div class="sw-hex">#FFFFFF</div><div class="sw-role">Panels, tiles, cards</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#171A1D"></span><div><div class="sw-name">--foreground</div><div class="sw-hex">#171A1D</div><div class="sw-role">Body ink</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#171A1D"></span><div><div class="sw-name">--ink</div><div class="sw-hex">#171A1D</div><div class="sw-role">Elevation tint source</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#D9DDDF"></span><div><div class="sw-name">--hairline</div><div class="sw-hex">#D9DDDF</div><div class="sw-role">Separators, decorative edges</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#7F8A91"></span><div><div class="sw-name">--border-control</div><div class="sw-hex">#7F8A91</div><div class="sw-role">Control edge · 3.09:1 on page</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#6F7A82"></span><div><div class="sw-name">--border-selected</div><div class="sw-hex">#6F7A82</div><div class="sw-role">Selected ring · 3.6:1 on muted</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#EDEFEE"></span><div><div class="sw-name">--muted</div><div class="sw-hex">#EDEFEE</div><div class="sw-role">Quiet fill, progress track</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#5B656C"></span><div><div class="sw-name">--muted-foreground</div><div class="sw-hex">#5B656C</div><div class="sw-role">Secondary ink</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#ECEEED"></span><div><div class="sw-name">--secondary</div><div class="sw-hex">#ECEEED</div><div class="sw-role">Secondary button fill</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#E9ECEB"></span><div><div class="sw-name">--accent</div><div class="sw-hex">#E9ECEB</div><div class="sw-role">Hover surface — stays neutral</div></div></div>
+      </div>
+    </div>
+
+    <div class="sw-group">
+      <h3>Brand &amp; action</h3>
+      <p>One brand hue, one destructive hue, and two accents scoped to where they are legible.</p>
+      <div class="sw-grid">
+        <div class="sw"><span class="sw-chip" style="background:#5B4FC7"></span><div><div class="sw-name">--primary</div><div class="sw-hex">#5B4FC7</div><div class="sw-role">Brand action, active nav</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#FFFFFF"></span><div><div class="sw-name">--primary-foreground</div><div class="sw-hex">#FFFFFF</div><div class="sw-role">Ink on primary</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#5B4FC7"></span><div><div class="sw-name">--primary-ink</div><div class="sw-hex">#5B4FC7</div><div class="sw-role">Ink on primary/10 tint</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#5B4FC7"></span><div><div class="sw-name">--ring</div><div class="sw-hex">#5B4FC7</div><div class="sw-role">Focus ring · 5.5:1</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#C83F49"></span><div><div class="sw-name">--destructive</div><div class="sw-hex">#C83F49</div><div class="sw-role">Destructive action / void</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#FFFFFF"></span><div><div class="sw-name">--destructive-foreground</div><div class="sw-hex">#FFFFFF</div><div class="sw-role">Ink on destructive</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#D6F25A"></span><div><div class="sw-name">--shuttle</div><div class="sw-hex">#D6F25A</div><div class="sw-role">On dark/green only — never on light</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#E1EFE8"></span><div><div class="sw-name">--court-tint</div><div class="sw-hex">#E1EFE8</div><div class="sw-role">Quiet green highlight</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#16865C"></span><div><div class="sw-name">--success</div><div class="sw-hex">#16865C</div><div class="sw-role">Fill only · 2.95:1 as text</div></div></div>
+      </div>
+    </div>
+
+    <div class="sw-group">
+      <h3>Feedback callouts</h3>
+      <p>Each tone is a surface + border + its own solved ink. The ink is only valid against its own surface.</p>
+      <div class="sw-grid">
+        <div class="sw"><span class="sw-chip" style="background:#FAF0E1"></span><div><div class="sw-name">--warn-surface</div><div class="sw-hex">#FAF0E1</div><div class="sw-role">Warn callout surface</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#E8CFA3"></span><div><div class="sw-name">--warn-border</div><div class="sw-hex">#E8CFA3</div><div class="sw-role">Warn edge</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#8F5300"></span><div><div class="sw-name">--warn-foreground</div><div class="sw-hex">#8F5300</div><div class="sw-role">Warn ink, late status</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#ECEAFA"></span><div><div class="sw-name">--info-surface</div><div class="sw-hex">#ECEAFA</div><div class="sw-role">Info callout surface</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#C9C4F0"></span><div><div class="sw-name">--info-border</div><div class="sw-hex">#C9C4F0</div><div class="sw-role">Info edge</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#3F35A0"></span><div><div class="sw-name">--info-foreground</div><div class="sw-hex">#3F35A0</div><div class="sw-role">Info ink</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#FBEAEB"></span><div><div class="sw-name">--danger-surface</div><div class="sw-hex">#FBEAEB</div><div class="sw-role">Danger surface, overrun tile</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#EDB9BD"></span><div><div class="sw-name">--danger-border</div><div class="sw-hex">#EDB9BD</div><div class="sw-role">Danger edge</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#B3343D"></span><div><div class="sw-name">--danger-foreground</div><div class="sw-hex">#B3343D</div><div class="sw-role">Danger ink</div></div></div>
+      </div>
+    </div>
+
+    <div class="sw-group">
+      <h3>Match state</h3>
+      <p>Four tiers, only the states the schema produces. Tier 4 has no chip token by design.</p>
+      <div class="sw-grid">
+        <div class="sw"><span class="sw-chip" style="background:#D8FF4F"></span><div><div class="sw-name">--state-live-chip</div><div class="sw-hex">#D8FF4F</div><div class="sw-role">Tier 1 chip</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#171A1D"></span><div><div class="sw-name">--state-live-ink</div><div class="sw-hex">#171A1D</div><div class="sw-role">Tier 1 ink</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#ECEEED"></span><div><div class="sw-name">--state-scheduled-chip</div><div class="sw-hex">#ECEEED</div><div class="sw-role">Tier 3 chip</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#4F5A61"></span><div><div class="sw-name">--state-scheduled-ink</div><div class="sw-hex">#4F5A61</div><div class="sw-role">Tier 3 ink</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#DADEE0"></span><div><div class="sw-name">--state-void-chip</div><div class="sw-hex">#DADEE0</div><div class="sw-role">Exceptional neutral chip</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#2A3238"></span><div><div class="sw-name">--state-void-ink</div><div class="sw-hex">#2A3238</div><div class="sw-role">Void ink · 6.83:1 on chip</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#4F5A61"></span><div><div class="sw-name">--state-completed-ink</div><div class="sw-hex">#4F5A61</div><div class="sw-role">Tier 4 ink — no chip</div></div></div>
+        <div class="sw"><span class="sw-chip" style="background:#16865C"></span><div><div class="sw-name">--presence-ink</div><div class="sw-hex">#16865C</div><div class="sw-role">Session dot — borrows live hue</div></div></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
