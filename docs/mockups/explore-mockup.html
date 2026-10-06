@@ -39,6 +39,7 @@
        fill's contrast headroom, which is what put every destructive button under 4.5:1. */
     --primary-hover: #4337AE;
     --destructive-hover: #AF323B;
+    --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
     --secondary: #ECEEED;
     --secondary-foreground: #171A1D;
     --muted: #EDEFEE;
@@ -197,13 +198,22 @@
   .field.filled { color: var(--foreground); }
 
   .chip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-end; }
-  .chip { min-height: 44px; border-radius: 16px; border: 1px solid var(--border-control);
+  .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; border-radius: 16px;
+    border: 1px solid var(--border-control);
     background: var(--surface); padding: 0 16px; font-size: 0.875rem; font-weight: 600;
     color: var(--foreground); cursor: pointer; transition: background-color 0.15s; }
   .chip:hover { background: var(--muted); }
   .chip[aria-pressed="true"] { border-color: var(--primary); background: var(--primary);
     color: var(--primary-foreground); }
   .chip[aria-pressed="true"]:hover { background: var(--primary-hover); }
+  /* The tick is the redundant channel. Four chips sit in a row and only one is pressed, so a
+     fill alone asks the reader to compare four shapes and remember which colour meant "on";
+     the glyph states it locally. Same lucide `Check` the app draws, masked so it takes
+     currentColor. It is aria-hidden in the app, so the accessible name stays the label. */
+  .chip[aria-pressed="true"]::before { content: ""; width: 1rem; height: 1rem;
+    flex: none; background: currentColor;
+    -webkit-mask: var(--check) center / contain no-repeat;
+    mask: var(--check) center / contain no-repeat; }
   .chip.focused { outline: 2px solid var(--ring); outline-offset: 2px; }
   .chip-group.left { justify-content: flex-start; }
 
@@ -290,6 +300,10 @@
   .note-card code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
   .note-card.danger { border-left-color: var(--danger-border); background: var(--danger-surface); color: var(--danger-foreground); }
   .note-card.info { border-left-color: var(--info-border); background: var(--info-surface); color: var(--info-foreground); }
+  /* A resolved finding. The left rule carries the green and the heading says "— fixed", so the
+     colour is never the only signal. `color-mix` matches `.flag.ok` above rather than inventing
+     a success surface this system does not have. */
+  .note-card.ok { border-left-color: var(--success); background: color-mix(in oklab, var(--success) 12%, transparent); color: var(--foreground); }
 
   .phone { width: 390px; max-width: 100%; border: 1px solid var(--border-control); border-radius: 28px;
     overflow: hidden; background: var(--background); box-shadow: var(--elev-2); }
@@ -917,7 +931,7 @@
     <ul class="anno-list" style="margin-top:16px">
       <li><span class="k">pills row · top</span><span class="v">Lifecycle first, window second, and only when the window adds a fact. Two pills maximum, so the row never wraps to two lines at desktop width.</span></li>
       <li><span class="k">h3 · 24px display</span><span class="v">Larger than <code>TournamentCard</code>'s 14px — this card is a thing to choose between, that one is a row in a work list. The name is the anchor, not the card: a card-sized click target swallows the footer buttons on touch.</span></li>
-      <li><span class="k">facts · 16px, when/where/how big</span><span class="v">Range, then venue, then counts — the order a visitor asks them. <code>TournamentCard</code> puts the venue first instead, and it is the only difference between the two facts lists.</span></li>
+      <li><span class="k">facts · 16px, when/where/how big</span><span class="v">Range, then venue, then counts — the order a visitor asks them, and now the order <code>TournamentCard</code> uses too. It used to put the venue first, which meant the same tournament described itself in two orders depending on the page.</span></li>
       <li><span class="k">facts · min-w-0 + break-words</span><span class="v">Structural, not cosmetic. <code>truncate</code> would contribute the whole nowrap string to the grid item's min-content width and scroll the page sideways.</span></li>
       <li><span class="k">action · one primary by state</span><span class="v">In progress → <em>Follow live scores</em> filled; Completed → <em>See results</em> outlined; Upcoming → <em>View details</em> outlined. A filled button for every state would make every card equally loud.</span></li>
       <li><span class="k">Register · additive, window-gated</span><span class="v">Drawn only when <code>registration_state === "open"</code>, beside the state action. Both are filled when they co-render, which is the one place two primaries stand next to each other.</span></li>
@@ -992,33 +1006,30 @@
         it. See <a href="#matrix" style="color:inherit">§ 03</a>.
       </div>
 
-      <div class="note-card danger">
-        <strong>2 · <code>TournamentCard</code> imports formatters it does not use</strong>
-        It imports <code>countText</code> and <code>dateRangeText</code> from
-        <code>summary-format.ts</code>, then defines local <code>count()</code> and
-        <code>dateRange()</code> and calls those instead. The local pair is a near-copy of the shared
-        pair — same branches, same <code>Intl</code> options, same output — which is exactly the
-        duplication that file’s own docblock says it exists to prevent: “the three formatters live here
-        rather than in either surface, and both import them”. Nothing is broken today and
-        <code>noUnusedLocals</code> is <code>false</code> in <code>tsconfig.json</code>, so
-        <code>typecheck</code> passes; the risk is the two drifting the next time one of them is
-        touched.
+      <div class="note-card ok">
+        <strong>2 · <code>TournamentCard</code>'s duplicated formatters — fixed</strong>
+        It imported <code>countText</code> and <code>dateRangeText</code> from
+        <code>summary-format.ts</code>, then defined local <code>count()</code> and
+        <code>dateRange()</code> — same branches, same <code>Intl</code> options, same output —
+        and called those instead. That is exactly the duplication the shared file's own docblock
+        says it exists to prevent, and nothing reported it because <code>noUnusedLocals</code> is
+        <code>false</code>. The local pair is gone; both cards now call the shared one.
       </div>
 
-      <div class="note-card info">
-        <strong>3 · The facts order differs between the two cards</strong>
-        <code>ExploreCard</code> reads when → where → how big. <code>TournamentCard</code> reads
-        where → when → how big. Both are deliberate per their comments, but they do mean the same
-        tournament describes itself in two orders depending on the page. Cheap to unify, or worth
-        documenting as intentional.
+      <div class="note-card ok">
+        <strong>3 · The facts order differed between the two cards — fixed</strong>
+        <code>ExploreCard</code> read when → where → how big and <code>TournamentCard</code> read
+        where → when → how big, so the same tournament described itself in two orders depending on
+        the page. Both are now when → where → how big, which is the order the reader asks them.
       </div>
 
-      <div class="note-card info">
-        <strong>4 · The chip row has no pressed state beyond colour</strong>
-        <code>aria-pressed</code> is correct and the fill carries it, but “Any status” pressed and
-        “Upcoming” pressed are the same shape in the same colour — a reader scanning quickly sees a
-        filled chip, not which filter is on. The label is the redundant channel, which is consistent
-        with the rest of the system; flagging it only because a filter row is where it is most load-bearing.
+      <div class="note-card ok">
+        <strong>4 · The chip row had no pressed state beyond colour — fixed</strong>
+        A pressed chip now carries a tick beside its label, so the redundant channel is a glyph as
+        well as a word — the rule the rest of the system already followed. Four chips in a row with
+        one fill among them asked a reader to compare four shapes and remember the colour; the tick
+        states it locally. It is <code>aria-hidden</code>, so the accessible name stays exactly the
+        label.
       </div>
     </div>
   </section>
