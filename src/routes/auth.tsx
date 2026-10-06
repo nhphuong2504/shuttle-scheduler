@@ -149,7 +149,7 @@ function AuthPage() {
                 Create account
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Anyone can create an account and run their own tournament. Editing somebody
               else's needs its owner to add you from the Access page.
             </p>

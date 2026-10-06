@@ -266,7 +266,7 @@ function TournamentPage() {
               </ul>
             ) : null}
 
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-sm text-muted-foreground">
               Sent {instantText(registration.createdAt)}
             </p>
 
@@ -509,7 +509,7 @@ function RegisterForm({
               ? "Update request"
               : "Send registration request"}
         </Button>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {entries.length === 0
             ? "Choose at least one event."
             : partnerIncomplete

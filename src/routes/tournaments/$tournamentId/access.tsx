@@ -253,7 +253,7 @@ function AccessPage() {
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate">{row.email || "—"}</span>
                     {row.is_owner ? (
-                      <span className="inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-score text-t4 uppercase tracking-wider text-primary-ink">
+                      <span className="inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-score text-sm uppercase tracking-wide text-primary-ink">
                         Owner
                       </span>
                     ) : null}

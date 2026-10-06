@@ -93,7 +93,7 @@ export function TournamentCard({
         the one place name on the card. Nothing is drawn that only a screen reader can hear,
         and no reader is given a term the value already implies.
       */}
-      <ul className="space-y-1 text-xs text-muted-foreground">
+      <ul className="space-y-1 text-sm text-muted-foreground">
         <li className="truncate">{summary.venue_name || "Venue not set"}</li>
         {/* An em dash rather than a blank when there are no playing days yet: an upcoming
             tournament legitimately has none, and an empty line reads as a rendering fault

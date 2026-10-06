@@ -284,11 +284,15 @@ export function PlacementScheduler() {
    */
   const settingsOpenedForFirstBuild = useRef(false);
   useEffect(() => {
+    // Settings is the editor's panel. A read-only reader is never shown it, so the
+    // auto-open below must not fire for them either — the ref would otherwise mark
+    // the first build as "opened" and the panel would render anyway.
+    if (!canEdit) return;
     if (settingsOpenedForFirstBuild.current) return;
     if (!planInputsReady) return;
     settingsOpenedForFirstBuild.current = true;
     if (!hasSchedule) setShowSettings(true);
-  }, [planInputsReady, hasSchedule]);
+  }, [canEdit, planInputsReady, hasSchedule]);
 
   /** Which courts each day plays on, as ids. Empty means "no restriction". */
   const dayCourtIds = useMemo(() => {
@@ -1220,7 +1224,7 @@ export function PlacementScheduler() {
                 <Link
                   to="/tournaments/$tournamentId/settings"
                   params={{ tournamentId }}
-                  className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                  className="text-sm font-semibold text-primary underline-offset-2 hover:underline"
                 >
                   Open tournament setup
                 </Link>
@@ -1237,34 +1241,34 @@ export function PlacementScheduler() {
       title="Court schedule"
       subtitle="One running order for the whole tournament. Matches already played or on court never move."
       actions={
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSettings((value) => !value)}
-            aria-expanded={showSettings}
-          >
-            {showSettings ? "Hide settings" : "Tournament settings"}
-          </Button>
-          <Button
-            disabled={
-              !canEdit || busy || !planInputsReady || !tournament || !(courts ?? []).length
-            }
-            onClick={() => void (hasSchedule ? previewRebuild() : build())}
-          >
-            {!planInputsReady
-              ? "Loading…"
-              : busy
-                ? "Planning…"
-                : hasSchedule
-                  ? "Update schedule"
-                  : "Build schedule"}
-          </Button>
-        </div>
+        canEdit ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSettings((value) => !value)}
+              aria-expanded={showSettings}
+            >
+              {showSettings ? "Hide settings" : "Tournament settings"}
+            </Button>
+            <Button
+              disabled={busy || !planInputsReady || !tournament || !(courts ?? []).length}
+              onClick={() => void (hasSchedule ? previewRebuild() : build())}
+            >
+              {!planInputsReady
+                ? "Loading…"
+                : busy
+                  ? "Planning…"
+                  : hasSchedule
+                    ? "Update schedule"
+                    : "Build schedule"}
+            </Button>
+          </div>
+        ) : null
       }
     >
       <div className="space-y-5">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm text-muted-foreground">
           <span className="font-score font-semibold text-foreground">
             {rows.length} match{rows.length === 1 ? "" : "es"} scheduled
           </span>
@@ -1283,8 +1287,8 @@ export function PlacementScheduler() {
           </span>
         </div>
 
-        {!(courts ?? []).length ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-surface px-3 py-2 text-xs text-danger-foreground">
+        {canEdit && !(courts ?? []).length ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
             <span>
               No courts yet — set how many courts the venue has before building the schedule.
             </span>
@@ -1295,7 +1299,7 @@ export function PlacementScheduler() {
         ) : null}
 
         {result && result.skipped.length > 0 ? (
-          <div className="rounded-lg bg-warn-surface px-3 py-2 text-xs text-warn-foreground">
+          <div className="rounded-lg bg-warn-surface px-3 py-2 text-sm text-warn-foreground">
             <p className="font-semibold">Left alone</p>
             <ul className="mt-0.5 space-y-0.5">
               {result.skipped.map((entry) => (
@@ -1307,7 +1311,7 @@ export function PlacementScheduler() {
           </div>
         ) : null}
 
-        {showSettings ? (
+        {canEdit && showSettings ? (
           <Panel
             title="Tournament settings"
             bodyClassName="p-0"
@@ -1712,16 +1716,18 @@ export function PlacementScheduler() {
           </Panel>
         ) : null}
 
-        <Panel
-          title="Stage progress"
-          right={
-            <span className="text-t4 text-muted-foreground">
-              matches completed / total · next step
-            </span>
-          }
-        >
-          <StageProgressList rows={stageProgress} />
-        </Panel>
+        {canEdit ? (
+          <Panel
+            title="Stage progress"
+            right={
+              <span className="text-t4 text-muted-foreground">
+                matches completed / total · next step
+              </span>
+            }
+          >
+            <StageProgressList rows={stageProgress} />
+          </Panel>
+        ) : null}
 
         <Panel
           title="Running order"
@@ -1798,7 +1804,7 @@ export function PlacementScheduler() {
                         <tbody>
                           {slice.rows.map((row) => (
                             <tr key={row.id}>
-                              <td className="font-score text-xs font-semibold">
+                              <td className="font-score text-sm font-semibold">
                                 {timeLabel(row.start)}
                               </td>
                               <td>
@@ -1806,8 +1812,8 @@ export function PlacementScheduler() {
                                   C{row.courtNumber || "—"}
                                 </span>
                               </td>
-                              <td className="font-score text-xs">{row.categoryCode}</td>
-                              <td className="text-xs text-muted-foreground">{row.stage}</td>
+                              <td className="font-score text-sm">{row.categoryCode}</td>
+                              <td className="text-sm text-muted-foreground">{row.stage}</td>
                               <td>
                                 <StatusPill status={row.status} />
                               </td>
@@ -1841,7 +1847,7 @@ export function PlacementScheduler() {
           >
             {showDanger ? (
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <p className="max-w-lg text-xs text-muted-foreground">
+                <p className="max-w-lg text-sm text-muted-foreground">
                   Clears every placement and knockout match, every reported result and every
                   scheduled time, returning the stage to the start of round one. The seed order
                   and any waivers are kept, so the schedule can be rebuilt on the same seeding.
@@ -1857,7 +1863,7 @@ export function PlacementScheduler() {
                 </Button>
               </div>
             ) : (
-              <p className="p-4 text-xs text-muted-foreground">
+              <p className="p-4 text-sm text-muted-foreground">
                 Clear results and schedule, keeping the seed order.
               </p>
             )}
@@ -1883,7 +1889,7 @@ export function PlacementScheduler() {
                     {preview.plan.summary.anchorCount} anchors kept · {preview.plan.summary.placed}{" "}
                     matches replanned · {preview.plan.diff.movedCount} moving
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     The table below shows how each day's finish changes.
                   </p>
                 </div>
@@ -1906,17 +1912,17 @@ export function PlacementScheduler() {
                             <td className="text-sm">
                               {dayDateLabel(row.date)}
                               {row.overrunMinutes > 0 ? (
-                                <span className="ml-2 text-xs text-warn-foreground">
+                                <span className="ml-2 text-sm text-warn-foreground">
                                   {row.overrunMinutes} min past close
                                 </span>
                               ) : null}
                             </td>
-                            <td className="font-score text-xs">{row.placed}</td>
-                            <td className="font-score text-xs">
+                            <td className="font-score text-sm">{row.placed}</td>
+                            <td className="font-score text-sm">
                               {row.lastFinish ? timeLabel(row.lastFinish) : "—"}
                             </td>
-                            <td className="font-score text-xs">{row.moving}</td>
-                            <td className="font-score text-xs">
+                            <td className="font-score text-sm">{row.moving}</td>
+                            <td className="font-score text-sm">
                               {row.largestShift ? `${row.largestShift} min` : "—"}
                             </td>
                           </tr>
@@ -1933,13 +1939,13 @@ export function PlacementScheduler() {
                       {preview.plan.blocked.length === 1 ? "" : "es"} could not be placed.
                     </p>
                     {preview.plan.blockedReason ? (
-                      <p className="mt-1 text-xs">{preview.plan.blockedReason}</p>
+                      <p className="mt-1 text-sm">{preview.plan.blockedReason}</p>
                     ) : preview.plan.summary.diagnostics?.deadlockReason ? (
-                      <p className="mt-1 text-xs">
+                      <p className="mt-1 text-sm">
                         {preview.plan.summary.diagnostics.deadlockReason}
                       </p>
                     ) : null}
-                    <ul className="mt-2 space-y-1 text-xs">
+                    <ul className="mt-2 space-y-1 text-sm">
                       {preview.plan.blocked.map((matchId) => (
                         <li key={matchId}>{matchLabel(matchId)}</li>
                       ))}
@@ -1948,7 +1954,7 @@ export function PlacementScheduler() {
                 ) : null}
 
                 {preview.plan.awaitingTeams.length > 0 ? (
-                  <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
                     {preview.plan.awaitingTeams.length} match
                     {preview.plan.awaitingTeams.length === 1 ? "" : "es"} waiting on a bracket and
                     will stay unscheduled.
@@ -1983,17 +1989,17 @@ export function PlacementScheduler() {
                           {visibleChanges.map((change) => (
                             <tr key={change.matchId}>
                               <td className="text-sm">{matchLabel(change.matchId)}</td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
                                 {timeLabel(change.toStart)}
                               </td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.fromCourtNumber != null
                                   ? `C${change.fromCourtNumber}`
                                   : "—"}{" "}
                                 → C{change.toCourtNumber}
                               </td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.shiftMinutes > 0 ? "+" : ""}
                                 {change.shiftMinutes || "—"}
                               </td>

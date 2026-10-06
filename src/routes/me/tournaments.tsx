@@ -196,7 +196,7 @@ function MyTournamentsPage() {
               aria-pressed={selected}
               onClick={() => setGroup(option.id)}
               className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+                "rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
                 selected
                   ? "bg-primary text-primary-foreground shadow-panel"
                   : "border border-hairline bg-surface text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -251,7 +251,7 @@ function MyTournamentsPage() {
                   actions={
                     <>
                       {isWorking ? (
-                        <span className="rounded-full bg-primary/10 px-2.5 py-1 font-score text-t4 uppercase tracking-wider text-primary-ink">
+                        <span className="rounded-full bg-primary/10 px-2.5 py-1 font-score text-sm uppercase tracking-wide text-primary-ink">
                           Working here
                         </span>
                       ) : (

@@ -100,9 +100,9 @@ there is to work on than a sign-in form.
 Two shells, and which one a page draws is decided by whether it is about one tournament.
 
 - **`WorkspaceShell`** — mounted once, by the layout route. It draws the tournament header
-  (name, lifecycle status, the section nav, the workspace switcher) and the caller's
-  access-aware actions. No page below it renders a shell of its own; a page composes `Page`,
-  which puts a title row over the page's own content.
+  (name, lifecycle status, the section nav, and — for a caller who may edit — the workspace
+  switcher) and the caller's access-aware actions. No page below it renders a shell of its own;
+  a page composes `Page`, which puts a title row over the page's own content.
 - **`PublicShell`** — drawn by each of the five public routes above, since no layout knows what
   to put in a header outside a tournament. It carries the public nav, which is one entry
   (**Browse tournaments**, at `/explore`): a bar a signed-out visitor reads should not be a
@@ -124,6 +124,16 @@ section added later is offered to everyone reading the tournament by default. A 
 workspace therefore opens on `entries` (the logo points at the first offered section, not at
 the Desk), and the tournament's participant page at `/tournaments/$tournamentId/` is not part of
 that experience.
+
+The header's own line — brand, then the tournament's name and status — carries one more entry
+for a reader, and it follows the same split as the section nav. An operator gets the workspace
+switcher in the section row, because the tournaments they may work in are a list they hold and
+moving between them is their own act. A reader gets **Browse tournaments** at `/explore`, in
+the position `PublicShell` puts its public nav: immediately after the brand. It is the entry a
+card came in by, and a reader who left the list should find the way back where they left it.
+There is no create-tournament button in either case: starting a tournament is an operator's
+act, and a header that offers no way to change this one should not offer a way to begin
+another.
 
 ## 4. The flows
 

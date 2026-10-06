@@ -649,6 +649,40 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     );
   });
 
+  it("leaves a reader the way back to the list, and no way to start one", () => {
+    /**
+     * Where the one entry that leaves a tournament lives, and who is given it.
+     *
+     * It is split by the same right the section nav is: an operator gets the switcher - the
+     * tournaments they may work in are a list they hold - and a reader gets the public list
+     * a card came in by. The assertion is this way round because the failure is asymmetric:
+     * a reader holding the switcher is being offered an operator's control, which is what
+     * read-only mode exists to prevent.
+     *
+     * The *position* is half the claim. A reader's entry belongs on the brand's own line,
+     * where `PublicShell` puts its public nav, rather than down in the section row or at its
+     * far right - one entry in one place across both shells. Asserting the name alone would
+     * pass with it anywhere in the header, which is how it came to sit in the opposite
+     * corner from the brand.
+     */
+    const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
+    // The reader's entry, and its place: between the brand block and the tournament's name.
+    expect(shell).toMatch(/access\.can_edit \? null : <BrowseLink \/>/);
+    expect(shell.indexOf("<BrowseLink />")).toBeLessThan(
+      shell.indexOf("Which tournament this is."),
+    );
+    // The switcher's place, unchanged: the section row, for a caller who may edit.
+    expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
+    // The entry is the public nav pill, not a second shape drawn for the same link.
+    expect(shell).toMatch(
+      /<Link to="\/explore" className=\{NAV_ITEM_CLASS\}>[\s\S]{0,40}?Browse tournaments/,
+    );
+    // And there is no door into the create flow anywhere in this header. Starting a
+    // tournament is an operator's act, offered by the pages that are about the caller's own
+    // work - not by the one header every reader of an event also reads.
+    expect(shell).not.toContain('to="/tournaments/new"');
+  });
+
   it("leaves the temporary shim gone from `/`, not merely shadowed", () => {
     const home = read("index.tsx");
     // S6 replaced the shim with the real surface. A shim left behind - even one whose
@@ -912,5 +946,87 @@ describe("the working-tournament pointer is written in one place per act", () =>
         join("routes", "me", "tournaments.tsx"),
       ].sort(),
     );
+  });
+});
+
+/**
+ * A reader without the edit right is shown data and navigation, never a control.
+ *
+ * The read-only treatment is one fact - this caller may not change anything here - but it
+ * has to be applied per surface, and the shape it must take is the same everywhere: the
+ * control is *removed*, not disabled. A disabled control still says "here is the act you
+ * cannot do", which is the opposite of a page that is meant to be read; a viewer and a
+ * signed-out visitor get the identical treatment, so the split is on `can_edit` rather
+ * than on a session.
+ *
+ * The layout already derives `readOnly` from `access.can_edit` and the nav withholds the
+ * Desk and the three editor sections; these guards cover the pages beneath it, where the
+ * controls actually lived. They read the sources because "is this control inside the
+ * edit-right branch" is a property of the rendered tree that a component test on one page
+ * cannot see across the five.
+ */
+describe("the read-only workspace removes the operator's controls, rather than disabling them", () => {
+  const entries = readWorkspace("entries.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
+  const dayPlanner = readScheduleView("day-planner.tsx");
+  const scores = readWorkspace("scores.tsx");
+
+  it("keeps the entries desk forms inside the edit-right branch", () => {
+    // Both forms - the player and the entry - are the desk's, and they render only for
+    // a caller who may write. The column that holds them is the conditional, and the
+    // grid collapses to one column when it is absent.
+    expect(entries).toMatch(
+      /cn\("grid grid-cols-1 gap-4", canEdit && "lg:grid-cols-\[340px_1fr\]"\)/,
+    );
+    expect(entries).toMatch(/Panel title="Add player"/);
+    expect(entries).toMatch(/Panel title="Add entry"/);
+  });
+
+  it("keeps the per-entry acts inside the edit-right branch", () => {
+    // Withdraw / Remove used to render disabled for a viewer; they are now inside the
+    // branch, so their absence is the whole statement.
+    const withdraw = entries.indexOf("await setTeamWithdrawn");
+    expect(withdraw).toBeGreaterThan(-1);
+    expect(entries.lastIndexOf("canEdit ? (", withdraw)).toBeGreaterThan(-1);
+    // And the old shape - a rendered button merely disabled by the right - is gone from
+    // the per-entry act.
+    expect(entries).not.toMatch(/variant="ghost"\s+disabled=\{!canEdit\}/);
+  });
+
+  it("does not open the schedule settings for a read-only reader", () => {
+    // The first-build effect auto-opens the panel on an unbuilt tournament. Without the
+    // gate, a viewer met the whole editor panel opened on arrival.
+    expect(schedule).toMatch(/if \(!canEdit\) return;/);
+    expect(schedule).toMatch(/\{canEdit && showSettings \? \(/);
+    // The toggle and the build action are the editor's; a viewer gets no header actions.
+    expect(schedule).toMatch(/actions=\{\s*canEdit \? \(/);
+    // The no-courts prompt instructs an operator, so it goes with the panel.
+    expect(schedule).toMatch(/canEdit && !\(courts \?\? \[\]\)\.length/);
+  });
+
+  it("hides the tournament-wide forecast from a read-only reader", () => {
+    // Stage progress is planning oversight, not the event's state, so it is withheld
+    // rather than shown to a spectator.
+    expect(schedule).toMatch(/\{canEdit \? \(\s*<Panel\s+title="Stage progress"/);
+  });
+
+  it("gives the day planner a read-only day summary instead of its inputs", () => {
+    // The date/start/end fields and the build buttons are the editor's; the read-only
+    // branch prints the day's date and window as static text.
+    expect(dayPlanner).toMatch(
+      /\{canEdit \? \(\s*<>\s*<div className="flex flex-wrap items-end gap-2">/,
+    );
+    expect(dayPlanner).toMatch(/dayDateLabel\(windowFor\(day\)\.date\)/);
+  });
+
+  it("withholds the score dialog's way in, and the dialog with it", () => {
+    // Open is the editor's route into scoring. It is absent for a reader in all three
+    // row shapes - the shared MatchRow, the round-robin list and the draw list - and the
+    // dialog cannot be opened without it.
+    expect(scores).toMatch(
+      /\{canEdit \? \(\s*<Button size="sm" variant="outline" onClick=\{onOpen\}>/,
+    );
+    expect(scores).toMatch(/\{!isByeMatch\(m\) && canEdit \? \(/);
+    expect(scores).toMatch(/open=\{!!selectedMatch && canEdit\}/);
   });
 });

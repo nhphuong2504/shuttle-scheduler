@@ -39,7 +39,8 @@ The visual design is not settled. There is no design system to conform to and no
 beyond the audience split above: layout, colour, type, spacing and components are yours to
 choose, and existing styling is not a constraint. Keep the result accessible — the
 accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
-`states.spec.ts`) still run.
+`states.spec.ts`) still run. Current colour, type and size guidance is in
+[`docs/design-principles.md`](docs/design-principles.md); it is guidance, not a gate.
 
 **The landing page is a placeholder.** What a signed-out visitor sees at `/` (the Landing
 branch of [`src/routes/index.tsx`](src/routes/index.tsx)) has not been designed yet. Its

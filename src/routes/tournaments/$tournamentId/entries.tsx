@@ -24,6 +24,7 @@ import {
   usePlayers,
   useTeams,
 } from "@/lib/tournament/data";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/entries")({
   head: () => ({
@@ -292,7 +293,8 @@ function EntriesPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
+      <div className={cn("grid grid-cols-1 gap-4", canEdit && "lg:grid-cols-[340px_1fr]")}>
+        {canEdit ? (
         <div className="space-y-4">
           <Panel title="Add player">
             <div className="space-y-3">
@@ -350,12 +352,12 @@ function EntriesPage() {
                   </SelectContent>
                 </Select>
                 {!openCategories.length ? (
-                  <p className="text-xs text-warn-foreground">
+                  <p className="text-sm text-warn-foreground">
                     Every category this tournament runs is either full or switched off.
                   </p>
                 ) : null}
                 {selectedIsFull ? (
-                  <p className="text-xs text-danger-foreground">
+                  <p className="text-sm text-danger-foreground">
                     That category is full — withdraw an entry to make room.
                   </p>
                 ) : null}
@@ -382,10 +384,11 @@ function EntriesPage() {
               >
                 Add entry
               </Button>
-              <p className="text-xs text-muted-foreground">{capPickerNote(categoryCap)}</p>
+              <p className="text-sm text-muted-foreground">{capPickerNote(categoryCap)}</p>
             </div>
           </Panel>
         </div>
+        ) : null}
 
         <div className="space-y-4">
           {listedCategories.map((c) => {
@@ -399,15 +402,15 @@ function EntriesPage() {
                 right={
                   <span className="flex items-center gap-2">
                     {!c.active ? (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                         Closed
                       </span>
                     ) : full ? (
-                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-danger-foreground">
+                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-danger-foreground">
                         Full
                       </span>
                     ) : null}
-                    <span className="font-score text-xs text-muted-foreground">
+                    <span className="font-score text-sm text-muted-foreground">
                       {activeCount}
                       {c.max_entries != null ? ` / ${c.max_entries}` : ""} entries
                     </span>
@@ -417,7 +420,11 @@ function EntriesPage() {
                 {list.length === 0 ? (
                   <EmptyState
                     title="No entries yet"
-                    hint="Add players on the left, then create an entry."
+                    hint={
+                      canEdit
+                        ? "Add players on the left, then create an entry."
+                        : "Nobody has entered this category yet."
+                    }
                   />
                 ) : (
                   <ul className="divide-y divide-hairline">
@@ -432,34 +439,38 @@ function EntriesPage() {
                           {teamLabel(t, playerMap)}
                         </span>
                         <span className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!canEdit}
-                            onClick={async () => {
-                              await setTeamWithdrawn(t.id, !t.withdrawn);
-                              refresh();
-                            }}
-                          >
-                            {t.withdrawn ? "Reinstate" : "Withdraw"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!canEdit}
-                            onClick={async () => {
-                              try {
-                                await deleteTeam(t.id);
-                                refresh();
-                              } catch (error) {
-                                toast.error(
-                                  error instanceof Error ? error.message : "Could not remove entry",
-                                );
-                              }
-                            }}
-                          >
-                            Remove
-                          </Button>
+                          {canEdit ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={async () => {
+                                  await setTeamWithdrawn(t.id, !t.withdrawn);
+                                  refresh();
+                                }}
+                              >
+                                {t.withdrawn ? "Reinstate" : "Withdraw"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={async () => {
+                                  try {
+                                    await deleteTeam(t.id);
+                                    refresh();
+                                  } catch (error) {
+                                    toast.error(
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Could not remove entry",
+                                    );
+                                  }
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </>
+                          ) : null}
                         </span>
                       </li>
                     ))}

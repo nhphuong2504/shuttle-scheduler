@@ -193,7 +193,7 @@ function PlacementPage() {
       actions={resetAction}
     >
       {wrongFormat ? (
-        <div className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-xs font-medium text-warn-foreground">
+        <div className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-sm font-medium text-warn-foreground">
           This tournament's stored format is{" "}
           <span className="font-score">{tournament?.format}</span>, not two-round placement. The
           tables below are the placement format's own and will stay empty for a round-robin event.
@@ -285,7 +285,7 @@ function CategorySection({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-display text-lg font-bold">
           {category.code} — {category.name}
-          <span className="ml-2 font-score text-xs font-normal text-muted-foreground">
+          <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
             {view.active.length} entrants · {view.matches.length} matches · {stageLabel(view.stage)}
           </span>
         </h2>
@@ -305,7 +305,7 @@ function CategorySection({
       </div>
 
       {oddNote ? (
-        <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           {oddNote}
         </p>
       ) : null}
@@ -467,7 +467,7 @@ function SeedingPanel({
       }
     >
       <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Skill level decides the seed order once: entrants are grouped by the block they reported,
           shuffled inside it, and seeded strongest block first. Every pairing rule after this reads
           the seed only.
@@ -589,7 +589,7 @@ function SeedingPanel({
                         </div>
                       </td>
                     ) : null}
-                    <td className="font-score text-xs font-semibold text-primary" {...dropProps}>
+                    <td className="font-score text-sm font-semibold text-primary" {...dropProps}>
                       {/* The live position, so a drag reads correctly before its write
                           lands. Before the seeds are written there is nothing to number. */}
                       {view.seedsLocked ? index + 1 : "—"}
@@ -605,7 +605,7 @@ function SeedingPanel({
                         // than the hairline: this boundary is what tells the reader a control
                         // is here, and the hairline is decorative and exempt from 1.4.11.
                         <select
-                          className="h-7 rounded-md border border-input bg-background px-2 text-xs"
+                          className="h-7 rounded-md border border-input bg-background px-2 text-sm"
                           value={entrant.skill_level}
                           onChange={async (event) => {
                             try {
@@ -629,17 +629,17 @@ function SeedingPanel({
                           ))}
                         </select>
                       ) : (
-                        <span className="text-xs">
+                        <span className="text-sm">
                           {isSkillLevel(entrant.skill_level)
                             ? SKILL_LABELS[entrant.skill_level]
                             : entrant.skill_level}
                         </span>
                       )}
                     </td>
-                    <td className="text-right font-score text-xs" {...dropProps}>
+                    <td className="text-right font-score text-sm" {...dropProps}>
                       {outcome?.played ?? 0}/{view.requiredMatches}
                     </td>
-                    <td className="font-score text-xs" {...dropProps}>
+                    <td className="font-score text-sm" {...dropProps}>
                       {outcome?.tier ?? "—"}
                     </td>
                   </tr>

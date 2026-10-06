@@ -40,14 +40,14 @@ export const COURT_STATE_LABEL: Record<CourtState, string> = {
 /**
  * The pill's fill and ink.
  *
- * `playing` reuses the match `live` tokens deliberately rather than minting a
- * second green. The two encode the same fact from different vantage points - a
+ * `playing` reuses the match `live` tokens (lime chip, ink text, ring) rather than minting a
+ * second lime. The two encode the same fact from different vantage points - a
  * match is live, therefore its court is playing - and they never co-render, so a
- * separate green would be a distinction the reader can see but cannot use. The
+ * separate lime would be a distinction the reader can see but cannot use. The
  * state is not a match status, but the colour can be shared.
  */
 export const COURT_STATE_CHIP: Record<CourtState, string> = {
-  playing: "bg-state-live-chip text-state-live-ink",
+  playing: "bg-state-live-chip text-state-live-ink ring-1 ring-inset ring-state-live-ink/60",
   overrun: "bg-danger-surface text-danger-foreground",
   // `/10`, not the `/12` this started as, because `/12` is a tint no ink was solved
   // against. `--primary-ink` was solved against `bg-primary/10` in phase 3; carrying a
@@ -71,7 +71,7 @@ export const COURT_STATE_CHIP: Record<CourtState, string> = {
  * The tile is a *wash* of the state and the pill is the denser surface, in every
  * state without exception. `playing` was the exception and it was a defect: its tile
  * painted the full `--state-live-chip`, which is the same fill the pill paints, so
- * the "Playing" chip had no edge at all and read as uppercase text on green. Measured
+ * the "Playing" chip had no edge at all and read as uppercase text with no edge. Measured
  * on the rendered board, the pill's fill was byte-identical to its own tile's -
  * 1.000:1, against 1.087:1 for the weakest other state. `states.spec.ts`
  * now sweeps every pill against its own tile, and `court-state.test.ts` asserts the
@@ -83,7 +83,7 @@ export const COURT_STATE_CHIP: Record<CourtState, string> = {
  * waiting court look more urgent than an overrun one.
  */
 export const COURT_STATE_TILE: Record<CourtState, string> = {
-  playing: "border-state-live-ink/35 bg-state-live-chip/30",
+  playing: "border-state-live-ink/50 bg-surface",
   overrun: "border-danger-border bg-danger-surface/40",
   "free-ready": "border-primary/40 bg-primary/5",
   "free-blocked": "border-hairline bg-surface",

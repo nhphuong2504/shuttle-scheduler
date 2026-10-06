@@ -125,7 +125,7 @@ export function ReviewStep({
                       {!check.ok && check.detail ? (
                         <span
                           className={cn(
-                            "block text-xs",
+                            "block text-sm",
                             advisory ? "text-warn-foreground" : "text-danger-foreground",
                           )}
                         >
@@ -162,7 +162,7 @@ export function ReviewStep({
             }
           />
           <div className="sm:col-span-2">
-            <dt className="text-t4 font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <dt className="text-sm font-medium text-muted-foreground">
               Note
             </dt>
             <dd className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
@@ -179,13 +179,13 @@ export function ReviewStep({
         </dl>
         <ol className="divide-y divide-hairline">
           {form.days.map((day, index) => (
-            <li key={day.date || index} className="flex items-center gap-3 py-2 text-xs">
+            <li key={day.date || index} className="flex items-center gap-3 py-2 text-sm">
               <span className="font-semibold">Day {index + 1}</span>
               <span className="font-score">{day.date || "No date"}</span>
             </li>
           ))}
         </ol>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground">
           The venue&apos;s courts, each day&apos;s hours and breaks, match lengths and scoring rules
           are set on the Schedule page at the first build, where the courts exist.
         </p>
@@ -206,14 +206,14 @@ export function ReviewStep({
                 <Badge variant="outline">
                   {event.entryType === "pair" ? "Doubles" : "Singles"}
                 </Badge>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {event.maxEntries == null ? "No entry cap" : `Cap ${event.maxEntries}`}
                 </span>
               </li>
             ))}
           </ul>
         )}
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground">
           A player may enter at most{" "}
           <span className="font-semibold text-foreground">
             {form.maxCategoriesPerPlayer} event{form.maxCategoriesPerPlayer === 1 ? "" : "s"}
@@ -224,10 +224,10 @@ export function ReviewStep({
 
       <Panel title="Structure">
         <p className="text-sm font-semibold">{SUPPORTED_FORMAT.name}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{SUPPORTED_FORMAT.summary}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{SUPPORTED_FORMAT.summary}</p>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {PLACEMENT_TIERS.map((tier) => (
-            <li key={tier.tier} className="flex items-center gap-2 text-xs">
+            <li key={tier.tier} className="flex items-center gap-2 text-sm">
               <Badge variant="outline" className="font-score">
                 {tier.record}
               </Badge>
@@ -247,7 +247,7 @@ export function ReviewStep({
         */}
         {status === "upcoming" ? (
           <>
-            <p className="mb-3 text-xs text-muted-foreground">
+            <p className="mb-3 text-sm text-muted-foreground">
               Starting moves this tournament from{" "}
               <span className="font-semibold">Upcoming</span> to{" "}
               <span className="font-semibold">In progress</span> and makes it the tournament you
@@ -269,12 +269,12 @@ export function ReviewStep({
               </Button>
             </div>
             {ready ? (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Every check passes. If the start time has not arrived yet, starting will say when
                 it does.
               </p>
             ) : readiness ? (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Starting is refused until every blocking check passes. The database enforces the
                 same checks, and if you press it early it will name what is missing.
               </p>
@@ -282,7 +282,7 @@ export function ReviewStep({
           </>
         ) : status === "in_progress" ? (
           <>
-            <p className="mb-3 text-xs text-muted-foreground">
+            <p className="mb-3 text-sm text-muted-foreground">
               This tournament is running. Its configuration is now frozen, so the settings above
               are read-only. Completing it closes the event.
             </p>
@@ -291,7 +291,7 @@ export function ReviewStep({
             </Button>
           </>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             This tournament is completed. Nothing can be started or changed here; a platform admin
             can repair individual results from the desk.
           </p>
@@ -304,7 +304,7 @@ export function ReviewStep({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-t4 font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <dt className="text-sm font-medium text-muted-foreground">
         {label}
       </dt>
       <dd className="break-words text-sm">{value}</dd>

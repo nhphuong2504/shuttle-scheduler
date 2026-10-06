@@ -193,7 +193,7 @@ function BracketSection({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-display text-lg font-bold">
           {category.code} — {category.name}
-          <span className="ml-2 font-score text-xs font-normal text-muted-foreground">
+          <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
             {hasDraws
               ? `${draws.length} bracket${draws.length === 1 ? "" : "s"} · ${championCount} decided`
               : view.gate.ready
@@ -206,7 +206,7 @@ function BracketSection({
       {!hasDraws ? (
         <Panel title="Not drawn yet">
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Draws open once every entrant has completed{" "}
               {view.gate.requiredMatches === 0
                 ? "the placement stage"
@@ -214,12 +214,12 @@ function BracketSection({
               .
             </p>
             {short > 0 ? (
-              <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 Waiting on {short} entrant{short === 1 ? "" : "s"}. A waived entrant is skipped
                 rather than blocking the event.
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Every entrant is finished, so the brackets are ready. Drawing them runs from the
                 schedule.
               </p>
@@ -245,7 +245,7 @@ function BracketSection({
                 }
               >
                 {!draw ? (
-                  <p className="text-xs text-muted-foreground">No entrants in this tier.</p>
+                  <p className="text-sm text-muted-foreground">No entrants in this tier.</p>
                 ) : (
                   <div className="space-y-3">
                     <p className="text-t4 text-muted-foreground">{bracketNote(draw)}</p>
@@ -256,7 +256,7 @@ function BracketSection({
                       // here; the glyph was not, so finding which of the four brackets had been
                       // decided meant reading all four. `draws.tsx` already marks the same award
                       // with a `Trophy`, and the other arm of this ternary is already `text-t4`,
-                      // so the size follows the branch it is chosen against rather than `text-xs`.
+                      // so the size follows the branch it is chosen against rather than `text-sm`.
                       //
                       // The glyph inherits the row's ink rather than taking `text-success`.
                       // `--success` is a fill token: `styles.css` states it is not text-safe
@@ -276,7 +276,7 @@ function BracketSection({
 
                     {[...rounds.entries()].map(([round, roundMatches]) => (
                       <div key={round} className="space-y-1">
-                        <p className="text-t4 font-semibold uppercase tracking-wider text-muted-foreground">
+                        <p className="text-sm font-semibold text-muted-foreground">
                           {roundName(draw.bracket_size, round)}
                         </p>
                         {roundMatches.map((match) => (
@@ -307,7 +307,7 @@ function TierMatchRow({
   const bye = isByeMatch(match);
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-hairline px-2 py-1.5">
-      <div className="min-w-0 break-words text-xs">
+      <div className="min-w-0 break-words text-sm">
         <span className="font-medium">{label(match.entrant_a_id)}</span>
         <span className="mx-1.5 text-muted-foreground">vs</span>
         <span className="font-medium">{label(match.entrant_b_id)}</span>

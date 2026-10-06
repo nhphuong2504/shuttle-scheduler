@@ -22,12 +22,11 @@ import { routes } from "./fixtures/routes";
  *
  * ## What "no controls" means, precisely
  *
- * The ownership acts are *absent* for a viewer, and the stage reset with them, so the
- * absence is the assertion. Not every mutation control on every route is hidden yet -
- * most pages disable rather than remove the ones that act on data the viewer can still
- * read - and those are asserted where they live rather than restated here. What this
- * file pins is the part that is load-bearing: a signed-in person with no row is not
- * silently treated as an owner.
+ * The ownership acts are *absent* for a viewer, and so is every control on the tournament's
+ * own pages: the five read-only sections remove the operator's forms, planners and per-row
+ * acts rather than disabling them, and a signed-out visitor meets the identical surface.
+ * What this file pins is both halves - that a signed-in person with no row is not silently
+ * treated as an owner, and that a reader is never shown a control they may not use.
  *
  * ## Why the label cases are separate describes
  *
@@ -119,6 +118,58 @@ test.describe("a viewer", () => {
     await expect(header.getByRole("button", { name: /^reset$/i })).toHaveCount(0);
   });
 
+  test("is shown the data, and none of the operator's controls, on the read-only sections", async ({
+    page,
+  }) => {
+    /**
+     * The read-only workspace is data and navigation. Each of the five sections is
+     * asserted where its operator's work lived, because "no controls" is not one fact:
+     * Entries had two entry forms and a per-row act, Schedule a whole settings panel and
+     * a build, Scores a dialog behind every row. All of them are removed for a caller
+     * without the edit right rather than disabled, so their absence is the assertion.
+     */
+
+    // Entries: the lists and the stat row stay, the desk's two forms and the per-entry
+    // acts go.
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Entries", level: 1 })).toBeVisible();
+    for (const gone of [/add player/i, /add entry/i, /^withdraw$/i, /^reinstate$/i, /^remove$/i]) {
+      await expect(page.getByRole("button", { name: gone })).toHaveCount(0);
+    }
+    // A form the reader cannot submit is a worse answer than no form: nothing in the page
+    // body is an input or a select.
+    await expect(page.locator("main input")).toHaveCount(0);
+    await expect(page.locator("main select")).toHaveCount(0);
+
+    // Schedule: the tournament-wide planner is gone, including the settings panel the
+    // first-build effect used to open for an editor. The running order is what remains.
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Running order" })).toBeVisible();
+    for (const gone of [
+      /tournament settings/i,
+      /build schedule/i,
+      /update schedule/i,
+      /^show$/i,
+      /^set courts$/i,
+      /^unlock window$/i,
+    ]) {
+      await expect(page.getByRole("button", { name: gone })).toHaveCount(0);
+    }
+    await expect(page.getByRole("heading", { name: "Stage progress" })).toHaveCount(0);
+    await expect(page.locator("main input")).toHaveCount(0);
+    await expect(page.locator("main select")).toHaveCount(0);
+
+    // Scores: every row already carries its result, so the way into scoring is gone. The
+    // search box is local filtering rather than a change to the tournament, so it stays.
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Score entry", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^open$/i })).toHaveCount(0);
+    await expect(page.getByPlaceholder(/search a player or pair/i)).toBeVisible();
+  });
+
   test("is told the view is read-only, in the same treatment a visitor gets", async ({ page }) => {
     await page.goto(routes.desk, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
@@ -149,6 +200,24 @@ test.describe("a viewer", () => {
     await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Setup", exact: true })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Access", exact: true })).toHaveCount(0);
+  });
+
+  test("is offered the way back to the list, and no act on the tournament", async ({ page }) => {
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The entry that leaves a tournament follows the edit right rather than the session, so
+    // a signed-in viewer and a signed-out visitor meet the same one: the public list a card
+    // came in by, in the place `PublicShell` puts its public nav - beside the brand, on the
+    // header's own line. The operator's switcher is not drawn for either of them, and
+    // neither is the create flow it used to end on for a visitor.
+    const header = page.getByRole("banner");
+    await expect(header.getByRole("link", { name: "Browse tournaments" })).toHaveAttribute(
+      "href",
+      routes.explore,
+    );
+    await expect(header.getByRole("button", { name: /switch tournament/i })).toHaveCount(0);
+    await expect(header.getByRole("link", { name: /create tournament/i })).toHaveCount(0);
   });
 
   test("sends the brand to its own first section, not to a Desk it is not offered", async ({
@@ -271,6 +340,21 @@ test.describe("a signed-out visitor", () => {
     await expect(page.getByText(/sign in to start, score and schedule matches/i).first()).toBeVisible();
   });
 
+  test("meets the same read-only surface a signed-in viewer does", async ({ page }) => {
+    // A visitor has no edit right to withhold, so the pages must not read as a form they
+    // are failing to fill in. Entries is the workspace a card opens them on.
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Entries", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: /add player/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /add entry/i })).toHaveCount(0);
+    await expect(page.locator("main input")).toHaveCount(0);
+
+    // And the Desk stays out of the nav, so nothing offers a console they cannot use.
+    const nav = page.getByRole("navigation", { name: /tournament sections/i });
+    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
+  });
+
   test("can tell which tournament the page is about without signing in", async ({ page }) => {
     await page.goto(routes.desk, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
@@ -282,6 +366,29 @@ test.describe("a signed-out visitor", () => {
     const header = page.getByRole("banner");
     await expect(header.getByText(TOURNAMENT_NAME)).toBeVisible();
     await expect(header.getByRole("navigation", { name: /tournament sections/i })).toBeVisible();
+  });
+
+  test("keeps the way back to the list after a card has been opened", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // A card opens the read-only workspace, which is how a reader arrives at a tournament at
+    // all. The entry they came in by is the one that gets them out, so opening a tournament
+    // must not spend the header's public slot on something else - and it has to be in the
+    // same place the list they left had it: beside the brand, not in the section row.
+    await page.getByRole("link", { name: TOURNAMENT_NAME }).first().click();
+    await expect(page).toHaveURL(new RegExp(`${routes.entries}$`));
+
+    const header = page.getByRole("banner");
+    const back = header.getByRole("link", { name: "Browse tournaments" });
+    await expect(back).toHaveAttribute("href", routes.explore);
+    // Above the section row rather than inside it, which is what "same place as the landing
+    // page" means concretely and is the part a name-only assertion cannot see.
+    const sections = header.getByRole("navigation", { name: /tournament sections/i });
+    const [backBox, sectionsBox] = await Promise.all([back.boundingBox(), sections.boundingBox()]);
+    expect(backBox!.y + backBox!.height).toBeLessThanOrEqual(sectionsBox!.y);
+    // And it does not answer a reader by offering to start a tournament of their own.
+    await expect(header.getByRole("link", { name: /create tournament/i })).toHaveCount(0);
   });
 });
 
@@ -328,15 +435,21 @@ test.describe("the tournament switcher", () => {
     await expect(trigger).toBeFocused();
   });
 
-  test("offers the act that would give you something to switch to", async ({ page }) => {
-    // A caller who runs nothing: the panel is not opened onto an apology, because this is a
-    // brand-new account's state rather than a fault. The alternative the control offers is
-    // the same one a visitor is offered below.
+  test("offers the act that would give an operator something to switch to", async ({ page }) => {
+    /**
+     * The one operator whose own list can be empty.
+     *
+     * The switcher is drawn with the edit right and nowhere else, so a viewer never meets
+     * it - the caller this state belongs to is a platform admin, whose override is the one
+     * way to edit a tournament you neither own nor edit. Nothing in the list is theirs, so
+     * the panel answers with the act that would give them something rather than with an
+     * apology.
+     */
     await installAppMock(page, {
       preset: "layout",
-      role: "user",
+      role: "admin",
       status: "upcoming",
-      access: VIEWER_ACCESS,
+      access: { is_owner: false, is_editor: false, can_edit: true },
     });
     await page.goto(routes.desk, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
@@ -347,9 +460,7 @@ test.describe("the tournament switcher", () => {
     await expect(header.getByRole("link", { name: /create tournament/i })).toBeVisible();
   });
 
-  test("is a single trip to the create flow for a visitor, not an empty disclosure", async ({
-    page,
-  }) => {
+  test("is not drawn for a reader, because there is nothing it could offer", async ({ page }) => {
     // Re-installed signed out. The route-level mock is registered last and wins, which is
     // the harness's own documented way to vary a session mid-file.
     await installAppMock(page, { preset: "layout", role: null });
@@ -357,11 +468,13 @@ test.describe("the tournament switcher", () => {
     await page.waitForLoadState("networkidle");
 
     const header = page.getByRole("banner");
+    // The workspace renders it under the edit right and nowhere else, so a reader - a
+    // visitor or a signed-in viewer - never meets it. What fills the slot for them is
+    // asserted in `a signed-out visitor`, where the trip in from Explore is.
     await expect(header.getByRole("button", { name: /switch tournament/i })).toHaveCount(0);
-    await expect(header.getByRole("link", { name: /create tournament/i })).toHaveAttribute(
-      "href",
-      routes.newTournament,
-    );
+    // And with it went the only way this header ever had of offering the create flow:
+    // starting a tournament is an operator's act, and a read-only header offers none.
+    await expect(header.getByRole("link", { name: /create tournament/i })).toHaveCount(0);
   });
 });
 

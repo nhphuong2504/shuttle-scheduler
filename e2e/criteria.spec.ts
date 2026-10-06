@@ -360,7 +360,15 @@ test.describe("1.4.11 non-text contrast, which no axe rule covers", () => {
 
       // A sweep that measured nothing would pass. These counts are the guard against it.
       expect(selected, `no selected-state markers were measured in ${cellLabel(cell)}`).toBeGreaterThan(10);
-      expect(edged, `no control edges were measured in ${cellLabel(cell)}`).toBeGreaterThan(5);
+      /**
+       * The edge floor is anti-vacuity, not a coverage target, and it moved with the
+       * surface. The read-only pass removed every input from the signed-out tournament
+       * pages - the Entries desk forms, the Schedule settings panel and the day planner's
+       * date/time fields are the editor's alone now - so the edged controls this sweep can
+       * still find are the public search fields and the sign-in form. The floor stays high
+       * enough to fail a sweep that measured almost nothing, and no higher.
+       */
+      expect(edged, `no control edges were measured in ${cellLabel(cell)}`).toBeGreaterThan(3);
       expect(failures, `non-text contrast under 3:1\n${failures.join("\n")}`).toEqual([]);
       console.log(
         `[1.4.11 ${cellLabel(cell)}] ${selected} selected markers, ${edged} control edges, all >= 3:1`,

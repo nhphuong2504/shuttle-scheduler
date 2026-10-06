@@ -5,7 +5,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { useSession } from "@/hooks/useSession";
 import { setCurrentTournament } from "@/lib/tournament/actions";
 import { useMyTournaments } from "@/lib/tournament/data";
 import { cn } from "@/lib/utils";
@@ -78,9 +77,19 @@ import { cn } from "@/lib/utils";
  *
  * ## Empty is a state, and it has its own answer
  *
- * A caller with no tournaments of their own is not shown a switcher with nothing in it.
- * They are offered the thing that would give them one - which is the same offer a visitor
- * gets - so the control never opens onto an apology.
+ * A caller whose own list is empty is not shown a switcher with nothing in it. They are
+ * offered the thing that would give them one, so the control never opens onto an apology.
+ * That caller is a platform admin working in somebody else's tournament - the one way to
+ * hold the edit right over a tournament that is neither owned nor edited - because everyone
+ * else who may edit a tournament holds it in this list by definition.
+ *
+ * ## It is the operator's control, so only an operator is shown it
+ *
+ * The workspace renders it under the edit right and nowhere else (`WorkspaceShell` in
+ * `app-shell.tsx`). A reader gets the public list instead, which is why this component no
+ * longer has a signed-out branch: the `Create tournament` button it used to draw for a
+ * visitor was an operator's act in a read-only header, and the audience it existed for is
+ * served by the entry they arrived through.
  *
  * The panel is a floating layer, and it is drawn with the shipped vocabulary for one:
  * `bg-popover` with a hairline edge and `shadow-raise`, which is `Panel`'s idiom promoted
@@ -90,7 +99,6 @@ import { cn } from "@/lib/utils";
  * button, which WCAG 1.4.11 exempts.
  */
 export function TournamentSwitcher({ currentId }: { currentId: string | null }) {
-  const { signedIn } = useSession();
   const { summaries, isLoading, isError, error } = useMyTournaments();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -154,117 +162,96 @@ export function TournamentSwitcher({ currentId }: { currentId: string | null }) 
 
   return (
     <div ref={wrapper} className="ml-auto flex items-center">
-      {signedIn ? (
-        <>
-          <Button
-            ref={trigger}
-            type="button"
-            size="sm"
-            variant="outline"
-            /**
-             * `aria-haspopup` is deliberately absent. It announces a *menu*, and a menu
-             * promises arrow-key navigation between items that this does not implement.
-             * `aria-expanded` on a button whose panel follows it in the document is the
-             * complete, accurate description of a disclosure.
-             */
-            aria-expanded={open}
-            aria-controls={panelId}
-            disabled={busy}
-            onClick={() => setOpen((was) => !was)}
-          >
-            Switch tournament
-            <ChevronDown
-              aria-hidden
-              className={cn("transition-transform", open && "rotate-180")}
-            />
-          </Button>
+      <Button
+        ref={trigger}
+        type="button"
+        size="sm"
+        variant="outline"
+        /**
+         * `aria-haspopup` is deliberately absent. It announces a *menu*, and a menu
+         * promises arrow-key navigation between items that this does not implement.
+         * `aria-expanded` on a button whose panel follows it in the document is the
+         * complete, accurate description of a disclosure.
+         */
+        aria-expanded={open}
+        aria-controls={panelId}
+        disabled={busy}
+        onClick={() => setOpen((was) => !was)}
+      >
+        Switch tournament
+        <ChevronDown aria-hidden className={cn("transition-transform", open && "rotate-180")} />
+      </Button>
 
-          {open ? (
-            <div
-              id={panelId}
-              className="absolute right-0 top-full z-10 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
-            >
-              {isLoading ? (
-                <p className="px-2 py-2 text-t4 text-muted-foreground">
-                  Loading your tournaments…
-                </p>
-              ) : isError ? (
-                <p className="px-2 py-2 text-t4 text-muted-foreground">
-                  {error instanceof Error
-                    ? error.message
-                    : "The list of your tournaments could not be read."}
-                </p>
-              ) : summaries.length === 0 ? (
-                <div className="px-2 py-2">
-                  <p className="text-t4 text-muted-foreground">
-                    You are not running a tournament yet, so there is nothing to switch to.
-                  </p>
-                  <Button size="sm" variant="outline" asChild className="mt-2 w-full">
-                    <Link to="/tournaments/new">Create tournament</Link>
-                  </Button>
-                </div>
-              ) : (
-                <ul className="max-h-80 overflow-y-auto">
-                  {summaries.map((summary) => {
-                    const current = summary.id === currentId;
-                    return (
-                      <li key={summary.id}>
-                        <button
-                          type="button"
-                          /**
-                           * The current tournament is marked, not withheld.
-                           *
-                           * A list that omitted the one you are in would answer "where can
-                           * I go" but not "where am I" - and it is the same list as the
-                           * set of tournaments you run, so showing all of it and marking
-                           * one is the honest draw. Choosing it is a no-op.
-                           */
-                          aria-current={current ? "true" : undefined}
-                          disabled={busy}
-                          onClick={() => void switchTo(summary.id, summary.name)}
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
-                            "text-t4 hover:bg-accent hover:text-accent-foreground",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            "disabled:pointer-events-none disabled:opacity-50",
-                            current ? "font-semibold text-foreground" : "text-muted-foreground",
-                          )}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{summary.name}</span>
-                          {/*
-                            The state carries a glyph and a word as well as a weight, on
-                            the same rule as every other state in this system: the check
-                            mark and "Working here" are what survive grayscale, and they
-                            are the same words `/me/tournaments` already uses for the row
-                            you are in.
-                          */}
-                          {current ? (
-                            <span className="inline-flex shrink-0 items-center gap-1 font-score text-t4 uppercase tracking-wider text-primary-ink">
-                              <Check aria-hidden className="size-3" />
-                              Working here
-                            </span>
-                          ) : null}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+      {open ? (
+        <div
+          id={panelId}
+          className="absolute right-0 top-full z-10 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
+        >
+          {isLoading ? (
+            <p className="px-2 py-2 text-t4 text-muted-foreground">Loading your tournaments…</p>
+          ) : isError ? (
+            <p className="px-2 py-2 text-t4 text-muted-foreground">
+              {error instanceof Error
+                ? error.message
+                : "The list of your tournaments could not be read."}
+            </p>
+          ) : summaries.length === 0 ? (
+            <div className="px-2 py-2">
+              <p className="text-t4 text-muted-foreground">
+                You are not running a tournament yet, so there is nothing to switch to.
+              </p>
+              <Button size="sm" variant="outline" asChild className="mt-2 w-full">
+                <Link to="/tournaments/new">Create tournament</Link>
+              </Button>
             </div>
-          ) : null}
-        </>
-      ) : (
-        /*
-          The visitor's slot, and the caller's who runs nothing yet: the switcher is empty
-          for both, so both are offered the act that fills it. It leads to the create flow
-          rather than straight to sign-in because that flow already owns the "sign in first"
-          gate and states what an account buys - a second copy of that gate in the header
-          would be a second place for it to be wrong.
-        */
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/tournaments/new">Create tournament</Link>
-        </Button>
-      )}
+          ) : (
+            <ul className="max-h-80 overflow-y-auto">
+              {summaries.map((summary) => {
+                const current = summary.id === currentId;
+                return (
+                  <li key={summary.id}>
+                    <button
+                      type="button"
+                      /**
+                       * The current tournament is marked, not withheld.
+                       *
+                       * A list that omitted the one you are in would answer "where can
+                       * I go" but not "where am I" - and it is the same list as the
+                       * set of tournaments you run, so showing all of it and marking
+                       * one is the honest draw. Choosing it is a no-op.
+                       */
+                      aria-current={current ? "true" : undefined}
+                      disabled={busy}
+                      onClick={() => void switchTo(summary.id, summary.name)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+                        "text-t4 hover:bg-accent hover:text-accent-foreground",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "disabled:pointer-events-none disabled:opacity-50",
+                        current ? "font-semibold text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{summary.name}</span>
+                      {/*
+                        The state carries a glyph and a word as well as a weight, on the
+                        same rule as every other state in this system: the check mark and
+                        "Working here" are what survive grayscale, and they are the same
+                        words `/me/tournaments` already uses for the row you are in.
+                      */}
+                      {current ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 font-score text-sm uppercase tracking-wide text-primary-ink">
+                          <Check aria-hidden className="size-3" />
+                          Working here
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

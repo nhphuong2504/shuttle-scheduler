@@ -172,7 +172,7 @@ function SignedInHome() {
         right={
           <Link
             to="/me/tournaments"
-            className="rounded-sm text-xs font-semibold text-primary-ink underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="rounded-sm text-sm font-semibold text-primary-ink underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             My tournaments
           </Link>
@@ -214,7 +214,7 @@ function SignedInHome() {
         right={
           <Link
             to="/me/tournaments"
-            className="rounded-sm text-xs font-semibold text-primary-ink underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="rounded-sm text-sm font-semibold text-primary-ink underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             See all
           </Link>
@@ -281,7 +281,7 @@ function SignedInHome() {
         right={
           <Link
             to="/explore"
-            className="rounded-sm text-xs font-semibold text-primary-ink underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="rounded-sm text-sm font-semibold text-primary-ink underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Explore all
           </Link>

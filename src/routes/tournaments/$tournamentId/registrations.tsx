@@ -113,7 +113,7 @@ function RegistrationsPage() {
   if (!canEdit) {
     return (
       <Page title="Registrations" subtitle={REGISTRATIONS_DESCRIPTION}>
-        <div className="rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-xs font-medium text-warn-foreground">
+        <div className="rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-sm font-medium text-warn-foreground">
           {/* Said plainly rather than shown as a locked list: a viewer who followed a link
               needs to know who can decide these, and "not authorized" would not tell them. */}
           Only the people who can edit this tournament can decide registration requests. You can
@@ -219,7 +219,7 @@ function PendingRequest({
         <span className="min-w-0 truncate text-sm font-semibold">
           {request.email || "Unknown requester"}
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           Asked {instantText(request.createdAt)}
         </span>
       </div>
@@ -228,7 +228,7 @@ function PendingRequest({
 
       <div className="space-y-1.5">
         <label
-          className="text-xs font-medium text-muted-foreground"
+          className="text-sm font-medium text-muted-foreground"
           htmlFor={`note-${request.id}`}
         >
           Note for the requester (optional)
@@ -280,7 +280,7 @@ function DecidedPanel({ queue }: { queue: RegistrationQueue | null }) {
                 <span className="truncate text-sm">{request.email || "Unknown requester"}</span>
                 <RegistrationDecisionPill decision={request.status} />
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {request.decidedAt ? `Decided ${instantText(request.decidedAt)}` : null}
               </span>
             </div>

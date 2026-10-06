@@ -164,7 +164,7 @@ const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as con
 
 /** Shared so the two nav branches cannot drift into two different-looking navs. */
 const NAV_ITEM_CLASS =
-  "rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+  "inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
 const NAV_ACTIVE_CLASS =
   "bg-primary text-primary-foreground shadow-panel hover:bg-primary hover:text-primary-foreground";
 /**
@@ -281,7 +281,7 @@ export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
 
   if (status === "completed") {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 font-score text-t4 uppercase tracking-wider text-state-completed-ink">
+      <span className="inline-flex shrink-0 items-center gap-1 font-score text-sm uppercase tracking-wide text-state-completed-ink">
         {STATE_GLYPH["completed"]}
         {label}
       </span>
@@ -291,7 +291,7 @@ export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-sm uppercase tracking-wide ring-1 ring-inset",
         status === "in_progress"
           ? "bg-state-live-chip text-state-live-ink ring-state-live-ink/25"
           : "bg-muted text-muted-foreground ring-hairline",
@@ -308,7 +308,7 @@ export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
  *
  * This is the treatment the read-only notice and Access's ownership notice both draw, and
  * they drew it as two hand-written copies of the same five classes before this pass - one
- * naming the type tier, one reaching around the scale with Tailwind's own `text-xs`. One
+ * naming the type tier, one reaching around the scale with Tailwind's own `text-sm`. One
  * component, because the treatment is one fact ("this is standing information, set apart
  * from the page") and the tone is the only thing a caller chooses. `warn` is standing
  * information that changes what the reader should do, and it is the tone both live copies
@@ -399,7 +399,7 @@ export function RegistrationStatePill({ state }: { state: RegistrationState }) {
   if (state === "completed") {
     return (
       <span
-        className="inline-flex shrink-0 items-center gap-1 font-score text-t4 uppercase tracking-wider text-state-completed-ink"
+        className="inline-flex shrink-0 items-center gap-1 font-score text-sm uppercase tracking-wide text-state-completed-ink"
         title={registrationStateHint(state)}
       >
         {REGISTRATION_GLYPH[state]}
@@ -411,7 +411,7 @@ export function RegistrationStatePill({ state }: { state: RegistrationState }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-sm uppercase tracking-wide ring-1 ring-inset",
         state === "open"
           ? "bg-state-live-chip text-state-live-ink ring-state-live-ink/25"
           : "bg-muted text-muted-foreground ring-hairline",
@@ -494,7 +494,7 @@ export function RegistrationDecisionPill({ decision }: { decision: RegistrationD
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-sm uppercase tracking-wide ring-1 ring-inset",
         DECISION_CLASS[decision],
       )}
       title={registrationDecisionHint(decision)}
@@ -502,6 +502,37 @@ export function RegistrationDecisionPill({ decision }: { decision: RegistrationD
       {DECISION_GLYPH[decision]}
       {registrationDecisionLabel(decision)}
     </span>
+  );
+}
+
+/**
+ * The way out of a tournament, for a reader.
+ *
+ * It is the same entry `PublicShell` carries, in the same place: the public nav sits
+ * immediately after the brand on the header's own line, and a reader who arrived from
+ * Explore finds the way back exactly where the list they left had it. Before this pass the
+ * workspace put it at the far right of the section row, as a bordered button - the opposite
+ * corner from the brand, and a second shape for one entry.
+ *
+ * Which control leaves a tournament follows the edit right rather than the session - the
+ * same rule the nav beside it follows. An operator gets `TournamentSwitcher`, because the
+ * tournaments they may work in are a list they hold and moving between them is their own
+ * act. A reader holds no such list, and the switcher's answer to an empty one was a button
+ * into the create flow: an operator's act, offered in a header whose whole read-only point
+ * is that it has none. So the reader gets the public list instead.
+ *
+ * Browsing is how a reader gets here at all: Explore's cards open on `…/entries`. The entry
+ * they came in by is the one they need to get back out, and until this pass the workspace
+ * header did not carry it, so the browser's own back button was the only way out.
+ *
+ * No `activeProps`: `/explore` draws `PublicShell`, so this link is never the current
+ * address while the workspace it belongs to is rendered.
+ */
+function BrowseLink() {
+  return (
+    <Link to="/explore" className={NAV_ITEM_CLASS}>
+      Browse tournaments
+    </Link>
   );
 }
 
@@ -572,6 +603,15 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           )}
 
           {/*
+            The public list, for a caller who may not edit, in the position `PublicShell`
+            puts it: immediately after the brand, on this line rather than down in the
+            section row. It is not a section of this tournament, so it does not belong
+            inside the sections landmark below - and a reader who arrived from Explore finds
+            the way back where the list they came from had it.
+          */}
+          {access.can_edit ? null : <BrowseLink />}
+
+          {/*
             Which tournament this is. The name is truncated rather than wrapped, because a
             long name must not push the nav onto a third line, and the status beside it is
             the one fact a host needs before touching anything.
@@ -594,12 +634,15 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           The section row, and the reason it is a `div` wrapping the `nav` rather than the
           `nav` itself.
 
-          Two things live on this line: the sections of the tournament you are reading, and
-          the control that changes which tournament that is. The second is not a section, so
-          it does not belong inside the sections landmark. It also anchors its panel to this
-          row, which is the last row of the header: `relative` here is what puts the panel's
-          right edge on the same container edge the nav is aligned to, and its top on the
-          header's own bottom edge. See `TournamentSwitcher` for what those two facts buy.
+          Two things have shared this line: the sections of the tournament you are reading,
+          and the control that changes which tournament that is. The second is not a section,
+          so it does not belong inside the sections landmark. It also anchors its panel to
+          this row, which is the last row of the header: `relative` here is what puts the
+          panel's right edge on the same container edge the nav is aligned to, and its top on
+          the header's own bottom edge. See `TournamentSwitcher` for what those two facts buy.
+
+          A reader's entry has moved up to the brand's own line (`BrowseLink`), so what is
+          left here is the sections and, for an operator, the switcher.
         */}
         <div className="relative mx-auto flex max-w-[1400px] flex-wrap items-center gap-1 px-4 py-2">
           <nav aria-label="Tournament sections" className="flex flex-wrap items-center gap-1">
@@ -629,7 +672,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 })
               : null}
           </nav>
-          <TournamentSwitcher currentId={tournamentId} />
+          {/*
+            The switcher, for a caller who may edit - the same split the nav beside it and
+            the public list above it follow. A reader is not left with an empty slot: the
+            thing that leaves their tournament is up on the brand's line.
+          */}
+          {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
         </div>
       </header>
 
@@ -775,7 +823,7 @@ export function Panel({
     >
       {title || right ? (
         <header className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-hairline px-4 py-2.5">
-          <h2 className="font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          <h2 className="font-display text-base font-bold tracking-tight text-foreground">
             {title}
           </h2>
           {right}
@@ -828,7 +876,7 @@ export function StatTile({
         : "text-muted-foreground";
   return (
     <div className={cn("rounded-xl border p-3 shadow-panel", toneClass)}>
-      <p className={cn("text-t4 font-semibold uppercase tracking-[0.12em]", labelClass)}>{label}</p>
+      <p className={cn("text-sm font-medium", labelClass)}>{label}</p>
       <p className="mt-1 font-score text-t1 font-semibold leading-none tracking-tight">{value}</p>
       {hint ? <p className={cn("mt-1 text-t4", labelClass)}>{hint}</p> : null}
     </div>
@@ -847,7 +895,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-hairline bg-muted/30 px-4 py-8 text-center">
       <p className="font-display text-sm font-semibold">{title}</p>
-      {hint ? <p className="max-w-md text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="max-w-md text-sm text-muted-foreground">{hint}</p> : null}
       {action}
     </div>
   );
@@ -1028,7 +1076,7 @@ export function StatusPill({ status }: { status: string }) {
    */
   if (!display) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-score text-t2 uppercase tracking-wider text-muted-foreground ring-1 ring-inset ring-hairline">
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-score text-t2 uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-hairline">
         {STATE_FALLBACK_GLYPH}
         {status.replace(/_/g, " ")}
       </span>
@@ -1043,7 +1091,7 @@ export function StatusPill({ status }: { status: string }) {
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 font-score text-t2 uppercase tracking-wider",
+          "inline-flex items-center gap-1 font-score text-t2 uppercase tracking-wide",
           STATE_TIER4_CLASS,
         )}
       >
@@ -1056,7 +1104,7 @@ export function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wide ring-1 ring-inset",
         STATE_CLASS[display],
       )}
     >
@@ -1086,7 +1134,7 @@ export function StatusPill({ status }: { status: string }) {
 export function ByeMarker() {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-dashed border-hairline px-2 py-0.5 font-score text-t2 uppercase tracking-wider text-muted-foreground"
+      className="inline-flex items-center gap-1 rounded-full border border-dashed border-hairline px-2 py-0.5 font-score text-t2 uppercase tracking-wide text-muted-foreground"
       title={BYE_NOTE}
     >
       {BYE_GLYPH}

@@ -136,7 +136,7 @@ export function DetailsStep({
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {span
               ? `${span} day${span === 1 ? "" : "s"}, ${start}${end && end !== start ? ` to ${end}` : ""}.`
               : "Pick the first day."}{" "}

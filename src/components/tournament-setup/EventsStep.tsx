@@ -102,7 +102,7 @@ export function EventsStep({
             );
           })}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground">
           Each event already knows its shape and who may enter it: singles for MS and WS, doubles
           for MD, WD and XD, each open to the gender in its name. Both are stored with the event so
           entry validation can use them.
@@ -177,7 +177,7 @@ export function EventsStep({
             );
           })}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground">
           {events.length === 0
             ? "Add events above to see which limits make sense."
             : `A player can play at most ${form.maxCategoriesPerPlayer} of your ${events.length} event${events.length === 1 ? "" : "s"}. Checked every time an entry is added.`}

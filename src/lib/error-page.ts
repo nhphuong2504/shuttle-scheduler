@@ -25,13 +25,13 @@ export function renderErrorPage(): string {
     <style>
       :root {
         color-scheme: light;
-        --color-background: oklch(0.975 0.004 250);
-        --color-foreground: oklch(0.255 0.010 255);
-        --color-surface: oklch(1 0 0);
-        --color-muted-foreground: oklch(0.505 0.009 252);
-        --color-border-control: oklch(0.643 0.008 250);
-        --color-primary: oklch(0.52 0.16 255);
-        --color-primary-foreground: oklch(1 0 0);
+        --color-background: #F4F5F4;
+        --color-foreground: #171A1D;
+        --color-surface: #FFFFFF;
+        --color-muted-foreground: #5B656C;
+        --color-border-control: #7F8A91;
+        --color-primary: #5B4FC7;
+        --color-primary-foreground: #FFFFFF;
       }
       body {
         font-family: system-ui, -apple-system, sans-serif;

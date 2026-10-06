@@ -701,8 +701,12 @@ for (const cell of MATRIX_CELLS) {
        * The fixture is exactly the combination the old wording got wrong: a seeded field with no
        * placement matches, and two brackets already running. So the panel is asked to draw a
        * waiting round, a round waiting on that one, and a live bracket at once.
+       *
+       * The panel belongs to the editor, so this runs with an edit right. A visitor and a
+       * signed-in viewer are shown the running order without it — the read-only surface
+       * carries no tournament-wide forecast.
        */
-      await installAppMock(page, { preset: "layout" });
+      await installAppMock(page, { preset: "layout", role: "admin" });
       await openCell(page, routes.schedule, cell);
 
       const panel = page.locator("section", {

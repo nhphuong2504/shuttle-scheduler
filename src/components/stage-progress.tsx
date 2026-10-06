@@ -42,22 +42,22 @@ export function StageProgressList({ rows }: { rows: readonly StageProgressRow[] 
           </span>
           <span className="flex items-center gap-3">
             {row.total > 0 ? (
-              <span className="font-score text-xs text-muted-foreground">
+              <span className="font-score text-sm text-muted-foreground">
                 {row.completed} / {row.total} matches completed
               </span>
             ) : row.status === "waiting" ? (
-              <span className="font-score text-xs text-muted-foreground">No matches yet</span>
+              <span className="font-score text-sm text-muted-foreground">No matches yet</span>
             ) : null}
             {row.remaining > 0 ? (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {remainingLabel(row.remaining)}
               </span>
             ) : row.action ? (
-              <span className="text-xs font-semibold text-primary">{row.action.label}</span>
+              <span className="text-sm font-semibold text-primary">{row.action.label}</span>
             ) : row.note ? (
               <span
                 className={cn(
-                  "text-xs",
+                  "text-sm",
                   row.status === "waiting" ? "text-warn-foreground" : "text-muted-foreground",
                 )}
               >

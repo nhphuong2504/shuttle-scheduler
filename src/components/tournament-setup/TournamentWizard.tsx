@@ -366,7 +366,7 @@ export function TournamentWizard({
             <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
               <ul className="space-y-1">
                 {problems.map((problem) => (
-                  <li key={problem} className="flex items-start gap-2 text-xs text-warn-foreground">
+                  <li key={problem} className="flex items-start gap-2 text-sm text-warn-foreground">
                     <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
                     {problem}
                   </li>
@@ -408,7 +408,7 @@ export function TournamentWizard({
             that could only fail would be a form that lies, so the wizard shows the one step
             that still has actions and says where the rest moved to.
           */}
-          <div className="mb-4 rounded-xl border border-info-border bg-info-surface px-4 py-3 text-xs text-info-foreground">
+          <div className="mb-4 rounded-xl border border-info-border bg-info-surface px-4 py-3 text-sm text-info-foreground">
             This tournament is {tournamentStatusLabel(tournamentStatus)}, so its name, dates and
             events can no longer be changed. Courts, timings and scoring are adjusted on the Schedule
             page. The checks below still say whether it is ready.
