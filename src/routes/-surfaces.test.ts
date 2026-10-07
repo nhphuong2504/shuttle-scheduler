@@ -666,11 +666,9 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
      * corner from the brand.
      */
     const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
-    // The reader's entry, and its place: between the brand block and the tournament's name.
-    expect(shell).toMatch(/access\.can_edit \? null : <BrowseLink \/>/);
-    expect(shell.indexOf("<BrowseLink />")).toBeLessThan(
-      shell.indexOf("Which tournament this is."),
-    );
+    // The reader's entry, and its place: in the bar beside the brand, above the title.
+    expect(shell).toMatch(/access\.can_edit \? null : \(\s*<>[\s\S]{0,200}?<BrowseLink \/>/);
+    expect(shell.indexOf("<BrowseLink />")).toBeLessThan(shell.indexOf("{tournament?.name"));
     // The switcher's place, unchanged: the section row, for a caller who may edit.
     expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
     // The entry is the public nav pill, not a second shape drawn for the same link.

@@ -120,6 +120,11 @@ const COLOUR_HELPERS = `
       const c = toRgb(s.borderTopColor);
       if (c && c[3] >= 0.3) out.push({ rgba: c, via: "border" });
     }
+    // A rule on the bottom edge only, which is how a tab row marks the open section.
+    if (s.borderBottomStyle !== "none" && parseFloat(s.borderBottomWidth) >= 1) {
+      const c = toRgb(s.borderBottomColor);
+      if (c && c[3] >= 0.3) out.push({ rgba: c, via: "border" });
+    }
     const fill = toRgb(s.backgroundColor);
     if (fill && fill[3] >= 0.3) out.push({ rgba: fill, via: "fill" });
     return out;

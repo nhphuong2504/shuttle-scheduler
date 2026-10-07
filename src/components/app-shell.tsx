@@ -4,6 +4,8 @@ import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
+import { useTournamentSummary } from "@/lib/tournament/data";
+import { shortDays } from "@/lib/tournament/summary-format";
 import { supabase } from "@/integrations/supabase/client";
 import {
   normalizeTournamentStatus,
@@ -167,6 +169,15 @@ const NAV_ITEM_CLASS =
   "inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
 const NAV_ACTIVE_CLASS =
   "bg-primary text-primary-foreground shadow-panel hover:bg-primary hover:text-primary-foreground";
+/**
+ * The sections of one tournament, as tabs on a rule rather than as pills.
+ *
+ * A tournament's sections are places inside one thing, so they read as a row of tabs under the
+ * tournament's name, with the open one marked by a line on the row's own edge. The pill
+ * treatment above stays for the public bar, where the entries are separate destinations.
+ */
+const TAB_ITEM_CLASS =
+  "inline-flex min-h-12 shrink-0 items-center border-b-[3px] border-transparent px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground";
 /**
  * The count of work waiting, beside its section.
  *
@@ -364,7 +375,7 @@ export function Notice({
   return (
     <div
       className={cn(
-        "mb-4 rounded-lg border px-3 py-2 text-t4 font-medium",
+        "mb-4 rounded-lg border px-3.5 py-2.5 text-sm font-medium",
         tone === "warn"
           ? "border-warn-border bg-warn-surface text-warn-foreground"
           : "border-info-border bg-info-surface text-info-foreground",
@@ -390,7 +401,7 @@ export function Notice({
  */
 function ReadOnlyNotice({ signedIn }: { signedIn: boolean }) {
   return (
-    <Notice data-read-only>
+    <Notice tone="info" data-read-only>
       {signedIn
         ? "Read-only view. You can see this tournament but not change it — ask its owner for edit access."
         : "Read-only view. Sign in to start, score and schedule matches."}
@@ -606,12 +617,38 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const registrationQueue = useTournamentRegistrationQueue(tournamentId, {
     enabled: access.can_edit,
   });
+  /**
+   * When and where, for the line under the tournament's name.
+   *
+   * The summary read rather than the tournament row: the start and end are derived from the
+   * playing days, and the page about a tournament must describe it the way the card that led
+   * to it did.
+   */
+  const summary = useTournamentSummary(tournamentId).data;
+  const meta = summary
+    ? [shortDays(summary.starts_at, summary.ends_at), summary.venue_name]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const pendingRegistrations = registrationQueue.data?.pending.length ?? 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 pt-2.5">
+      {/*
+        The tournament's own header, in three parts.
+
+        The bar is the app: the brand, the way back to the public list for somebody who may not
+        edit, and the session. Under it is the tournament - its name as a title, its status, and
+        when and where it is - because the name is the thing a reader came for and used to sit
+        in the bar at the size of a menu item. The sections come last, as tabs on a rule of
+        their own.
+
+        All three are the one `header` landmark, so the tournament's name, the way back to the
+        list and the sections are found together. The header scrolls away with the page: it is
+        too tall to keep on screen, and a section is one tap from the top.
+      */}
+      <header className="border-b border-hairline bg-surface">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           {/*
             The brand goes to the tournament you are looking at, never to `/`. It used to
             point at `/` always, which after the workspace move would send an operator
@@ -622,43 +659,46 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             does not carry.
           */}
           {tournamentId ? (
-            <Link to={homeSection} params={{ tournamentId }} className="flex items-center gap-2">
+            <Link to={homeSection} params={{ tournamentId }} className="flex items-center gap-2.5">
               <BrandMark />
             </Link>
           ) : (
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2.5">
               <BrandMark />
             </span>
           )}
 
           {/*
             The public list, for a caller who may not edit, in the position `PublicShell`
-            puts it: immediately after the brand, on this line rather than down in the
-            section row. It is not a section of this tournament, so it does not belong
-            inside the sections landmark below - and a reader who arrived from Explore finds
-            the way back where the list they came from had it.
+            puts it: immediately after the brand. It is not a section of this tournament, so
+            it does not belong inside the sections landmark below - and a reader who arrived
+            from Explore finds the way back where the list they came from had it.
           */}
-          {access.can_edit ? null : <BrowseLink />}
-
-          {/*
-            Which tournament this is. The name is truncated rather than wrapped, because a
-            long name must not push the nav onto a third line, and the status beside it is
-            the one fact a host needs before touching anything.
-          */}
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-display text-sm font-semibold">
-              {tournament?.name ?? "Loading…"}
-            </span>
-            {tournament ? (
-              <TournamentStatusPill status={normalizeTournamentStatus(tournament.status)} />
-            ) : null}
-          </div>
+          {access.can_edit ? null : (
+            <>
+              <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
+              <BrowseLink />
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-2">
             <SessionBlock />
           </div>
         </div>
 
+        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight">
+              {tournament?.name ?? "Loading…"}
+            </p>
+            {tournament ? (
+              <TournamentStatusPill status={normalizeTournamentStatus(tournament.status)} />
+            ) : null}
+          </div>
+          {meta ? <p className="mt-1 break-words text-sm text-muted-foreground">{meta}</p> : null}
+        </div>
+
+        <div>
         {/*
           The section row, and the reason it is a `div` wrapping the `nav` rather than the
           `nav` itself.
@@ -666,15 +706,15 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           Two things have shared this line: the sections of the tournament you are reading,
           and the control that changes which tournament that is. The second is not a section,
           so it does not belong inside the sections landmark. It also anchors its panel to
-          this row, which is the last row of the header: `relative` here is what puts the
-          panel's right edge on the same container edge the nav is aligned to, and its top on
-          the header's own bottom edge. See `TournamentSwitcher` for what those two facts buy.
-
-          A reader's entry has moved up to the brand's own line (`BrowseLink`), so what is
-          left here is the sections and, for an operator, the switcher.
+          this row: `relative` here is what puts the panel's right edge on the same container
+          edge the nav is aligned to, and its top on the row's own bottom edge. See
+          `TournamentSwitcher` for what those two facts buy.
         */}
-        <div className="relative mx-auto flex max-w-[1400px] flex-wrap items-center gap-1 px-4 py-2">
-          <nav aria-label="Tournament sections" className="flex flex-wrap items-center gap-1">
+        <div className="relative mx-auto flex max-w-[1400px] items-center gap-2 border-t border-hairline px-4">
+          <nav
+            aria-label="Tournament sections"
+            className="-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+          >
             {tournamentId
               ? sections.map((item) => {
                   const waiting =
@@ -684,8 +724,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                       key={item.scoped}
                       to={item.scoped}
                       params={{ tournamentId }}
-                      className={NAV_ITEM_CLASS}
-                      activeProps={{ className: NAV_ACTIVE_CLASS }}
+                      className={TAB_ITEM_CLASS}
                     >
                       {item.label}
                       {waiting > 0 ? (
@@ -704,9 +743,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           {/*
             The switcher, for a caller who may edit - the same split the nav beside it and
             the public list above it follow. A reader is not left with an empty slot: the
-            thing that leaves their tournament is up on the brand's line.
+            thing that leaves their tournament is up in the bar.
           */}
           {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
+        </div>
         </div>
       </header>
 
