@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Page, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { MatchFormatCard } from "@/components/match-format";
+import { PlayingDayPicker } from "@/components/schedule/playing-day-picker";
 import { ScheduledFinish } from "@/components/schedule-status";
 import { Button } from "@/components/ui/button";
 import {
@@ -182,8 +183,6 @@ export function PlacementScheduler() {
   const [breakDrafts, setBreakDrafts] = useState<Record<string, DayBreakRow[]>>({});
   /** Day windows whose edits are still in flight, so their card can say "saving". */
   const [savingDayId, setSavingDayId] = useState<string | null>(null);
-  /** The date typed into "Add a day", or null while it still shows the suggested one. */
-  const [newDayDate, setNewDayDate] = useState<string | null>(null);
   const tournamentDays = useMemo(() => days ?? [], [days]);
   const dayCount = tournament?.day_count ?? tournamentDays.length;
   /** The venue's court pool, read once so the settings sections cannot disagree. */
@@ -789,20 +788,25 @@ export function PlacementScheduler() {
   );
 
   /**
-   * The date offered for a new day: the one after the last, which is the overrun case.
+   * The playing days as dates, and the ones that cannot be switched off.
    *
-   * Built from the day's own `YYYY-MM-DD` rather than a UTC parse, so it cannot land
-   * a day early west of Greenwich the way `new Date(dateString)` would.
+   * The picker offers only the tournament window's own dates, so a day outside it cannot be
+   * chosen by typing; the database refuses one for every writer too. A day with matches on it
+   * stays on, and the reason travels with the date.
    */
-  const suggestedNewDayDate = useMemo(() => {
-    const last = tournamentDays[tournamentDays.length - 1];
-    if (!last) return "";
-    const date = new Date(`${last.date}T00:00:00`);
-    date.setDate(date.getDate() + 1);
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${date.getFullYear()}-${month}-${day}`;
-  }, [tournamentDays]);
+  const chosenDates = useMemo(
+    () => new Set(tournamentDays.map((day) => day.date.slice(0, 10))),
+    [tournamentDays],
+  );
+  const lockedDates = useMemo(() => {
+    const locked = new Map<string, string>();
+    for (const day of tournamentDays) {
+      if (daysWithMatches.has(day.id)) {
+        locked.set(day.date.slice(0, 10), "This day has matches on it. Clear or move them first.");
+      }
+    }
+    return locked;
+  }, [tournamentDays, daysWithMatches]);
 
   /**
    * Which day's running order is on screen.
@@ -940,9 +944,12 @@ export function PlacementScheduler() {
     setBusy(true);
     try {
       await addTournamentDay(tournamentId, date);
-      setNewDayDate("");
       await qc.invalidateQueries();
-      toast.success(`Day added for ${date}. Rebuild to place matches on it.`);
+      toast.success(
+        hasSchedule
+          ? `${dayDateLabel(date)} is a playing day. Update the schedule to place matches on it.`
+          : `${dayDateLabel(date)} is a playing day.`,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add the day");
     } finally {
@@ -1111,6 +1118,10 @@ export function PlacementScheduler() {
   };
 
   const build = async () => {
+    if (!tournamentDays.length) {
+      toast.error("Choose the days you play first.");
+      return;
+    }
     if (!validateAllWindows()) return;
     if (!planInputsReady) {
       toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
@@ -1137,6 +1148,10 @@ export function PlacementScheduler() {
   };
 
   const previewRebuild = async () => {
+    if (!tournamentDays.length) {
+      toast.error("Choose the days you play first.");
+      return;
+    }
     if (!validateAllWindows()) return;
     if (!planInputsReady) {
       toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
@@ -1212,25 +1227,59 @@ export function PlacementScheduler() {
     }
   };
 
+  /**
+   * A tournament with no playing days yet is the ordinary starting state, not a missing
+   * setup: the days are chosen here, inside the window the tournament was created with.
+   * So this is the first thing the Schedule page asks for, not a dead end that sends the
+   * host back to setup.
+   */
   if (!loading && !tournamentDays.length) {
     return (
-      <Page title="Court schedule">
-        <Panel title="No tournament configured">
-          <EmptyState
-            title="Set up a tournament first"
-            hint="A tournament defines its days, courts and the durations each stage is scheduled with."
-            action={
-              tournamentId ? (
-                <Link
-                  to="/tournaments/$tournamentId/settings"
-                  params={{ tournamentId }}
-                  className="text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                >
-                  Open tournament setup
-                </Link>
-              ) : null
-            }
-          />
+      <Page
+        title="Court schedule"
+        subtitle="Choose the days you play. Hours, courts and breaks come next."
+      >
+        <Panel title="Which days do you play?">
+          {tournament ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                The tournament runs from {dayDateLabel(String(tournament.starts_on).slice(0, 10))}{" "}
+                to {dayDateLabel(String(tournament.ends_on).slice(0, 10))}. Pick the days inside
+                it that have matches; they need not be consecutive.
+              </p>
+              {canEdit ? (
+                <PlayingDayPicker
+                  startsOn={String(tournament.starts_on).slice(0, 10)}
+                  endsOn={String(tournament.ends_on).slice(0, 10)}
+                  chosen={chosenDates}
+                  locked={lockedDates}
+                  disabled={busy}
+                  onAdd={(date) => void addDay(date)}
+                  onRemove={() => undefined}
+                />
+              ) : (
+                <EmptyState
+                  title="No playing days chosen yet"
+                  hint="The organiser chooses which days of the tournament are played."
+                />
+              )}
+              <p className="text-sm text-muted-foreground">
+                The window itself can still change on the{" "}
+                {tournamentId ? (
+                  <Link
+                    to="/tournaments/$tournamentId/settings"
+                    params={{ tournamentId }}
+                    className="font-semibold text-primary underline-offset-2 hover:underline"
+                  >
+                    setup page
+                  </Link>
+                ) : (
+                  "setup page"
+                )}
+                .
+              </p>
+            </div>
+          ) : null}
         </Panel>
       </Page>
     );
@@ -1365,10 +1414,22 @@ export function PlacementScheduler() {
 
               <SettingsSection
                 title="Playing days"
-                summary={`${tournamentDays.length} day${tournamentDays.length === 1 ? "" : "s"}${
-                  tournamentDays.length >= 7 ? " · 7 is the maximum" : ""
-                }`}
+                summary={`${tournamentDays.length} day${tournamentDays.length === 1 ? "" : "s"}`}
               >
+                {tournament ? (
+                  <PlayingDayPicker
+                    startsOn={String(tournament.starts_on).slice(0, 10)}
+                    endsOn={String(tournament.ends_on).slice(0, 10)}
+                    chosen={chosenDates}
+                    locked={lockedDates}
+                    disabled={!canEdit || busy}
+                    onAdd={(date) => void addDay(date)}
+                    onRemove={(date) => {
+                      const day = tournamentDays.find((entry) => entry.date.slice(0, 10) === date);
+                      if (day) void removeDay(day);
+                    }}
+                  />
+                ) : null}
                 <div className="divide-y divide-hairline rounded-lg border border-hairline">
                   {tournamentDays.map((day) => {
                     const window = windowFor(day);
@@ -1390,18 +1451,11 @@ export function PlacementScheduler() {
                               variant="ghost"
                               className="h-7 px-2 text-t4"
                               aria-label={`Remove day ${day.day_number}`}
-                              disabled={
-                                !canEdit ||
-                                busy ||
-                                tournamentDays.length <= 1 ||
-                                daysWithMatches.has(day.id)
-                              }
+                              disabled={!canEdit || busy || daysWithMatches.has(day.id)}
                               title={
-                                tournamentDays.length <= 1
-                                  ? "A tournament needs at least one day."
-                                  : daysWithMatches.has(day.id)
-                                    ? "This day has matches on it. Clear or move them first."
-                                    : undefined
+                                daysWithMatches.has(day.id)
+                                  ? "This day has matches on it. Clear or move them first."
+                                  : undefined
                               }
                               onClick={() => void removeDay(day)}
                             >
@@ -1634,32 +1688,6 @@ export function PlacementScheduler() {
                     );
                   })}
                 </div>
-                {tournamentDays.length < 7 ? (
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div>
-                      <Label htmlFor="new-day-date" className="text-t4 text-muted-foreground">
-                        New day
-                      </Label>
-                      <PickerInput
-                        id="new-day-date"
-                        type="date"
-                        pickerLabel="Open the calendar for the new day"
-                        className="mt-1 w-38 md:w-36"
-                        disabled={!canEdit || busy}
-                        value={newDayDate ?? suggestedNewDayDate}
-                        onChange={(event) => setNewDayDate(event.target.value)}
-                      />
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!canEdit || busy}
-                      onClick={() => void addDay(newDayDate ?? suggestedNewDayDate)}
-                    >
-                      Add day
-                    </Button>
-                  </div>
-                ) : null}
               </SettingsSection>
 
               <SettingsSection title="Match format" summary="2 stages">

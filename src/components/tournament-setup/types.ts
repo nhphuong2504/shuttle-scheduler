@@ -103,22 +103,9 @@ export function todayIso(): string {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
 }
 
-/** Adds whole days to a `YYYY-MM-DD` string, staying clear of local-time drift. */
-export function shiftIsoDate(iso: string, days: number): string {
-  const date = new Date(`${iso}T00:00:00Z`);
-  // An unreadable date stays unreadable (blank), rather than throwing from `toISOString`
-  // into a render.
-  if (Number.isNaN(date.getTime())) return "";
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-/** Inclusive day count between two `YYYY-MM-DD` strings; at least 1. */
-export function countIsoDays(start: string, end: string): number {
-  const from = Date.parse(`${start}T00:00:00Z`);
-  const to = Date.parse(`${end}T00:00:00Z`);
-  return Math.round((to - from) / 86_400_000) + 1;
-}
+// Date arithmetic lives with the other calendar-date helpers, so the Schedule page's day
+// picker and this wizard cannot disagree about what a window contains.
+export { countIsoDays, shiftIsoDate } from "@/lib/tournament/iso-date";
 
 /** "2026-10-20 to 2026-10-30", "2026-10-20" for one day, or a prompt if there is no window. */
 export function windowLabel(startsOn: string, endsOn: string): string {

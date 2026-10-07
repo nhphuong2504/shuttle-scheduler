@@ -2029,6 +2029,15 @@ describe("start on first match migration", () => {
       expect(body, name).toMatch(/assert_tournament_can_start_match/);
       expect(body, name).toMatch(/mark_tournament_started/);
       expect(body, name).not.toMatch(/assert_tournament_live/);
+      // The flip comes before the match row is touched, so nothing the match update fires
+      // sees a match on court inside a tournament that is still upcoming. A failed start
+      // raises and takes the flip with it.
+      expect(body.indexOf("mark_tournament_started"), name).toBeGreaterThan(
+        body.indexOf("assert_tournament_can_start_match"),
+      );
+      expect(body.indexOf("mark_tournament_started"), name).toBeLessThan(
+        body.search(/\bUPDATE public\.(placement|tier_draw|pool|draw)_matches/),
+      );
     }
   });
 

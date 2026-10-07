@@ -516,6 +516,13 @@ test.describe("Creating a tournament", () => {
 test.describe("Creating a tournament, signed in", () => {
   test.use({ appMock: { preset: "layout", role: "user" } });
 
+  // The create flow suggests a registration deadline from "now", and the tests below pick
+  // dates in December. Left to the real clock they would fail the day the deadline suggestion
+  // lands after the opening - a failure with no code change - so time starts here and runs.
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: new Date("2026-10-07T19:03:00Z") });
+  });
+
   test("runs the same four steps, with the step kept in the address", async ({ page }) => {
     await page.goto(routes.newTournament, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
@@ -690,6 +697,48 @@ test.describe("Setting up a tournament that has started", () => {
     // And the end of it: completing, which is the host's own act.
     await expect(page.getByRole("button", { name: "Complete tournament" })).toBeVisible();
     await expect(page.getByRole("button", { name: /start tournament/i })).toHaveCount(0);
+  });
+});
+
+test.describe("A tournament with no playing days yet", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
+
+  test("asks which days are played, from the window's own dates", async ({ page }) => {
+    // A tournament is created complete and has no playing days: they are chosen here.
+    await page.route("**/rest/v1/tournament_days*", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+    );
+    const added: unknown[] = [];
+    await page.route("**/rest/v1/rpc/add_tournament_day", async (route) => {
+      added.push(JSON.parse(route.request().postData() ?? "{}"));
+      await route.fulfill({ status: 200, contentType: "application/json", body: '"day-1"' });
+    });
+
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The ordinary starting state, not a dead end that sends the host back to setup.
+    await expect(page.getByRole("heading", { name: "Which days do you play?" })).toBeVisible();
+    await expect(page.getByText(/need not be consecutive/i)).toBeVisible();
+    await expect(page.getByText(/set up a tournament first/i)).toHaveCount(0);
+
+    // Only the tournament window's own dates are offered, and none is chosen yet.
+    const days = page.getByRole("group").getByRole("button");
+    await expect(days).toHaveCount(1);
+    await expect(days.first()).toHaveAttribute("aria-pressed", "false");
+
+    await days.first().click();
+    await expect.poll(() => added.length).toBe(1);
+    expect(added[0]).toMatchObject({ p_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+  });
+
+  test("cannot build a schedule until a day is chosen", async ({ page }) => {
+    await page.route("**/rest/v1/tournament_days*", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+    );
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("button", { name: /build schedule|update schedule/i })).toHaveCount(0);
   });
 });
 

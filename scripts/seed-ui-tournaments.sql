@@ -146,6 +146,7 @@ INSERT INTO public.tournaments (
   venue_name, venue_address, venue_timezone,
   organizer_name, organizer_email, organizer_phone,
   day_count, court_count,
+  starts_on, ends_on,
   registration_opens_at, registration_closes_at,
   placement_best_of, placement_games_to, placement_win_by,
   knockout_best_of, knockout_games_to, knockout_win_by,
@@ -156,6 +157,7 @@ SELECT
   v.venue_name, v.venue_address, v.venue_timezone,
   v.organizer_name, v.organizer_email, v.organizer_phone,
   v.day_count, v.court_count,
+  v.starts_on, v.ends_on,
   v.reg_opens, v.reg_closes,
   3, 21, 2,
   3, 21, 2,
@@ -167,6 +169,7 @@ FROM (VALUES
     'America/Chicago',
     'Chicago Badminton Association', 'ops@chicagobadminton.example', '(312) 555-0184',
     2, 8,
+    DATE '2026-09-12', DATE '2026-09-13',
     TIMESTAMPTZ '2026-08-01 00:00:00-05', TIMESTAMPTZ '2026-09-05 23:59:00-05',
     E'Annual Midwest classic, two days, four events.\nShuttle speed 77; feather shuttles throughout.'
   ),
@@ -176,6 +179,7 @@ FROM (VALUES
     'America/Los_Angeles',
     'Northern California Badminton Association', 'entry@ncbadminton.example', '(415) 555-0117',
     2, 8,
+    DATE '2026-08-15', DATE '2026-08-16',
     TIMESTAMPTZ '2026-07-01 00:00:00-07', TIMESTAMPTZ '2026-08-08 23:59:00-07',
     E'Open regional championship. Group stage Saturday, placement Sunday.\nPlayers must report 30 minutes before their first match.'
   ),
@@ -185,13 +189,14 @@ FROM (VALUES
     'America/New_York',
     'New York Badminton Association', 'secretariat@nybadminton.example', '(212) 555-0143',
     2, 8,
+    DATE '2026-10-31', DATE '2026-11-01',
     TIMESTAMPTZ '2026-10-01 00:00:00-04', TIMESTAMPTZ '2026-10-25 23:59:00-04',
     E'State championship, 31 October and 1 November 2026.\nRegistration closes when the draw is published, or at 48 entries per event, whichever comes first.'
   )
 ) AS v (
   key, status, venue_name, venue_address, venue_timezone,
   organizer_name, organizer_email, organizer_phone,
-  day_count, court_count, reg_opens, reg_closes, notes
+  day_count, court_count, starts_on, ends_on, reg_opens, reg_closes, notes
 )
 JOIN seed_tkey k ON k.key = v.key
 CROSS JOIN seed_owner o;
@@ -204,8 +209,8 @@ JOIN public.tournaments t ON t.name = k.name;
 -- ---------------------------------------------------------------------------
 -- 3. Days and courts
 -- ---------------------------------------------------------------------------
--- `tournament_starts_at` / `tournament_ends_at` are derived from these rows, so
--- the dates a card shows come from here rather than from the tournaments row.
+-- The window on the tournaments row (`starts_on` / `ends_on`) is what a card shows;
+-- these rows are the days actually played, and each must lie inside it.
 INSERT INTO public.tournament_days (tournament_id, day_number, date, start_time, end_time)
 SELECT t.id, d.day_number, d.date, d.start_time, d.end_time
 FROM seed_t t

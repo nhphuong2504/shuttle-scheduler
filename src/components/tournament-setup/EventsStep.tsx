@@ -293,7 +293,8 @@ function RegistrationSection({
           role="switch"
           aria-checked={registration.enabled}
           aria-labelledby="reg-switch-label"
-          disabled={locked}
+          aria-describedby={opened ? "reg-switch-note" : undefined}
+          disabled={locked || opened}
           onClick={() => set({ enabled: !registration.enabled })}
           className="inline-flex min-h-11 items-center gap-2.5 rounded-lg px-1 font-semibold disabled:opacity-60"
         >
@@ -312,6 +313,13 @@ function RegistrationSection({
           {registration.enabled ? "On" : "Off"}
         </button>
       </div>
+
+      {opened ? (
+        <p id="reg-switch-note" className="mt-2 text-sm text-muted-foreground">
+          Registration has already opened, so it cannot be switched off. To stop taking requests,
+          move the deadline to now.
+        </p>
+      ) : null}
 
       {registration.enabled ? (
         <>

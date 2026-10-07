@@ -15,6 +15,14 @@
 -- in-progress tournament (`assert_tournament_live`, unchanged), and a completed
 -- tournament can never have a match started, platform admin or not.
 --
+-- ## Why the flip comes before the match update
+--
+-- The transition runs right after the guard and before the match row is touched. The match
+-- update fires triggers (the desk activity log, realtime), and none of them may observe a
+-- match on court inside a tournament that is still upcoming. If the start then fails - the
+-- match is not scheduled, a court is busy, a player is resting - the function raises and the
+-- transaction, the flip with it, is rolled back; a refused start never starts a tournament.
+--
 -- ## Why a shared lock
 --
 -- Completing and starting must not interleave: a Complete that decided "nothing is on
@@ -108,6 +116,10 @@ BEGIN
 
   PERFORM public.lock_tournament_lifecycle_shared(v_tournament);
   PERFORM public.assert_tournament_can_start_match(v_tournament);
+  -- Before the match is touched, so nothing the match update fires can see an upcoming
+  -- tournament with a match on court. A start that then fails raises, and the whole
+  -- transaction - this flip included - is rolled back.
+  PERFORM public.mark_tournament_started(v_tournament);
 
   UPDATE public.placement_matches
   SET status = 'in-progress',
@@ -118,8 +130,6 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'That match is not ready to start';
   END IF;
-
-  PERFORM public.mark_tournament_started(v_tournament);
 END;
 $function$;
 
@@ -140,6 +150,7 @@ BEGIN
 
   PERFORM public.lock_tournament_lifecycle_shared(v_tournament);
   PERFORM public.assert_tournament_can_start_match(v_tournament);
+  PERFORM public.mark_tournament_started(v_tournament);
 
   UPDATE public.tier_draw_matches
   SET status = 'in-progress',
@@ -150,8 +161,6 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'That match is not ready to start';
   END IF;
-
-  PERFORM public.mark_tournament_started(v_tournament);
 END;
 $function$;
 
@@ -172,6 +181,7 @@ BEGIN
 
   PERFORM public.lock_tournament_lifecycle_shared(v_tournament);
   PERFORM public.assert_tournament_can_start_match(v_tournament);
+  PERFORM public.mark_tournament_started(v_tournament);
   PERFORM pg_advisory_xact_lock(hashtext('live-schedule'));
   PERFORM pg_advisory_xact_lock(hashtext('schedule:1'));
   PERFORM pg_advisory_xact_lock(hashtext('schedule:2'));
@@ -201,8 +211,6 @@ BEGIN
   ELSE
     RAISE EXCEPTION 'Unsupported match table';
   END IF;
-
-  PERFORM public.mark_tournament_started(v_tournament);
 END;
 $function$;
 

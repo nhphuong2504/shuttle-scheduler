@@ -377,30 +377,37 @@ describe("each reset is scoped to the tab that owns it", () => {
 /**
  * The day count used to be decided in setup and frozen at activation, so an event
  * that overran could not be given another day without rebuilding the tournament. The
- * Schedule page now adds and removes days, guarded so that neither can strand a match.
+ * Schedule page now chooses the playing days from the tournament window, guarded so that
+ * neither adding nor removing one can strand a match.
  */
 describe("playing days can be managed after activation", () => {
   const schedule = readScheduleView("placement-scheduler.tsx");
 
-  it("offers an add-day control that stops at the seven-day cap", () => {
+  it("offers the window's own dates to choose from, with no cap on how many", () => {
     expect(schedule).toMatch(/addTournamentDay/);
-    expect(schedule).toMatch(/Add day/);
-    expect(schedule).toMatch(/tournamentDays\.length < 7/);
+    expect(schedule).toMatch(/<PlayingDayPicker/);
+    // The window the picker draws is the tournament's own, so a date outside it cannot be
+    // typed: the database refuses one for every writer, and the page does not offer it.
+    expect(schedule).toMatch(/startsOn=\{String\(tournament\.starts_on\)/);
+    expect(schedule).toMatch(/endsOn=\{String\(tournament\.ends_on\)/);
+    // And no ceiling: the old limit of seven lived in two constraints and two functions and
+    // is gone from all of them.
+    expect(schedule).not.toMatch(/tournamentDays\.length < 7|7 is the maximum/);
   });
 
-  it("suggests the day after the last, since overrunning is the common case", () => {
-    expect(schedule).toMatch(/suggestedNewDayDate/);
-    // Built from the day's own YYYY-MM-DD: a bare `new Date(dateString)` is read as
-    // UTC midnight and lands a day early west of Greenwich.
-    expect(schedule).toMatch(/T00:00:00/);
-    expect(schedule).not.toMatch(/new Date\(last\.date\)/);
+  it("treats a tournament with no playing days as the ordinary starting state", () => {
+    // Choosing the days is the first thing the page asks for, not a dead end that sends the
+    // host back to setup - the days are chosen here, inside the window.
+    expect(schedule).not.toMatch(/Set up a tournament first/);
+    expect(schedule).toMatch(/Which days do you play\?/);
+    expect(schedule).toMatch(/Choose the days you play first/);
   });
 
-  it("disables remove rather than letting it fail, at both refusals", () => {
+  it("disables remove rather than letting it fail, when matches are on the day", () => {
     expect(schedule).toMatch(/removeTournamentDay/);
-    // The last day cannot go, and a day with matches on it cannot go.
-    expect(schedule).toMatch(/tournamentDays\.length <= 1/);
+    // A day with matches on it cannot go. The last day can: a tournament may have none.
     expect(schedule).toMatch(/daysWithMatches\.has\(day\.id\)/);
+    expect(schedule).not.toMatch(/tournamentDays\.length <= 1/);
   });
 
   it("disables remove using the same attribution the running order is built from", () => {

@@ -122,11 +122,16 @@ BEGIN
       replace(OLD.status, '_', ' ');
   END IF;
 
-  -- Once open, the opening time is a statement people have relied on.
-  IF OLD.registration_opens_at IS NOT NULL
-     AND OLD.registration_opens_at <= now()
-     AND NEW.registration_opens_at IS DISTINCT FROM OLD.registration_opens_at THEN
-    RAISE EXCEPTION 'Registration has already opened, so its opening time cannot change';
+  -- Once open, the opening time is a statement people have relied on, and so is the fact
+  -- that registration exists: closing it early is the way to stop taking requests, not
+  -- removing the window under the ones already sent.
+  IF OLD.registration_opens_at IS NOT NULL AND OLD.registration_opens_at <= now() THEN
+    IF NEW.registration_opens_at IS NULL THEN
+      RAISE EXCEPTION
+        'Registration has already opened, so it cannot be switched off. Close it early instead.';
+    ELSIF NEW.registration_opens_at IS DISTINCT FROM OLD.registration_opens_at THEN
+      RAISE EXCEPTION 'Registration has already opened, so its opening time cannot change';
+    END IF;
   END IF;
 
   -- Extending - or turning registration on - under a built schedule would change who is
