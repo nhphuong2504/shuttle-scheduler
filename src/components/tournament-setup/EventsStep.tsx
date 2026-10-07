@@ -1,8 +1,8 @@
-import { Panel } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
+import { Check, Plus, X } from "lucide-react";
+
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import type { TournamentEventInput } from "@/lib/tournament/actions";
+import { FieldError, SetupSection } from "./section";
 import type { DraftForm } from "./types";
 
 type EventGender = TournamentEventInput["gender"];
@@ -32,18 +32,26 @@ const EVENT_TEMPLATES: EventTemplate[] = [
 
 const MAX_CATEGORIES_PER_PLAYER = 5;
 
+/**
+ * The second step: which events run, and how many one player may enter.
+ *
+ * The five standard events are a row of toggles: pressing one adds it and pressing it again
+ * takes it away, and a pressed one says so with a tick as well as a fill. What was added is
+ * listed below, where its name and entry cap can still be changed.
+ */
 export function EventsStep({
   form,
   onChange,
+  showErrors = false,
 }: {
   form: DraftForm;
   onChange: (patch: Partial<DraftForm>) => void;
+  showErrors?: boolean;
 }) {
   const events = form.events;
   const present = new Set(events.map((event) => event.code));
 
   const addEvent = (template: EventTemplate) => {
-    if (present.has(template.code)) return;
     onChange({
       events: [
         ...events,
@@ -68,71 +76,83 @@ export function EventsStep({
   const removeEvent = (code: string) =>
     onChange({ events: events.filter((event) => event.code !== code) });
 
+  const toggle = (template: EventTemplate) =>
+    present.has(template.code) ? removeEvent(template.code) : addEvent(template);
+
+  const none = showErrors && events.length === 0;
+
   return (
-    <div className="space-y-4">
-      <Panel
-        title="Add an event"
-        right={
-          <span className="font-score text-t4 text-muted-foreground">{events.length} added</span>
-        }
+    <div className="space-y-5">
+      <SetupSection
+        headingId="setup-pick"
+        title="Choose the events"
+        hint="Singles for MS and WS, doubles for MD, WD and XD. Each is open to the gender in its name. Press to add or remove."
       >
-        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
           {EVENT_TEMPLATES.map((template) => {
             const added = present.has(template.code);
             return (
               <button
                 key={template.code}
                 type="button"
-                disabled={added}
-                onClick={() => addEvent(template)}
-                className={`flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                aria-pressed={added}
+                onClick={() => toggle(template)}
+                className={`flex min-h-[5.25rem] flex-col items-start justify-between gap-1 rounded-xl border px-3.5 py-3 text-left transition-colors ${
                   added
-                    ? "border-primary bg-primary/10"
-                    : "border-hairline bg-surface hover:border-primary/50 hover:shadow-raise"
+                    ? "border-primary bg-info-surface"
+                    : "border-border-control bg-surface hover:bg-muted"
                 }`}
               >
                 <span className="flex w-full items-center justify-between">
-                  <span className="font-score text-base font-bold">{template.code}</span>
-                  <span className="font-score text-t4 text-muted-foreground">
-                    {added ? "✓" : "+"}
-                  </span>
+                  <span className="font-display text-xl font-bold">{template.code}</span>
+                  {added ? (
+                    <Check aria-hidden="true" className="size-5 text-info-foreground" />
+                  ) : (
+                    <Plus aria-hidden="true" className="size-5 text-muted-foreground" />
+                  )}
                 </span>
-                <span className="text-t4 leading-snug text-muted-foreground">{template.name}</span>
+                <span className="text-sm text-muted-foreground">{template.name}</span>
               </button>
             );
           })}
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Each event already knows its shape and who may enter it: singles for MS and WS, doubles
-          for MD, WD and XD, each open to the gender in its name. Both are stored with the event so
-          entry validation can use them.
-        </p>
-      </Panel>
+        {none ? <FieldError id="setup-pick-error">Add at least one event.</FieldError> : null}
+      </SetupSection>
 
-      <Panel title="Events">
+      <SetupSection headingId="setup-list" title="Your events">
         {events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No events yet. Add at least one before activating the tournament.
+          <p className="text-base text-muted-foreground">
+            No events yet. Choose at least one above before starting the tournament.
           </p>
         ) : (
-          <ul className="divide-y divide-hairline">
-            {events.map((event) => (
-              <li key={event.code} className="flex flex-wrap items-end gap-3 py-3">
-                <div className="min-w-[160px] flex-1 space-y-1.5">
-                  <Label htmlFor={`e-${event.code}-name`}>Name</Label>
+          <>
+            <div
+              aria-hidden="true"
+              className="mb-1 hidden grid-cols-[3rem_minmax(0,1fr)_7rem_2.75rem] items-end gap-3 px-1 text-sm text-muted-foreground sm:grid"
+            >
+              <span />
+              <span>Name</span>
+              <span>Entry cap</span>
+              <span />
+            </div>
+            <ul className="divide-y divide-hairline rounded-xl border border-hairline">
+              {events.map((event) => (
+                <li
+                  key={event.code}
+                  className="grid grid-cols-[3rem_minmax(0,1fr)_2.75rem] items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:grid-cols-[3rem_minmax(0,1fr)_7rem_2.75rem]"
+                >
+                  <span className="font-display text-lg font-bold">{event.code}</span>
                   <Input
-                    id={`e-${event.code}-name`}
+                    aria-label={`${event.code} name`}
                     value={event.name}
+                    className="h-11"
                     onChange={(e) => setEvent(event.code, { name: e.target.value })}
                   />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`e-${event.code}-cap`}>Entry cap</Label>
                   <Input
-                    id={`e-${event.code}-cap`}
-                    className="w-28"
+                    aria-label={`${event.code} entry cap`}
+                    className="col-start-2 h-11 sm:col-start-auto"
                     inputMode="numeric"
-                    placeholder="none"
+                    placeholder="No cap"
                     value={event.maxEntries == null ? "" : String(event.maxEntries)}
                     onChange={(e) => {
                       const raw = e.target.value.trim();
@@ -141,19 +161,27 @@ export function EventsStep({
                       });
                     }}
                   />
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => removeEvent(event.code)}>
-                  Remove
-                </Button>
-              </li>
-            ))}
-          </ul>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${event.code}`}
+                    onClick={() => removeEvent(event.code)}
+                    className="col-start-3 row-start-1 grid size-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:col-start-auto sm:row-start-auto"
+                  >
+                    <X aria-hidden="true" className="size-5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
-      </Panel>
+      </SetupSection>
 
-      <Panel title="Entries per player">
-        <p className="text-sm text-muted-foreground">How many events may one player enter?</p>
-        <div className="mt-3 flex flex-wrap gap-2">
+      <SetupSection
+        headingId="setup-cap"
+        title="Entries per player"
+        hint="How many of these events may one person enter?"
+      >
+        <div role="group" aria-label="Entries per player" className="flex flex-wrap gap-2">
           {Array.from({ length: MAX_CATEGORIES_PER_PLAYER }, (_, i) => i + 1).map((count) => {
             const selected = form.maxCategoriesPerPlayer === count;
             const tooMany = events.length > 0 && count > events.length;
@@ -161,28 +189,26 @@ export function EventsStep({
               <button
                 key={count}
                 type="button"
+                aria-pressed={selected}
                 disabled={tooMany}
                 onClick={() => onChange({ maxCategoriesPerPlayer: count })}
-                className={`flex min-w-[104px] flex-1 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`grid size-14 place-items-center rounded-xl border font-display text-xl font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                   selected
-                    ? "border-primary bg-primary/10 shadow-panel"
-                    : "border-hairline bg-surface hover:border-primary/50 hover:shadow-raise"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border-control bg-surface hover:bg-muted"
                 }`}
               >
-                <span className="font-score text-xl font-bold leading-none">{count}</span>
-                <span className="text-t4 text-muted-foreground">
-                  {count === 1 ? "event" : "events"}
-                </span>
+                {count}
               </button>
             );
           })}
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
           {events.length === 0
-            ? "Add events above to see which limits make sense."
-            : `A player can play at most ${form.maxCategoriesPerPlayer} of your ${events.length} event${events.length === 1 ? "" : "s"}. Checked every time an entry is added.`}
+            ? "Choose events above to see which limits make sense."
+            : `A player can enter at most ${form.maxCategoriesPerPlayer} of your ${events.length} event${events.length === 1 ? "" : "s"}. More than that is refused when they register.`}
         </p>
-      </Panel>
+      </SetupSection>
     </div>
   );
 }

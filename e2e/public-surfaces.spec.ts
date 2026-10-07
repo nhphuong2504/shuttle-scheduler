@@ -522,19 +522,19 @@ test.describe("Creating a tournament, signed in", () => {
 
     await expect(page.getByRole("heading", { name: /new tournament/i, level: 1 })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Name" })).toBeVisible();
-    await expect(page.getByText(/step 1 \/ 4/i)).toBeVisible();
+    await expect(page.getByText(/step 1 of 4/i).filter({ visible: true }).first()).toBeVisible();
 
     // Moving between steps writes the position into the address instead of holding it in
     // memory, so a refresh resumes where the host left off rather than starting again.
     // The step control's own label is "2 Events" - the number is part of the button - so the
     // query is the label alone.
-    await page.getByRole("button", { name: /events/i }).click();
+    await page.getByRole("navigation", { name: "Setup steps" }).getByRole("button", { name: /events/i }).click();
     await expect(page).toHaveURL(/step=events/);
 
     await page.reload({ waitUntil: "load" });
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(/step 2 \/ 4/i)).toBeVisible();
-    await expect(page.getByRole("heading", { name: /add an event/i })).toBeVisible();
+    await expect(page.getByText(/step 2 of 4/i).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /choose the events/i })).toBeVisible();
   });
 });
 
@@ -548,15 +548,17 @@ test.describe("Configuring one tournament", () => {
     // The subject comes from the route, so the page can state it. Before S5 the same screen
     // was also the tournament *list* and the create flow, which meant the id in its address
     // was a host for a form rather than the thing the page was about.
-    await expect(page.getByRole("heading", { name: TOURNAMENT_NAME, level: 1 })).toBeVisible();
+    await expect(page.getByRole("banner").getByText(TOURNAMENT_NAME)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Setup", level: 1 })).toBeVisible();
     await expect(page.getByRole("heading", { name: /new tournament/i })).toHaveCount(0);
 
     // Recalled by address rather than by clicking, which is what makes it a step and not a
     // scroll position.
-    await expect(page.getByText(/step 3 \/ 4/i)).toBeVisible();
+    await expect(page.getByText(/step 3 of 4/i).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /competition format/i })).toBeVisible();
 
     // The way back is the caller's list, which is where the management acts live now.
-    await expect(page.getByRole("link", { name: /all tournaments/i })).toHaveAttribute(
+    await expect(page.getByRole("main").getByRole("link", { name: /my tournaments/i })).toHaveAttribute(
       "href",
       routes.myTournaments,
     );

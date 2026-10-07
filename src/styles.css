@@ -240,7 +240,7 @@
        It sits here rather than in the token blocks at the top of the file because it is
        not part of the design vocabulary anything names or solves - the clearance rule
        below is its only reader, and the two belong together. */
-    --action-bar-clearance: 4.5rem;
+    --action-bar-clearance: 5rem;
   }
 
   /**

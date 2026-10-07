@@ -120,10 +120,10 @@ function NewTournamentPage() {
   return (
     <PublicShell
       title="New tournament"
-      subtitle={SETUP_STEPS[index]?.hint ?? ""}
+      subtitle="Four short steps. It is saved as a draft after the first one, so you can leave and come back."
       actions={
         <Button size="sm" variant="ghost" asChild>
-          <Link to="/me/tournaments">Cancel</Link>
+          <Link to="/me/tournaments">← My tournaments</Link>
         </Button>
       }
     >

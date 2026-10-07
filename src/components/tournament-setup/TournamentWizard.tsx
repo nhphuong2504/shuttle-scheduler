@@ -130,6 +130,14 @@ export function TournamentWizard({
 
   const [form, setForm] = useState<DraftForm>(defaultForm);
   const [busy, setBusy] = useState(false);
+  /**
+   * Whether the host has pressed "Save and continue" on this step with something missing.
+   *
+   * Problems are drawn beside their fields only after that. A form that complains before
+   * anybody has typed in it is telling the host they have already done something wrong; one
+   * that waits until they try to move on is telling them what is missing.
+   */
+  const [attempted, setAttempted] = useState(false);
   const hydratedFor = useRef<string | null>(null);
 
   const currentIndex = setupStepIndex(step);
@@ -158,6 +166,12 @@ export function TournamentWizard({
 
   const patchForm = (patch: Partial<DraftForm>) => setForm((prev) => ({ ...prev, ...patch }));
 
+  /** Moving between steps starts a clean attempt: the next step has not been tried yet. */
+  const goTo = (next: SetupStep) => {
+    setAttempted(false);
+    onStepChange(next);
+  };
+
   const problems = useMemo(() => problemsForStep(step, form), [step, form]);
 
   /**
@@ -177,7 +191,7 @@ export function TournamentWizard({
   /** Saves whatever the current step owns, then advances. */
   const saveAndContinue = async () => {
     if (problems.length) {
-      toast.error(problems[0] ?? "Check this step.");
+      setAttempted(true);
       return;
     }
     setBusy(true);
@@ -202,6 +216,7 @@ export function TournamentWizard({
 
       // Advancing past the first step means the tournament now exists, so the caller must
       // move the address to carry its id or a refresh would lose the position.
+      setAttempted(false);
       if (justCreated && onCreated) onCreated(id, nextStep);
       else onStepChange(nextStep);
       toast.success("Saved");
@@ -306,100 +321,176 @@ export function TournamentWizard({
     onStart: () => void start(),
     onComplete: () => void complete(),
     onDiscard: () => void discard(),
+    onGoToStep: configEditable ? goTo : undefined,
   };
 
   return (
-    <div className="wizard-flow mx-auto w-full max-w-3xl">
+    <div className="wizard-flow mx-auto w-full max-w-[64rem]">
       {configEditable ? (
-        <>
-          <ol className="mb-5 flex items-center gap-2">
-            {SETUP_STEPS.map((entry, index) => {
-              const isCurrent = entry.id === step;
-              const isDone = index < currentIndex && !!draftId;
-              return (
-                <li key={entry.id} className="flex flex-1 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onStepChange(entry.id)}
-                    aria-current={isCurrent ? "step" : undefined}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
-                      isCurrent
-                        ? "border-border-selected bg-primary/10"
-                        : "border-hairline bg-surface hover:bg-muted/60",
-                    )}
-                  >
-                    <span
+        <div className="grid items-start gap-6 lg:grid-cols-[16.25rem_minmax(0,1fr)] lg:gap-10">
+          {/*
+            Where you are, as a rail on a wide screen and a bar on a narrow one.
+
+            The rail names each step and says what it is for in a line, marks the ones that are
+            done, and marks a finished step that still needs something - so a host who skipped
+            ahead sees where to go back to. It is a list of buttons because moving between
+            steps is a deliberate act that saves nothing: the step's own work is saved by the
+            button at the foot.
+          */}
+          <nav aria-label="Setup steps" className="hidden lg:sticky lg:top-24 lg:block">
+            <ol className="space-y-1.5">
+              {SETUP_STEPS.map((entry, index) => {
+                const isCurrent = entry.id === step;
+                const visited = index < currentIndex && !!draftId;
+                const needs = visited && problemsForStep(entry.id, form).length > 0;
+                const isDone = visited && !needs;
+                return (
+                  <li key={entry.id}>
+                    <button
+                      type="button"
+                      onClick={() => goTo(entry.id)}
+                      aria-current={isCurrent ? "step" : undefined}
                       className={cn(
-                        "grid size-5 shrink-0 place-items-center rounded-full font-score text-t4 font-bold",
+                        "flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
                         isCurrent
-                          ? "bg-primary text-primary-foreground"
-                          : isDone
-                            ? "bg-primary/50 text-foreground"
-                            : "bg-muted text-muted-foreground",
+                          ? "border-border-selected bg-surface"
+                          : "border-transparent hover:bg-muted/60",
                       )}
                     >
-                      {isDone ? "✓" : index + 1}
-                    </span>
-                    <span
-                      className={cn(
-                        "truncate text-sm font-semibold",
-                        isCurrent ? "text-foreground" : "text-muted-foreground",
-                      )}
-                    >
-                      {entry.label}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-
-          {step === "details" ? (
-            <DetailsStep form={form} onChange={patchForm} isNew={isNew} />
-          ) : null}
-          {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
-          {step === "structure" ? <StructureStep /> : null}
-          {step === "review" ? <ReviewStep {...reviewProps} /> : null}
-
-          {step !== "review" && problems.length ? (
-            <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
-              <ul className="space-y-1">
-                {problems.map((problem) => (
-                  <li key={problem} className="flex items-start gap-2 text-sm text-warn-foreground">
-                    <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
-                    {problem}
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded-full font-score text-sm font-bold",
+                          isCurrent
+                            ? "bg-primary text-primary-foreground"
+                            : needs
+                              ? "bg-warn-surface text-warn-foreground"
+                              : isDone
+                                ? "bg-success/15 text-foreground"
+                                : "bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {isCurrent ? index + 1 : needs ? "!" : isDone ? "✓" : index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span
+                          className={cn(
+                            "block text-base font-semibold",
+                            isCurrent || isDone || needs ? "text-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {entry.label}
+                        </span>
+                        <span
+                          className={cn(
+                            "mt-0.5 block text-sm",
+                            needs ? "font-semibold text-warn-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {needs ? "Needs one more thing" : entry.hint}
+                        </span>
+                      </span>
+                    </button>
                   </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+                );
+              })}
+            </ol>
+            <p className="mt-4 flex items-center gap-2 px-3.5 text-sm text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "size-2 rounded-full",
+                  draftId ? "bg-success" : "bg-border-control",
+                )}
+              />
+              {draftId ? "Draft saved" : "Not saved yet. Saved after this step."}
+            </p>
+          </nav>
 
-          <div className="sticky bottom-0 z-20 mt-4 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-surface/90 px-4 py-3 shadow-raise backdrop-blur-md">
-            {currentIndex > 0 ? (
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  const previous = SETUP_STEPS[currentIndex - 1];
-                  if (previous) onStepChange(previous.id);
-                }}
-              >
-                ← Back
-              </Button>
+          <div className="lg:hidden">
+            <p className="flex justify-between gap-3 text-sm text-muted-foreground">
+              <strong className="text-foreground">
+                Step {currentIndex + 1} of {SETUP_STEPS.length} · {SETUP_STEPS[currentIndex]?.label}
+              </strong>
+              <span>{draftId ? "Draft saved" : "Not saved yet"}</span>
+            </p>
+            <div aria-hidden="true" className="mt-2 grid grid-cols-4 gap-1.5">
+              {SETUP_STEPS.map((entry, index) => (
+                <span
+                  key={entry.id}
+                  className={cn(
+                    "h-1.5 rounded-full",
+                    index <= currentIndex ? "bg-primary" : "bg-hairline",
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="min-w-0 max-w-3xl">
+            {step === "details" ? (
+              <DetailsStep form={form} onChange={patchForm} isNew={isNew} showErrors={attempted} />
             ) : null}
-            <span className="font-score text-t4 text-muted-foreground">
-              Step {currentIndex + 1} / {SETUP_STEPS.length}
-            </span>
-            <div className="ml-auto flex items-center gap-3">
+            {step === "events" ? (
+              <EventsStep form={form} onChange={patchForm} showErrors={attempted} />
+            ) : null}
+            {step === "structure" ? <StructureStep /> : null}
+            {step === "review" ? <ReviewStep {...reviewProps} /> : null}
+
+            {step !== "review" && attempted && problems.length ? (
+              <div
+                role="alert"
+                className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3"
+              >
+                <p className="text-base font-semibold text-danger-foreground">
+                  {problems.length === 1 ? "One thing to fix to continue" : "Things to fix to continue"}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {problems.map((problem) => (
+                    <li key={problem} className="text-sm text-foreground">
+                      {problem}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {/*
+              The step's buttons, kept at the foot of the window. A step can be taller than the
+              screen, and "continue" should not be a long scroll away from the field a host has
+              just finished. The bar is flat - a rule and a surface, no shadow - so it reads as
+              the edge of the form rather than as something floating over it, and the wizard's
+              scroll margin (`--action-bar-clearance`) keeps a focused field clear of it.
+            */}
+            <div className="sticky bottom-0 z-20 -mx-4 mt-6 flex items-center gap-3 border-t border-hairline bg-surface px-4 py-3 lg:mx-0 lg:rounded-2xl lg:border lg:px-5">
+              {currentIndex > 0 ? (
+                <Button
+                  variant="outline"
+                  className="h-12 px-5"
+                  disabled={busy}
+                  onClick={() => {
+                    const previous = SETUP_STEPS[currentIndex - 1];
+                    if (previous) goTo(previous.id);
+                  }}
+                >
+                  ← Back
+                </Button>
+              ) : null}
+              <span className="hidden text-sm text-muted-foreground lg:inline">
+                Step {currentIndex + 1} of {SETUP_STEPS.length}
+              </span>
               {step !== "review" ? (
-                <Button disabled={busy} onClick={saveAndContinue}>
-                  {busy ? "Saving…" : isNew ? "Create and continue" : "Save and continue →"}
+                <Button
+                  className="ml-auto h-12 flex-1 px-7 text-base font-semibold lg:flex-none"
+                  disabled={busy}
+                  onClick={saveAndContinue}
+                >
+                  {busy ? "Saving…" : "Save and continue →"}
                 </Button>
               ) : null}
             </div>
           </div>
-        </>
+        </div>
       ) : (
         <>
           {/*
@@ -413,7 +504,9 @@ export function TournamentWizard({
             events can no longer be changed. Courts, timings and scoring are adjusted on the Schedule
             page. The checks below still say whether it is ready.
           </div>
-          <ReviewStep {...reviewProps} />
+          <div className="max-w-3xl">
+            <ReviewStep {...reviewProps} />
+          </div>
         </>
       )}
     </div>

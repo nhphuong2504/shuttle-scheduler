@@ -2,12 +2,38 @@ import type { TournamentDayInput, TournamentEventInput } from "@/lib/tournament/
 
 export type SetupStep = "details" | "events" | "structure" | "review";
 
+/**
+ * The steps, in order. `hint` is the one line the step rail prints beneath the name, so a host
+ * can tell what a step is for without opening it.
+ */
 export const SETUP_STEPS: { id: SetupStep; label: string; hint: string }[] = [
-  { id: "details", label: "Details", hint: "Name, dates and timezone" },
-  { id: "events", label: "Events", hint: "Which categories run" },
-  { id: "structure", label: "Structure", hint: "How the competition runs" },
-  { id: "review", label: "Review", hint: "Checks and activation" },
+  { id: "details", label: "Details", hint: "Name, dates, venue" },
+  { id: "events", label: "Events", hint: "What is played" },
+  { id: "structure", label: "Structure", hint: "How it is played" },
+  { id: "review", label: "Review and start", hint: "Checks, then go live" },
 ];
+
+/**
+ * Which step fixes a readiness check.
+ *
+ * The database names its checks by id (`basics`, `timezone`, `days`, `day_dates`,
+ * `categories`, `category_caps`), and a failing one is only useful if it says where to go. A
+ * check this does not know leads nowhere rather than to a guess.
+ */
+export function stepForCheck(checkId: string): SetupStep | null {
+  switch (checkId) {
+    case "basics":
+    case "timezone":
+    case "days":
+    case "day_dates":
+      return "details";
+    case "categories":
+    case "category_caps":
+      return "events";
+    default:
+      return null;
+  }
+}
 
 export function isSetupStep(value: unknown): value is SetupStep {
   return typeof value === "string" && SETUP_STEPS.some((step) => step.id === value);
