@@ -62,49 +62,76 @@ const PENDING_REQUEST: MockMyRegistrationRow = {
 test.describe("Home, for a caller working in a tournament", () => {
   test.use({ appMock: { preset: "layout", role: "user" } });
 
-  test("resumes the working tournament, and describes it once", async ({ page }) => {
+  test("says what needs the caller, and shows each tournament once under its role", async ({
+    page,
+  }) => {
     await page.goto(routes.home, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back", level: 1 })).toBeVisible();
 
     const main = page.getByRole("main");
-    // The fixture's pointer names the tournament this session owns, so Continue draws it and
-    // offers the trip back to the desk it was left on.
-    await expect(main.getByRole("link", { name: /open the desk/i })).toHaveAttribute(
+    // The fixture's tournament is under way and this session owns it, so it is a task - it is
+    // live and the caller runs it - with the one action that clears it: the Desk.
+    await expect(main.getByRole("heading", { name: "Needs your attention", level: 2 })).toBeVisible();
+    await expect(main.getByRole("link", { name: "Open the Desk" }).first()).toHaveAttribute(
       "href",
       routes.desk,
     );
+    await expect(main.getByText("You run this").first()).toBeVisible();
 
     /**
-     * **Once**, and that is the assertion rather than a detail of it.
+     * **Once as a card**, and that is the assertion rather than a detail of it.
      *
-     * Three panels that each answered "which tournaments exist" would draw the same card
-     * three times for a caller who owns one tournament, which reads as a rendering fault.
-     * Each panel renders what the ones above it have not: Continue the working tournament,
-     * Your tournaments the caller's *other* ones, Discover what is neither - and the two
-     * exclusions announce themselves instead of leaving an empty panel.
+     * The task names the tournament too, but as a sentence ("... is live") and not as a card;
+     * what must not happen is the same card drawn under two headings. The caller owns this
+     * one, so it is under Running and nowhere else.
      */
-    await expect(main.getByRole("heading", { name: TOURNAMENT_NAME })).toHaveCount(1);
-    await expect(main.getByText(/nothing else to show/i)).toBeVisible();
-    await expect(main.getByText(/nothing else is on tournova yet/i)).toBeVisible();
+    await expect(main.getByRole("heading", { name: TOURNAMENT_NAME, level: 3 })).toHaveCount(1);
+    await expect(main.getByRole("heading", { name: "Running", level: 2 })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Helping", level: 2 })).toHaveCount(0);
   });
 
-  test("still lists the caller's own tournaments when there is nothing to continue", async ({
+  test("offers the signed-in caller the ways to their own tournaments from the header", async ({
     page,
   }) => {
-    // The state a brand-new account is in, and the other half of the pointer's contract:
-    // nothing to resume, but the panel below is about the caller rather than about the
-    // pointer, so the tournament they own is still drawn.
-    await installAppMock(page, { preset: "layout", role: "user", pointer: null });
+    await page.goto(routes.home, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const header = page.getByRole("banner");
+    await expect(header.getByRole("link", { name: "Browse tournaments" })).toHaveAttribute(
+      "href",
+      routes.explore,
+    );
+    await expect(header.getByRole("link", { name: "My tournaments" })).toHaveAttribute(
+      "href",
+      "/me/tournaments",
+    );
+    await expect(header.getByRole("link", { name: "New tournament" })).toHaveAttribute(
+      "href",
+      "/tournaments/new",
+    );
+  });
+
+  test("greets an account with no tournament with ways to begin, not an empty page", async ({
+    page,
+  }) => {
+    // The state a brand-new account is in: nothing owned, nothing helped, so there is nothing
+    // to resume and nothing waiting.
+    await installAppMock(page, {
+      preset: "layout",
+      role: "user",
+      access: { is_owner: false, is_editor: false, can_edit: false, can_manage_access: false },
+    });
     await page.goto(routes.home, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     const main = page.getByRole("main");
-    // `EmptyState` draws its title as a paragraph rather than as a heading - it is a state,
-    // not a section - so this is a text assertion and not a role one.
-    await expect(main.getByText(/no working tournament/i)).toBeVisible();
-    await expect(main.getByRole("heading", { name: TOURNAMENT_NAME })).toHaveCount(1);
+    await expect(main.getByRole("heading", { name: "Welcome to Tournova", level: 1 })).toBeVisible();
+    await expect(main.getByRole("heading", { name: /find a tournament to play in/i })).toBeVisible();
+    await expect(main.getByRole("heading", { name: /run your own tournament/i })).toBeVisible();
+    await expect(main.getByRole("heading", { name: /help run someone else/i })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Needs your attention" })).toHaveCount(0);
   });
 
   test("introduces no accessibility violation", async ({ page }) => {

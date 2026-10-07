@@ -103,7 +103,7 @@ test.describe("the bare domain", () => {
     // are "it rendered" and "it stayed". The path is asserted first: a surviving redirect
     // would pass a heading check by landing somewhere else entirely.
     expect(new URL(page.url()).pathname).toBe("/");
-    await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back", level: 1 })).toBeVisible();
   });
 
   test("is Landing for a visitor, which is the other reading of one address", async ({ page }) => {

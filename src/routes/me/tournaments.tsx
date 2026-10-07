@@ -175,11 +175,6 @@ function MyTournamentsPage() {
     <PublicShell
       title="My tournaments"
       subtitle="The tournaments you own, and the ones somebody else has asked you to help run."
-      actions={
-        <Button size="sm" asChild>
-          <Link to="/tournaments/new">New tournament</Link>
-        </Button>
-      }
     >
       <div role="group" aria-label="Which tournaments" className="mb-4 flex flex-wrap gap-1">
         {(

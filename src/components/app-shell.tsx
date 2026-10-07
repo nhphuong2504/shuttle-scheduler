@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { TournamentSwitcher } from "@/components/tournament-switcher";
@@ -163,6 +164,19 @@ const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as
  * the row does not move once the session settles.
  */
 const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as const;
+
+/**
+ * The same bar for somebody signed in, with the place their own tournaments live.
+ *
+ * Creating one is not a section, so it is drawn beside the list as an action (`NEW_CLASS`)
+ * rather than in it: it is something to do, not somewhere to be.
+ */
+const SIGNED_IN_SECTIONS = [
+  { label: "Browse tournaments", to: "/explore" },
+  { label: "My tournaments", to: "/me/tournaments" },
+] as const;
+const NEW_TOURNAMENT_CLASS =
+  "inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-info-surface px-4 text-sm font-bold text-info-foreground transition-colors hover:bg-info-border/60";
 
 /** Shared so the two nav branches cannot drift into two different-looking navs. */
 const NAV_ITEM_CLASS =
@@ -778,6 +792,7 @@ export function PublicShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const { signedIn } = useSession();
   return (
     <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
       <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">
@@ -787,7 +802,7 @@ export function PublicShell({
           </Link>
           <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
           <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
-            {PUBLIC_SECTIONS.map((item) => (
+            {(signedIn ? SIGNED_IN_SECTIONS : PUBLIC_SECTIONS).map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
@@ -798,6 +813,12 @@ export function PublicShell({
               </Link>
             ))}
           </nav>
+          {signedIn ? (
+            <Link to="/tournaments/new" className={NEW_TOURNAMENT_CLASS}>
+              <Plus aria-hidden="true" className="size-4" />
+              New tournament
+            </Link>
+          ) : null}
           <div className="ml-auto flex items-center gap-2">
             <SessionBlock />
           </div>

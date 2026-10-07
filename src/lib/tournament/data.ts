@@ -1,6 +1,7 @@
 import {
   keepPreviousData,
   useInfiniteQuery,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -871,14 +872,44 @@ export function useTournamentRegistrationQueue(
   return useQuery({
     queryKey: scopedKey(keys.registrationQueue, tournamentId),
     enabled: enabled && !!tournamentId,
-    queryFn: async (): Promise<RegistrationQueue> => {
-      const { data, error } = await supabase.rpc("review_tournament_registrations", {
-        p_tournament_id: tournamentId as string,
-      });
-      if (error) throw new Error(error.message);
-      return toRegistrationQueue((data ?? []) as unknown as ReviewRegistrationRow[]);
-    },
+    queryFn: () => fetchRegistrationQueue(tournamentId as string),
   });
+}
+
+async function fetchRegistrationQueue(tournamentId: string): Promise<RegistrationQueue> {
+  const { data, error } = await supabase.rpc("review_tournament_registrations", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+  return toRegistrationQueue((data ?? []) as unknown as ReviewRegistrationRow[]);
+}
+
+/**
+ * How many requests are waiting for a decision, for each of several tournaments.
+ *
+ * Home asks about every tournament the caller may edit, and a hook cannot be called in a loop,
+ * so this is the same read as the queue above issued once per id. It shares the queue's cache
+ * key, so a tournament whose queue is already open costs nothing, and the Registrations page
+ * and the nav badge see the same answer. The ids passed are the caller's own, so the editor
+ * gate on the read is met; an answer that fails reads as zero rather than as an error, since
+ * "none waiting" is the safe thing for a summary line to say when it cannot tell.
+ */
+export function usePendingRegistrationCounts(tournamentIds: readonly string[]) {
+  const results = useQueries({
+    queries: tournamentIds.map((id) => ({
+      queryKey: scopedKey(keys.registrationQueue, id),
+      queryFn: () => fetchRegistrationQueue(id),
+    })),
+  });
+  return useMemo(() => {
+    const counts = new Map<string, number>();
+    tournamentIds.forEach((id, index) => {
+      counts.set(id, results[index]?.data?.pending.length ?? 0);
+    });
+    return counts;
+    // `results` is a new array every render; its contents are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentIds.join(","), results.map((r) => r.dataUpdatedAt).join(",")]);
 }
 
 export interface ReadinessCheck {

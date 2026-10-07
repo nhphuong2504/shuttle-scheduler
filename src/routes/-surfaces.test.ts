@@ -678,7 +678,13 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     // And there is no door into the create flow anywhere in this header. Starting a
     // tournament is an operator's act, offered by the pages that are about the caller's own
     // work - not by the one header every reader of an event also reads.
-    expect(shell).not.toContain('to="/tournaments/new"');
+    // Scoped to the workspace header: the public bar offers a signed-in caller a way to
+    // start a tournament, and that is a different header.
+    const workspace = shell.slice(
+      shell.indexOf("export function WorkspaceShell"),
+      shell.indexOf("export function PublicShell"),
+    );
+    expect(workspace).not.toContain('to="/tournaments/new"');
   });
 
   it("leaves the temporary shim gone from `/`, not merely shadowed", () => {
