@@ -1301,6 +1301,7 @@ export type Database = {
           court_count: number
           created_at: string
           day_count: number
+          ends_on: string
           format: string
           group_rest_gap_minutes: number
           group_slot_minutes: number
@@ -1323,6 +1324,7 @@ export type Database = {
           registration_closes_at: string | null
           registration_opens_at: string | null
           rest_gap_minutes: number
+          starts_on: string
           status: string
           venue_address: string | null
           venue_name: string | null
@@ -1332,6 +1334,7 @@ export type Database = {
           court_count?: number
           created_at?: string
           day_count?: number
+          ends_on: string
           format?: string
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
@@ -1354,6 +1357,7 @@ export type Database = {
           registration_closes_at?: string | null
           registration_opens_at?: string | null
           rest_gap_minutes?: number
+          starts_on: string
           status?: string
           venue_address?: string | null
           venue_name?: string | null
@@ -1363,6 +1367,7 @@ export type Database = {
           court_count?: number
           created_at?: string
           day_count?: number
+          ends_on?: string
           format?: string
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
@@ -1385,6 +1390,7 @@ export type Database = {
           registration_closes_at?: string | null
           registration_opens_at?: string | null
           rest_gap_minutes?: number
+          starts_on?: string
           status?: string
           venue_address?: string | null
           venue_name?: string | null
@@ -1575,6 +1581,8 @@ export type Database = {
           entry_count: number
           id: string
           name: string
+          play_ends_at: string | null
+          play_starts_at: string | null
           registration_state: string
           starts_at: string
           status: string
@@ -1793,16 +1801,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_registration_window: {
+        Args: { p_closes: string; p_opens: string; p_tournament_id: string }
+        Returns: undefined
+      }
       start_placement_match: {
         Args: { p_court_id?: string; p_match_id: string }
         Returns: undefined
       }
       start_tier_draw_match: {
         Args: { p_court_id?: string; p_match_id: string }
-        Returns: undefined
-      }
-      start_tournament: {
-        Args: { p_tournament_id: string }
         Returns: undefined
       }
       submit_tournament_registration: {
@@ -1814,6 +1822,10 @@ export type Database = {
         Returns: number
       }
       tournament_access: { Args: { p_tournament_id: string }; Returns: Json }
+      tournament_completion_check: {
+        Args: { p_tournament_id: string }
+        Returns: Json
+      }
       tournament_ends_at: { Args: { p_tournament_id: string }; Returns: string }
       tournament_is_ready: {
         Args: { p_tournament_id: string }
@@ -1867,11 +1879,21 @@ export type Database = {
           entry_count: number
           id: string
           name: string
+          play_ends_at: string | null
+          play_starts_at: string | null
           registration_state: string
           starts_at: string
           status: string
           venue_name: string
         }[]
+      }
+      update_tournament_details: {
+        Args: { p_payload: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      update_tournament_window: {
+        Args: { p_ends_on: string; p_starts_on: string; p_tournament_id: string }
+        Returns: undefined
       }
       withdraw_tournament_registration: {
         Args: { p_registration_id: string }

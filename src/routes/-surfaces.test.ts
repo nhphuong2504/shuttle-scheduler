@@ -147,17 +147,24 @@ describe("the setup wizard asks only for what activation needs", () => {
     const create = read("tournaments/new.tsx");
     expect(create).toMatch(/<TournamentWizard[\s\S]{0,80}tournamentId=\{null\}/);
     expect(create).not.toMatch(/DetailsStep|EventsStep|StructureStep|ReviewStep/);
-    // The create flow writes the row and then moves the address to it, which is what makes
-    // a refresh resume rather than start a second tournament.
-    expect(create).toMatch(/onCreated=\{\(tournamentId, nextStep\)/);
-    expect(create).toMatch(/to: "\/tournaments\/\$tournamentId\/settings"/);
+    // Nothing is written until the last step, so the create page has no id to move its
+    // address to: the wizard makes the tournament in one call and sends the caller to its
+    // own page, and the answers it holds meanwhile are cleared with it.
+    expect(create).not.toMatch(/onCreated/);
+    expect(wizard).toMatch(/createTournament\(\{/);
+    expect(wizard).toMatch(/clearLocalDraft\(\)/);
+    expect(wizard).toMatch(/to: "\/tournaments\/\$tournamentId"/);
   });
 
-  it("describes the days step as a date range", () => {
-    // Setup decides which dates run, not the hours or the courts each one plays on.
-    expect(types).toMatch(/export function buildDayRange\(/);
-    expect(review).toMatch(/dateRangeLabel/);
-    expect(review).not.toMatch(/courtPoolSize|day\.courts|day\.breaks/);
+  it("asks for the tournament window, and leaves the playing days to the schedule", () => {
+    // Setup decides which dates the tournament promises. Which days are played, and the
+    // hours and courts of each, are chosen when the schedule is built, inside the window.
+    expect(types).toMatch(/startsOn: string/);
+    expect(types).toMatch(/endsOn: string/);
+    expect(types).not.toMatch(/buildDayRange|MAX_TOURNAMENT_DAYS/);
+    expect(review).toMatch(/windowLabel/);
+    expect(review).not.toMatch(/courtPoolSize|day\.courts|day\.breaks|form\.days/);
+    expect(wizard).not.toMatch(/saveTournamentDays|form\.days/);
   });
 
   it("leaves scoring, durations and rest gaps to the schedule page", () => {
@@ -180,7 +187,11 @@ describe("the setup wizard asks only for what activation needs", () => {
 
   it("still persists the basics it does own", () => {
     expect(wizard).toMatch(/maxCategoriesPerPlayer: form\.maxCategoriesPerPlayer/);
-    expect(wizard).toMatch(/saveTournamentDays\(id, form\.days\)/);
+    // The window has its own writer, because its rules (the first date locks once the
+    // tournament is in progress; no playing day may fall outside it) belong to it alone.
+    expect(wizard).toMatch(/updateTournamentWindow\(id, form\.startsOn, form\.endsOn\)/);
+    // And so does the registration window, for the same reason.
+    expect(wizard).toMatch(/setRegistrationWindow\(/);
   });
 });
 
@@ -945,7 +956,8 @@ describe("the working-tournament pointer is written in one place per act", () =>
       [
         // The definition itself, which names the function it exports.
         join("lib", "tournament", "actions.ts"),
-        join("components", "tournament-setup", "TournamentWizard.tsx"),
+        // Not the wizard: `create_tournament` points the creator at the new tournament in
+        // the same transaction, so creating is not a separate act that needs the call.
         join("components", "tournament-switcher.tsx"),
         join("routes", "me", "tournaments.tsx"),
       ].sort(),

@@ -1,12 +1,6 @@
 import type { TournamentEventInput } from "@/lib/tournament/actions";
-import type {
-  Category,
-  Court,
-  Tournament,
-  TournamentDay,
-  TournamentDayBreak,
-  TournamentDayCourt,
-} from "@/lib/tournament/data";
+import type { Category, Tournament } from "@/lib/tournament/data";
+import { instantToZoned } from "@/lib/tournament/zoned-time";
 import type { DraftForm } from "./types";
 
 function eventsFrom(categories: Category[]): TournamentEventInput[] {
@@ -24,32 +18,36 @@ function eventsFrom(categories: Category[]): TournamentEventInput[] {
   }));
 }
 
-/** Rebuilds the wizard form from a persisted draft. */
-export function hydrateForm(
-  tournament: Tournament,
-  days: TournamentDay[],
-  courts: Court[],
-  dayCourts: TournamentDayCourt[],
-  dayBreaks: TournamentDayBreak[],
-  categories: Category[],
-): DraftForm {
-  const numberById = new Map(courts.map((court) => [court.id, court.number]));
-  const courtsByDay = new Map<string, number[]>();
-  for (const row of dayCourts) {
-    const number = numberById.get(row.court_id);
-    if (number == null) continue;
-    const list = courtsByDay.get(row.day_id) ?? [];
-    list.push(number);
-    courtsByDay.set(row.day_id, list);
-  }
+/**
+ * The registration window as stored, for comparing with what the host has typed.
+ *
+ * The form holds wall-clock strings to the minute; the database holds instants to the
+ * microsecond. Converting a stored instant to a string and back loses the seconds, so when
+ * the host has not touched a field the stored instant is what must be sent, or the opening
+ * time would appear to have changed by a few seconds and be refused. This keeps both forms
+ * side by side so the wizard can tell "unchanged" from "edited".
+ */
+export interface RegistrationOrigin {
+  opensAt: string | null;
+  closesAt: string | null;
+  opensLocal: string;
+  closesLocal: string;
+}
 
-  const breaksByDay = new Map<string, TournamentDayBreak[]>();
-  for (const row of dayBreaks) {
-    const list = breaksByDay.get(row.day_id) ?? [];
-    list.push(row);
-    breaksByDay.set(row.day_id, list);
-  }
+export function registrationOrigin(tournament: Tournament): RegistrationOrigin {
+  const zone = tournament.venue_timezone;
+  const local = (iso: string | null) => (iso ? (instantToZoned(iso, zone) ?? "") : "");
+  return {
+    opensAt: tournament.registration_opens_at,
+    closesAt: tournament.registration_closes_at,
+    opensLocal: local(tournament.registration_opens_at),
+    closesLocal: local(tournament.registration_closes_at),
+  };
+}
 
+/** Rebuilds the wizard form from a stored tournament. */
+export function hydrateForm(tournament: Tournament, categories: Category[]): DraftForm {
+  const origin = registrationOrigin(tournament);
   return {
     basics: {
       name: tournament.name,
@@ -61,18 +59,14 @@ export function hydrateForm(
       organizerEmail: tournament.organizer_email ?? "",
       organizerPhone: tournament.organizer_phone ?? "",
     },
-    days: days.map((day) => ({
-      date: day.date.slice(0, 10),
-      startTime: day.start_time.slice(0, 5),
-      endTime: day.end_time.slice(0, 5),
-      courts: (courtsByDay.get(day.id) ?? []).sort((a, b) => a - b),
-      breaks: (breaksByDay.get(day.id) ?? []).map((br) => ({
-        label: br.label ?? "",
-        startTime: br.start_time.slice(0, 5),
-        endTime: br.end_time.slice(0, 5),
-      })),
-    })),
+    startsOn: tournament.starts_on ? String(tournament.starts_on).slice(0, 10) : "",
+    endsOn: tournament.ends_on ? String(tournament.ends_on).slice(0, 10) : "",
     events: eventsFrom(categories),
     maxCategoriesPerPlayer: tournament.max_categories_per_player,
+    registration: {
+      enabled: Boolean(origin.opensAt && origin.closesAt),
+      opensAt: origin.opensLocal,
+      closesAt: origin.closesLocal,
+    },
   };
 }

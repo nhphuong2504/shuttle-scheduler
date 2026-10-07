@@ -175,14 +175,15 @@ Three states, one direction, and no reverse edge.
 
 ```mermaid
 flowchart LR
-  upcoming["upcoming"] -->|"start_tournament<br/>owner, editor or admin<br/>readiness + start time reached"| inProgress["in_progress"]
-  inProgress -->|"complete_tournament<br/>owner, editor or admin"| completed["completed"]
+  upcoming["upcoming"] -->|"the first match is started<br/>from 00:00 of the window's first date"| inProgress["in_progress"]
+  inProgress -->|"complete_tournament<br/>owner, editor or admin<br/>nothing on court"| completed["completed"]
 ```
 
-- **`upcoming`** — created, publicly readable, still configurable. Includes draw generation
-  and match scheduling, which are preparation rather than play. Registration is offered here
-  or not at all.
-- **`in_progress`** — being played. Registration is shut and the desk is live.
+- **`upcoming`** — created complete, publicly readable, still configurable. Includes draw
+  generation and match scheduling, which are preparation rather than play. Registration is
+  offered here or not at all. There is no draft: a tournament is created whole or not at all.
+- **`in_progress`** — being played. Registration is shut and the desk is live. Entered by the
+  first match being started, never by a button.
 - **`completed`** — finished, operationally read-only for normal paths.
 
 **No reverse transition exists.** `in_progress → upcoming` and `completed → in_progress` are
@@ -190,20 +191,30 @@ both refused, and neither is reachable by a direct client write (Section 8). A m
 is corrected by a platform admin through the named repair paths in Section 4, which is the
 same surface a completed tournament is edited through anyway. A real reopen is not built.
 
-**Both lifecycle RPCs are owner-capable.** A normal owner takes their own tournament from
-`upcoming` to `completed` with no platform admin involvement. Neither transition is
-admin-only, and neither is automatic:
+**Starting is a consequence, completing is an act.** A normal owner takes their own tournament
+from `upcoming` to `completed` with no platform admin involvement:
 
-| RPC | Transition | Authority | Gates |
+| Where | Transition | Authority | Gates |
 | --- | --- | --- | --- |
-| `start_tournament(uuid)` | `upcoming → in_progress` | `can_edit_tournament` | `tournament_is_ready()` **and** `now() >= tournament_starts_at()` |
-| `complete_tournament(uuid)` | `in_progress → completed` | `can_edit_tournament` | Current state is `in_progress` |
+| `start_placement_match`, `start_tier_draw_match`, `start_match_safe` | `upcoming → in_progress`, in the same transaction as the match starting | `can_edit_tournament` | `assert_tournament_can_start_match`: not `completed`, and `now() >= tournament_starts_at()` |
+| `complete_tournament(uuid)` | `in_progress → completed` | `can_edit_tournament` | Current state is `in_progress`, and **no match is on court** |
 
-**Nothing starts on its own.** There is no scheduled job, no trigger on `tournament_days` and
-no time-based transition. A tournament whose start time has passed simply remains `upcoming`
-until a human calls `start_tournament`; the start-time check is a floor, not a trigger. The
-trade is real and deliberate: an unattended tournament never starts, and its matches are
-unplayable until someone presses Start.
+There is no `start_tournament`. It was a button that could be pressed with no match anywhere
+near ready, or forgotten on a tournament already being played. The transition is
+`mark_tournament_started`, which only ever moves an `upcoming` row forward and so is idempotent
+under two simultaneous first matches.
+
+**Completing and starting do not interleave.** Every match start takes a *shared* advisory lock
+on the tournament (`lifecycle:<id>`) and `complete_tournament` takes it *exclusively*, so a
+Complete that saw nothing on court cannot commit after a match has started. A row lock was
+rejected: two first matches would each hold it shared and then both try to upgrade it to flip
+the status, which deadlocks.
+
+**Nothing completes on its own.** There is no scheduled job and no time-based transition. A
+tournament past its last day simply stays `in_progress` until its host completes it, and one
+that never had a match started stays `upcoming`. The app *reminds* — a tournament whose first
+playing day has begun with no match started is shown as "Not started", and one past its last
+playing day as "Past its last day" — but a reminder is a label, never a transition.
 
 **Many tournaments may be `upcoming` or `in_progress` at once.** This is a requirement, not an
 optimisation, and there is no global active tournament. The only "where am I working" state is
@@ -214,20 +225,37 @@ column, its partial unique index and `set_active_tournament` were retired by
 [`20260929010000_retire_is_active.sql`](../supabase/migrations/20260929010000_retire_is_active.sql);
 nothing may reintroduce a tournament-wide default.
 
-### Derived timing
+### The window, and the playing days inside it
 
-**Start and end are derived, never stored.** The authoritative definition is
-`tournament_days`: start is the earliest `date + start_time` and end is the latest
-`date + end_time`, both interpreted in `tournaments.venue_timezone`. Moving or adding a day
-therefore keeps them correct with no synchronisation step.
+A tournament has two sets of dates, and they are different things.
 
-The timezone is mandatory rather than cosmetic. `date + start_time` is a wall clock;
+- **The window** (`starts_on`, `ends_on`) is what the tournament promises. It is chosen when the
+  tournament is created, is what the public sees, and has no maximum length. Only
+  `create_tournament` and `update_tournament_window` write it.
+- **Playing days** (`tournament_days`) are the days actually played, chosen later when the
+  schedule is built. Each must lie inside the window, they need not be consecutive, and there
+  is no maximum. A tournament may have none yet.
+
+**The derived instants are the window.** `tournament_starts_at` is 00:00 of `starts_on` and
+`tournament_ends_at` is 00:00 of the day after `ends_on`, both in `tournaments.venue_timezone`.
+That one instant is the registration deadline's bound *and* the earliest a match may start,
+so registering and playing never overlap. `tournament_play_starts_at` / `tournament_play_ends_at`
+are the old derivation from the playing days (NULL with none), used only for reminders.
+
+The timezone is mandatory rather than cosmetic. A date or `date + start_time` is a wall clock;
 comparing it against a `timestamptz` without `AT TIME ZONE venue_timezone` casts it in the
 *session* zone — UTC on Supabase — which puts every boundary five or six hours wrong for a US
-venue. `venue_timezone` is applied on every read of a day window.
+venue. The timezone cannot change once any match has a time (`tournaments_guard_timezone`).
 
-Both readers return `NULL` when a tournament has no days, which is a legitimate `upcoming`
-state. A tournament with no days cannot be started.
+**The window rule is a trigger.** `tournament_days_guard_window` refuses a day outside the window
+for every writer, because an editor can write `tournament_days` directly; an RPC-only check
+would be walked around by the table update.
+
+**What may move after the first match.** The last date can still be extended; the first date is
+locked (the gate and the deadline have been measured from it). A playing day can be added inside
+the window, and removed only if no match falls on it. Events, entry caps and format are fixed.
+Name, note, venue, address and organiser contact stay editable until completion
+(`update_tournament_details`).
 
 ## 4. Lifecycle guards, and the classified mutation list
 
@@ -248,8 +276,8 @@ pins this by asserting the classified list.
 
 ### `upcoming` only — `assert_tournament_configurable`
 
-- `save_tournament_config`, `save_tournament_days`, `save_tournament_categories`,
-  `discard_tournament`
+- `save_tournament_config`, `save_tournament_days` (and only while nothing is scheduled),
+  `save_tournament_categories`, `set_registration_window`, `discard_tournament`
 - `sync_placement_entrants`, `set_placement_skill` (which keeps its own `seed_locked_at` data
   gate), `lock_placement_seeds`
 - `apply_placement_generation` — the initial bracket, built from the seed order
@@ -257,7 +285,6 @@ pins this by asserting the classified list.
 
 ### `in_progress` only — `assert_tournament_live`
 
-- Match start: `start_placement_match`, `start_tier_draw_match`, legacy `start_match_safe`
 - Scoring and results: `report_placement_result`, `report_tier_draw_result`, legacy
   `report_draw_result`, `report_pool_result`
 - Live rescheduling: `reschedule_placement_match`, legacy `reschedule_live_match`
@@ -270,12 +297,20 @@ pins this by asserting the classified list.
 `advance_draw_locked`, `advance_tier_draw_locked` and `shift_live_schedule_after_match` need
 no separate guard: they are only ever called from a guarded RPC in the same transaction.
 
+### Starting a match — `assert_tournament_can_start_match`
+
+`start_placement_match`, `start_tier_draw_match` and legacy `start_match_safe` accept an
+`upcoming` or `in_progress` tournament, from 00:00 of the window's first date, and flip an
+`upcoming` one to `in_progress`. A `completed` one is refused for **everyone**; the guard does
+not consult the platform role, and `db-invariants.test.ts` pins that.
+
 ### Any state except `completed` — `assert_tournament_writable`
 
 - Structural repair: `reset_placement_schedule`, `reset_placement_stage`,
   `apply_placement_day_schedule`, legacy `apply_day_schedule`
 - Incremental configuration a running event legitimately needs: `add_tournament_day`,
-  `remove_tournament_day`, `set_tournament_courts`
+  `remove_tournament_day`, `set_tournament_courts`, `update_tournament_window`,
+  `update_tournament_details`
 - The registration decision: `decide_tournament_registration` (Section 6)
 
 These are the repair and support paths, and each already carries a stronger, data-based gate
@@ -287,10 +322,10 @@ outer boundary, not the whole rule.
 ### Two asymmetries that look like mistakes and are not
 
 - **`save_tournament_days` is `upcoming`-only, but `add_tournament_day` and
-  `remove_tournament_day` are not.** The first is the wizard's bulk rewrite of *every* day, so
-  running it mid-event would discard the schedule wholesale. The other two are the Schedule
-  page's incremental writers, and they exist precisely for the case where a tournament runs
-  long and the host needs one more day on the end.
+  `remove_tournament_day` are not.** The first is a bulk rewrite of *every* day, so running it
+  once anything is scheduled would silently re-attribute the matches; it refuses then. The
+  other two are the Schedule page's incremental writers, and they exist precisely for the case
+  where a tournament runs long and the host needs one more day on the end.
 - **`apply_placement_day_schedule` and `set_tournament_courts` take `assert_tournament_writable`
   rather than the stricter guard.** Each serves both initial setup *and* mid-event replanning,
   and the RPC cannot distinguish the two intents. The finer split the product model implies is
@@ -301,7 +336,9 @@ outer boundary, not the whole rule.
 These are not omissions:
 
 - `delete_tournament` — an owner or admin must be able to delete in *any* state.
-- `create_tournament` — a new row has no state to guard.
+- `create_tournament` — a new row has no state to guard. It is the only way a tournament
+  comes into being, and it is atomic: the window, the timezone and at least one event are
+  written together or not at all.
 - `set_current_tournament` — a presentation pointer on the caller's own row, not an operation.
 - `submit_tournament_registration` — carries `assert_registration_not_shut`, which is a
   window-and-lifecycle rule of its own (Section 6) rather than one of the three above.
@@ -311,22 +348,29 @@ These are not omissions:
   `explore_tournament_counts(...)`, `tournament_registration_state(uuid)`,
   `tournament_readiness(uuid)`, `my_tournament_registration(uuid)`,
   `review_tournament_registrations(uuid)`, `list_tournament_editors(uuid)`,
-  `tournament_starts_at` / `tournament_ends_at`, `placement_occupied_matches`,
+  `tournament_starts_at` / `tournament_ends_at`, `tournament_completion_check(uuid)`,
+  `placement_occupied_matches`,
   `placement_required_matches`, `placement_decided_matches`.
 - Integrity triggers (`enforce_team_shape`, `enforce_two_category_cap`,
-  `enforce_pool_entry_membership`, `enforce_match_sides`, `tournament_days_guard_order`) —
-  they enforce data shape, never lifecycle.
+  `enforce_pool_entry_membership`, `enforce_match_sides`, `tournament_days_guard_order`,
+  `tournament_days_guard_window`) — they enforce data shape, never lifecycle. Two triggers on
+  `tournaments` are the exception, and say so: `tournaments_guard_timezone` (not under a
+  schedule) and `tournaments_guard_registration` (Section 6).
 
 ## 5. Readiness, and why it must not depend on participation
 
 Readiness answers "is this tournament configured enough to run". It is **not** lifecycle, and
-it is **not** registration. Six blockers, all read from configuration alone:
+it is **not** registration. Four blockers, all read from configuration alone:
 
-`basics` · `timezone` · `days` · `day_dates` · `categories` · `category_caps`
+`basics` (a name) · `timezone` · `categories` · `category_caps`
+
+Playing days are not a check: they are chosen when the schedule is built, so a tournament with
+none is complete. The window is always present and ordered (`NOT NULL` plus a `CHECK`), so it
+needs no check of its own. A venue is optional, so `basics` no longer asks for one.
 
 | Predicate | Answers | Gates |
 | --- | --- | --- |
-| `tournament_is_ready(uuid)` | Are the six configuration checks satisfied? | `start_tournament`, `submit_tournament_registration` |
+| `tournament_is_ready(uuid)` | Are the configuration checks satisfied? | `submit_tournament_registration`, and the `create_tournament` it ends with |
 | `assert_registration_not_shut(uuid, now)` | `upcoming` **and** a window is configured **and** `now()` is inside it | `submit_tournament_registration` |
 | `tournament_registration_state(uuid)` | The window as one word (§6) — a *read*, never a gate | The Register button and the window copy |
 
@@ -335,7 +379,7 @@ what would let a registration concern leak into the start gate, and a start-side
 back in.
 
 **Readiness must stay satisfiable before anyone registers**, or registration could never open.
-None of the six checks reads `teams`, `placement_entrants`, `placement_matches`, `tier_draws`,
+None of the checks reads `teams`, `placement_entrants`, `placement_matches`, `tier_draws`,
 `tier_draw_matches` or `tournament_registration_entries` — and `category_caps` compares a cap
 against a constant, not against an entry count. This is load-bearing now that approval
 *creates* `players` and `teams` rows: if a future check counted entries — "every event has at
@@ -346,7 +390,7 @@ tables, so that mistake fails the suite instead of silently making registration 
 check that needs entries belongs in a separately named *start*-side predicate.
 
 The checklist the Setup page renders is `tournament_readiness(uuid)`, still all-or-nothing
-over the same six blockers, now guarded by `can_edit_tournament` rather than a global role.
+over the same blockers, now guarded by `can_edit_tournament` rather than a global role.
 
 ## 6. Registration
 
@@ -360,16 +404,26 @@ absolute and independent of the venue zone. Both may be `NULL`.
 When a window *is* configured, two invariants hold:
 
 1. `registration_opens_at < registration_closes_at`
-2. `registration_closes_at` is at or before `tournament_starts_at`
+2. `registration_closes_at` is at or before `tournament_starts_at` — that is, 00:00 of the
+   tournament window's first date at the venue. The registration window and the tournament
+   window never overlap.
 
-They are re-validated on **every** writer — `save_tournament_config`, `save_tournament_days`
-and the day add/remove RPCs — because days and the window can be written in either order, so
-moving the event earlier has to re-check. A partially configured window is refused, so a
-stored window is always coherent and nothing downstream re-derives the invariant.
+They are re-validated on **every** writer — `create_tournament`, `save_tournament_config`,
+`save_tournament_days`, `set_registration_window` and `update_tournament_window` — because the
+two windows can be written in either order, so moving the tournament earlier has to re-check. A
+partially configured window is refused, so a stored window is always coherent and nothing
+downstream re-derives the invariant.
 
-**The window is not a readiness check.** Do not add it to `tournament_is_ready` and do not
-require one in `start_tournament`. A tournament with no window is ready and startable while
-`submit_tournament_registration` is refused for it; both halves are asserted.
+**Who may move it, and when** (`tournaments_guard_registration`, a trigger, because the editor
+UPDATE grant lets a client write the columns directly): once the tournament has started it
+cannot change at all; once it has opened its opening time cannot change; and it cannot be
+*extended* — or switched on — once a schedule exists (`tournament_has_schedule`), because the
+entrants the schedule was built for must not change under it. It can always be shortened, which
+is how "close registration now" works. `set_registration_window` is the one call that does this.
+
+**The window is not a readiness check.** Do not add it to `tournament_is_ready`. A tournament
+with no window is ready while `submit_tournament_registration` is refused for it; both halves
+are asserted.
 
 ### The window as one word
 

@@ -2144,3 +2144,53 @@ describe("registration window rules migration", () => {
     expect(sql).toMatch(/RAISE EXCEPTION 'M3:/);
   });
 });
+
+describe("update tournament details migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261008030000_update_tournament_details.sql"), "utf8");
+  const executable = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  const withoutVerify = executable.replace(/DO \$verify\$[\s\S]*?\$verify\$;/, "");
+  const body = functionSource(withoutVerify, "update_tournament_details");
+
+  it("is open until completion, and no further", () => {
+    expect(body).toMatch(/can_edit_tournament/);
+    expect(body).toMatch(/PERFORM public\.assert_tournament_writable\(p_tournament_id\)/);
+    expect(body).not.toMatch(/assert_tournament_configurable/);
+  });
+
+  it("writes the seven detail columns and nothing that alters a game", () => {
+    const set = body.match(/UPDATE public\.tournaments SET([\s\S]*?)WHERE id = p_tournament_id/);
+    expect(set, "the update statement").toBeTruthy();
+    const columns = [...(set?.[1] ?? "").matchAll(/^\s*([a-z_]+) =/gm)].map((match) => match[1]);
+    expect(columns).toEqual([
+      "name",
+      "notes",
+      "venue_name",
+      "venue_address",
+      "organizer_name",
+      "organizer_email",
+      "organizer_phone",
+    ]);
+  });
+
+  it("still needs a name", () => {
+    expect(body).toMatch(/A tournament needs a name/);
+  });
+
+  it("is a client RPC for signed-in callers only", () => {
+    expect(withoutVerify).toMatch(
+      /REVOKE ALL ON FUNCTION public\.update_tournament_details\(uuid, jsonb\) FROM public, anon/,
+    );
+    expect(withoutVerify).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.update_tournament_details\(uuid, jsonb\) TO authenticated/,
+    );
+  });
+
+  it("verifies its own result", () => {
+    expect(sql).toMatch(/DO \$verify\$/);
+    expect(sql).toMatch(/RAISE EXCEPTION 'M4:/);
+  });
+});

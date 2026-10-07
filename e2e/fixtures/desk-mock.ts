@@ -288,6 +288,9 @@ const tournament = {
   knockout_rest_gap_minutes: 30,
   court_count: COURT_COUNT,
   day_count: 1,
+  // The window is the one fixture day; the playing day sits inside it.
+  starts_on: DAY_DATE,
+  ends_on: DAY_DATE,
   status: "in_progress",
   format: "two_round_placement",
   max_categories_per_player: 3,
@@ -606,6 +609,9 @@ export interface MockTournamentSummary {
   entry_count: number;
   category_count: number;
   access_level: string;
+  /** The first and last playing day, as instants. Null until playing days are chosen. */
+  play_starts_at: string | null;
+  play_ends_at: string | null;
 }
 
 /** The filters `tournament_summary` takes that this fixture models. */
@@ -708,6 +714,9 @@ const buildFixture = (
     // presence, not an offset arithmetic the mock would have to reimplement.
     starts_at: DAY_OPEN,
     ends_at: DAY_CLOSE,
+    // The one playing day fills the window, so the plan and the promise coincide here.
+    play_starts_at: DAY_OPEN,
+    play_ends_at: DAY_CLOSE,
     registration_state: servedRegistrationState,
     // The entry is `teams` and the events are `categories` - never a derived projection.
     entry_count: teams.length,

@@ -509,7 +509,7 @@ test.describe("Creating a tournament", () => {
     // The gate is page-level rather than a route guard, because the session lives in the
     // browser and this app server-renders first - so the check is on what is drawn.
     await expect(page.getByRole("heading", { name: /sign in first/i })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Name" })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
   });
 });
 
@@ -521,7 +521,7 @@ test.describe("Creating a tournament, signed in", () => {
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByRole("heading", { name: /new tournament/i, level: 1 })).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Name" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeVisible();
     await expect(page.getByText(/step 1 of 4/i).filter({ visible: true }).first()).toBeVisible();
 
     // Moving between steps writes the position into the address instead of holding it in
@@ -535,6 +535,107 @@ test.describe("Creating a tournament, signed in", () => {
     await page.waitForLoadState("networkidle");
     await expect(page.getByText(/step 2 of 4/i).filter({ visible: true }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: /choose the events/i })).toBeVisible();
+  });
+
+  /**
+   * Nothing exists until the last step.
+   *
+   * A tournament is created complete or not at all, so moving through the steps must not
+   * call the database, and what was typed must survive a reload - the answers live in the
+   * browser's session storage until "Create tournament".
+   */
+  test("keeps what was typed across a reload, and creates nothing on the way", async ({ page }) => {
+    const created: string[] = [];
+    await page.route("**/rest/v1/rpc/create_tournament", async (route) => {
+      created.push(route.request().postData() ?? "");
+      await route.fulfill({ status: 200, contentType: "application/json", body: '"x"' });
+    });
+
+    await page.goto(routes.newTournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill("City Open");
+    await page.getByLabel("Tournament starts").fill("2026-12-01");
+    await page.getByLabel("Tournament ends").fill("2026-12-03");
+    await page.getByRole("button", { name: /^continue/i }).click();
+    await expect(page).toHaveURL(/step=events/);
+
+    await page.reload({ waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page
+      .getByRole("navigation", { name: "Setup steps" })
+      .getByRole("button", { name: /details/i })
+      .click();
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("City Open");
+    await expect(page.getByLabel("Tournament starts")).toHaveValue("2026-12-01");
+    await expect(page.getByLabel("Tournament ends")).toHaveValue("2026-12-03");
+    expect(created, "moving between steps must not create anything").toEqual([]);
+  });
+
+  test("tells a host what is missing only once they try to continue", async ({ page }) => {
+    await page.goto(routes.newTournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("#t-name-error")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /^continue/i }).click();
+    await expect(page.locator("#t-name-error")).toHaveText("Give the tournament a name.");
+    await expect(page.locator("#t-window-error")).toBeVisible();
+    // It stayed on the step: there was nothing to carry forward.
+    await expect(page.getByText(/step 1 of 4/i).filter({ visible: true }).first()).toBeVisible();
+  });
+
+  test("creates the tournament in one call, with the window and the registration in the venue's zone", async ({
+    page,
+  }) => {
+    const calls: { payload: Record<string, unknown> }[] = [];
+    await page.route("**/rest/v1/rpc/create_tournament", async (route) => {
+      calls.push({ payload: JSON.parse(route.request().postData() ?? "{}") });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(routes.tournament.split("/").pop()),
+      });
+    });
+
+    await page.goto(routes.newTournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill("City Open");
+    await page.getByLabel("Tournament starts").fill("2026-12-01");
+    await page.getByLabel("Tournament ends").fill("2026-12-03");
+    await page.getByRole("button", { name: /^continue/i }).click();
+
+    await page.getByRole("button", { name: /^MS/ }).click();
+    // The deadline defaults to the end of the day before the tournament, at the venue.
+    await expect(page.getByLabel("Registration closes")).toHaveValue("2026-11-30T23:59");
+    await page.getByRole("button", { name: /^continue/i }).click();
+    await page.getByRole("button", { name: /^continue/i }).click();
+
+    await expect(page.getByRole("heading", { name: /ready to create/i })).toBeVisible();
+    await page.getByRole("button", { name: "Create tournament" }).click();
+    await expect(page).toHaveURL(new RegExp(routes.tournament + "$"));
+
+    expect(calls).toHaveLength(1);
+    const payload = calls[0]?.payload.p_payload as Record<string, unknown>;
+    expect(payload["name"]).toBe("City Open");
+    expect(payload["starts_on"]).toBe("2026-12-01");
+    expect(payload["ends_on"]).toBe("2026-12-03");
+    expect(payload["venue_timezone"]).toBe("America/Chicago");
+    expect((payload["categories"] as { code: string }[]).map((c) => c.code)).toEqual(["MS"]);
+    // 23:59 in Chicago (UTC-6 in winter) is 05:59 UTC the next morning: the zone is the
+    // venue's, not the browser's.
+    expect(payload["registration_closes_at"]).toBe("2026-12-01T05:59:00.000Z");
+    expect(payload["registration_opens_at"]).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
+    // The tournament has no playing days yet: those are chosen when the schedule is built.
+    expect(payload).not.toHaveProperty("days");
+  });
+
+  test("blocks creating while a check fails, and says which step fixes it", async ({ page }) => {
+    await page.goto(`${routes.newTournament}?step=review`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: /things to fix before you can create it/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create tournament" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Go to Details" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Go to Events" }).first()).toBeVisible();
   });
 });
 
@@ -562,6 +663,47 @@ test.describe("Configuring one tournament", () => {
       "href",
       routes.myTournaments,
     );
+  });
+});
+
+test.describe("Setting up a tournament that has started", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "in_progress" } });
+
+  test("keeps what can still change editable, and says why the rest cannot", async ({ page }) => {
+    await page.goto(routes.settings, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The steps are gone: a started tournament's events, caps and format are fixed, so
+    // there is no rail to walk and no form that could only fail.
+    await expect(page.getByRole("navigation", { name: "Setup steps" })).toHaveCount(0);
+    await expect(page.getByText(/events, entry caps and format are fixed/i)).toBeVisible();
+
+    // The first date and the timezone are locked, each with its reason; the last date, the
+    // name and the venue are not.
+    await expect(page.getByLabel("Tournament starts")).toBeDisabled();
+    await expect(page.getByText(/first day can no longer move/i)).toBeVisible();
+    await expect(page.locator("#t-tz")).toBeDisabled();
+    await expect(page.getByLabel("Tournament ends")).toBeEnabled();
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Save details" })).toBeEnabled();
+
+    // And the end of it: completing, which is the host's own act.
+    await expect(page.getByRole("button", { name: "Complete tournament" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /start tournament/i })).toHaveCount(0);
+  });
+});
+
+test.describe("Setting up a completed tournament", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "completed" } });
+
+  test("is read-only all the way down", async ({ page }) => {
+    await page.goto(routes.settings, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByText(/is completed, so nothing here can change/i)).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save details" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Complete tournament" })).toHaveCount(0);
   });
 });
 

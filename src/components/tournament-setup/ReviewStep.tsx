@@ -1,63 +1,86 @@
 import type { TournamentStatus } from "@/lib/auth/authorization";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
-import type { TournamentReadiness } from "@/lib/tournament/data";
 import { cn } from "@/lib/utils";
+import { effectiveRegistration } from "./problems";
 import { SetupSection } from "./section";
-import { SETUP_STEPS, dateRangeLabel, stepForCheck, type DraftForm, type SetupStep } from "./types";
+import {
+  countIsoDays,
+  setupSteps,
+  stepForCheck,
+  windowLabel,
+  type DraftForm,
+  type SetupStep,
+} from "./types";
+
+/** One line of the checklist, whether it came from the browser or from the database. */
+export interface ReviewCheck {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail?: string | null | undefined;
+  /** False for a check that is advice rather than a blocker. Absent means it blocks. */
+  blocking?: boolean | undefined;
+}
 
 /**
- * The last step: whether the tournament can start, what was set up, and the start itself.
+ * The last step: whether the tournament can be created (or is set up, once it exists), what
+ * was set up, and the one act that belongs here.
  *
- * The checks come from `tournament_readiness`, which is the same function the start RPC
- * re-runs, so what is shown here is what the database will enforce. The page opens with the
- * answer in one sentence ("ready", or "N things to fix"), because a host arrives here to
- * learn exactly that, and each thing to fix carries the button that goes to the step that
- * fixes it.
+ * While a tournament is being made, the checks come from the form itself - there is no row
+ * to ask - and the page opens with the answer in one sentence ("ready to create", or "N
+ * things to fix"), because a host arrives here to learn exactly that. Each thing to fix
+ * carries the button that goes to the step that fixes it. Once it exists the checks are the
+ * database's own `tournament_readiness`, the same function that decides whether registration
+ * can open.
  *
- * The checklist is information, not the gate. Start is enabled whenever the tournament
- * exists, and the RPC names its own refusal: it knows the blockers and the venue-local
- * start time, and a disabled button would only be able to say "no".
+ * There is no Start button. A tournament starts by itself when its first match is started on
+ * the Desk, so the act that belongs on an existing tournament's last step is only the end of
+ * it: Complete, while it is running.
  *
  * `onGoToStep` is absent once the configuration is frozen (the tournament has started), and
  * with it the Edit and fix buttons: a button that goes to a step that can no longer be
  * changed would be a door to a form that lies.
  */
 export function ReviewStep({
+  mode,
   form,
-  readiness,
-  readinessError,
+  checks,
+  loading,
+  error,
   busy,
-  hasTournament,
   status,
-  onStart,
+  onCreate,
   onComplete,
   onDiscard,
   onGoToStep,
 }: {
+  mode: "create" | "existing";
   form: DraftForm;
-  readiness: TournamentReadiness | undefined;
-  readinessError: string | null;
+  checks: ReviewCheck[];
+  loading: boolean;
+  error: string | null;
   busy: boolean;
-  /** Whether the tournament exists yet. The first step creates it. */
-  hasTournament: boolean;
   status: TournamentStatus;
-  onStart: () => void;
+  onCreate: () => void;
   onComplete: () => void;
   onDiscard: () => void;
   onGoToStep?: ((step: SetupStep) => void) | undefined;
 }) {
   const activeEvents = form.events.filter((event) => event.active !== false);
-  const checks = readiness?.checks ?? [];
   const blockers = checks.filter((check) => !check.ok && check.blocking !== false);
   const advisories = checks.filter((check) => !check.ok && check.blocking === false);
-  const ready = readiness?.ready === true;
+  const ready = !loading && !error && blockers.length === 0;
+  const registration = effectiveRegistration(form);
+  const days = form.startsOn ? countIsoDays(form.startsOn, form.endsOn || form.startsOn) : 0;
+  const steps = setupSteps(mode === "existing");
 
   return (
     <div className="space-y-5">
       <Verdict
-        loading={!readiness && !readinessError}
-        error={readinessError}
+        mode={mode}
+        loading={loading}
+        error={error}
         ready={ready}
         blockers={blockers.length}
         advisories={advisories.length}
@@ -93,13 +116,13 @@ export function ReviewStep({
                     ) : null}
                     {advisory ? (
                       <span className="block text-sm text-muted-foreground">
-                        Set on the Schedule page at the first build. It does not hold up starting.
+                        Finished on the Schedule page. It does not hold anything up.
                       </span>
                     ) : null}
                   </span>
                   {fixIn && onGoToStep ? (
                     <Button variant="outline" onClick={() => onGoToStep(fixIn)}>
-                      Go to {SETUP_STEPS.find((entry) => entry.id === fixIn)?.label}
+                      Go to {steps.find((entry) => entry.id === fixIn)?.label}
                     </Button>
                   ) : null}
                 </li>
@@ -118,10 +141,10 @@ export function ReviewStep({
             onGoToStep={onGoToStep}
           />
           <Row
-            label="Dates"
-            value={`${dateRangeLabel(form.days)} · ${form.days.length} day${form.days.length === 1 ? "" : "s"} · ${
-              form.basics.venueTimezone || "no timezone"
-            }`}
+            label="Tournament dates"
+            value={`${windowLabel(form.startsOn, form.endsOn)}${
+              days ? ` · ${days} day${days === 1 ? "" : "s"}` : ""
+            } · ${form.basics.venueTimezone || "no timezone"}`}
           />
           <Row
             label="Venue"
@@ -160,6 +183,17 @@ export function ReviewStep({
             label="Entries per player"
             value={`Up to ${form.maxCategoriesPerPlayer}`}
           />
+          <div className="min-w-0">
+            <dt className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Registration</span>
+              <EditLink step="events" onGoToStep={onGoToStep} />
+            </dt>
+            <dd className="mt-0.5 break-words text-base font-semibold">
+              {form.registration.enabled
+                ? `${registration.opensAt.replace("T", " ")} to ${registration.closesAt.replace("T", " ")}`
+                : "Off"}
+            </dd>
+          </div>
           {form.basics.notes.trim() ? (
             <div className="min-w-0 sm:col-span-2">
               <dt className="text-sm text-muted-foreground">Note</dt>
@@ -182,51 +216,59 @@ export function ReviewStep({
           </div>
         </dl>
         <p className="mt-5 text-sm text-muted-foreground">
-          The venue&apos;s courts, each day&apos;s hours and breaks, match lengths and scoring rules
-          are set on the Schedule page at the first build, where the courts exist.
+          Which days are played, the venue&apos;s courts, each day&apos;s hours and breaks, match
+          lengths and scoring rules are set on the Schedule page when the schedule is built,
+          where the courts exist.
         </p>
       </SetupSection>
 
       <SetupSection
         headingId="review-finish"
-        title={status === "in_progress" ? "Finish the tournament" : "Start the tournament"}
+        title={
+          mode === "create"
+            ? "Create the tournament"
+            : status === "in_progress"
+              ? "Finish the tournament"
+              : status === "completed"
+                ? "Completed"
+                : "Starting"
+        }
       >
-        {status === "upcoming" ? (
+        {mode === "create" ? (
           <>
             <p className="mb-4 text-base text-muted-foreground">
-              Starting moves this tournament from <strong className="text-foreground">Upcoming</strong>{" "}
-              to <strong className="text-foreground">In progress</strong> and makes it the tournament
-              you are working in. It will not start before every check passes and its own start time
-              has arrived.
+              Creating saves it as <strong className="text-foreground">Upcoming</strong>. It is
+              listed in Explore, and people can register while registration is open. It becomes{" "}
+              <strong className="text-foreground">In progress</strong> by itself when the first
+              match is started on the Desk, from the first day at 00:00.
             </p>
-            {/*
-              Enabled whenever the tournament exists, even with failing checks. The RPC
-              re-runs the checklist and refuses with the blockers named - and it is the only
-              thing that knows the venue-local start time, so pre-empting it in the browser
-              would replace a precise refusal with a vague one.
-            */}
-            <Button className="h-12 px-7 text-base" disabled={busy || !hasTournament} onClick={onStart}>
-              {busy ? "Working…" : "Start tournament"}
+            <Button
+              className="h-12 px-7 text-base"
+              disabled={busy || !ready}
+              onClick={onCreate}
+            >
+              {busy ? "Creating…" : "Create tournament"}
             </Button>
-            {ready ? (
+            {!ready && !loading ? (
               <p className="mt-3 text-sm text-muted-foreground">
-                Every check passes. If the start time has not arrived yet, starting will say when
-                it does.
-              </p>
-            ) : readiness ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Starting is refused until every check above passes, and it will name what is
-                missing.
+                Fix the {blockers.length === 1 ? "check" : "checks"} above to create it.
               </p>
             ) : null}
           </>
+        ) : status === "upcoming" ? (
+          <p className="text-base text-muted-foreground">
+            Nobody presses Start. This tournament becomes{" "}
+            <strong className="text-foreground">In progress</strong> by itself when the first match is
+            started on the Desk, from {form.startsOn || "the first day"} at 00:00. Until then
+            everything on the previous steps can still change.
+          </p>
         ) : status === "in_progress" ? (
           <>
             <p className="mb-4 text-base text-muted-foreground">
-              This tournament is running. Its configuration is now frozen, so what is above is
-              read-only. Completing it closes the event.
+              This tournament is running. Its events, caps and format are now fixed; its name,
+              venue and last day can still change. Completing it closes the event.
             </p>
-            <Button className="h-12 px-7 text-base" disabled={busy || !hasTournament} onClick={onComplete}>
+            <Button className="h-12 px-7 text-base" disabled={busy} onClick={onComplete}>
               {busy ? "Working…" : "Complete tournament"}
             </Button>
           </>
@@ -238,16 +280,16 @@ export function ReviewStep({
         )}
       </SetupSection>
 
-      {status === "upcoming" ? (
+      {mode === "create" || status === "upcoming" ? (
         <div className="flex justify-end border-t border-hairline pt-3">
           {/* A link-sized act, set apart from the one above: discarding is rare and final. */}
           <button
             type="button"
-            disabled={busy || !hasTournament}
+            disabled={busy}
             onClick={onDiscard}
             className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-semibold text-danger-foreground underline underline-offset-2 hover:bg-danger-surface disabled:opacity-50"
           >
-            Discard this draft
+            {mode === "create" ? "Discard these answers" : "Discard this tournament"}
           </button>
         </div>
       ) : null}
@@ -257,12 +299,14 @@ export function ReviewStep({
 
 /** The one-sentence answer the page opens with. */
 function Verdict({
+  mode,
   loading,
   error,
   ready,
   blockers,
   advisories,
 }: {
+  mode: "create" | "existing";
   loading: boolean;
   error: string | null;
   ready: boolean;
@@ -282,19 +326,20 @@ function Verdict({
   } else if (!loading && ready) {
     tone = "ok";
     mark = "✓";
-    title = "Ready to start";
+    title = mode === "create" ? "Ready to create" : "Set up";
     detail = advisories
       ? `${advisories} setting${advisories === 1 ? "" : "s"} below ${
           advisories === 1 ? "is" : "are"
-        } finished at the first build.`
+        } finished on the Schedule page.`
       : "Every check passes.";
   } else if (!loading) {
     tone = "warn";
     mark = "!";
+    const things = blockers === 1 ? "1 thing" : `${blockers} things`;
     title =
-      blockers === 1
-        ? "1 thing to fix before you can start"
-        : `${blockers} things to fix before you can start`;
+      mode === "create"
+        ? `${things} to fix before you can create it`
+        : `${things} to fix`;
     detail = "The rest is ready.";
   }
 

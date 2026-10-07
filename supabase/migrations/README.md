@@ -2525,7 +2525,7 @@ them but the Explore page.
 
 ## Applying `20261008000000_tournament_window.sql`
 
-First of three files that make one change (the window, start-on-first-match, the registration rules); apply them in order.
+First of four files that make one change (the window, start-on-first-match, the registration rules, the details writer); apply them in order.
 Do not apply the app build that calls the new `create_tournament` before this is in place, and do
 not apply this before the build that stops calling `start_tournament` and `save_tournament_days`
 for a new tournament: the two sides move together.
@@ -2666,3 +2666,36 @@ match) and run `npm run test:integration` against the local stack.
 Drop the trigger and `set_registration_window`, restore `assert_registration_window` from
 `20260927000000_tournova_role_redesign.sql`, and re-create the two reads from
 `20260929001000_tournament_summary.sql` and `20261007000000_explore_tournaments.sql`.
+
+
+---
+
+## Applying `20261008030000_update_tournament_details.sql`
+
+The fourth file of the same change, and the smallest. It belongs to the first three: they make
+the tournament's configuration fixed from its first match, and this is the narrow door that stays
+open.
+
+### What it adds
+
+`update_tournament_details(p_tournament_id, p_payload)`: name, note, venue, address and the
+organiser's contact, for an owner, an editor or a platform admin, until the tournament is
+completed (`assert_tournament_writable`). It reads those seven keys and nothing else. The events,
+format and rules have `save_tournament_config` / `save_tournament_categories`, which are
+upcoming-only; the window has `update_tournament_window`; the timezone is left to
+`save_tournament_config` and its guard under a schedule.
+
+### Verify after applying
+
+```sql
+SELECT has_function_privilege('anon', 'public.update_tournament_details(uuid, jsonb)', 'execute');           -- false
+SELECT has_function_privilege('authenticated', 'public.update_tournament_details(uuid, jsonb)', 'execute'); -- true
+```
+
+Then, as an editor of an in-progress tournament, change its venue and confirm it saves; change a
+completed one as the same editor and confirm it is refused.
+
+### Rolling back
+
+`DROP FUNCTION public.update_tournament_details(uuid, jsonb);` Only the Setup page of a started
+tournament calls it.

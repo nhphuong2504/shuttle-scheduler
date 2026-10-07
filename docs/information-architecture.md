@@ -28,7 +28,7 @@ Three audiences, and the address says which one it belongs to:
 | `/` | **Placeholder** Landing for a visitor (a bare "browse or sign in", not yet designed); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
 | `/explore` | Every tournament, searchable over name, venue and event, with a status filter |
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me** |
-| `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, against a new row |
+| `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
 | `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card on `…/entries` instead, so a visitor who only came to read never sees this page |
 
@@ -55,7 +55,7 @@ mounts `WorkspaceShell` around the child page.
 | `…/knockout` | The tier-draw brackets | Operator |
 | `…/schedule` | Tournament-wide planning. One address for both engines: the route reads `tournament.format` and renders the placement scheduler or the day planner | Organiser |
 | `…/scores` | Result entry | Operator |
-| `…/settings` | Configuration and the lifecycle, hosted in the shared wizard | Editor |
+| `…/settings` | Setting up a tournament that exists, hosted in the shared wizard: every step while it is upcoming, and only what can still change once it has started | Editor |
 | `…/access` | Who else may operate this tournament | Editor |
 | `…/pools`, `…/draws` | The legacy round-robin brackets, reachable by URL while a legacy tournament is read | Viewer |
 
@@ -164,10 +164,12 @@ what a tournament is.
 
 `/tournaments/new` hosts the same four-step wizard that Setup hosts
 ([`src/components/tournament-setup`](../src/components/tournament-setup)), against a tournament
-that does not exist yet. The step that writes the row creates it, points the caller's working
-pointer at it, and moves the address to `/tournaments/:id/settings` — which is what makes a
-refresh resume the wizard rather than start a second tournament. There is one wizard with two
-hosts, and neither host owns the steps.
+that does not exist yet. Nothing is written until the last step: the answers live in the page
+and in the browser's session storage, so a reload keeps them, and "Create tournament" makes the
+tournament whole in one call, points the caller's working pointer at it, clears the stored
+answers and goes to `/tournaments/:id`. There is no draft row, so there is nothing for a
+refresh to resume and no half-made tournament for anyone else to find. There is one wizard with
+two hosts, and neither host owns the steps.
 
 ### Working in one
 
