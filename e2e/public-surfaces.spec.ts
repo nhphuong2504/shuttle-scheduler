@@ -228,6 +228,101 @@ test.describe("Explore, searched", () => {
 });
 
 /**
+ * Explore at scale: the filters beside the list, and the shapes a long list is drawn in.
+ *
+ * The fixture holds one tournament, so what these can show is that each group is drawn in its
+ * own shape and that every filter reads from and writes to the address. Ordering many rows,
+ * paging and the refusal of an unknown word are the database's and are asserted against the
+ * real functions in `integration/explore.test.ts`.
+ */
+test.describe("Explore, an upcoming tournament", () => {
+  test.use({ appMock: { preset: "layout", role: null, status: "upcoming" } });
+
+  test("sits in a row under its month, with a way to the cards", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: /^upcoming/i, level: 2 })).toBeVisible();
+    // The month heading: a group of its own, one level under the section.
+    await expect(page.getByRole("heading", { level: 3 })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: TOURNAMENT_NAME })).toHaveAttribute(
+      "href",
+      routes.entries,
+    );
+    await expect(page.getByRole("link", { name: "Details" })).toBeVisible();
+    await expect(page.getByText(/showing 1 of 1 upcoming/i)).toBeVisible();
+
+    await page.getByRole("button", { name: "Cards" }).click();
+    await expect(page).toHaveURL(/view=cards/);
+    await expect(page.getByRole("button", { name: "Cards" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("link", { name: "View details" })).toBeVisible();
+
+    // The default is not written down: two spellings of one layout are two addresses.
+    await page.getByRole("button", { name: "Timeline" }).click();
+    await expect(page).not.toHaveURL(/view=/);
+  });
+});
+
+test.describe("Explore, a completed tournament", () => {
+  test.use({ appMock: { preset: "layout", role: null, status: "completed" } });
+
+  test("is a row of a table, read down the column", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("heading", { name: /^completed/i, level: 2 })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Tournament" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "See results" })).toBeVisible();
+    await expect(page.getByText(/showing 1 of 1 completed/i)).toBeVisible();
+  });
+});
+
+test.describe("Explore, filtered", () => {
+  test.use({ appMock: { preset: "layout", role: null } });
+
+  test("writes each filter into the address, shows it as a chip, and clears it", async ({
+    page,
+  }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(TOURNAMENT_NAME)).toBeVisible();
+
+    // The fixture's tournament is under way, so no registration window is open on it.
+    await page.getByRole("button", { name: "Registration open", exact: true }).click();
+    await expect(page).toHaveURL(/reg=true/);
+    await expect(page.getByRole("button", { name: "Registration open", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByText(/no tournament matches that search/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove Registration open" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Clear all" }).click();
+    await expect(page.getByText(TOURNAMENT_NAME)).toBeVisible();
+    await expect(page).not.toHaveURL(/reg=/);
+  });
+
+  test("keeps a date window and an order in the address, and drops words it has no filter for", async ({
+    page,
+  }) => {
+    await page.goto(`${routes.explore}?when=month&sort=name`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByLabel("When")).toHaveValue("month");
+    await expect(page.getByLabel("Sort by")).toHaveValue("name");
+
+    // A hand-edited address can name anything; an unknown word is dropped, not forwarded.
+    await page.goto(`${routes.explore}?when=decade&sort=random&view=table`, {
+      waitUntil: "load",
+    });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText(TOURNAMENT_NAME)).toBeVisible();
+    await expect(page.getByLabel("When")).toHaveValue("");
+    await expect(page.getByLabel("Sort by")).toHaveValue("soonest");
+    await expect(page).not.toHaveURL(/when=|sort=|view=/);
+  });
+});
+
+/**
  * Registering, which needs a session the visitor does not have.
  *
  * The fixture answers `tournament_registration_state` with "not offered" everywhere else, so

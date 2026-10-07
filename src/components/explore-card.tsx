@@ -19,6 +19,64 @@ const ACTION_OUTLINE =
   "inline-flex min-h-11 items-center rounded-lg border border-border-control px-5 text-sm font-semibold transition-colors hover:bg-muted";
 
 /**
+ * The focus ring on the dark live card.
+ *
+ * The page's own ring is violet, which sits at about 2.8:1 against the card's near-black, under
+ * the 3:1 a focus indicator needs. A light ring with an offset the colour of the card clears it
+ * on every control the card holds.
+ */
+const ON_DARK_FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background focus-visible:ring-offset-2 focus-visible:ring-offset-foreground";
+
+/**
+ * The one way in to registering, shared by every shape of Explore row.
+ *
+ * Drawn only while the window is open. A signed-in caller goes to the participant page, where
+ * the form is; a visitor has no session, so they are sent to sign in carrying the participant
+ * page as the place to come back to - the same trip, and the same words, that the participant
+ * page itself offers.
+ *
+ * The participant page is built by the router rather than pasted: `/auth`'s `redirect` is a
+ * plain string, and the address is a route with a parameter. Writing `/tournaments/${id}` here
+ * would be a second spelling of a path the route tree owns, and the one that would go stale,
+ * because nothing type-checks a template literal against a route.
+ */
+export function RegisterAction({
+  summary,
+  signedIn,
+  onDark = false,
+}: {
+  summary: TournamentSummary;
+  signedIn: boolean;
+  /** On the dark live card, where the default focus ring is too close to the surface. */
+  onDark?: boolean;
+}) {
+  const className = onDark ? `${ACTION_PRIMARY} ${ON_DARK_FOCUS}` : ACTION_PRIMARY;
+  const participantHref = useRouter().buildLocation({
+    to: "/tournaments/$tournamentId",
+    params: { tournamentId: summary.id },
+  }).href;
+
+  if (summary.registration_state !== "open") return null;
+  return signedIn ? (
+    <Link
+      to="/tournaments/$tournamentId"
+      params={{ tournamentId: summary.id }}
+      className={className}
+    >
+      Register
+    </Link>
+  ) : (
+    <Link to="/auth" search={signInSearch(participantHref, "register")} className={className}>
+      Sign in to register
+    </Link>
+  );
+}
+
+/** The outline treatment, for the secondary action beside a primary one. */
+export const EXPLORE_ACTION_OUTLINE = ACTION_OUTLINE;
+
+/**
  * One tournament on Explore, drawn for somebody deciding what to follow.
  *
  * `TournamentCard` is the card for a page that works on tournaments (My Tournaments) and is
@@ -48,11 +106,19 @@ const ACTION_OUTLINE =
 export function ExploreCard({
   summary,
   signedIn,
+  variant = "default",
 }: {
   summary: TournamentSummary;
   /** Whether the caller holds a session, which decides where registering leads. */
   signedIn: boolean;
+  /**
+   * `live` is the dark card Explore gives to what is being played right now, so the one thing
+   * a visitor may want to open this minute is not another card in a grid. It draws the same
+   * facts and the same actions; only the surface differs.
+   */
+  variant?: "default" | "live";
 }) {
+  const live = variant === "live";
   const { status } = summary;
   const action =
     status === "in_progress"
@@ -61,21 +127,14 @@ export function ExploreCard({
         ? { label: "See results", primary: false }
         : { label: "View details", primary: false };
 
-  /**
-   * The participant page as a path, built by the router rather than pasted.
-   *
-   * `/auth`'s `redirect` is a plain string, and the participant address is a route with a
-   * parameter. Writing `/tournaments/${id}` here would be a second spelling of a path the
-   * route tree already owns - and the one that would go stale, because nothing type-checks
-   * a template literal against a route.
-   */
-  const participantHref = useRouter().buildLocation({
-    to: "/tournaments/$tournamentId",
-    params: { tournamentId: summary.id },
-  }).href;
-
   return (
-    <article className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-hairline bg-surface p-5 shadow-panel">
+    <article
+      className={
+        live
+          ? "flex h-full min-w-0 flex-col gap-3 rounded-xl bg-foreground p-6 text-background"
+          : "flex h-full min-w-0 flex-col gap-3 rounded-xl border border-hairline bg-surface p-5 shadow-panel"
+      }
+    >
       <div className="flex flex-wrap items-center gap-2">
         <TournamentStatusPill status={status} />
         {/* Only the window states that tell a visitor something the status does not: "started"
@@ -89,13 +148,23 @@ export function ExploreCard({
         <Link
           to="/tournaments/$tournamentId/entries"
           params={{ tournamentId: summary.id }}
-          className="rounded-sm hover:text-primary-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className={
+            live
+              ? "rounded-sm text-background hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-state-live-chip focus-visible:ring-offset-2 focus-visible:ring-offset-foreground"
+              : "rounded-sm hover:text-primary-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          }
         >
           {summary.name}
         </Link>
       </h3>
 
-      <ul className="min-w-0 space-y-1 text-base text-muted-foreground">
+      <ul
+        className={
+          live
+            ? "min-w-0 space-y-1 text-base text-background/80"
+            : "min-w-0 space-y-1 text-base text-muted-foreground"
+        }
+      >
         <li className="break-words">{dateRangeText(summary.starts_at, summary.ends_at)}</li>
         <li className="break-words">{summary.venue_name || "Venue not set"}</li>
         <li className="font-score tabular-nums">
@@ -108,29 +177,17 @@ export function ExploreCard({
         <Link
           to="/tournaments/$tournamentId/entries"
           params={{ tournamentId: summary.id }}
-          className={action.primary ? ACTION_PRIMARY : ACTION_OUTLINE}
+          className={
+            live
+              ? `inline-flex min-h-11 items-center rounded-lg bg-state-live-chip px-5 text-sm font-semibold text-state-live-ink transition-colors hover:brightness-95 ${ON_DARK_FOCUS}`
+              : action.primary
+                ? ACTION_PRIMARY
+                : ACTION_OUTLINE
+          }
         >
           {action.label}
         </Link>
-        {summary.registration_state === "open" ? (
-          signedIn ? (
-            <Link
-              to="/tournaments/$tournamentId"
-              params={{ tournamentId: summary.id }}
-              className={ACTION_PRIMARY}
-            >
-              Register
-            </Link>
-          ) : (
-            <Link
-              to="/auth"
-              search={signInSearch(participantHref, "register")}
-              className={ACTION_PRIMARY}
-            >
-              Sign in to register
-            </Link>
-          )
-        ) : null}
+        <RegisterAction summary={summary} signedIn={signedIn} onDark={live} />
       </div>
     </article>
   );
