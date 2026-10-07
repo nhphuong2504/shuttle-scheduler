@@ -17,6 +17,7 @@ import {
   useTeams,
   useTierDrawMatches,
   useTierDraws,
+  useScopedAccess,
   useTournamentScope,
   type Category,
   type Player,
@@ -67,6 +68,7 @@ function KnockoutPage() {
   // The links below stay inside this tournament, so they carry the id the layout resolved
   // rather than a global. A route param, so it is a string here and not a nullable one.
   const { tournamentId } = Route.useParams();
+  const canEdit = useScopedAccess().can_edit;
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -88,7 +90,7 @@ function KnockoutPage() {
       actions={
         <Button size="sm" variant="outline" asChild>
           <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
-            Enter results in Scores
+            {canEdit ? "Enter results in Scores" : "See all scores"}
           </Link>
         </Button>
       }

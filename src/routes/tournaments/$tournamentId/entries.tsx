@@ -252,6 +252,8 @@ function EntriesPage() {
     const totalPlayers = (players ?? []).length;
     return {
       totalPlayers,
+      /** The people with an entry in *this* tournament, which is the count a reader means. */
+      entered: entered.size,
       entries: all.length,
       active: active.length,
       withdrawn,
@@ -261,22 +263,42 @@ function EntriesPage() {
   }, [teams, players, categoryCount]);
 
   return (
-    <Page title="Entries" subtitle={capSubtitle(categoryCap)}>
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatTile
-          label="Players"
-          value={stats.totalPlayers}
-          hint={`${stats.unassigned} with no entry`}
-        />
+    <Page
+      title="Entries"
+      subtitle={canEdit ? capSubtitle(categoryCap) : "Who is playing in each event."}
+    >
+      {/*
+        What a reader needs is how big the field is. The roster-wide player count, the players
+        with no entry and the two cap tiles are the desk's bookkeeping - they describe the
+        whole player list and the entry limit, which only somebody adding entries acts on - so
+        they are drawn for an editor and not for a reader.
+      */}
+      <div
+        className={cn(
+          "mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2",
+          canEdit ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-4",
+        )}
+      >
+        {canEdit ? (
+          <StatTile
+            label="Players"
+            value={stats.totalPlayers}
+            hint={`${stats.unassigned} with no entry`}
+          />
+        ) : (
+          <StatTile label="Players" value={stats.entered} hint="Taking part" />
+        )}
         <StatTile label="Entries" value={stats.entries} hint="Across all categories" />
         <StatTile label="Active" value={stats.active} tone="good" hint="Still in the draw" />
-        <StatTile
-          label="Withdrawn"
-          value={stats.withdrawn}
-          tone={stats.withdrawn > 0 ? "warn" : "normal"}
-          hint="Pulled out"
-        />
-        {CAP_LEVELS.map((level) => {
+        {canEdit || stats.withdrawn > 0 ? (
+          <StatTile
+            label="Withdrawn"
+            value={stats.withdrawn}
+            tone={stats.withdrawn > 0 ? "warn" : "normal"}
+            hint="Pulled out"
+          />
+        ) : null}
+        {(canEdit ? CAP_LEVELS : []).map((level) => {
           const count = stats.byCount.get(level) ?? 0;
           // At or past the configured cap this level cannot enter again; below
           // it, the entry is still open, so the tiles say different things.

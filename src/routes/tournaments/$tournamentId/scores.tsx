@@ -185,6 +185,7 @@ function MatchesPage() {
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [stage, setStage] = useState<string | null>(null);
   const { data: categories } = useCategories();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
@@ -406,18 +407,21 @@ function MatchesPage() {
     [visibleTier, drawOfTierMatch],
   );
 
+  const groupCount = visiblePool.length + visiblePlacement.length;
+  const knockoutCount = visibleDraw.length + visibleTier.length;
+
   return (
     <Page
-      title="Score entry"
+      title={canEdit ? "Score entry" : "Scores"}
       subtitle={`Group stage is ${scoringRuleLabel(LEGACY_GAME_RULE).toLowerCase()}. Knockouts are ${scoringRuleLabel(knockoutRule).toLowerCase()}.`}
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Matches shown" value={all.length} />
           <StatTile
-            label="Awaiting result"
+            label={canEdit ? "Awaiting result" : "Still to play"}
             value={pendingCount}
-            tone={pendingCount ? "warn" : "normal"}
+            tone={canEdit && pendingCount ? "warn" : "normal"}
           />
           <StatTile label="On court" value={liveCount} />
           <StatTile label="Completed" value={doneCount} tone="good" />
@@ -475,14 +479,16 @@ function MatchesPage() {
           </div>
         </Panel>
 
-        <Tabs defaultValue="group">
+        {/*
+          The stage that opens is the one with matches in it. A tournament past its group stage
+          has nothing under "Group stage", and opening on that empty tab sent every reader to a
+          page that said "No group matches yet" about a tournament that was already in its
+          knockouts. A choice the reader makes wins from then on.
+        */}
+        <Tabs value={stage ?? (groupCount === 0 && knockoutCount > 0 ? "knockout" : "group")} onValueChange={setStage}>
           <TabsList>
-            <TabsTrigger value="group">
-              Group stage ({visiblePool.length + visiblePlacement.length})
-            </TabsTrigger>
-            <TabsTrigger value="knockout">
-              Knockout ({visibleDraw.length + visibleTier.length})
-            </TabsTrigger>
+            <TabsTrigger value="group">Group stage ({groupCount})</TabsTrigger>
+            <TabsTrigger value="knockout">Knockout ({knockoutCount})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="group" className="mt-4 space-y-4">

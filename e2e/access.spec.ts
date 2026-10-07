@@ -165,7 +165,7 @@ test.describe("a viewer", () => {
     // search box is local filtering rather than a change to the tournament, so it stays.
     await page.goto(routes.scores, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
-    await expect(page.getByRole("heading", { name: "Score entry", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Scores", level: 1 })).toBeVisible();
     await expect(page.getByRole("button", { name: /^open$/i })).toHaveCount(0);
     await expect(page.getByPlaceholder(/search a player or pair/i)).toBeVisible();
   });
