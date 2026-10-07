@@ -1782,3 +1782,58 @@ describe("walk-in predicate migration", () => {
     expect(executable).not.toMatch(/raise warning/i);
   });
 });
+
+/**
+ * Explore at scale.
+ *
+ * Two public reads, granted to `anon`. What these assert is the shape that keeps a public,
+ * pageable read safe and correct: the implicit PUBLIC grant is closed and re-issued to the two
+ * roles that call it, every free argument is a closed vocabulary that raises, the page size is
+ * clamped, the order is total so pages add up, and the existing summary read is left alone.
+ */
+describe("explore tournaments migration", () => {
+  const FILE = "20261007000000_explore_tournaments.sql";
+  const sql = readFileSync(join(__dirname, "../../../supabase/migrations", FILE), "utf8");
+  const executable = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+
+  it("closes the implicit PUBLIC grant and re-issues it to anon and authenticated", () => {
+    for (const signature of [
+      "explore_tournaments\\(text, text, boolean, text, text, int, int\\)",
+      "explore_tournament_counts\\(text, boolean, text\\)",
+    ]) {
+      expect(executable).toMatch(
+        new RegExp(`REVOKE ALL ON FUNCTION public\\.${signature}\\s+FROM anon, PUBLIC`),
+      );
+      expect(executable).toMatch(
+        new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${signature}\\s+TO anon, authenticated`),
+      );
+    }
+  });
+
+  it("is a definer read that pins its search path", () => {
+    expect(executable.match(/SECURITY DEFINER/g)).toHaveLength(2);
+    expect(executable.match(/SET search_path = public/g)).toHaveLength(2);
+  });
+
+  it("refuses a word outside each closed vocabulary", () => {
+    expect(executable).toMatch(/Unknown status filter/);
+    expect(executable).toMatch(/Unknown sort/);
+    expect(executable.match(/Unknown range/g)).toHaveLength(2);
+  });
+
+  it("clamps the page size and ends the order in the id", () => {
+    expect(executable).toMatch(/least\(greatest\(coalesce\(p_limit, 12\), 1\), 50\)/);
+    expect(executable).toMatch(/f\.t_created DESC,\s+f\.t_id\s+LIMIT/);
+  });
+
+  it("takes the size of the whole result in the same statement as the page", () => {
+    expect(executable).toMatch(/\(count\(\*\) OVER \(\)\)::int/);
+  });
+
+  it("leaves tournament_summary alone", () => {
+    expect(executable).not.toMatch(/FUNCTION public\.tournament_summary/);
+  });
+});

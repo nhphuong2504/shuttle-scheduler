@@ -2471,3 +2471,51 @@ drop function public.can_add_walk_in_player();
 
 A rollback through the repository's own history is the restore path, as usual — see
 [`docs/recovery-runbook.md`](../../docs/recovery-runbook.md).
+
+## Applying `20261007000000_explore_tournaments.sql`
+
+Adds the two reads behind the paged, filtered Explore page. It is **purely additive**: two new
+functions, no table or column touched, and `tournament_summary` is left exactly as it was, so
+My Tournaments and the create flow are unaffected.
+
+**Apply this before deploying the page that calls it.** Explore reads these functions; a
+build that ships first shows "Couldn't load tournaments" until the migration is on the project.
+
+### What it adds
+
+| Function | Purpose |
+| --- | --- |
+| `explore_tournaments(p_query, p_status, p_registration_open, p_range, p_sort, p_limit, p_offset)` | One page of cards, with `total_count`, the size of the whole result, taken in the same statement. |
+| `explore_tournament_counts(p_query, p_registration_open, p_range)` | How many match per status, always all three, for the filter buttons. |
+
+Both are granted to `anon` and `authenticated`, and the implicit `PUBLIC` grant is closed.
+`p_status`, `p_range` (`week` | `month` | `quarter`) and `p_sort` (`soonest` | `newest` |
+`entries` | `name`) are checked against that list and raise on anything else. The page size is
+clamped to 50, and every ordering ends in the tournament id so a page boundary never repeats or
+skips a row.
+
+### Verify after applying
+
+```sql
+-- the grants: both callable by anon, neither by PUBLIC
+SELECT p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can
+FROM pg_proc p WHERE p.proname IN ('explore_tournaments', 'explore_tournament_counts');
+
+-- a page, and the size of the whole result
+SELECT name, status, total_count FROM public.explore_tournaments(p_limit => 3);
+
+-- the counts, always three rows
+SELECT * FROM public.explore_tournament_counts();
+
+-- an unknown word is refused rather than answered
+SELECT * FROM public.explore_tournaments(p_sort => 'random');  -- Unknown sort: random
+```
+
+Then regenerate `src/integrations/supabase/types.ts` (the two entries in this change were
+written by hand to match) and run `npm run test:integration` against the local stack.
+
+### Rolling back
+
+`DROP FUNCTION public.explore_tournaments(text, text, boolean, text, text, int, int);` and
+`DROP FUNCTION public.explore_tournament_counts(text, boolean, text);`. Nothing else depends on
+them but the Explore page.

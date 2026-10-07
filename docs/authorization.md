@@ -133,7 +133,7 @@ from `anon` and `authenticated`:
 - `link_profile()` / `unlink_profile()` — the `auth.users` trigger bodies.
 
 The data-carrying reads the pages call — `tournament_summary(...)`,
-`tournament_registration_state(uuid)`, `tournament_readiness(uuid)`,
+`explore_tournaments(...)`, `explore_tournament_counts(...)`, `tournament_registration_state(uuid)`, `tournament_readiness(uuid)`,
 `tournament_access(uuid)`, `my_tournament_registration(uuid)`,
 `review_tournament_registrations(uuid)` — are the opposite case: they exist to be called, and
 each closes its implicit `PUBLIC` grant and re-grants explicitly to the roles that need it
@@ -307,7 +307,8 @@ These are not omissions:
   window-and-lifecycle rule of its own (Section 6) rather than one of the three above.
 - `withdraw_tournament_registration` — the caller deleting their own unanswered request.
   Allowed in any state, because it destroys no competition data.
-- Read and inspection paths: `tournament_summary(...)`, `tournament_registration_state(uuid)`,
+- Read and inspection paths: `tournament_summary(...)`, `explore_tournaments(...)`,
+  `explore_tournament_counts(...)`, `tournament_registration_state(uuid)`,
   `tournament_readiness(uuid)`, `my_tournament_registration(uuid)`,
   `review_tournament_registrations(uuid)`, `list_tournament_editors(uuid)`,
   `tournament_starts_at` / `tournament_ends_at`, `placement_occupied_matches`,

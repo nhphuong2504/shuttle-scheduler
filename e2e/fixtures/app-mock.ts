@@ -523,6 +523,57 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
       return;
     }
     /**
+     * Explore's paged read and its counts.
+     *
+     * Built on the same derived summary the card read serves, so the two cannot describe a
+     * tournament differently. The fixture holds one tournament, so what these can show is
+     * the *filtering* - search, status, registration, date window - and the shape of the
+     * answer (`total_count` beside the rows, a count for every status); the ordering of many
+     * rows and the refusal of an unknown word belong to the integration suite, where the real
+     * function answers.
+     */
+    if (target === "rpc/explore_tournaments" || target === "rpc/explore_tournament_counts") {
+      type ExploreArgs = MockSummaryArgs & {
+        p_registration_open?: boolean | null;
+        p_range?: string | null;
+        p_limit?: number | null;
+        p_offset?: number | null;
+      };
+      const args = (route.request().postDataJSON() ?? {}) as ExploreArgs;
+      const counting = target === "rpc/explore_tournament_counts";
+      let rows = fixture.tournamentSummaries({
+        p_query: args.p_query ?? null,
+        p_status: counting ? null : (args.p_status ?? null),
+      });
+      if (args.p_registration_open) rows = rows.filter((row) => row.registration_state === "open");
+      const days: Record<string, number> = { week: 7, month: 31, quarter: 92 };
+      const span = args.p_range ? days[args.p_range] : undefined;
+      if (span !== undefined) {
+        const now = Date.now();
+        rows = rows.filter(
+          (row) =>
+            row.starts_at !== null &&
+            Date.parse(row.starts_at) <= now + span * 86_400_000 &&
+            Date.parse(row.ends_at ?? row.starts_at) >= now,
+        );
+      }
+      if (counting) {
+        await rpc(
+          ["in_progress", "upcoming", "completed"].map((status) => ({
+            status,
+            total: rows.filter((row) => row.status === status).length,
+          })),
+        );
+        return;
+      }
+      const offset = Math.max(args.p_offset ?? 0, 0);
+      const limit = Math.min(Math.max(args.p_limit ?? 12, 1), 50);
+      await rpc(
+        rows.slice(offset, offset + limit).map((row) => ({ ...row, total_count: rows.length })),
+      );
+      return;
+    }
+    /**
      * Who may edit the fixture tournament, projected the way the RPC projects it.
      *
      * It used to answer `[]` unconditionally, and that was not a neutral default: the

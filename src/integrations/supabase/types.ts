@@ -1547,6 +1547,41 @@ export type Database = {
         Args: { p_tournament_id: string }
         Returns: undefined
       }
+      explore_tournament_counts: {
+        Args: {
+          p_query?: string
+          p_range?: string
+          p_registration_open?: boolean
+        }
+        Returns: {
+          status: string
+          total: number
+        }[]
+      }
+      explore_tournaments: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_range?: string
+          p_registration_open?: boolean
+          p_sort?: string
+          p_status?: string
+        }
+        Returns: {
+          access_level: string
+          category_count: number
+          ends_at: string
+          entry_count: number
+          id: string
+          name: string
+          registration_state: string
+          starts_at: string
+          status: string
+          total_count: number
+          venue_name: string
+        }[]
+      }
       is_platform_admin: { Args: never; Returns: boolean }
       is_tournament_editor: {
         Args: { p_tournament_id: string }

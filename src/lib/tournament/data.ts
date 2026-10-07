@@ -1,4 +1,9 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
@@ -422,7 +427,28 @@ export async function fetchTournamentSummaries(
 
   const { data, error } = await supabase.rpc("tournament_summary", args);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map(toTournamentSummary);
+}
+
+/**
+ * One summary row, with the vocabularies narrowed.
+ *
+ * Shared by every read that returns the card shape - `tournament_summary` and
+ * `explore_tournaments` - so a card cannot be built from the same fields two different ways.
+ */
+function toTournamentSummary(row: {
+  id: string;
+  name: string;
+  venue_name: string | null;
+  status: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  registration_state: string;
+  entry_count: number | null;
+  category_count: number | null;
+  access_level: string;
+}): TournamentSummary {
+  return {
     id: row.id,
     name: row.name,
     venue_name: row.venue_name,
@@ -438,7 +464,68 @@ export async function fetchTournamentSummaries(
       row.access_level === "editor"
         ? row.access_level
         : "viewer",
-  }));
+  };
+}
+
+/** The date windows Explore offers, as `explore_tournaments` spells them. */
+export const EXPLORE_RANGES = ["week", "month", "quarter"] as const;
+export type ExploreRange = (typeof EXPLORE_RANGES)[number];
+
+/** The orders Explore offers, as `explore_tournaments` spells them. */
+export const EXPLORE_SORTS = ["soonest", "newest", "entries", "name"] as const;
+export type ExploreSort = (typeof EXPLORE_SORTS)[number];
+
+/** What narrows the list, apart from the status, which each section asks for itself. */
+export interface ExploreFilters {
+  query?: string | null;
+  registrationOpen?: boolean;
+  range?: ExploreRange | null;
+  sort?: ExploreSort;
+}
+
+/** One page of the list and the size of the whole result it was cut from. */
+export interface ExplorePage {
+  rows: TournamentSummary[];
+  total: number;
+}
+
+export async function fetchExplorePage(
+  params: ExploreFilters & { status?: TournamentStatus | null; limit: number; offset: number },
+): Promise<ExplorePage> {
+  // Every filter is omitted rather than sent as null, for the reason fetchTournamentSummaries
+  // gives: an absent argument takes the function's default, and cannot be mistaken for a
+  // filter whose value is null.
+  const args: Database["public"]["Functions"]["explore_tournaments"]["Args"] = {
+    p_limit: params.limit,
+    p_offset: params.offset,
+  };
+  const query = params.query?.trim();
+  if (query) args.p_query = query;
+  if (params.status) args.p_status = params.status;
+  if (params.registrationOpen) args.p_registration_open = true;
+  if (params.range) args.p_range = params.range;
+  if (params.sort) args.p_sort = params.sort;
+
+  const { data, error } = await supabase.rpc("explore_tournaments", args);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  return { rows: rows.map(toTournamentSummary), total: rows[0]?.total_count ?? 0 };
+}
+
+export async function fetchExploreCounts(
+  filters: ExploreFilters,
+): Promise<Record<TournamentStatus, number>> {
+  const args: Database["public"]["Functions"]["explore_tournament_counts"]["Args"] = {};
+  const query = filters.query?.trim();
+  if (query) args.p_query = query;
+  if (filters.registrationOpen) args.p_registration_open = true;
+  if (filters.range) args.p_range = filters.range;
+
+  const { data, error } = await supabase.rpc("explore_tournament_counts", args);
+  if (error) throw new Error(error.message);
+  const counts: Record<TournamentStatus, number> = { upcoming: 0, in_progress: 0, completed: 0 };
+  for (const row of data ?? []) counts[normalizeTournamentStatus(row.status)] = row.total;
+  return counts;
 }
 
 /**
@@ -528,6 +615,86 @@ export function useExploreTournaments(params: {
     // Keeps the previous page's rows on screen while the next answer arrives, which is
     // what stops the card grid blinking its way through every keystroke.
     placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * One status group of Explore, a page at a time.
+ *
+ * Each group is its own read - the page asks for live, upcoming and completed separately -
+ * so a group pages on its own and a long list of finished tournaments cannot push a live one
+ * out of sight. `loadMore` fetches the next `pageSize` rows; the rows already shown stay
+ * where they are, and `total` is what the database says the whole group holds.
+ *
+ * `enabled` lets the page leave a group unread when a status filter has already chosen
+ * another one.
+ */
+export function useExploreSection(
+  status: TournamentStatus,
+  filters: ExploreFilters,
+  pageSize: number,
+  enabled = true,
+) {
+  const query = filters.query?.trim() ?? "";
+  const registrationOpen = filters.registrationOpen ?? false;
+  const range = filters.range ?? null;
+  const sort = filters.sort ?? "soonest";
+
+  const result = useInfiniteQuery({
+    queryKey: [
+      ...keys.tournamentSummaries,
+      "explore-section",
+      status,
+      query,
+      registrationOpen,
+      range,
+      sort,
+      pageSize,
+    ],
+    enabled,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchExplorePage({
+        status,
+        query,
+        registrationOpen,
+        range,
+        sort,
+        limit: pageSize,
+        offset: pageParam,
+      }),
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.rows.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    // The previous answer stays on screen while a new filter loads, for the reason
+    // useExploreTournaments gives.
+    placeholderData: keepPreviousData,
+  });
+
+  const rows = useMemo(() => result.data?.pages.flatMap((page) => page.rows) ?? [], [result.data]);
+  return {
+    rows,
+    total: result.data?.pages[0]?.total ?? 0,
+    isLoading: result.isLoading,
+    isError: result.isError,
+    error: result.error,
+    hasMore: !!result.hasNextPage,
+    isLoadingMore: result.isFetchingNextPage,
+    loadMore: () => void result.fetchNextPage(),
+    refetch: () => void result.refetch(),
+  };
+}
+
+/** How many tournaments each status filter would show, for the numbers on its buttons. */
+export function useExploreCounts(filters: ExploreFilters) {
+  const query = filters.query?.trim() ?? "";
+  const registrationOpen = filters.registrationOpen ?? false;
+  const range = filters.range ?? null;
+  return useQuery({
+    queryKey: [...keys.tournamentSummaries, "explore-counts", query, registrationOpen, range],
+    queryFn: () => fetchExploreCounts({ query, registrationOpen, range }),
+    placeholderData: keepPreviousData,
   });
 }
 
