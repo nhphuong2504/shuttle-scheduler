@@ -223,11 +223,15 @@ function SessionBlock() {
   const { session, signedIn, systemRole } = useSession();
   const navigate = useNavigate();
   const href = useLocation({ select: (location) => location.href });
+  // The sign-in page's own form holds the one primary action, so the header's door to it
+  // is quiet there.
+  const onSignInPage = useLocation({ select: (location) => location.pathname === "/auth" });
 
   if (!signedIn) {
     return (
       <Button
         size="sm"
+        variant={onSignInPage ? "outline" : "default"}
         onClick={() => navigate({ to: "/auth", search: signInSearch(href) })}
       >
         Sign in

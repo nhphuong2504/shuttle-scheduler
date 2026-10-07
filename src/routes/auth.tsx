@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, AtSign, Info, Lock } from "lucide-react";
+import { ArrowRight, Info, Lock, Mail } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -152,7 +152,9 @@ function AuthPage() {
   };
 
   const fieldClass = (hasProblem: boolean) =>
-    hasProblem ? "h-12 border-2 border-danger-foreground text-base" : "h-12 text-base";
+    hasProblem
+      ? "h-12 rounded-[10px] border-2 border-danger-foreground"
+      : "h-12 rounded-[10px]";
 
   return (
     <PublicShell
@@ -164,7 +166,7 @@ function AuthPage() {
       }
     >
       <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:gap-10">
-        <aside className="flex flex-col gap-6 rounded-2xl border border-hairline bg-surface p-6 shadow-panel sm:p-8">
+        <aside className="flex flex-col justify-between gap-6 rounded-2xl border border-hairline bg-surface p-6 shadow-sm sm:p-8">
           {search.redirect ? (
             <p className="inline-flex self-start rounded-full bg-info-surface px-3.5 py-1.5 text-sm font-semibold text-info-foreground">
               {search.intent ? signInIntentText(search.intent) : "You'll go back to the page you were on."}
@@ -173,11 +175,11 @@ function AuthPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="font-display text-2xl font-bold">What an account is for</h2>
-              <p className="mt-1 text-base text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 One account, three ways to take part.
               </p>
             </div>
-            <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold text-muted-foreground ring-1 ring-inset ring-hairline">
+            <span className="whitespace-nowrap rounded-full border border-info-border bg-info-surface px-3 py-1 text-sm font-semibold text-info-foreground">
               Open sign-up
             </span>
           </div>
@@ -186,16 +188,19 @@ function AuthPage() {
               {
                 title: "Register for a tournament",
                 tag: "Players",
+                tone: "border-emerald-200/80 bg-emerald-50 text-emerald-700",
                 text: "Send your entry and follow the decision on your request.",
               },
               {
                 title: "Run your own tournament",
                 tag: "Organisers",
+                tone: "border-violet-200/80 bg-violet-50 text-violet-700",
                 text: "Set up events, build the schedule and add editors to help.",
               },
               {
                 title: "Work a court",
                 tag: "Court staff",
+                tone: "border-amber-200/80 bg-amber-50 text-amber-700",
                 text: "Start matches and enter scores once an organiser adds you as an editor.",
               },
             ].map((item, index) => (
@@ -205,24 +210,26 @@ function AuthPage() {
               >
                 <span
                   aria-hidden="true"
-                  className="grid size-9 shrink-0 place-items-center rounded-lg bg-info-surface font-score text-base font-bold text-info-foreground"
+                  className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-info-surface font-display text-base font-bold tabular-nums text-info-foreground"
                 >
                   {index + 1}
                 </span>
-                <div className="min-w-0 space-y-1">
-                  <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                    <strong className="text-base">{item.title}</strong>
-                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground ring-1 ring-inset ring-hairline">
+                <div className="min-w-0 flex-1">
+                  <p className="mb-1 flex flex-wrap items-center gap-2">
+                    <strong className="text-sm font-semibold">{item.title}</strong>
+                    <span
+                      className={`rounded-full border px-2.5 py-0.5 text-sm font-medium ${item.tone}`}
+                    >
                       {item.tag}
                     </span>
                   </p>
-                  <p className="text-base text-muted-foreground">{item.text}</p>
+                  <p className="text-sm text-muted-foreground">{item.text}</p>
                 </div>
               </li>
             ))}
           </ol>
-          <p className="mt-auto flex items-start gap-2.5 border-t border-hairline pt-5 text-base text-muted-foreground">
-            <Info aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <p className="flex items-center gap-2 border-t border-hairline pt-4 text-sm text-muted-foreground">
+            <Info aria-hidden="true" className="size-[18px] shrink-0" />
             Anyone can create an account. Helping run somebody else's tournament needs its owner to
             add you.
           </p>
@@ -230,7 +237,7 @@ function AuthPage() {
 
         <section
           aria-label={signingIn ? "Sign in" : "Create account"}
-          className="rounded-2xl border border-hairline bg-surface p-6 shadow-panel sm:p-8"
+          className="flex flex-col rounded-2xl border border-hairline bg-surface p-6 shadow-sm sm:p-8"
         >
           {confirmEmail ? (
             <div role="status" className="space-y-3">
@@ -249,7 +256,7 @@ function AuthPage() {
               <div
                 role="group"
                 aria-label="Sign in or create an account"
-                className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"
+                className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1"
               >
                 {(
                   [
@@ -264,8 +271,8 @@ function AuthPage() {
                     onClick={() => switchMode(option.value)}
                     className={
                       mode === option.value
-                        ? "min-h-11 rounded-lg bg-surface text-base font-bold text-foreground ring-1 ring-border-selected"
-                        : "min-h-11 rounded-lg text-base font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                        ? "h-11 rounded-lg border border-border-control bg-surface text-sm font-bold text-foreground"
+                        : "h-11 rounded-lg text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
                     }
                   >
                     {option.label}
@@ -273,18 +280,18 @@ function AuthPage() {
                 ))}
               </div>
 
-              <div className="mt-6">
+              <div className="mb-6">
                 <h2 className="font-display text-2xl font-bold">
                   {signingIn ? "Welcome back" : "Get started"}
                 </h2>
-                <p className="mt-1 text-base text-muted-foreground">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {signingIn
                     ? "Sign in with your email and password."
                     : "Choose an email and a password. That's all it takes."}
                 </p>
               </div>
 
-              <form onSubmit={(event) => void submit(event)} noValidate className="mt-5 space-y-4">
+              <form onSubmit={(event) => void submit(event)} noValidate className="mb-6 space-y-4">
                 {problem ? (
                   <div
                     role="alert"
@@ -297,9 +304,9 @@ function AuthPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
-                  <AtSign
+                  <Mail
                     aria-hidden="true"
-                    className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+                    className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground"
                   />
                   <Input
                     id="email"
@@ -326,11 +333,12 @@ function AuthPage() {
                   <div className="relative">
                     <Lock
                       aria-hidden="true"
-                      className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+                      className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground"
                     />
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
                       autoComplete={signingIn ? "current-password" : "new-password"}
                       value={password}
                       disabled={busy}
@@ -361,7 +369,7 @@ function AuthPage() {
                   )}
                 </div>
   
-                <Button type="submit" disabled={busy} className="h-12 w-full text-base font-semibold">
+                <Button type="submit" disabled={busy} className="mt-2 h-12 w-full gap-2 rounded-[10px] text-base font-semibold">
                   {busy ? (
                     signingIn ? (
                       "Signing in…"
@@ -371,13 +379,13 @@ function AuthPage() {
                   ) : (
                     <>
                       {signingIn ? "Sign in" : "Create account"}
-                      <ArrowRight aria-hidden="true" className="ml-2 size-5" />
+                      <ArrowRight aria-hidden="true" className="size-[18px]" />
                     </>
                   )}
                 </Button>
               </form>
   
-              <p className="mt-6 border-t border-hairline pt-5 text-sm text-muted-foreground">
+              <p className="mt-auto border-t border-hairline pt-4 text-sm text-muted-foreground">
                 Just want to look around?{" "}
                 <Link to="/explore" className="font-semibold text-primary-ink underline">
                   Browse tournaments
