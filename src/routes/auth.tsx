@@ -188,19 +188,16 @@ function AuthPage() {
               {
                 title: "Register for a tournament",
                 tag: "Players",
-                tone: "border-emerald-200/80 bg-emerald-50 text-emerald-700",
                 text: "Send your entry and follow the decision on your request.",
               },
               {
                 title: "Run your own tournament",
                 tag: "Organisers",
-                tone: "border-violet-200/80 bg-violet-50 text-violet-700",
                 text: "Set up events, build the schedule and add editors to help.",
               },
               {
                 title: "Work a court",
                 tag: "Court staff",
-                tone: "border-amber-200/80 bg-amber-50 text-amber-700",
                 text: "Start matches and enter scores once an organiser adds you as an editor.",
               },
             ].map((item, index) => (
@@ -218,7 +215,7 @@ function AuthPage() {
                   <p className="mb-1 flex flex-wrap items-center gap-2">
                     <strong className="text-sm font-semibold">{item.title}</strong>
                     <span
-                      className={`rounded-full border px-2.5 py-0.5 text-sm font-medium ${item.tone}`}
+                      className="rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground ring-1 ring-inset ring-hairline"
                     >
                       {item.tag}
                     </span>

@@ -178,16 +178,44 @@ const NAV_ACTIVE_CLASS =
 const NAV_BADGE_CLASS =
   "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full border border-warn-border bg-warn-surface px-1 font-score text-t4 leading-tight text-warn-foreground";
 
+/**
+ * The foot of every page, in both shells.
+ *
+ * It carries only what exists: the name, the year, and the one public door. Privacy, terms
+ * and support links are left out until those pages do, because a link to nothing is worse
+ * than no link. The door is worded "Find a tournament" rather than repeating the header's
+ * "Browse tournaments", so a page never offers two links with the same name.
+ */
+function SiteFooter() {
+  return (
+    <footer className="mt-auto border-t border-hairline bg-background">
+      <div className="mx-auto flex max-w-[1400px] flex-col items-start justify-between gap-3 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-display text-base font-bold text-foreground">Tournova</span>
+          <span>© {new Date().getFullYear()} Tournova. All rights reserved.</span>
+        </p>
+        <Link
+          to="/explore"
+          className="inline-flex min-h-11 items-center rounded-lg font-semibold transition-colors hover:text-foreground"
+        >
+          Find a tournament
+        </Link>
+      </div>
+    </footer>
+  );
+}
+
 /** The mark, shared by both shells so the two headers cannot drift apart. */
 function BrandMark() {
   return (
     <>
-      <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-t2 font-bold text-primary-foreground shadow-panel">
+      <span
+        aria-hidden="true"
+        className="grid size-8 place-items-center rounded-[10px] bg-primary font-display text-lg font-bold leading-none text-primary-foreground"
+      >
         T
       </span>
-      <span className="font-display text-sm font-bold tracking-tight text-primary">
-        TOURNOVA<span className="text-muted-foreground"> / ops</span>
-      </span>
+      <span className="font-display text-lg font-bold tracking-tight text-foreground">Tournova</span>
     </>
   );
 }
@@ -223,15 +251,12 @@ function SessionBlock() {
   const { session, signedIn, systemRole } = useSession();
   const navigate = useNavigate();
   const href = useLocation({ select: (location) => location.href });
-  // The sign-in page's own form holds the one primary action, so the header's door to it
-  // is quiet there.
-  const onSignInPage = useLocation({ select: (location) => location.pathname === "/auth" });
-
   if (!signedIn) {
     return (
       <Button
         size="sm"
-        variant={onSignInPage ? "outline" : "default"}
+        variant="outline"
+        className="h-11 px-4 text-sm"
         onClick={() => navigate({ to: "/auth", search: signInSearch(href) })}
       >
         Sign in
@@ -584,8 +609,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const pendingRegistrations = registrationQueue.data?.pending.length ?? 0;
 
   return (
-    <div className="min-h-screen bg-background font-body text-foreground">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
+    <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
+      <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 pt-2.5">
           {/*
             The brand goes to the tournament you are looking at, never to `/`. It used to
@@ -685,10 +710,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto min-h-[calc(100vh-5.5rem)] max-w-[1400px] px-4 py-6">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
         {readOnly ? <ReadOnlyNotice signedIn={signedIn} /> : null}
         {children}
       </main>
+      <SiteFooter />
     </div>
   );
 }
@@ -713,12 +739,13 @@ export function PublicShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background font-body text-foreground">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
+    <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
+      <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2.5">
             <BrandMark />
           </Link>
+          <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
           <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
             {PUBLIC_SECTIONS.map((item) => (
               <Link
@@ -737,10 +764,11 @@ export function PublicShell({
         </div>
       </header>
 
-      <main className="mx-auto min-h-[calc(100vh-3.5rem)] max-w-[1400px] px-4 py-6">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
         <PageHeader title={title} subtitle={subtitle} actions={actions} />
         {children}
       </main>
+      <SiteFooter />
     </div>
   );
 }
