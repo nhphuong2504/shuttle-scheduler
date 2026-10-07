@@ -6,6 +6,7 @@ import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { useTournamentSummary } from "@/lib/tournament/data";
+import { isReminderPhase, phaseLabel, tournamentPhase, type TournamentPhase } from "@/lib/tournament/phase";
 import { shortDays } from "@/lib/tournament/summary-format";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -330,8 +331,38 @@ function SessionBlock() {
  * Exported because Explore and My Tournaments draw the same pill: it is the tournament's
  * identity, not the workspace header's private drawing of it.
  */
-export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
-  const label = tournamentStatusLabel(status);
+export function TournamentStatusPill({
+  status,
+  phase,
+}: {
+  status: TournamentStatus;
+  /**
+   * The status read against the clock (see `tournamentPhase`). Given, it names the phase and
+   * draws the two late ones as reminders: amber, with a "!" so they survive grayscale.
+   */
+  phase?: TournamentPhase | undefined;
+}) {
+  const label = phase ? phaseLabel(phase) : tournamentStatusLabel(status);
+
+  if (phase && isReminderPhase(phase)) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warn-surface px-2 py-0.5 font-score text-sm uppercase tracking-wide text-warn-foreground ring-1 ring-inset ring-warn-border">
+        <span aria-hidden="true" className="font-extrabold">
+          !
+        </span>
+        {label}
+      </span>
+    );
+  }
+
+  if (phase === "starts_today") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-score text-sm uppercase tracking-wide text-primary-foreground ring-1 ring-inset ring-primary">
+        {STATE_GLYPH["scheduled"]}
+        {label}
+      </span>
+    );
+  }
 
   if (status === "completed") {
     return (
@@ -706,7 +737,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
               {tournament?.name ?? "Loading…"}
             </p>
             {tournament ? (
-              <TournamentStatusPill status={normalizeTournamentStatus(tournament.status)} />
+              <TournamentStatusPill
+                status={normalizeTournamentStatus(tournament.status)}
+                phase={summary ? tournamentPhase(summary) : undefined}
+              />
             ) : null}
           </div>
           {meta ? <p className="mt-1 break-words text-sm text-muted-foreground">{meta}</p> : null}

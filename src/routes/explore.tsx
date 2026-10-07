@@ -4,6 +4,7 @@ import { Check, X } from "lucide-react";
 import { PublicShell } from "@/components/app-shell";
 import { ExploreCard } from "@/components/explore-card";
 import { CompletedList, ExploreRow, groupByMonth } from "@/components/explore-rows";
+import { tournamentPhase } from "@/lib/tournament/phase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -175,6 +176,26 @@ function ExplorePage() {
   const live = useExploreSection("in_progress", filters, LIVE_LIMIT, wants("in_progress"));
   const upcoming = useExploreSection("upcoming", filters, PAGE_SIZE, wants("upcoming"));
   const completed = useExploreSection("completed", filters, PAGE_SIZE, wants("completed"));
+
+  /**
+   * The stored status read against the clock, so the page does not say "In progress" or
+   * "Upcoming" about something that has quietly stopped being either. Three reads still page
+   * on their own; this only decides where a loaded row is drawn. A tournament past its last
+   * day is waiting for its host to complete it, so it leaves the live strip for a section of
+   * its own above Completed; one that should have started but has not leaves the Upcoming
+   * list, where it would sit at the top for being the oldest date.
+   */
+  const now = new Date();
+  const liveRows = live.rows.filter((row) => tournamentPhase(row, now) !== "past_last_day");
+  const lingering = live.rows.filter((row) => tournamentPhase(row, now) === "past_last_day");
+  const delayed = upcoming.rows.filter((row) => tournamentPhase(row, now) === "not_started");
+  const upcomingRows = [
+    ...upcoming.rows.filter((row) => tournamentPhase(row, now) === "starts_today"),
+    ...upcoming.rows.filter((row) => {
+      const phase = tournamentPhase(row, now);
+      return phase !== "starts_today" && phase !== "not_started";
+    }),
+  ];
   const counts = useExploreCounts(filters);
 
   const sections = [
@@ -467,7 +488,7 @@ function ExplorePage() {
             {total} tournament{total === 1 ? "" : "s"}
           </p>
 
-          {live.rows.length > 0 ? (
+          {liveRows.length > 0 ? (
             <section aria-labelledby="explore-live">
               <h2
                 id="explore-live"
@@ -479,11 +500,11 @@ function ExplorePage() {
                 />
                 In progress
                 <span className="font-body text-base font-medium text-muted-foreground tabular-nums">
-                  {live.total}
+                  {Math.max(live.total - lingering.length, liveRows.length)}
                 </span>
               </h2>
               <ul className="grid gap-4 sm:grid-cols-2">
-                {live.rows.map((summary) => (
+                {liveRows.map((summary) => (
                   <li key={summary.id} className="min-w-0">
                     <ExploreCard summary={summary} signedIn={signedIn} variant="live" />
                   </li>
@@ -492,17 +513,17 @@ function ExplorePage() {
             </section>
           ) : null}
 
-          {upcoming.rows.length > 0 ? (
+          {upcomingRows.length > 0 ? (
             <section aria-labelledby="explore-upcoming">
               <h2 id="explore-upcoming" className="mb-4 font-display text-xl font-bold">
                 Upcoming{" "}
                 <span className="font-body text-base font-medium text-muted-foreground tabular-nums">
-                  {upcoming.total}
+                  {Math.max(upcoming.total - delayed.length, upcomingRows.length)}
                 </span>
               </h2>
               {layout === "cards" ? (
                 <ul className="grid gap-4 sm:grid-cols-2">
-                  {upcoming.rows.map((summary) => (
+                  {upcomingRows.map((summary) => (
                     <li key={summary.id} className="min-w-0">
                       <ExploreCard summary={summary} signedIn={signedIn} />
                     </li>
@@ -510,7 +531,7 @@ function ExplorePage() {
                 </ul>
               ) : (
                 <div className="space-y-6">
-                  {groupByMonth(upcoming.rows).map((group) => (
+                  {groupByMonth(upcomingRows).map((group) => (
                     <div key={group.key}>
                       <h3 className="mb-2.5 text-sm font-bold uppercase tracking-wide text-muted-foreground">
                         {group.label}
@@ -527,6 +548,49 @@ function ExplorePage() {
                 </div>
               )}
               <MoreButton section={upcoming} noun="upcoming" />
+            </section>
+          ) : null}
+
+          {delayed.length > 0 ? (
+            <section aria-labelledby="explore-delayed">
+              <h2 id="explore-delayed" className="mb-1 font-display text-xl font-bold">
+                Start time has passed{" "}
+                <span className="font-body text-base font-medium text-muted-foreground tabular-nums">
+                  {delayed.length}
+                </span>
+              </h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Not running yet. Shown here so they do not sit above events that really are coming
+                up.
+              </p>
+              <ul className="space-y-2.5">
+                {delayed.map((summary) => (
+                  <li key={summary.id} className="min-w-0">
+                    <ExploreRow summary={summary} signedIn={signedIn} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {lingering.length > 0 ? (
+            <section aria-labelledby="explore-lingering">
+              <h2 id="explore-lingering" className="mb-1 font-display text-xl font-bold">
+                Awaiting final results{" "}
+                <span className="font-body text-base font-medium text-muted-foreground tabular-nums">
+                  {lingering.length}
+                </span>
+              </h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                These have played their last day. The organiser has not marked them complete yet.
+              </p>
+              <ul className="space-y-2.5">
+                {lingering.map((summary) => (
+                  <li key={summary.id} className="min-w-0">
+                    <ExploreRow summary={summary} signedIn={signedIn} />
+                  </li>
+                ))}
+              </ul>
             </section>
           ) : null}
 

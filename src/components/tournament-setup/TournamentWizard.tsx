@@ -1,8 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
@@ -40,6 +42,7 @@ import {
   completeTournament,
   createTournament,
   discardTournament,
+  fetchCompletionCheck,
   saveTournamentConfig,
   saveTournamentEvents,
   setRegistrationWindow,
@@ -146,6 +149,16 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
 
   const [form, setForm] = useState<DraftForm>(defaultForm);
   const [busy, setBusy] = useState(false);
+  /** The Complete dialog, which counts what is left to play each time it opens. */
+  const [completing, setCompleting] = useState(false);
+  const completion = useQuery({
+    queryKey: ["completion-check", tournamentId],
+    queryFn: () => fetchCompletionCheck(tournamentId as string),
+    enabled: completing && !!tournamentId,
+    // Counted fresh every time: a match may have gone on court since the page loaded.
+    staleTime: 0,
+    gcTime: 0,
+  });
   /**
    * Whether the host has pressed "continue" on this step with something missing.
    *
@@ -287,6 +300,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
     setBusy(true);
     try {
       await completeTournament(tournamentId);
+      setCompleting(false);
       await refresh();
       toast.success("Tournament completed");
     } catch (error) {
@@ -375,7 +389,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
     busy,
     status: tournamentStatus,
     onCreate: () => void create(),
-    onComplete: () => void complete(),
+    onComplete: () => setCompleting(true),
     onDiscard: () => void discard(),
     onGoToStep: configEditable ? goTo : undefined,
   };
@@ -386,6 +400,16 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
 
   return (
     <div className="wizard-flow mx-auto w-full max-w-[64rem]">
+      <CompleteDialog
+        open={completing}
+        onOpenChange={setCompleting}
+        name={draftData.tournament?.name ?? form.basics.name}
+        check={completion.data}
+        loading={completing && completion.isPending}
+        error={completion.error instanceof Error ? completion.error.message : null}
+        busy={busy}
+        onConfirm={() => void complete()}
+      />
       {configEditable ? (
         <div className="grid items-start gap-6 lg:grid-cols-[16.25rem_minmax(0,1fr)] lg:gap-10">
           {/*

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { isConfigurable } from "@/lib/auth/authorization";
 import { signInSearch } from "@/lib/routing/redirect";
+import { phaseReminder, tournamentPhase } from "@/lib/tournament/phase";
 import {
   useExploreTournaments,
   useMyTournaments,
@@ -162,8 +163,27 @@ function SignedInHome() {
         });
       }
     }
+    // The two reminders: a tournament that should have begun with no match started, and one
+    // past its last day that nobody has completed. Neither is moved by being shown here.
     for (const row of operated) {
-      if (row.status !== "in_progress") continue;
+      const phase = tournamentPhase(row);
+      const reminder = phaseReminder(phase, row.name);
+      if (!reminder) continue;
+      out.push({
+        key: `reminder-${row.id}`,
+        kind: "reminder",
+        mark: "!",
+        title: reminder,
+        role: mine.ownedIds.has(row.id) ? "You run this" : "You help run this",
+        where: [shortDays(row.starts_at, row.ends_at), row.venue_name].filter(Boolean).join(" · "),
+        action:
+          phase === "not_started"
+            ? { label: "Open the Desk", id: row.id, to: "desk" }
+            : { label: "Complete it", id: row.id, to: "settings" },
+      });
+    }
+    for (const row of operated) {
+      if (tournamentPhase(row) !== "live") continue;
       out.push({
         key: `live-${row.id}`,
         kind: "live",
@@ -278,13 +298,13 @@ function SignedInHome() {
 
 interface HomeTask {
   key: string;
-  kind: "requests" | "live";
+  kind: "requests" | "live" | "reminder";
   /** The figure drawn in the tile, for a task that is a count. */
   mark: string;
   title: string;
   role: string;
   where: string;
-  action: { label: string; id: string; to: "registrations" | "desk" };
+  action: { label: string; id: string; to: "registrations" | "desk" | "settings" };
 }
 
 /**
@@ -313,7 +333,7 @@ function Attention({ tasks }: { tasks: HomeTask[] }) {
             className="grid items-center gap-x-4 gap-y-3 rounded-xl border border-hairline bg-surface p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
           >
             <div className="flex items-start gap-4 sm:contents">
-              {task.kind === "requests" ? (
+              {task.kind === "requests" || task.kind === "reminder" ? (
                 <span
                   aria-hidden="true"
                   className="grid size-11 shrink-0 place-items-center rounded-xl bg-warn-surface font-display text-lg font-extrabold text-warn-foreground tabular-nums"
@@ -341,6 +361,14 @@ function Attention({ tasks }: { tasks: HomeTask[] }) {
             {task.action.to === "desk" ? (
               <Link
                 to="/tournaments/$tournamentId/desk"
+                params={{ tournamentId: task.action.id }}
+                className={PRIMARY}
+              >
+                {task.action.label}
+              </Link>
+            ) : task.action.to === "settings" ? (
+              <Link
+                to="/tournaments/$tournamentId/settings"
                 params={{ tournamentId: task.action.id }}
                 className={PRIMARY}
               >
@@ -417,7 +445,7 @@ function HomeCard({ summary, role }: { summary: TournamentSummary; role: "owner"
   return (
     <article className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border border-hairline bg-surface p-5 shadow-panel">
       <div className="flex">
-        <TournamentStatusPill status={status} />
+        <TournamentStatusPill status={status} phase={tournamentPhase(summary)} />
       </div>
       <h3 className="break-words font-display text-xl font-bold leading-tight">
         <Link

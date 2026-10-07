@@ -10,6 +10,7 @@ import {
   RegistrationStatePill,
   TournamentStatusPill,
 } from "@/components/app-shell";
+import { tournamentPhase } from "@/lib/tournament/phase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -184,7 +185,12 @@ function TournamentPage() {
       title={name}
       subtitle={[venue || "Venue not set", range].filter(Boolean).join(" · ")}
       actions={
-        summary ? <TournamentStatusPill status={normalizeTournamentStatus(summary.status)} /> : null
+        summary ? (
+          <TournamentStatusPill
+            status={normalizeTournamentStatus(summary.status)}
+            phase={tournamentPhase(summary)}
+          />
+        ) : null
       }
     >
       <div className="space-y-4">

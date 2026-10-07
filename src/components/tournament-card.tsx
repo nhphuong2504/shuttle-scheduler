@@ -3,6 +3,7 @@ import { type ReactNode } from "react";
 
 import { RegistrationStatePill, TournamentStatusPill } from "@/components/app-shell";
 import type { TournamentSummary } from "@/lib/tournament/data";
+import { tournamentPhase } from "@/lib/tournament/phase";
 import { countText, dateRangeText } from "@/lib/tournament/summary-format";
 
 /**
@@ -78,7 +79,7 @@ export function TournamentCard({
             {summary.name}
           </Link>
         </h2>
-        <TournamentStatusPill status={summary.status} />
+        <TournamentStatusPill status={summary.status} phase={tournamentPhase(summary)} />
       </div>
 
       {/*

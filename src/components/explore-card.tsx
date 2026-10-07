@@ -2,6 +2,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 
 import { RegistrationStatePill, TournamentStatusPill } from "@/components/app-shell";
 import { signInSearch } from "@/lib/routing/redirect";
+import { tournamentPhase } from "@/lib/tournament/phase";
 import type { TournamentSummary } from "@/lib/tournament/data";
 import { countText, dateRangeText } from "@/lib/tournament/summary-format";
 
@@ -136,7 +137,7 @@ export function ExploreCard({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        <TournamentStatusPill status={status} />
+        <TournamentStatusPill status={status} phase={tournamentPhase(summary)} />
         {/* Only the window states that tell a visitor something the status does not: "started"
           and "completed" repeat it. */}
         {["opens_soon", "open", "closed"].includes(summary.registration_state) ? (

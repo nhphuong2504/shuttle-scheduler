@@ -499,11 +499,12 @@ test.describe("the workspace header", () => {
     // Scoped to the header, because the same word appears in the setup list and in help
     // copy; a page-wide match would pass on prose rather than on the state.
     const header = page.getByRole("banner");
-    const status = header.getByText(/^In progress$/).first();
+    // Read against the clock, a running tournament inside its playing days is "Live".
+    const status = header.getByText(/^Live$/).first();
     await expect(status).toBeVisible();
     // Status is never colour alone: the pill carries a glyph and a label, and the label is
     // the display word rather than the stored `in_progress`.
-    await expect(header.locator("span", { hasText: /^In progress$/ }).first().locator("svg")).toHaveCount(1);
+    await expect(header.locator("span", { hasText: /^Live$/ }).first().locator("svg")).toHaveCount(1);
     await expect(header.getByText("in_progress")).toHaveCount(0);
   });
 
@@ -558,6 +559,9 @@ test.describe("an upcoming tournament", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
 
   test("is labelled Upcoming on its card, in both words it carries", async ({ page }) => {
+    // The fixture's playing day is today. Two days earlier it has not come yet, which is the
+    // ordinary "upcoming" case; today itself, with no match started, reads "Not started".
+    await page.clock.install({ time: new Date(Date.now() - 2 * 86_400_000) });
     await page.goto(routes.myTournaments, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
@@ -573,17 +577,28 @@ test.describe("an upcoming tournament", () => {
     // that read "Not offered" off the lifecycle, would fail here.
     await expect(row.getByText(/^Not offered$/)).toBeVisible();
   });
+
+  test("is marked Not started once its first day has begun and no match has", async ({ page }) => {
+    await page.goto(routes.myTournaments, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // A reminder, not a transition: the stored status is still upcoming, and the card says
+    // what the clock says. The mark is a word and a glyph, never a colour alone.
+    const row = page.locator("li").filter({ hasText: TOURNAMENT_NAME }).first();
+    await expect(row.getByText(/Not started/)).toBeVisible();
+    await expect(row.getByText(/^Upcoming/)).toHaveCount(0);
+  });
 });
 
 test.describe("a running tournament", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "in_progress" } });
 
-  test("is labelled In progress, not Upcoming", async ({ page }) => {
+  test("is labelled Live, not Upcoming", async ({ page }) => {
     await page.goto(routes.myTournaments, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
     const row = page.locator("li").filter({ hasText: TOURNAMENT_NAME }).first();
-    await expect(row.getByText(/^In progress/)).toBeVisible();
+    await expect(row.getByText(/^Live/)).toBeVisible();
     await expect(row.getByText(/^Upcoming/)).toHaveCount(0);
     // A started tournament is not "closed for registration": the window reads `started`,
     // which is the lifecycle's answer rather than a timestamp comparison's.

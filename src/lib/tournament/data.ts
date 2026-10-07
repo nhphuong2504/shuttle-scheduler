@@ -383,9 +383,12 @@ export interface TournamentSummary {
   name: string;
   venue_name: string | null;
   status: TournamentStatus;
-  /** Derived from the days and the venue's timezone, null while there are no days. */
+  /** The tournament window as instants: 00:00 of its first date, and 00:00 after its last. */
   starts_at: string | null;
   ends_at: string | null;
+  /** The first and last playing day as instants. Null until playing days are chosen. */
+  play_starts_at: string | null;
+  play_ends_at: string | null;
   /** The window as one word, decided by the database rather than by the browser's clock. */
   registration_state: RegistrationState;
   /** Entries (`teams`), which is the entry per I3 - never a derived projection. */
@@ -444,6 +447,8 @@ function toTournamentSummary(row: {
   status: string;
   starts_at: string | null;
   ends_at: string | null;
+  play_starts_at?: string | null;
+  play_ends_at?: string | null;
   registration_state: string;
   entry_count: number | null;
   category_count: number | null;
@@ -456,6 +461,8 @@ function toTournamentSummary(row: {
     status: normalizeTournamentStatus(row.status),
     starts_at: row.starts_at,
     ends_at: row.ends_at,
+    play_starts_at: row.play_starts_at ?? null,
+    play_ends_at: row.play_ends_at ?? null,
     registration_state: normalizeRegistrationState(row.registration_state),
     entry_count: row.entry_count ?? 0,
     category_count: row.category_count ?? 0,

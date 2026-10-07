@@ -266,6 +266,9 @@ test.describe("Explore, an upcoming tournament", () => {
   test.use({ appMock: { preset: "layout", role: null, status: "upcoming" } });
 
   test("sits in a row under its month, with a way to the cards", async ({ page }) => {
+    // The fixture's playing day is today. Two days earlier it has not come yet, which is the
+    // ordinary "upcoming" case; today itself, with no match started, reads "Not started".
+    await page.clock.install({ time: new Date(Date.now() - 2 * 86_400_000) });
     await page.goto(routes.explore, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
@@ -287,6 +290,21 @@ test.describe("Explore, an upcoming tournament", () => {
     // The default is not written down: two spellings of one layout are two addresses.
     await page.getByRole("button", { name: "Timeline" }).click();
     await expect(page).not.toHaveURL(/view=/);
+  });
+});
+
+test.describe("Explore, an upcoming tournament that should have started", () => {
+  test.use({ appMock: { preset: "layout", role: null, status: "upcoming" } });
+
+  test("moves out of Upcoming into a section of its own", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // Its first day has begun and no match has started: it would otherwise sit at the top of
+    // Upcoming for having the oldest date, above events that really are coming up.
+    await expect(page.getByRole("heading", { name: /^start time has passed/i, level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^upcoming/i, level: 2 })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: TOURNAMENT_NAME })).toBeVisible();
   });
 });
 
