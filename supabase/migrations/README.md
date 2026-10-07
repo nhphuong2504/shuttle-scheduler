@@ -2519,3 +2519,150 @@ written by hand to match) and run `npm run test:integration` against the local s
 `DROP FUNCTION public.explore_tournaments(text, text, boolean, text, text, int, int);` and
 `DROP FUNCTION public.explore_tournament_counts(text, boolean, text);`. Nothing else depends on
 them but the Explore page.
+
+
+---
+
+## Applying `20261008000000_tournament_window.sql`
+
+First of three files that make one change (the window, start-on-first-match, the registration rules); apply them in order.
+Do not apply the app build that calls the new `create_tournament` before this is in place, and do
+not apply this before the build that stops calling `start_tournament` and `save_tournament_days`
+for a new tournament: the two sides move together.
+
+### What it adds
+
+- `tournaments.starts_on` and `ends_on`, the tournament **window**: the dates the tournament
+  promises, chosen when it is created. Backfilled from the span of each tournament's existing days
+  (a tournament with no days gets the date it was created on, in UTC), then `NOT NULL` with
+  `CHECK (starts_on <= ends_on)`. They are not in the editor UPDATE grant: only `create_tournament`
+  and `update_tournament_window` write them.
+- `tournament_starts_at` / `tournament_ends_at` now read the window, not the earliest and latest
+  playing day. The start is 00:00 of `starts_on` in the venue timezone, and the end is 00:00 of the
+  day after `ends_on`.
+- Playing days (`tournament_days`) are chosen later and must lie inside the window. A trigger
+  enforces it for every writer, because an editor can write the table directly. They need not be
+  consecutive.
+- The seven-day ceiling is gone: `tournaments_day_count_check` and
+  `tournament_days_day_number_check` keep only their floor of one, and `add_tournament_day` /
+  `save_tournament_days` no longer count. `remove_tournament_day` no longer insists on one day left,
+  because a tournament may have none until the schedule is built; it still refuses a day with a
+  match on it.
+- `create_tournament(p_payload)` is the single, atomic way to create a tournament: name, window,
+  timezone and at least one event in one transaction, with an optional registration window. There is
+  no draft row.
+- `update_tournament_window(id, starts_on, ends_on)`: the last date may move later until completion;
+  the first date is locked once the tournament is in progress; refused if a playing day would fall
+  outside, or the first date would pass the registration deadline.
+- `tournament_has_schedule(id)`, and a trigger that refuses a timezone change once any match has a
+  time.
+- `tournament_readiness_checks` no longer asks about days (`days`, `day_dates` are gone), and the
+  `basics` check asks for a name only. A venue is optional.
+- `save_tournament_days` refuses once anything is scheduled.
+
+### Check before applying
+
+```sql
+-- tournaments that will get a window from their created date because they have no days:
+SELECT id, name, status, created_at FROM public.tournaments t
+WHERE NOT EXISTS (SELECT 1 FROM public.tournament_days d WHERE d.tournament_id = t.id);
+
+-- registration windows that close between 00:00 and the first day's opening on day 1: they
+-- were valid before and will be refused the next time anything rewrites them.
+SELECT t.id, t.name, t.registration_closes_at, min(d.date + d.start_time) AS first_opening
+FROM public.tournaments t JOIN public.tournament_days d ON d.tournament_id = t.id
+WHERE t.registration_closes_at IS NOT NULL
+GROUP BY t.id HAVING t.registration_closes_at::date >= min(d.date);
+```
+
+### Verify after applying
+
+```sql
+SELECT count(*) FROM public.tournaments WHERE starts_on IS NULL OR ends_on IS NULL;       -- 0
+SELECT count(*) FROM public.tournament_days d JOIN public.tournaments t ON t.id = d.tournament_id
+WHERE d.date NOT BETWEEN t.starts_on AND t.ends_on;                                        -- 0
+
+-- a day outside the window is refused for the table, not just the RPC
+INSERT INTO public.tournament_days (tournament_id, day_number, date, start_time, end_time)
+SELECT id, 99, ends_on + 1, '09:00', '18:00' FROM public.tournaments LIMIT 1;  -- is outside the tournament window
+```
+
+### Rolling back
+
+Not mechanical: dropping the window columns discards the dates tournaments were created with. If it
+must be undone, restore `tournament_starts_at` / `tournament_ends_at` from
+`20260927000000_tournova_role_redesign.sql` first, then drop the two triggers, then the columns.
+
+---
+
+## Applying `20261008010000_start_on_first_match.sql`
+
+### What it changes
+
+- `start_tournament` is dropped. A tournament becomes `in_progress` when its first match is started:
+  `start_placement_match`, `start_tier_draw_match` and `start_match_safe` accept an `upcoming`
+  tournament (from 00:00 of the window's first date in the venue timezone, never a `completed` one,
+  admin or not) and flip it in the same transaction with `mark_tournament_started`, which only ever
+  moves an `upcoming` row forward.
+- Scoring, resetting and rescheduling still require `in_progress` (`assert_tournament_live` is
+  unchanged), so the closed list of 13 callers is the list of 16 minus these three.
+- `complete_tournament` is refused while any match is on court. A shared advisory lock
+  (`lifecycle:<id>`) is taken by every match start and the exclusive lock by Complete, so a Complete
+  that saw nothing on court cannot commit after a match has started. Row locks would deadlock two
+  concurrent first matches, which is why it is an advisory lock.
+- `tournament_completion_check(id)` returns `{on_court, unplayed, total}` to an editor for the
+  Complete dialog. A read, never a gate.
+
+### Verify after applying
+
+```sql
+SELECT to_regprocedure('public.start_tournament(uuid)');   -- NULL
+SELECT has_function_privilege('authenticated', 'public.mark_tournament_started(uuid)', 'execute');  -- false
+```
+
+Then, as an editor of an upcoming tournament whose window has opened, start a scheduled match and
+confirm `status` became `in_progress`; start a second and confirm nothing else changed; complete it
+with that match still on court and confirm it is refused.
+
+### Rolling back
+
+Re-create `start_tournament` and the three start functions from
+`20260927000000_tournova_role_redesign.sql`, and `complete_tournament` without the match check.
+
+---
+
+## Applying `20261008020000_registration_window_rules.sql`
+
+### What it changes
+
+- `assert_registration_window`: the deadline must be at or before 00:00 of the window's first date,
+  so registering and playing never overlap. (The bound already read `tournament_starts_at`, which now
+  means the window; the message is the change.)
+- A trigger on the two registration columns applies to every writer, including the editor UPDATE grant
+  and `save_tournament_config`: they cannot change once the tournament has started; the opening time
+  cannot change once it has passed; and the deadline cannot be extended - or registration switched on -
+  once a schedule exists.
+- `set_registration_window(id, opens, closes)`: the one call that changes the window on its own.
+  Extending, closing early (`closes = now()`) and switching it off are all this.
+- `tournament_play_starts_at` / `tournament_play_ends_at`: the first and last playing day, which are what
+  `tournament_starts_at` / `tournament_ends_at` used to return. `tournament_summary` and
+  `explore_tournaments` gain `play_starts_at` and `play_ends_at` (NULL until playing days are chosen) so
+  the app can say "not started" and "past its last day" about the plan rather than the window. Both are
+  dropped and re-created because their return type changes; their grants to `anon` are restored.
+
+### Verify after applying
+
+```sql
+SELECT name, starts_at, play_starts_at FROM public.explore_tournaments(p_limit => 3);
+SELECT has_function_privilege('anon', 'public.explore_tournaments(text, text, boolean, text, text, int, int)', 'execute');  -- true
+SELECT has_function_privilege('anon', 'public.set_registration_window(uuid, timestamptz, timestamptz)', 'execute');         -- false
+```
+
+Then regenerate `src/integrations/supabase/types.ts` (the entries in this change were written by hand to
+match) and run `npm run test:integration` against the local stack.
+
+### Rolling back
+
+Drop the trigger and `set_registration_window`, restore `assert_registration_window` from
+`20260927000000_tournova_role_redesign.sql`, and re-create the two reads from
+`20260929001000_tournament_summary.sql` and `20261007000000_explore_tournaments.sql`.

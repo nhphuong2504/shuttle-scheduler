@@ -1837,3 +1837,310 @@ describe("explore tournaments migration", () => {
     expect(executable).not.toMatch(/FUNCTION public\.tournament_summary/);
   });
 });
+
+/** The text of one function definition: its CREATE through the closing dollar quote it opens. */
+function functionSource(source: string, name: string): string {
+  const start = source.indexOf(`FUNCTION public.${name}`);
+  expect(start, `${name} is defined`).toBeGreaterThan(-1);
+  const rest = source.slice(start);
+  const tag = rest.match(/\bAS\s+(\$[a-z_]*\$)/i)?.[1];
+  expect(tag, `${name} opens a dollar quote`).toBeTruthy();
+  const first = rest.indexOf(tag as string);
+  const second = rest.indexOf(tag as string, first + (tag as string).length);
+  return rest.slice(0, second + (tag as string).length);
+}
+
+/**
+ * The tournament window, atomic creation, start-on-first-match and the registration rules.
+ *
+ * Three migrations, asserted against their source for the reason the earlier blocks give:
+ * what they guard against is invisible at runtime. `CREATE OR REPLACE FUNCTION` restores the
+ * implicit PUBLIC grant, a guard written as an RPC check is a guard a direct table update
+ * walks around, and a lifecycle rule that quietly consults the platform role stops being a
+ * rule. Each assertion names the failure it prevents.
+ */
+describe("tournament window migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261008000000_tournament_window.sql"), "utf8");
+  const executable = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  const withoutVerify = executable.replace(/DO \$verify\$[\s\S]*?\$verify\$;/, "");
+
+  const fn = (name: string) => functionSource(withoutVerify, name);
+
+  it("adds the window nullable, backfills it, then constrains it", () => {
+    const add = withoutVerify.indexOf("ADD COLUMN IF NOT EXISTS starts_on date");
+    const fill = withoutVerify.indexOf("UPDATE public.tournaments t\nSET starts_on");
+    const notNull = withoutVerify.indexOf("ALTER COLUMN starts_on SET NOT NULL");
+    const order = withoutVerify.indexOf("CHECK (starts_on <= ends_on)");
+    expect(add).toBeGreaterThan(-1);
+    expect(fill).toBeGreaterThan(add);
+    expect(notNull).toBeGreaterThan(fill);
+    expect(order).toBeGreaterThan(notNull);
+  });
+
+  it("backfills an unrecognised timezone safely, in UTC", () => {
+    expect(withoutVerify).toMatch(/created_at AT TIME ZONE 'UTC'\)::date/);
+  });
+
+  it("keeps the window out of the editor UPDATE grant", () => {
+    // Written only by create_tournament and update_tournament_window.
+    expect(withoutVerify).not.toMatch(/GRANT UPDATE \([^)]*starts_on/i);
+  });
+
+  it("has no seven-day ceiling left in a constraint or a function", () => {
+    expect(withoutVerify).not.toMatch(/BETWEEN 1 AND 7/);
+    expect(withoutVerify).not.toMatch(/at most 7 days/);
+    expect(withoutVerify).not.toMatch(/v_total >= 7/);
+    expect(withoutVerify).toMatch(/CHECK \(day_count >= 1\)/);
+    expect(withoutVerify).toMatch(/CHECK \(day_number >= 1\)/);
+  });
+
+  it("derives the instants from the window, in the venue timezone", () => {
+    expect(fn("tournament_starts_at")).toMatch(
+      /\(t\.starts_on::timestamp\) AT TIME ZONE t\.venue_timezone/,
+    );
+    expect(fn("tournament_ends_at")).toMatch(
+      /\(\(t\.ends_on \+ 1\)::timestamp\) AT TIME ZONE t\.venue_timezone/,
+    );
+  });
+
+  it("no longer asks readiness about days, and still ignores participation", () => {
+    const checks = fn("tournament_readiness_checks");
+    expect(checks).not.toMatch(/'id', 'days'/);
+    expect(checks).not.toMatch(/'id', 'day_dates'/);
+    for (const id of ["basics", "timezone", "categories", "category_caps"]) {
+      expect(checks).toContain(`'id', '${id}'`);
+    }
+    for (const table of ["teams", "placement_entrants", "placement_matches", "tier_draws"]) {
+      expect(checks).not.toContain(table);
+    }
+  });
+
+  it("guards a playing day against the window with a trigger, so a table update cannot walk around it", () => {
+    expect(withoutVerify).toMatch(
+      /CREATE TRIGGER tournament_days_guard_window\s+BEFORE INSERT OR UPDATE OF tournament_id, date\s+ON public\.tournament_days/,
+    );
+    expect(fn("tournament_days_guard_window")).toMatch(/is outside the tournament window/);
+  });
+
+  it("locks the timezone under a schedule with a trigger", () => {
+    expect(withoutVerify).toMatch(
+      /CREATE TRIGGER tournaments_guard_timezone\s+BEFORE UPDATE OF venue_timezone\s+ON public\.tournaments/,
+    );
+    expect(fn("tournaments_guard_timezone")).toMatch(/tournament_has_schedule\(NEW\.id\)/);
+  });
+
+  it("creates a tournament in one function that refuses an incomplete one", () => {
+    const create = fn("create_tournament(p_payload jsonb)");
+    expect(create).toMatch(/SECURITY DEFINER/);
+    for (const refusal of [
+      "Sign in to create a tournament",
+      "A tournament needs a name",
+      "Choose the day the tournament starts",
+      "Choose the day the tournament ends",
+      "The tournament cannot end before it starts",
+    ]) {
+      expect(create).toContain(refusal);
+    }
+    expect(create).toMatch(/INSERT INTO public\.categories/);
+    expect(create).toMatch(/PERFORM public\.assert_registration_window\(new_id\)/);
+    expect(create).toMatch(/NOT public\.tournament_is_ready\(new_id\)/);
+    expect(create).toMatch(/SET current_tournament_id = new_id\s+WHERE user_id = auth\.uid\(\)/);
+  });
+
+  it("leaves no second creation path", () => {
+    expect(withoutVerify).not.toMatch(/FUNCTION public\.create_tournament_draft/);
+  });
+
+  it("locks the first date once the tournament is in progress, and re-checks the deadline", () => {
+    const update = fn("update_tournament_window");
+    expect(update).toMatch(/t\.status <> 'upcoming' AND p_starts_on <> t\.starts_on/);
+    expect(update).toMatch(/would fall outside the window/);
+    expect(update).toMatch(/PERFORM public\.assert_registration_window\(p_tournament_id\)/);
+    expect(update).toMatch(/can_edit_tournament/);
+  });
+
+  it("allows no playing days, but never removes a day that holds a match", () => {
+    expect(fn("remove_tournament_day")).not.toMatch(/A tournament needs at least one day/);
+    expect(fn("remove_tournament_day")).toMatch(/still has % match\(es\) on it/);
+  });
+
+  it("refuses to replace the days wholesale once anything is scheduled", () => {
+    expect(fn("save_tournament_days")).toMatch(
+      /IF public\.tournament_has_schedule\(p_tournament_id\) THEN/,
+    );
+  });
+
+  it("repeats the revoke and grant pair for everything it creates or replaces", () => {
+    for (const internal of [
+      "tournament_starts_at(uuid)",
+      "tournament_ends_at(uuid)",
+      "tournament_readiness_checks(uuid)",
+      "tournament_has_schedule(uuid)",
+      "tournament_days_guard_window()",
+      "tournaments_guard_timezone()",
+    ]) {
+      expect(withoutVerify).toContain(`'${internal}'`);
+    }
+    expect(withoutVerify).toMatch(/revoke all on function public\.%s from anon, authenticated, public/);
+    expect(withoutVerify).toMatch(/revoke all on function public\.%s from public, anon/);
+    for (const client of [
+      "create_tournament(jsonb)",
+      "update_tournament_window(uuid, date, date)",
+    ]) {
+      expect(withoutVerify).toContain(`'${client}'`);
+    }
+  });
+
+  it("verifies its own result", () => {
+    expect(sql).toMatch(/DO \$verify\$/);
+    expect(sql).toMatch(/RAISE EXCEPTION 'M1:/);
+  });
+});
+
+describe("start on first match migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261008010000_start_on_first_match.sql"), "utf8");
+  const executable = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  const withoutVerify = executable.replace(/DO \$verify\$[\s\S]*?\$verify\$;/, "");
+
+  const fn = (name: string) => functionSource(withoutVerify, name);
+
+  it("drops start_tournament and creates no replacement button", () => {
+    expect(withoutVerify).toMatch(/DROP FUNCTION IF EXISTS public\.start_tournament\(uuid\)/);
+    expect(withoutVerify).not.toMatch(/CREATE OR REPLACE FUNCTION public\.start_tournament/);
+  });
+
+  it("flips upcoming to in progress inside each of the three match starts", () => {
+    for (const name of [
+      "start_placement_match(p_match_id uuid, p_court_id uuid DEFAULT NULL::uuid)",
+      "start_tier_draw_match(p_match_id uuid, p_court_id uuid DEFAULT NULL::uuid)",
+      "start_match_safe(p_table text, p_match_id uuid, p_court_id uuid, p_ignore_rest boolean DEFAULT false)",
+    ]) {
+      const body = fn(name);
+      expect(body, name).toMatch(/can_edit_tournament/);
+      expect(body, name).toMatch(/lock_tournament_lifecycle_shared/);
+      expect(body, name).toMatch(/assert_tournament_can_start_match/);
+      expect(body, name).toMatch(/mark_tournament_started/);
+      expect(body, name).not.toMatch(/assert_tournament_live/);
+    }
+  });
+
+  it("takes the lifecycle lock before any other lock a start already takes", () => {
+    const body = fn(
+      "start_match_safe(p_table text, p_match_id uuid, p_court_id uuid, p_ignore_rest boolean DEFAULT false)",
+    );
+    expect(body.indexOf("lock_tournament_lifecycle_shared")).toBeLessThan(
+      body.indexOf("hashtext('live-schedule')"),
+    );
+  });
+
+  it("makes the transition idempotent and one-way", () => {
+    const mark = fn("mark_tournament_started");
+    expect(mark).toMatch(/SET status = 'in_progress'\s+WHERE id = p_tournament_id AND status = 'upcoming'/);
+  });
+
+  it("never lets a completed tournament have a match started, whoever asks", () => {
+    const guard = fn("assert_tournament_can_start_match");
+    expect(guard).toMatch(/v_state = 'completed'/);
+    expect(guard).not.toMatch(/is_platform_admin/);
+    expect(guard).toMatch(/now\(\) < v_starts/);
+  });
+
+  it("completes only with nothing on court, under the exclusive half of the lifecycle lock", () => {
+    const complete = fn("complete_tournament");
+    expect(complete).toMatch(/pg_advisory_xact_lock\(hashtext\('lifecycle:' \|\| p_tournament_id::text\)\)/);
+    expect(complete).toMatch(/match\(es\) are still being played/);
+    expect(complete).toMatch(/can_edit_tournament/);
+  });
+
+  it("counts what is left from the four match tables", () => {
+    const counts = fn("tournament_completion_counts");
+    for (const table of ["placement_matches", "tier_draw_matches", "pool_matches", "draw_matches"]) {
+      expect(counts).toContain(`public.${table}`);
+    }
+    expect(counts).toMatch(/'on_court', count\(\*\) FILTER \(WHERE status = 'in-progress'\)/);
+    expect(counts).toMatch(/'unplayed', count\(\*\) FILTER \(WHERE status = 'scheduled'\)/);
+  });
+
+  it("keeps the transition and the lock helpers off the client surface", () => {
+    expect(withoutVerify).toMatch(/'mark_tournament_started\(uuid\)'/);
+    expect(withoutVerify).toMatch(/'lock_tournament_lifecycle_shared\(uuid\)'/);
+    expect(withoutVerify).toMatch(/revoke all on function public\.%s from anon, authenticated, public/);
+  });
+
+  it("verifies its own result", () => {
+    expect(sql).toMatch(/DO \$verify\$/);
+    expect(sql).toMatch(/RAISE EXCEPTION 'M2:/);
+  });
+});
+
+describe("registration window rules migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261008020000_registration_window_rules.sql"), "utf8");
+  const executable = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  const withoutVerify = executable.replace(/DO \$verify\$[\s\S]*?\$verify\$;/, "");
+
+  const fn = (name: string) => functionSource(withoutVerify, name);
+
+  it("requires the deadline to close before the window opens", () => {
+    const assert = fn("assert_registration_window(p_tournament_id uuid)");
+    expect(assert).toMatch(/v_closes > v_starts/);
+    expect(assert).toMatch(/Registration must close after it opens/);
+    expect(assert).toMatch(/Set both the opening and the closing time/);
+  });
+
+  it("guards the two columns for every writer, not only the dedicated RPC", () => {
+    expect(withoutVerify).toMatch(
+      /CREATE TRIGGER tournaments_guard_registration\s+BEFORE UPDATE OF registration_opens_at, registration_closes_at\s+ON public\.tournaments/,
+    );
+    const guard = fn("tournaments_guard_registration");
+    expect(guard).toMatch(/Registration has already opened/);
+    expect(guard).toMatch(/registration cannot be extended/);
+    expect(guard).toMatch(/OLD\.status <> 'upcoming'/);
+    expect(guard).toMatch(/tournament_has_schedule\(OLD\.id\)/);
+  });
+
+  it("sets the window through one editor RPC that is upcoming only", () => {
+    const set = fn("set_registration_window(");
+    expect(set).toMatch(/can_edit_tournament/);
+    expect(set).toMatch(/assert_tournament_configurable/);
+    expect(set).toMatch(/PERFORM public\.assert_registration_window\(p_tournament_id\)/);
+  });
+
+  it("re-creates both public reads with the playing-day span and keeps them public", () => {
+    expect(withoutVerify).toMatch(/DROP FUNCTION IF EXISTS public\.tournament_summary/);
+    expect(withoutVerify).toMatch(/DROP FUNCTION IF EXISTS public\.explore_tournaments/);
+    expect(withoutVerify.match(/play_starts_at timestamptz/g)).toHaveLength(2);
+    expect(withoutVerify.match(/play_ends_at timestamptz/g)).toHaveLength(2);
+    for (const signature of [
+      "tournament_summary\\(text, text, uuid\\[\\], int, int\\)",
+      "explore_tournaments\\(text, text, boolean, text, text, int, int\\)",
+    ]) {
+      expect(withoutVerify).toMatch(
+        new RegExp(`REVOKE ALL ON FUNCTION public\\.${signature} FROM anon, PUBLIC`),
+      );
+      expect(withoutVerify).toMatch(
+        new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${signature} TO anon, authenticated`),
+      );
+    }
+  });
+
+  it("keeps the page order total", () => {
+    expect(withoutVerify).toMatch(/f\.t_created DESC,\s+f\.t_id\s+LIMIT v_limit/);
+  });
+
+  it("verifies its own result", () => {
+    expect(sql).toMatch(/DO \$verify\$/);
+    expect(sql).toMatch(/RAISE EXCEPTION 'M3:/);
+  });
+});
