@@ -105,11 +105,15 @@ test.describe("staff surfaces", () => {
   test("the session is a staff session", async ({ page }) => {
     await openStaffShell(page);
 
-    // The role is rendered beside the email in the shell. If it is missing the session
-    // is not a staff one, and every assertion below would be meaningless rather than
-    // failing on its own.
+    // The chip carries the email alone; a platform admin is told apart by the User / Admin
+    // view switch beside it. If it is missing the session is not a staff one, and every
+    // assertion below would be meaningless rather than failing on its own.
     const account = await page.getByText(/@example\.test/).first().textContent();
-    expect(account ?? "", "the account chip does not name a staff role").toContain("admin");
+    expect(account ?? "", "the account chip should show the email only").not.toMatch(/admin|user/i);
+    await expect(
+      page.getByRole("group", { name: "View as" }),
+      "the session is not a platform admin: no view switch",
+    ).toBeVisible();
   });
 
   test("role-gated controls are enabled, not merely read", async ({ page }) => {

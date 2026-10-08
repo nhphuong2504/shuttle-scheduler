@@ -1,6 +1,7 @@
 import { Check, Plus, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { PickerInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import type { TournamentEventInput } from "@/lib/tournament/actions";
 import { effectiveRegistration, registrationProblems } from "./problems";
@@ -326,9 +327,10 @@ function RegistrationSection({
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="reg-open">Registration opens</Label>
-              <Input
+              <PickerInput
                 id="reg-open"
                 type="datetime-local"
+                pickerLabel="Open the calendar and time picker for registration opening"
                 className="h-12"
                 value={opensAt}
                 disabled={locked || opened}
@@ -340,10 +342,12 @@ function RegistrationSection({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="reg-close">Registration closes</Label>
-              <Input
+              <PickerInput
                 id="reg-close"
                 type="datetime-local"
-                className={problems.length ? "h-12 border-2 border-danger-foreground" : "h-12"}
+                pickerLabel="Open the calendar and time picker for registration closing"
+                className="h-12"
+                inputClassName={problems.length ? "border-2 border-danger-foreground" : undefined}
                 value={closesAt}
                 disabled={locked}
                 aria-invalid={problems.length > 0}

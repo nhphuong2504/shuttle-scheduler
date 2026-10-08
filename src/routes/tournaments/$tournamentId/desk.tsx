@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { PickerInput } from "@/components/ui/picker-input";
 import {
   reportDrawMatch,
   reportPoolMatch,
@@ -1431,15 +1432,20 @@ export function MatchOperationsDialog({
                     ))}
                   </select>
                 </label>
-                <label className="block text-sm font-medium">
-                  Start time
-                  <Input
-                    className="mt-1 h-11 text-base"
+                <div className="block text-sm font-medium">
+                  {/* Not wrapped around the field: the picker button inside would become
+                      part of the label's text. */}
+                  <label htmlFor="desk-move-time">Start time</label>
+                  <PickerInput
+                    id="desk-move-time"
+                    className="mt-1 h-11"
+                    inputClassName="text-base"
                     type="datetime-local"
+                    pickerLabel="Open the calendar and time picker for the start time"
                     value={moveTime}
                     onChange={(event) => setMoveTime(event.target.value)}
                   />
-                </label>
+                </div>
                 <Button
                   className="h-11 text-sm sm:col-span-2"
                   size="sm"

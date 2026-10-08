@@ -741,7 +741,7 @@ test.describe("A tournament with no playing days yet", () => {
     await expect(page.getByText(/set up a tournament first/i)).toHaveCount(0);
 
     // Only the tournament window's own dates are offered, and none is chosen yet.
-    const days = page.getByRole("group").getByRole("button");
+    const days = page.getByRole("group", { name: /^[A-Z][a-z]+ [0-9]{4}$/ }).getByRole("button");
     await expect(days).toHaveCount(1);
     await expect(days.first()).toHaveAttribute("aria-pressed", "false");
 

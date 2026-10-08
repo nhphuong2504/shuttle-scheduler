@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { PickerInput } from "@/components/ui/picker-input";
 
@@ -16,6 +16,15 @@ import { PickerInput } from "@/components/ui/picker-input";
  */
 
 afterEach(cleanup);
+
+beforeAll(() => {
+  // The popup positions itself with a ResizeObserver, which jsdom does not provide.
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
 
 /** jsdom implements neither `showPicker()` nor the engines' own glyph. */
 type Picker = { showPicker?: () => void };
@@ -68,40 +77,77 @@ describe("PickerInput replaces the engine's glyph with a real control", () => {
     );
   });
 
-  it("opens the popup from the click", () => {
+  it("opens the app's own calendar rather than the engine's", () => {
     const { container } = render(<PickerInput type="date" pickerLabel="Open the calendar" />);
     const field = fieldOf(container);
     const showPicker = vi.fn();
     asPicker(field).showPicker = showPicker;
 
     fireEvent.click(buttonOf(container));
-    // Called from the handler rather than an effect or a timeout: the API needs transient
-    // user activation, which only exists while the click is being handled.
-    expect(showPicker).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("group", { name: /\d{4}/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next month" })).toBeTruthy();
+    // The engine's popup is the thing being replaced; it must not open as well.
+    expect(showPicker).not.toHaveBeenCalled();
   });
 
-  it("falls back to the field where the engine has no picker", () => {
-    const { container } = render(<PickerInput type="date" pickerLabel="Open the calendar" />);
-    const field = fieldOf(container);
-    delete asPicker(field).showPicker;
+  it("writes a chosen day to the field as an ordinary change", () => {
+    const seen: string[] = [];
+    const { container } = render(
+      <PickerInput
+        type="date"
+        pickerLabel="Open the calendar"
+        defaultValue="2026-10-08"
+        onChange={(event) => seen.push(event.target.value)}
+      />,
+    );
 
     fireEvent.click(buttonOf(container));
-    // Focus rather than nothing: a reader who cannot open the popup still lands on the
-    // field, so the affordance degrades instead of disappearing.
-    expect(document.activeElement).toBe(field);
+    fireEvent.click(screen.getByRole("button", { name: /October 15, 2026/ }));
+
+    expect(seen).toEqual(["2026-10-15"]);
+    expect(fieldOf(container).value).toBe("2026-10-15");
+    // A day is the whole of a date, so choosing one closes the calendar.
+    expect(screen.queryByRole("button", { name: "Next month" })).toBeNull();
   });
 
-  it("falls back to the field where the engine refuses the picker", () => {
-    const { container } = render(<PickerInput type="date" pickerLabel="Open the calendar" />);
-    const field = fieldOf(container);
-    asPicker(field).showPicker = () => {
-      // What a disabled or read-only input throws, and what an engine without the feature
-      // threw before the API existed.
-      throw new DOMException("not allowed", "InvalidStateError");
-    };
+  it("keeps the time of a date-and-time field when another day is chosen", () => {
+    const { container } = render(
+      <PickerInput
+        type="datetime-local"
+        pickerLabel="Open it"
+        defaultValue="2026-10-08T14:30"
+      />,
+    );
 
-    expect(() => fireEvent.click(buttonOf(container))).not.toThrow();
-    expect(document.activeElement).toBe(field);
+    fireEvent.click(buttonOf(container));
+    fireEvent.click(screen.getByRole("button", { name: /October 20, 2026/ }));
+
+    expect(fieldOf(container).value).toBe("2026-10-20T14:30");
+  });
+
+  it("builds a time from the hour and the minute", () => {
+    const { container } = render(
+      <PickerInput type="time" pickerLabel="Open the time picker" defaultValue="" />,
+    );
+
+    fireEvent.click(buttonOf(container));
+    const hour = screen.getByRole("group", { name: "Hour" });
+    const minute = screen.getByRole("group", { name: "Minute" });
+    const twelve = !!screen.queryByRole("group", { name: "AM or PM" });
+
+    fireEvent.click(within(hour).getByRole("button", { name: twelve ? "8" : "08" }));
+    fireEvent.click(within(minute).getByRole("button", { name: "45" }));
+    if (twelve) fireEvent.click(screen.getByRole("button", { name: "PM" }));
+
+    expect(fieldOf(container).value).toBe(twelve ? "20:45" : "08:45");
+  });
+
+  it("does not open for a disabled field", () => {
+    const { container } = render(
+      <PickerInput type="date" pickerLabel="Open the calendar" readOnly />,
+    );
+    fireEvent.click(buttonOf(container));
+    expect(screen.queryByRole("button", { name: "Next month" })).toBeNull();
   });
 
   it("disables the control with the field, so the pair cannot separate", () => {

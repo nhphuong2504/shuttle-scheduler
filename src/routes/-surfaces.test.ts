@@ -667,41 +667,35 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     );
   });
 
-  it("leaves a reader the way back to the list, and no way to start one", () => {
+  it("gives every caller the app's own navigation inside a tournament", () => {
     /**
-     * Where the one entry that leaves a tournament lives, and who is given it.
+     * The bar above a tournament is the app's, and it is the same bar `PublicShell` draws.
      *
-     * It is split by the same right the section nav is: an operator gets the switcher - the
-     * tournaments they may work in are a list they hold - and a reader gets the public list
-     * a card came in by. The assertion is this way round because the failure is asymmetric:
-     * a reader holding the switcher is being offered an operator's control, which is what
-     * read-only mode exists to prevent.
-     *
-     * The *position* is half the claim. A reader's entry belongs on the brand's own line,
-     * where `PublicShell` puts its public nav, rather than down in the section row or at its
-     * far right - one entry in one place across both shells. Asserting the name alone would
-     * pass with it anywhere in the header, which is how it came to sit in the opposite
-     * corner from the brand.
+     * It used to be split by the edit right: a reader got Browse, and an operator got nothing
+     * at all in the bar - opening a tournament took Browse, My tournaments and New tournament
+     * away from the person running it. Now one component draws the row for both shells, so
+     * the two cannot drift, and the tournament's own sections stay a second row under its
+     * name. The operator's switcher stays where it was: the section row.
      */
     const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
-    // The reader's entry, and its place: in the bar beside the brand, above the title.
-    expect(shell).toMatch(/access\.can_edit \? null : \(\s*<>[\s\S]{0,200}?<BrowseLink \/>/);
-    expect(shell.indexOf("<BrowseLink />")).toBeLessThan(shell.indexOf("{tournament?.name"));
-    // The switcher's place, unchanged: the section row, for a caller who may edit.
-    expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
-    // The entry is the public nav pill, not a second shape drawn for the same link.
-    expect(shell).toMatch(
-      /<Link to="\/explore" className=\{NAV_ITEM_CLASS\}>[\s\S]{0,40}?Browse tournaments/,
-    );
-    // And there is no door into the create flow anywhere in this header. Starting a
-    // tournament is an operator's act, offered by the pages that are about the caller's own
-    // work - not by the one header every reader of an event also reads.
-    // Scoped to the workspace header: the public bar offers a signed-in caller a way to
-    // start a tournament, and that is a different header.
     const workspace = shell.slice(
       shell.indexOf("export function WorkspaceShell"),
       shell.indexOf("export function PublicShell"),
     );
+    expect(workspace).toMatch(/<PrimaryNav signedIn=\{signedIn\} marked=\{false\} \/>/);
+    // In the bar beside the brand, above the title.
+    expect(workspace.indexOf("<PrimaryNav")).toBeLessThan(workspace.indexOf("{tournament?.name"));
+    // The same component draws the public bar, so there is one row, not two that agree.
+    expect(shell.slice(shell.indexOf("export function PublicShell"))).toMatch(
+      /<PrimaryNav signedIn=\{signedIn\} marked \/>/,
+    );
+    // The switcher's place, unchanged: the section row, for a caller who may edit.
+    expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
+    // The row itself: Browse for everyone, My tournaments and New tournament once signed in.
+    expect(shell).toMatch(/\{ label: "Browse tournaments", to: "\/explore" \}/);
+    expect(shell).toMatch(/\{ label: "My tournaments", to: "\/me\/tournaments" \}/);
+    expect(shell).toMatch(/<Link to="\/tournaments\/new" className=\{NEW_TOURNAMENT_CLASS\}>/);
+    // The create door is drawn by the shared row, never written into the workspace header.
     expect(workspace).not.toContain('to="/tournaments/new"');
   });
 

@@ -5,6 +5,7 @@ import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
+import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useTournamentSummary } from "@/lib/tournament/data";
 import { isReminderPhase, phaseLabel, tournamentPhase, type TournamentPhase } from "@/lib/tournament/phase";
 import { shortDays } from "@/lib/tournament/summary-format";
@@ -253,7 +254,7 @@ function BrandMark() {
  * shape the live status pill draws its glyph from, but `--presence-ink` is a separate
  * value so the mark reads as "someone is signed in" rather than "a match is live", and so
  * tuning it cannot move the state palette (`--state-live-ink` is read by the court-state
- * vocabulary and the status pills). Decorative — the email and role beside it carry the
+ * vocabulary and the status pills). Decorative — the email beside it carries the
  * meaning — so it stays out of the accessibility tree.
  *
  * The chip names its own tier (`text-t4`) rather than inheriting: the shell sets no size
@@ -274,7 +275,7 @@ function BrandMark() {
  * away from is not a kindness.
  */
 function SessionBlock() {
-  const { session, signedIn, systemRole } = useSession();
+  const { session, signedIn, isPlatformAdmin } = useSession();
   const navigate = useNavigate();
   const href = useLocation({ select: (location) => location.href });
   if (!signedIn) {
@@ -295,8 +296,8 @@ function SessionBlock() {
       <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-t4 text-muted-foreground sm:inline-flex">
         <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
         {session?.userEmail}
-        {systemRole ? ` · ${systemRole}` : ""}
       </span>
+      {isPlatformAdmin ? <ViewModeSwitch /> : null}
       <Button
         size="sm"
         variant="outline"
@@ -308,6 +309,43 @@ function SessionBlock() {
         Sign out
       </Button>
     </>
+  );
+}
+
+/**
+ * The platform admin's choice between the ordinary `user` view and the `admin` one.
+ *
+ * Only a platform admin is offered it; everyone else sees their email and nothing more.
+ * It is a view preference, not a permission - the server still decides what any caller may
+ * do. The admin view itself is not designed yet, so for now the choice is only remembered.
+ */
+function ViewModeSwitch() {
+  const { viewMode, setViewMode } = useViewMode();
+  const options: ViewMode[] = ["user", "admin"];
+
+  return (
+    <div
+      role="group"
+      aria-label="View as"
+      className="inline-flex items-center rounded-full border border-hairline bg-muted/60 p-0.5 text-t4"
+    >
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={viewMode === option}
+          onClick={() => setViewMode(option)}
+          className={cn(
+            "min-h-7 rounded-full px-3 font-semibold capitalize transition-colors",
+            viewMode === option
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -591,33 +629,42 @@ export function RegistrationDecisionPill({ decision }: { decision: RegistrationD
 }
 
 /**
- * The way out of a tournament, for a reader.
+ * The app's own navigation: where you go that is not about this tournament.
  *
- * It is the same entry `PublicShell` carries, in the same place: the public nav sits
- * immediately after the brand on the header's own line, and a reader who arrived from
- * Explore finds the way back exactly where the list they left had it. Before this pass the
- * workspace put it at the far right of the section row, as a bordered button - the opposite
- * corner from the brand, and a second shape for one entry.
+ * It is the bar `PublicShell` draws, and the tournament's header draws the same one, for
+ * everybody. Opening a tournament used to take it away from an operator - the bar held the
+ * brand and the session and nothing else - so somebody running a tournament had no way to
+ * Browse, to see their other tournaments or to start another except the browser's back
+ * button. The tournament's own sections are a second row under its name; this row is the
+ * app, and it does not change when you go inside one.
  *
- * Which control leaves a tournament follows the edit right rather than the session - the
- * same rule the nav beside it follows. An operator gets `TournamentSwitcher`, because the
- * tournaments they may work in are a list they hold and moving between them is their own
- * act. A reader holds no such list, and the switcher's answer to an empty one was a button
- * into the create flow: an operator's act, offered in a header whose whole read-only point
- * is that it has none. So the reader gets the public list instead.
- *
- * Browsing is how a reader gets here at all: Explore's cards open on `…/entries`. The entry
- * they came in by is the one they need to get back out, and until this pass the workspace
- * header did not carry it, so the browser's own back button was the only way out.
- *
- * No `activeProps`: `/explore` draws `PublicShell`, so this link is never the current
- * address while the workspace it belongs to is rendered.
+ * Signed in, it is Browse and My tournaments with New tournament beside them as an action.
+ * Signed out it is Browse alone, so the row does not move once the session settles for a
+ * reader. No `activeProps` are needed inside a workspace: none of these is the current
+ * address while a tournament is on screen, and `PublicShell` passes its own.
  */
-function BrowseLink() {
+function PrimaryNav({ signedIn, marked }: { signedIn: boolean; marked: boolean }) {
   return (
-    <Link to="/explore" className={NAV_ITEM_CLASS}>
-      Browse tournaments
-    </Link>
+    <>
+      <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
+        {(signedIn ? SIGNED_IN_SECTIONS : PUBLIC_SECTIONS).map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className={NAV_ITEM_CLASS}
+            {...(marked ? { activeProps: { className: NAV_ACTIVE_CLASS } } : {})}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      {signedIn ? (
+        <Link to="/tournaments/new" className={NEW_TOURNAMENT_CLASS}>
+          <Plus aria-hidden="true" className="size-4" />
+          New tournament
+        </Link>
+      ) : null}
+    </>
   );
 }
 
@@ -714,17 +761,15 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           )}
 
           {/*
-            The public list, for a caller who may not edit, in the position `PublicShell`
-            puts it: immediately after the brand. It is not a section of this tournament, so
-            it does not belong inside the sections landmark below - and a reader who arrived
-            from Explore finds the way back where the list they came from had it.
+            The app's own navigation, for everybody, in the position `PublicShell` puts it:
+            immediately after the brand. It is not a section of this tournament, so it does not
+            belong inside the sections landmark below. An operator gets the same Browse, My
+            tournaments and New tournament a reader of the public pages has - opening a
+            tournament must not take the rest of the app away - and a reader who arrived from
+            Explore finds the way back where the list they came from had it.
           */}
-          {access.can_edit ? null : (
-            <>
-              <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
-              <BrowseLink />
-            </>
-          )}
+          <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
+          <PrimaryNav signedIn={signedIn} marked={false} />
 
           <div className="ml-auto flex items-center gap-2">
             <SessionBlock />
@@ -835,24 +880,7 @@ export function PublicShell({
             <BrandMark />
           </Link>
           <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
-          <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
-            {(signedIn ? SIGNED_IN_SECTIONS : PUBLIC_SECTIONS).map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={NAV_ITEM_CLASS}
-                activeProps={{ className: NAV_ACTIVE_CLASS }}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          {signedIn ? (
-            <Link to="/tournaments/new" className={NEW_TOURNAMENT_CLASS}>
-              <Plus aria-hidden="true" className="size-4" />
-              New tournament
-            </Link>
-          ) : null}
+          <PrimaryNav signedIn={signedIn} marked />
           <div className="ml-auto flex items-center gap-2">
             <SessionBlock />
           </div>

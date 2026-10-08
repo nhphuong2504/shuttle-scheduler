@@ -243,6 +243,30 @@ test.describe("an editor", () => {
     appMock: { preset: "layout", role: "user", status: "upcoming", access: EDITOR_ACCESS },
   });
 
+  test("keeps the app's own navigation while inside a tournament", async ({ page }) => {
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // Opening a tournament must not take Browse, My tournaments and New tournament away from
+    // the person running it: they are the app, and the sections below are the tournament.
+    const header = page.getByRole("banner");
+    const primary = header.getByRole("navigation", { name: "Primary" });
+    await expect(primary.getByRole("link", { name: "Browse tournaments" })).toHaveAttribute(
+      "href",
+      routes.explore,
+    );
+    await expect(primary.getByRole("link", { name: "My tournaments" })).toHaveAttribute(
+      "href",
+      routes.myTournaments,
+    );
+    await expect(header.getByRole("link", { name: "New tournament" })).toHaveAttribute(
+      "href",
+      routes.newTournament,
+    );
+    // Two rows, two landmarks: the app, and this tournament's sections.
+    await expect(header.getByRole("navigation", { name: /tournament sections/i })).toBeVisible();
+  });
+
   test("sees the shared tournament, and may not delete it", async ({ page }) => {
     await page.goto(routes.myTournaments, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
