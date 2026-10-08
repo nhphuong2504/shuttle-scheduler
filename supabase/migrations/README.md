@@ -2699,3 +2699,71 @@ completed one as the same editor and confirm it is refused.
 
 `DROP FUNCTION public.update_tournament_details(uuid, jsonb);` Only the Setup page of a started
 tournament calls it.
+
+
+---
+
+## Applying `20261008040000_result_correction_guards.sql`
+
+Reporting or correcting a result: what it may change downstream, and what the live reflow may do.
+
+### What it changes
+
+- **Correction guards.** Four `AFTER UPDATE` triggers, one per match table. Each fires only on a
+  *correction*: an already-reported row whose winner changes to another non-null value (pools: whose
+  winner or score changes). A first report and a reset (`winner_id` becomes NULL) are untouched, and the
+  four `report_*_result` functions are not edited.
+  - `tier_draw_matches_correction`: the next-round match is repaired in place while it is `scheduled`;
+    refused once it has started.
+  - `draw_matches_correction` (legacy knockout): same, through `parent_a_id` / `parent_b_id`.
+    `advance_draw_locked` only looks at the newest round, so it never repaired an older one.
+  - `placement_matches_correction`: a round-one winner cannot change once round two exists.
+  - `pool_matches_correction`: a group result cannot change once draws exist for the category.
+- **Break-aware reflow.** `shift_live_schedule_after_match` is now a wrapper. The original ~350-line
+  function was renamed to `shift_live_schedule_core` (untouched), and the wrapper calls it and then
+  `clear_breaks_after_reflow(tournament_id)`, which moves any still-`scheduled` match that overlaps a
+  `tournament_day_breaks` row to the break's end and slides the matches behind it on that court. Every
+  caller keeps the old name and signature. Known limits: the pass keeps each court's order but does not
+  re-check a player's rest window for the matches it pushes, and it does not enforce the day's closing
+  time.
+- **Access.** `shift_live_schedule_after_match` was granted to `authenticated` by `20260916010000` with no
+  tournament check, so any signed-in account could reflow any tournament by match id. It is now revoked,
+  along with the core, the break pass and the four guard functions: they are called only from
+  `SECURITY DEFINER` functions.
+
+### Verify after applying
+
+```sql
+SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname IN
+  ('shift_live_schedule_core', 'clear_breaks_after_reflow', 'guard_tier_draw_correction',
+   'guard_draw_correction', 'guard_placement_correction', 'guard_pool_correction');                    -- 6
+SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname IN
+  ('tier_draw_matches_correction', 'draw_matches_correction',
+   'placement_matches_correction', 'pool_matches_correction');                                         -- 4
+SELECT has_function_privilege('authenticated', 'public.shift_live_schedule_after_match(text, uuid)', 'execute'); -- false
+```
+
+Those prove the objects exist, not that they behave. Run `npm run test:integration` against the local
+stack, in particular `integration/simulation.test.ts`: its second test asserts that changing a round-one
+winner after round two exists is refused, that a score-only correction is accepted, and that changing a
+knockout winner after the next round was played is refused. A break overlap after a late finish is checked
+at every step of its first test.
+
+### Rolling back
+
+```sql
+DROP TRIGGER pool_matches_correction ON public.pool_matches;
+DROP TRIGGER placement_matches_correction ON public.placement_matches;
+DROP TRIGGER draw_matches_correction ON public.draw_matches;
+DROP TRIGGER tier_draw_matches_correction ON public.tier_draw_matches;
+DROP FUNCTION public.guard_pool_correction(), public.guard_placement_correction(),
+  public.guard_draw_correction(), public.guard_tier_draw_correction();
+DROP FUNCTION public.shift_live_schedule_after_match(text, uuid);
+DROP FUNCTION public.clear_breaks_after_reflow(uuid);
+ALTER FUNCTION public.shift_live_schedule_core(text, uuid) RENAME TO shift_live_schedule_after_match;
+```
+
+Rolling back the rename restores the old behaviour, including the old grant being absent: re-grant
+`EXECUTE` to `authenticated` only if a caller outside the `SECURITY DEFINER` functions needs it, and
+none does today.
