@@ -1285,6 +1285,9 @@ export function useTournamentEditors(tournamentId: string | null | undefined) {
   });
 }
 
+/** How long the channel must be quiet before the cache is refetched. */
+const REALTIME_DEBOUNCE_MS = 400;
+
 export function useRealtimeRefresh() {
   const qc = useQueryClient();
   // Keep the first server and browser render identical; network state is only
@@ -1299,11 +1302,20 @@ export function useRealtimeRefresh() {
     if (!navigator.onLine) setStatus("offline");
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
+    // One reported result writes the match, its activity row, every match it pushes and the
+    // next round - dozens of events within a few hundred milliseconds. Refetching the whole
+    // cache on each one is a storm on venue wifi (and `invalidateQueries` cancels the fetch in
+    // flight each time), so a burst collapses into a single refetch once it goes quiet.
+    let pending: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel("ops-live")
       .on("postgres_changes", { event: "*", schema: "public" }, () => {
         setLastUpdatedAt(Date.now());
-        void qc.invalidateQueries();
+        if (pending) clearTimeout(pending);
+        pending = setTimeout(() => {
+          pending = null;
+          void qc.invalidateQueries();
+        }, REALTIME_DEBOUNCE_MS);
       })
       .subscribe((next) => {
         if (!navigator.onLine) setStatus("offline");
@@ -1314,6 +1326,7 @@ export function useRealtimeRefresh() {
         else if (next === "CLOSED") setStatus("connecting");
       });
     return () => {
+      if (pending) clearTimeout(pending);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
       void supabase.removeChannel(channel);

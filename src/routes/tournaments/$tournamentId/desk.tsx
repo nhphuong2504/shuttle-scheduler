@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { PickerInput } from "@/components/ui/picker-input";
 import {
+  assertMatchUnchanged,
   reportDrawMatch,
   reportPoolMatch,
   rescheduleMatch,
@@ -1044,6 +1045,7 @@ export function MatchOperationsDialog({
     }
     setBusy(true);
     try {
+      await assertMatchUnchanged(table, match.id, match.status);
       if (match.kind === "placement" || match.kind === "tier") {
         if (!tournamentId) throw new Error("No active tournament.");
         const report = match.kind === "placement" ? reportPlacementMatch : reportTierDrawMatch;

@@ -206,6 +206,33 @@ export async function generatePoolsForCategory(categoryId: string, teams: Team[]
   });
 }
 
+/**
+ * Refuses to save a result against a match that has changed since the dialog opened.
+ *
+ * The dialog holds a snapshot of the match. If another desk reported, reset or started it in the
+ * meantime, "recorded" versus "corrected" and the not-started confirmation were decided against
+ * stale state, and the save would silently overwrite the other desk's entry. The check is a
+ * read just before the write, so it narrows that window to a round trip rather than closing it.
+ */
+export async function assertMatchUnchanged(
+  table: "pool_matches" | "draw_matches" | "placement_matches" | "tier_draw_matches",
+  matchId: string,
+  expectedStatus: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from(table)
+    .select("status")
+    .eq("id", matchId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("This match no longer exists.");
+  if (data.status !== expectedStatus) {
+    throw new Error(
+      `This match changed to "${data.status}" while you were entering the result. Close this window and reopen the match to see the latest.`,
+    );
+  }
+}
+
 export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: number) {
   if (!isLegalGameScore(scoreA, scoreB))
     throw new Error("A group match needs a race-to-21 winning score.");

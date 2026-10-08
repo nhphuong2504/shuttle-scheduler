@@ -396,11 +396,27 @@ describe("playing days can be managed after activation", () => {
   });
 
   it("treats a tournament with no playing days as the ordinary starting state", () => {
-    // Choosing the days is the first thing the page asks for, not a dead end that sends the
-    // host back to setup - the days are chosen here, inside the window.
+    // Choosing the days is part of the one Settings panel, not a page in front of it and not a
+    // dead end that sends the host back to setup - the days are chosen here, inside the window.
     expect(schedule).not.toMatch(/Set up a tournament first/);
-    expect(schedule).toMatch(/Which days do you play\?/);
+    expect(schedule).not.toMatch(/Which days do you play\?/);
+    expect(schedule).toMatch(/Choose at least one playing day first/);
     expect(schedule).toMatch(/Choose the days you play first/);
+  });
+
+  it("says what is missing instead of greying the build out, courts before days", () => {
+    // A new tournament has no court rows, so courts are as much a precondition as days are.
+    expect(schedule).toMatch(/const buildBlocker =/);
+    expect(schedule).toMatch(/Set the courts and choose at least one playing day first/);
+    expect(schedule).toMatch(/aria-describedby=\{buildBlocker \? "build-blocker" : undefined\}/);
+    // One build button at a time: in the header, or in the bar at the foot while settings are open.
+    expect(schedule).toMatch(/\{showSettings \? null : buildButton\}/);
+  });
+
+  it("follows one set of hours for every day, and opens a day only to change it", () => {
+    expect(schedule).toMatch(/Change for all days/);
+    expect(schedule).toMatch(/applyHoursToAll/);
+    expect(schedule).toMatch(/Different/);
   });
 
   it("disables remove rather than letting it fail, when matches are on the day", () => {
@@ -1017,8 +1033,10 @@ describe("the read-only workspace removes the operator's controls, rather than d
     expect(schedule).toMatch(/\{canEdit && showSettings \? \(/);
     // The toggle and the build action are the editor's; a viewer gets no header actions.
     expect(schedule).toMatch(/actions=\{\s*canEdit \? \(/);
-    // The no-courts prompt instructs an operator, so it goes with the panel.
-    expect(schedule).toMatch(/canEdit && !\(courts \?\? \[\]\)\.length/);
+    // What is missing before a build instructs an operator, and the bar that builds is the
+    // operator's too: both go with the panel.
+    expect(schedule).toMatch(/\{canEdit && showSettings \? \(\s*<div className="sticky/);
+    expect(schedule).toMatch(/actions=\{\s*canEdit \? \(\s*<div className="flex flex-col items-end gap-1">/);
   });
 
   it("hides the tournament-wide forecast from a read-only reader", () => {

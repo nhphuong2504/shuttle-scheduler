@@ -164,12 +164,48 @@ test.describe("staff surfaces", () => {
       await expect(page.getByRole("heading", { name })).toBeVisible();
     }
 
-    // A day's breaks are edited in place, so adding one puts the break rows in front of
-    // axe without any disclosure to open first.
+    // A day follows the hours shared by every day until it is opened, so its own fields,
+    // courts and breaks are one tap away; opening it and adding a break puts the break rows in
+    // front of axe.
+    await page.getByRole("button", { name: /^edit day 1$/i }).click();
     await page.getByRole("button", { name: /add break/i }).first().click();
     await settleAnimations(page, "main");
 
     expect(violationIds(await scan(page))).toEqual([]);
+  });
+
+  test("the playing days follow one set of hours, and a day opens only to be changed", async ({
+    page,
+  }) => {
+    await openStaffShell(page);
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /settings/i }).first().click();
+
+    // Courts come first, then the days, then the match format.
+    const headings = await page.getByRole("heading", { level: 3 }).allTextContents();
+    expect(headings.indexOf("Venue courts")).toBeGreaterThanOrEqual(0);
+    expect(headings.indexOf("Venue courts")).toBeLessThan(headings.indexOf("Playing days"));
+    expect(headings.indexOf("Playing days")).toBeLessThan(headings.indexOf("Match format"));
+
+    // One line for the hours every day shares, and a day is a single row until opened.
+    await expect(page.getByText(/every day:/i)).toBeVisible();
+    const edit = page.getByRole("button", { name: /^edit day 1$/i });
+    await expect(edit).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("button", { name: /add break/i })).toHaveCount(0);
+
+    await edit.click();
+    await expect(page.getByRole("button", { name: /^close day 1$/i })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(page.getByRole("button", { name: /add break/i }).first()).toBeVisible();
+
+    // The shared hours are a form of their own, folded away until asked for.
+    await expect(page.getByLabel("Courts open")).toHaveCount(0);
+    await page.getByRole("button", { name: /change for all days/i }).click();
+    await expect(page.getByLabel("Courts open")).toBeVisible();
+    await expect(page.getByRole("button", { name: /apply to every day/i })).toBeEnabled();
   });
 
   test("a replaced picker glyph is a real control that takes the focus ring", async ({ page }) => {
@@ -177,6 +213,8 @@ test.describe("staff surfaces", () => {
     await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: /settings/i }).first().click();
+    // The day's own date field is behind that day's Edit.
+    await page.getByRole("button", { name: /^edit day 1$/i }).click();
 
     /**
      * The engines draw their own calendar and clock inside a date or time field. It takes
@@ -314,6 +352,7 @@ test.describe("staff surfaces", () => {
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await page.getByRole("button", { name: /settings/i }).first().click();
+    await page.getByRole("button", { name: /^edit day 1$/i }).click();
     await page.getByRole("button", { name: /add break/i }).first().click();
 
     const failures: string[] = [];

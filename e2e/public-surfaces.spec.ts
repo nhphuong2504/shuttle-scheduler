@@ -721,7 +721,9 @@ test.describe("Setting up a tournament that has started", () => {
 test.describe("A tournament with no playing days yet", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
 
-  test("asks which days are played, from the window's own dates", async ({ page }) => {
+  test("asks which days are played inside the one Settings, from the window's own dates", async ({
+    page,
+  }) => {
     // A tournament is created complete and has no playing days: they are chosen here.
     await page.route("**/rest/v1/tournament_days*", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
@@ -735,10 +737,12 @@ test.describe("A tournament with no playing days yet", () => {
     await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    // The ordinary starting state, not a dead end that sends the host back to setup.
-    await expect(page.getByRole("heading", { name: "Which days do you play?" })).toBeVisible();
-    await expect(page.getByText(/need not be consecutive/i)).toBeVisible();
+    // No page in front of the settings and no dead end: the schedule is the page, and the
+    // settings are where the days are chosen.
+    await expect(page.getByRole("heading", { name: "Which days do you play?" })).toHaveCount(0);
     await expect(page.getByText(/set up a tournament first/i)).toHaveCount(0);
+    await page.getByRole("button", { name: "Tournament settings" }).click();
+    await expect(page.getByRole("heading", { name: "Playing days" })).toBeVisible();
 
     // Only the tournament window's own dates are offered, and none is chosen yet.
     const days = page.getByRole("group", { name: /^[A-Z][a-z]+ [0-9]{4}$/ }).getByRole("button");
@@ -750,13 +754,23 @@ test.describe("A tournament with no playing days yet", () => {
     expect(added[0]).toMatchObject({ p_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
   });
 
-  test("cannot build a schedule until a day is chosen", async ({ page }) => {
+  test("cannot build until a day is chosen, and says so", async ({ page }) => {
     await page.route("**/rest/v1/tournament_days*", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
     );
     await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
-    await expect(page.getByRole("button", { name: /build schedule|update schedule/i })).toHaveCount(0);
+
+    // The reason sits beside the button instead of the button being merely grey.
+    const build = page.getByRole("button", { name: /build schedule|update schedule/i });
+    await expect(build).toBeDisabled();
+    await expect(page.getByText("Choose at least one playing day first.")).toBeVisible();
+
+    // And with the settings open the build moves to the bar at the foot, still one button.
+    await page.getByRole("button", { name: "Tournament settings" }).click();
+    await expect(build).toHaveCount(1);
+    await expect(build).toBeDisabled();
+    await expect(page.getByText("Choose at least one playing day first.")).toBeVisible();
   });
 });
 
