@@ -331,6 +331,25 @@ async function conflictsNow(): Promise<ScheduleConflict[]> {
 // --- Scheduling ------------------------------------------------------------------
 
 /** Generates whatever stage is missing, then plans and applies the whole queue. */
+/**
+ * The planner's "now" when Update schedule is pressed.
+ *
+ * The simulation plays courts one after another, so `clock` (the end of the last match played)
+ * runs ahead of the other courts' next matches, which in a real venue would already be on court.
+ * Handing the planner that clock makes every one of those matches look overdue, and an overdue
+ * match that has not started is released and moved to "now" - so each rebuild would push every
+ * other court forward and the delay would compound until the last matches spilled onto a third day.
+ * The planner's "now" is therefore the earliest start still ahead: nothing unplayed is in the past,
+ * which is what a real desk with concurrent courts looks like.
+ *
+ * This means the simulation never exercises the rule that releases a pin whose time has passed;
+ * that rule is covered by the unit tests in `placement-schedule.test.ts`.
+ */
+function plannerNow(snap: Snapshot): number {
+  const next = playable(snap)[0];
+  return next ? Math.min(clock, Date.parse(next.row.scheduled_time as string)) : clock;
+}
+
 async function buildSchedule(): Promise<{ generated: number }> {
   let snap = await snapshot();
   const outcome = await generateMissingStages({
@@ -355,7 +374,7 @@ async function buildSchedule(): Promise<{ generated: number }> {
     placementMatches: snap.placement,
     tierMatches: snap.tier,
     categoryOrder: new Map(snap.categories.map((c) => [c.id, c.sort_order])),
-    now: clock,
+    now: plannerNow(snap),
   });
   // A plan with nothing to place is not an error; a plan that cannot place something is, and
   // `applyPlacementSchedulePlan` says which.
