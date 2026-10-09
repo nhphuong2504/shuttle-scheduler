@@ -449,4 +449,43 @@ describe("live reflow", () => {
     const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
     expect(conflicts.filter((row) => row.match_id === m1)).toEqual([]);
   });
+
+  it("(i) pushes a co-player on another court behind the source's real finish", async () => {
+    // An overrun is another court's problem when the two matches share a player. The
+    // co-player was reached only once some *other* match had moved, so an overrun that landed
+    // on top of it left a reported result overlapping a scheduled match for the same player.
+    const seeded = await seed({ label: "i", entrants: 5 });
+    const a = await placeMatch(seeded, { key: "i-a", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    // Shares entrant 0 with A, on another court, published just after A's planned 09:20 finish
+    // - but inside the ten-minute rest A's real 09:50 end demands, which is 10:00.
+    const b = await placeMatch(seeded, { key: "i-b", a: 0, b: 2, court: 2, at: iso(DAY1, "09:30") });
+    // Unrelated players on their own court: nothing may reach it.
+    const c = await placeMatch(seeded, { key: "i-c", a: 3, b: 4, court: 3, at: iso(DAY1, "09:30") });
+
+    await reportAt(a, iso(DAY1, "09:50"), seeded.tournamentId);
+
+    const times = await timesOf([b, c]);
+    // Exactly the source's real end plus the rest gap: the co-player's own published time is a
+    // floor it may be pushed later from, never earlier.
+    expect(times.get(b)).toBe(iso(DAY1, "10:00"));
+    // Court three is not in the chain at all.
+    expect(times.get(c)).toBe(iso(DAY1, "09:30"));
+  });
+
+  it("(i) control: keeps a co-player on another court when the rest already fits", async () => {
+    // The control for the case above: the same shared-player chain, but the co-player is
+    // published past the source's real end plus the rest gap. The new seed only has to reach
+    // it, so it must not move it.
+    const seeded = await seed({ label: "i2", entrants: 5 });
+    const a = await placeMatch(seeded, { key: "i2-a", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    // Shares entrant 0 with A; 10:05 is past the 10:00 the rest demands.
+    const b = await placeMatch(seeded, { key: "i2-b", a: 0, b: 2, court: 2, at: iso(DAY1, "10:05") });
+    const c = await placeMatch(seeded, { key: "i2-c", a: 3, b: 4, court: 3, at: iso(DAY1, "09:30") });
+
+    await reportAt(a, iso(DAY1, "09:50"), seeded.tournamentId);
+
+    const times = await timesOf([b, c]);
+    expect(times.get(b)).toBe(iso(DAY1, "10:05"));
+    expect(times.get(c)).toBe(iso(DAY1, "09:30"));
+  });
 });

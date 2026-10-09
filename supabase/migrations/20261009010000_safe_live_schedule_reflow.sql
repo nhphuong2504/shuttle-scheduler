@@ -4,7 +4,7 @@
 --
 -- Reporting a result calls `shift_live_schedule_after_match`, which since
 -- `20261008040000` is a wrapper around `shift_live_schedule_core`. The core was a
--- working 350-line algorithm, but it had four defects that a late result exposed:
+-- working 350-line algorithm, but it had five defects that a late result exposed:
 --
 -- 1. IT PULLED MATCHES EARLIER. `next_start := COALESCE(previous_end, shifted_time)`
 --    with no floor at the match's own published time. Whenever the previous match
@@ -31,7 +31,15 @@
 --    without enforcing the day's closing time at all. Breaks and the closing time
 --    are now part of the shifting loop itself.
 --
--- The remedy is a rewrite of the core, because the four defects are all in the same
+-- 5. THE SOURCE NEVER REACHED A CO-PLAYER ON ANOTHER COURT. The initial queue was the
+--    source's own court, plus the matches that *wait on* it. A match that merely
+--    shares a player with the source - that player's next game, published on another
+--    court - entered the queue only after some *other* match had moved, so the
+--    source's own overrun could leave a reported result and a scheduled match, same
+--    player, overlapping in time. The queue is now also seeded with the source's
+--    co-players on the same day, on any court.
+--
+-- The remedy is a rewrite of the core, because the five defects are all in the same
 -- arithmetic. The rewrite is deliberately conservative about writing:
 --
 --   * every match is given a start with
@@ -408,6 +416,31 @@ BEGIN
     AND work.match_id <> p_match_id
     AND (v_day_id IS NULL OR work.day_id = v_day_id)
     AND p_match_id = ANY(work.prereq_ids)
+  ON CONFLICT DO NOTHING;
+
+  -- A match that *shares a player with the source* is part of the cascade even when it
+  -- is on another court, and the two seeds above do not reach it: the court seed is the
+  -- source's own court, and the dependent seed is only for a match that declares the
+  -- source as a prerequisite. Without this one the source's own overrun never reached a
+  -- co-player elsewhere - a shared match entered the queue only after some *other* match
+  -- had moved - so a reported result could overlap the player's still-scheduled next
+  -- game on another court. The loop's player-rest floor (`previous.actual_end +
+  -- current_match.rest_gap`) is what then pushes the co-player behind the source's real
+  -- end; this seed only has to put it in the queue.
+  INSERT INTO live_schedule_queue
+  SELECT DISTINCT work.match_table, work.match_id
+  FROM live_schedule_work work
+  JOIN live_match_players theirs
+    ON theirs.match_table = work.match_table
+   AND theirs.match_id = work.match_id
+  JOIN live_match_players mine
+    ON mine.player_id = theirs.player_id
+   AND mine.match_table = p_table
+   AND mine.match_id = p_match_id
+  WHERE work.movable
+    AND (v_day_id IS NULL OR work.day_id = v_day_id)
+    AND (work.original_time, work.match_table, work.match_id::text)
+      > (source_time, p_table, p_match_id::text)
   ON CONFLICT DO NOTHING;
 
   WHILE EXISTS (SELECT 1 FROM live_schedule_queue)
@@ -823,6 +856,14 @@ BEGIN
       AND p.prosrc LIKE '%p_match_id = ANY(work.prereq_ids)%'
   ) THEN
     RAISE EXCEPTION 'M3: the reflow does not seed a dependent match on another court';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'shift_live_schedule_core'
+      AND p.prosrc LIKE '%mine.match_id = p_match_id%'
+  ) THEN
+    RAISE EXCEPTION 'M3: the reflow does not seed a co-player match on another court';
   END IF;
 
   IF has_function_privilege('authenticated', 'public.shift_live_schedule_after_match(text, uuid)', 'execute') THEN
