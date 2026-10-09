@@ -2203,3 +2203,54 @@ describe("update tournament details migration", () => {
     expect(sql).toMatch(/RAISE EXCEPTION 'M4:/);
   });
 });
+
+/**
+ * The roster is read one tournament at a time.
+ *
+ * Asserted against the migration source because the failure is invisible at runtime until
+ * somebody lists the platform: `public_players` answering to `anon` looks like working code.
+ * What matters is the shape of the three calls and that the view's grant is gone.
+ */
+describe("the scoped player reads migration", () => {
+  const dir = join(process.cwd(), "supabase", "migrations");
+  const sql = readFileSync(join(dir, "20261009000000_scoped_player_reads.sql"), "utf8");
+  const body = sql.replace(/--.*$/gm, "");
+
+  it("withdraws the roster view from anon and authenticated", () => {
+    expect(body).toMatch(/REVOKE SELECT ON public\.public_players FROM anon, authenticated/);
+    // Re-creating the view would restore nothing here, but it is the one-line change that
+    // would publish the link column, so it is kept out of this file.
+    expect(body).not.toMatch(/CREATE (OR REPLACE )?VIEW public\.public_players/i);
+  });
+
+  it("lists a tournament's people publicly, with three columns and no contact data", () => {
+    expect(body).toMatch(
+      /FUNCTION public\.tournament_players\(p_tournament_id uuid\)\s+RETURNS TABLE \(id uuid, name text, gender text\)/,
+    );
+    expect(body).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.tournament_players\(uuid\) TO anon, authenticated/,
+    );
+    const fn = body.slice(body.indexOf("FUNCTION public.tournament_players"));
+    expect(fn.slice(0, fn.indexOf("COMMENT ON"))).not.toMatch(/email|phone|profile_id/);
+  });
+
+  it("searches only for an editor of the tournament, and bounds what it returns", () => {
+    expect(body).toMatch(/IF NOT public\.can_edit_tournament\(p_tournament_id\) THEN/);
+    expect(body).toMatch(/char_length\(v_query\) < 2/);
+    expect(body).toMatch(/LIMIT least\(greatest\(COALESCE\(p_limit, 20\), 1\), 50\)/);
+    expect(body).toMatch(
+      /REVOKE ALL ON FUNCTION public\.search_players\(uuid, text, integer\) FROM PUBLIC, anon/,
+    );
+  });
+
+  it("creates a walk-in through the create-side predicate and returns the id", () => {
+    expect(body).toMatch(/IF NOT public\.can_add_walk_in_player\(\) THEN/);
+    expect(body).toMatch(/RETURNING players\.id INTO v_id/);
+    // The link is never a parameter: only an approved registration may set it.
+    expect(body).not.toMatch(/p_profile/);
+  });
+
+  it("checks its own grants", () => {
+    expect(sql).toMatch(/DO \$verify\$/);
+  });
+});

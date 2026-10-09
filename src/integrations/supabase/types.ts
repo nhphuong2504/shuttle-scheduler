@@ -1444,6 +1444,10 @@ export type Database = {
         Args: { p_email: string; p_tournament_id: string }
         Returns: string
       }
+      add_walk_in_player: {
+        Args: { p_email?: string; p_gender?: string; p_name: string; p_phone?: string }
+        Returns: string
+      }
       advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
       advance_tier_draw_locked: {
         Args: { p_draw_id: string }
@@ -1772,6 +1776,10 @@ export type Database = {
         Args: { p_days: Json; p_tournament_id: string }
         Returns: undefined
       }
+      search_players: {
+        Args: { p_limit?: number; p_query: string; p_tournament_id: string }
+        Returns: { gender: string; id: string; name: string }[]
+      }
       set_current_tournament: {
         Args: { p_tournament_id: string }
         Returns: undefined
@@ -1850,6 +1858,10 @@ export type Database = {
       tournament_of_tier_draw_match: {
         Args: { p_match_id: string }
         Returns: string
+      }
+      tournament_players: {
+        Args: { p_tournament_id: string }
+        Returns: { gender: string; id: string; name: string }[]
       }
       tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
       tournament_readiness_checks: {

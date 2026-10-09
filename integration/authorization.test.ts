@@ -122,19 +122,29 @@ describe("an unauthenticated visitor", () => {
     expect(data).toHaveLength(1);
   });
 
-  it("reads the anonymous roster projection and not the contact columns", async () => {
-    // `public_players` is a definer projection over id/name/gender. The base table is
-    // revoked from anon, so the naive roster query cannot leak emails and phone numbers
-    // that ship in the client bundle's reach.
-    const { data: projected, error: projectedError } = await anon
-      .from("public_players")
-      .select("id, name")
-      .limit(1);
-    expect(projectedError).toBeNull();
-    expect(Array.isArray(projected)).toBe(true);
+  it("cannot read the roster, only the people on one tournament", async () => {
+    // The roster is global - everyone ever entered anywhere - so it is not readable as a whole:
+    // the `public_players` view is no longer granted, and the table never was. What a visitor
+    // can ask for is the people on a tournament's entries, which the entries themselves
+    // already publish, through `tournament_players`.
+    const view = await expectRefused(() => anon.from("public_players").select("id").limit(1));
+    expect(view.message.toLowerCase()).toContain("permission denied");
+    const table = await expectRefused(() => anon.from("players").select("id").limit(1));
+    expect(table.message.toLowerCase()).toContain("permission denied");
 
-    const error = await expectRefused(() => anon.from("players").select("id").limit(1));
-    expect(error.message.toLowerCase()).toContain("permission denied");
+    const { data, error } = await anon.rpc("tournament_players", { p_tournament_id: tournamentId });
+    expect(error).toBeNull();
+    expect(Array.isArray(data)).toBe(true);
+    // Nothing but the three columns, whatever the people on it have given the desk.
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      expect(Object.keys(row).sort()).toEqual(["gender", "id", "name"]);
+    }
+
+    // Searching the roster is the desk's, so a visitor is refused outright.
+    const search = await expectRefused(() =>
+      anon.rpc("search_players", { p_tournament_id: tournamentId, p_query: "an" }),
+    );
+    expect(search.message.toLowerCase()).toContain("permission denied");
   });
 
   it("reads no profiles", async () => {
@@ -705,33 +715,93 @@ describe("player identity and the contact read", () => {
     expect(updated.error?.message ?? "").toMatch(/approved registration/i);
   });
 
-  it("still lets a client add a person to the roster, and the roster is where the id comes from", async () => {
-    // The desk's walk-in path, and the shape of it matters twice over.
-    //
-    // It has to keep working: creation is deliberately broader than reading, because a
-    // walk-in has no entry yet and contact data is readable only through one.
-    //
-    // And it must not ask for the row back: `RETURNING` is checked against the read policy,
-    // so requesting representation here fails with a row-level security error even though
-    // the write is permitted. The id the desk needs comes from `public_players` instead,
-    // which is the projection the roster screen is built on.
-    const name = `itest-walk-in-${Date.now().toString(36)}`;
-    const inserted = await contactOwner.client.from("players").insert({ name } as never);
-    expect(inserted.error).toBeNull();
-    expect(inserted.data).toBeNull();
+  it("lets a desk add a person to the roster and hands the id back", async () => {
+    // The direct insert still works - creation is deliberately broader than reading, because a
+    // walk-in has no entry yet and contact data is readable only through one - but it cannot
+    // return the row it wrote: `RETURNING` is checked against the read policy.
+    const direct = await contactOwner.client
+      .from("players")
+      .insert({ name: `itest-direct-${Date.now().toString(36)}` } as never);
+    expect(direct.error).toBeNull();
+    expect(direct.data).toBeNull();
 
-    const { data: rosterRows, error: rosterError } = await contactOwner.client
-      .from("public_players")
-      .select("id, name")
-      .eq("name", name);
-    expect(rosterError).toBeNull();
-    expect(rosterRows).toHaveLength(1);
-    walkInPlayerId = rosterRows?.[0]?.id ?? "";
+    // `add_walk_in_player` is how the app creates one now, because it returns the id. The roster
+    // used to be re-read to find the person just made, and it is no longer readable as a whole.
+    const name = `itest-walk-in-${Date.now().toString(36)}`;
+    const { data: id, error } = await contactOwner.client.rpc("add_walk_in_player", {
+      p_name: name,
+      p_gender: "M",
+    });
+    expect(error).toBeNull();
+    walkInPlayerId = (id as string | null) ?? "";
     expect(walkInPlayerId).toBeTruthy();
 
-    // And the client still cannot read the row it just wrote, which is the rule that made
-    // the representation-free insert necessary rather than incidental.
+    // Not a person nobody may create: a user who owns or edits no tournament is refused.
+    const refused = await expectRefused(() =>
+      outsider.client.rpc("add_walk_in_player", { p_name: "itest-outsider-walk-in" }),
+    );
+    expect(refused.message).toContain(NOT_AUTHORIZED);
+    const blank = await contactOwner.client.rpc("add_walk_in_player", { p_name: "   " });
+    expect(blank.error?.message ?? "").toMatch(/needs a name/i);
+
+    // And the client still cannot read the row it just wrote, which is the rule that made the
+    // representation-free insert necessary rather than incidental.
     expect(await contactRows(contactOwner, walkInPlayerId)).toEqual([]);
+  });
+
+  it("finds people by name for an editor, one match at a time", async () => {
+    const found = await contactOwner.client.rpc("search_players", {
+      p_tournament_id: contactTournamentId,
+      p_query: "itest-walk-in",
+    });
+    expect(found.error).toBeNull();
+    expect((found.data as { id: string }[]).map((p) => p.id)).toContain(walkInPlayerId);
+    for (const row of (found.data ?? []) as Record<string, unknown>[]) {
+      expect(Object.keys(row).sort()).toEqual(["gender", "id", "name"]);
+    }
+
+    // Too short is an empty answer, not a listing of everyone.
+    const short = await contactOwner.client.rpc("search_players", {
+      p_tournament_id: contactTournamentId,
+      p_query: "i",
+    });
+    expect(short.data).toEqual([]);
+
+    // `%` and `_` are what somebody typed, not wildcards.
+    const wildcard = await contactOwner.client.rpc("search_players", {
+      p_tournament_id: contactTournamentId,
+      p_query: "%%",
+    });
+    expect(wildcard.data).toEqual([]);
+
+    // The cap is a server rule, whatever the caller asks for.
+    const capped = await contactOwner.client.rpc("search_players", {
+      p_tournament_id: contactTournamentId,
+      p_query: "itest",
+      p_limit: 10_000,
+    });
+    expect(((capped.data as unknown[]) ?? []).length).toBeLessThanOrEqual(50);
+
+    // Only an editor of THIS tournament: an editor of another one, and a bystander, are refused.
+    const bystander = await expectRefused(() =>
+      outsider.client.rpc("search_players", {
+        p_tournament_id: contactTournamentId,
+        p_query: "itest-walk-in",
+      }),
+    );
+    expect(bystander.message).toContain(NOT_AUTHORIZED);
+  });
+
+  it("lists the people on a tournament and nobody else", async () => {
+    const mine = await outsider.client.rpc("tournament_players", {
+      p_tournament_id: contactTournamentId,
+    });
+    expect(mine.error).toBeNull();
+    const ids = ((mine.data ?? []) as { id: string }[]).map((p) => p.id);
+    expect(ids).toContain(enteredPlayerId);
+    // A person on no entry here is not listed, however the caller is signed in.
+    expect(ids).not.toContain(unenteredPlayerId);
+    expect(ids).not.toContain(walkInPlayerId);
   });
 
   it("refuses a direct write to the request entries", async () => {

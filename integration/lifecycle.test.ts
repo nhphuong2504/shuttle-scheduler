@@ -167,19 +167,11 @@ describe("a tournament can be created and run end to end", () => {
     const teams: Team[] = [];
     for (let i = 0; i < PLAYER_COUNT; i += 1) {
       const playerName = `itest lifecycle player ${i}`;
-      await createPlayer({ name: playerName, gender: "M" });
-      // The id comes from the roster projection rather than from the insert, which is what
-      // the desk does too: `createPlayer` returns nothing because PostgreSQL checks
-      // `RETURNING` against the read policy, and a freshly created player has no entry, so
-      // nobody may read it back yet. `public_players` is the definer view that carries it.
-      const { data: rosterPlayers, error: rosterError } = await admin.client
-        .from("public_players")
-        .select("id")
-        .eq("name", playerName)
-        .limit(1);
-      if (rosterError) throw new Error(rosterError.message);
-      const playerId = rosterPlayers?.[0]?.id;
-      expect(playerId, `the roster did not show ${playerName}`).toBeTruthy();
+      // The id comes back from the call: `add_walk_in_player` returns it, which a table insert
+      // cannot (PostgreSQL checks `RETURNING` against the read policy, and a fresh walk-in has
+      // no entry yet), and the roster is no longer readable as a whole to look it up in.
+      const playerId = await createPlayer({ name: playerName, gender: "M" });
+      expect(playerId, `creating ${playerName} returned no id`).toBeTruthy();
       playerIds.push(playerId as string);
       const team = await createTeam({
         categoryId: categoryId as string,

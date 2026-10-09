@@ -629,6 +629,26 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
       await rpc(registrationQueue);
       return;
     }
+    /**
+     * The roster, as the app now reads it: the people on this tournament, and a search over the
+     * rest. The roster as a whole is no longer readable, so there is no table to serve - the
+     * fixture's `players` stand in for "everyone", which is enough to exercise the picker.
+     */
+    if (target === "rpc/tournament_players") {
+      await rpc(fixture.tables["players"] ?? []);
+      return;
+    }
+    if (target === "rpc/search_players") {
+      const args = (route.request().postDataJSON() ?? {}) as { p_query?: string };
+      const needle = (args.p_query ?? "").trim().toLowerCase();
+      const rows = (fixture.tables["players"] ?? []) as { name?: string }[];
+      await rpc(needle.length < 2 ? [] : rows.filter((p) => (p.name ?? "").toLowerCase().includes(needle)));
+      return;
+    }
+    if (target === "rpc/add_walk_in_player") {
+      await rpc("00000000-0000-4000-8000-0000000000aa");
+      return;
+    }
     if (target.startsWith("rpc/tournament_readiness")) {
       await rpc([]);
       return;

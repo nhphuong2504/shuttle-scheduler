@@ -124,36 +124,32 @@ async function withScheduleImpact(
 }
 
 /**
- * Adds a person to the global player roster.
+ * Adds a person to the global player roster and returns the new id.
  *
- * Returns nothing, and that is forced rather than a preference. PostgreSQL applies
- * the table's **select** policy to `RETURNING`, and `players` deliberately does not
- * admit the row a client has just created: `players read` is "you are this person,
- * or a tournament they entered", and a walk-in has no entry at that moment. Requesting
- * representation therefore fails with "new row violates row-level security policy" -
- * the write is permitted and the read-back is not.
- *
- * The callers do not need the row: the roster they render comes from the
- * `public_players` projection, which carries the id, and it is refetched after this
- * returns. `createTeam` below *does* return its row, because a team is readable by
- * whoever may edit its tournament - which is the person creating it.
+ * Through `add_walk_in_player` rather than a table insert, and the return value is the reason.
+ * PostgreSQL applies the table's **select** policy to `RETURNING`, and `players` deliberately
+ * does not admit the row a client has just created: "you are this person, or a tournament they
+ * entered", and a walk-in has no entry at that moment. A direct insert therefore had to return
+ * nothing and leave the caller to find the person again in the roster - which no longer exists
+ * as a readable whole. The function runs as definer, checks `can_add_walk_in_player()` itself,
+ * and hands back the id, which `createTeam` can use straight away.
  */
 export async function createPlayer(input: {
   name: string;
   email?: string;
   phone?: string;
   gender?: string;
-}): Promise<void> {
-  // `profile_id` is not accepted here, and could not be set if it were: the column is
-  // withheld from `authenticated`, and the guard trigger refuses an insert that names
-  // it. A person's link is established by approving their registration request.
-  const { error } = await supabase.from("players").insert({
-    name: input.name.trim(),
-    email: input.email?.trim() || null,
-    phone: input.phone?.trim() || null,
-    gender: input.gender || null,
+}): Promise<string> {
+  // `profile_id` is not accepted here, and could not be set if it were: the function has no such
+  // parameter. A person's link is established by approving their registration request.
+  const { data, error } = await supabase.rpc("add_walk_in_player", {
+    p_name: input.name.trim(),
+    ...(input.email?.trim() ? { p_email: input.email.trim() } : {}),
+    ...(input.phone?.trim() ? { p_phone: input.phone.trim() } : {}),
+    ...(input.gender ? { p_gender: input.gender } : {}),
   });
   if (error) throw new Error(error.message);
+  return data as string;
 }
 
 // `tournament_id` is intentionally omitted: the `teams_shape` trigger derives it

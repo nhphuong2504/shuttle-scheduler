@@ -2767,3 +2767,58 @@ ALTER FUNCTION public.shift_live_schedule_core(text, uuid) RENAME TO shift_live_
 Rolling back the rename restores the old behaviour, including the old grant being absent: re-grant
 `EXECUTE` to `authenticated` only if a caller outside the `SECURITY DEFINER` functions needs it, and
 none does today.
+
+
+---
+
+## Applying `20261009000000_scoped_player_reads.sql`
+
+The player roster stops being readable as a whole.
+
+### What it changes
+
+`players` is the one global table, and `public_players` (a definer view over it) was granted to `anon`
+and `authenticated`. The app read all of it on every page: the Entries screen showed the platform's
+roster as "Players" (384, for a tournament of fifty), and anyone could list everybody who had ever played
+anywhere. Three calls replace the read, and the view's grant is withdrawn.
+
+- `tournament_players(p_tournament_id)` - id, name and gender of everyone with a team row in the
+  tournament. Granted to `anon` and `authenticated`: the entries are public and so are the names on them.
+- `search_players(p_tournament_id, p_query, p_limit)` - a name search over the whole roster for the desk
+  entering someone. `can_edit_tournament` of that tournament only; two characters or more; at most 50 rows;
+  `%` and `_` are literal. Not callable by `anon`.
+- `add_walk_in_player(name, email, phone, gender)` - creates an unlinked person and returns the id, which a
+  table insert cannot (`RETURNING` is checked against the read policy). `can_add_walk_in_player()`; no
+  `profile_id` parameter, so the link is still made only by approving a registration.
+- `REVOKE SELECT ON public.public_players FROM anon, authenticated`. The view stays, for definer
+  functions. Nothing is changed on `players` itself.
+
+Application: `usePlayers()` now reads `tournament_players` for the current tournament (so the cache is keyed
+per tournament); `searchPlayers()` feeds the new `PlayerPicker`; `createPlayer()` returns the new id. The
+function entries in `src/integrations/supabase/types.ts` were written by hand to match; regenerate them.
+
+### Verify after applying
+
+```sql
+SELECT has_table_privilege('anon', 'public.public_players', 'select');                                  -- false
+SELECT has_table_privilege('authenticated', 'public.public_players', 'select');                         -- false
+SELECT has_function_privilege('anon', 'public.tournament_players(uuid)', 'execute');                    -- true
+SELECT has_function_privilege('anon', 'public.search_players(uuid, text, integer)', 'execute');         -- false
+SELECT has_function_privilege('authenticated', 'public.add_walk_in_player(text, text, text, text)', 'execute'); -- true
+```
+
+The migration also checks these itself (`DO $verify$`) and fails if any is wrong. Then run
+`npm run test:integration` against the local stack: `authorization.test.ts` covers the anonymous refusal,
+the editor-only search, the wildcard and cap rules, and the walk-in id.
+
+### Rolling back
+
+```sql
+GRANT SELECT ON public.public_players TO anon, authenticated;
+DROP FUNCTION public.add_walk_in_player(text, text, text, text);
+DROP FUNCTION public.search_players(uuid, text, integer);
+DROP FUNCTION public.tournament_players(uuid);
+```
+
+The application reads the three functions, so roll it back with the migration; rolling back only the
+grant leaves a build that works but shows the whole roster again.

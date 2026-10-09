@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { PlayerPicker } from "@/components/player-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,7 @@ import {
   useCategories,
   usePlayers,
   useTeams,
+  type Player,
 } from "@/lib/tournament/data";
 import { cn } from "@/lib/utils";
 
@@ -140,8 +142,10 @@ function EntriesPage() {
   const [gender, setGender] = useState<string>("");
 
   const [categoryId, setCategoryId] = useState<string>("");
-  const [p1, setP1] = useState<string>("");
-  const [p2, setP2] = useState<string>("");
+  // The people chosen for the entry. They are held as rows, not ids: a person found by search
+  // is not on this tournament yet, so `players` cannot give their name back.
+  const [p1, setP1] = useState<Player | null>(null);
+  const [p2, setP2] = useState<Player | null>(null);
 
   const playerMap = useMemo(() => indexBy(players), [players]);
   const category = (categories ?? []).find((c) => c.id === categoryId);
@@ -208,7 +212,12 @@ function EntriesPage() {
 
   const addPlayer = async () => {
     try {
-      await createPlayer({ name, email, phone, gender });
+      const created = await createPlayer({ name, email, phone, gender });
+      // Put the new person straight into the entry being built: the next thing anyone does
+      // with a walk-in is enter them.
+      const person: Player = { id: created, name: name.trim(), gender: gender || null };
+      if (!p1) setP1(person);
+      else if (isPair && !p2) setP2(person);
       setName("");
       setEmail("");
       setPhone("");
@@ -224,18 +233,16 @@ function EntriesPage() {
     try {
       if (!categoryId || !p1) return;
       if (isPair && !p2) throw new Error("This category needs a pair — pick both players.");
-      if (isPair && p1 === p2) throw new Error("A pair needs two different players.");
-      await createTeam({ categoryId, player1: p1, player2: isPair ? p2 : null });
-      setP1("");
-      setP2("");
+      if (isPair && p1.id === p2?.id) throw new Error("A pair needs two different players.");
+      await createTeam({ categoryId, player1: p1.id, player2: isPair && p2 ? p2.id : null });
+      setP1(null);
+      setP2(null);
       toast.success("Entry added");
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add entry");
     }
   };
-
-  const eligible = (players ?? []).filter((p) => !atCap(p.id));
 
   const stats = useMemo(() => {
     const all = teams ?? [];
@@ -249,18 +256,15 @@ function EntriesPage() {
       entered.add(pid);
       byCount.set(set.size, (byCount.get(set.size) ?? 0) + 1);
     }
-    const totalPlayers = (players ?? []).length;
     return {
-      totalPlayers,
       /** The people with an entry in *this* tournament, which is the count a reader means. */
       entered: entered.size,
       entries: all.length,
       active: active.length,
       withdrawn,
-      unassigned: Math.max(0, totalPlayers - entered.size),
       byCount,
     };
-  }, [teams, players, categoryCount]);
+  }, [teams, categoryCount]);
 
   return (
     <Page
@@ -279,15 +283,7 @@ function EntriesPage() {
           canEdit ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-4",
         )}
       >
-        {canEdit ? (
-          <StatTile
-            label="Players"
-            value={stats.totalPlayers}
-            hint={`${stats.unassigned} with no entry`}
-          />
-        ) : (
-          <StatTile label="Players" value={stats.entered} hint="Taking part" />
-        )}
+        <StatTile label="Players" value={stats.entered} hint="Taking part" />
         <StatTile label="Entries" value={stats.entries} hint="Across all categories" />
         <StatTile label="Active" value={stats.active} tone="good" hint="Still in the draw" />
         {canEdit || stats.withdrawn > 0 ? (
@@ -386,16 +382,25 @@ function EntriesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="p1">{isPair ? "Player 1" : "Player"}</Label>
-                <PlayerSelect id="p1" value={p1} onChange={setP1} options={eligible} />
+                <PlayerPicker
+                  id="p1"
+                  tournamentId={tournament?.id ?? null}
+                  selected={p1}
+                  onChange={setP1}
+                  exclude={new Set(p2 ? [p2.id] : [])}
+                  hidden={atCap}
+                />
               </div>
               {isPair ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="p2">Player 2</Label>
-                  <PlayerSelect
+                  <PlayerPicker
                     id="p2"
-                    value={p2}
+                    tournamentId={tournament?.id ?? null}
+                    selected={p2}
                     onChange={setP2}
-                    options={eligible.filter((p) => p.id !== p1)}
+                    exclude={new Set(p1 ? [p1.id] : [])}
+                    hidden={atCap}
                   />
                 </div>
               ) : null}
@@ -504,34 +509,5 @@ function EntriesPage() {
         </div>
       </div>
     </Page>
-  );
-}
-
-function PlayerSelect({
-  value,
-  onChange,
-  options,
-  id,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { id: string; name: string }[];
-  // Required, not optional: a combobox with no accessible name is the defect this
-  // prop exists to prevent, so making it optional would let the next caller omit it.
-  id: string;
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger id={id}>
-        <SelectValue placeholder="Choose player" />
-      </SelectTrigger>
-      <SelectContent className="max-h-72">
-        {options.map((p) => (
-          <SelectItem key={p.id} value={p.id}>
-            {p.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }

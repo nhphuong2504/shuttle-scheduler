@@ -1065,3 +1065,33 @@ describe("the read-only workspace removes the operator's controls, rather than d
     expect(scores).toMatch(/open=\{!!selectedMatch && canEdit\}/);
   });
 });
+
+/**
+ * No screen reads the roster as a whole.
+ *
+ * `players` is global, so a screen that selects all of it learns about every tournament but
+ * its own, and the number it shows is the platform's rather than the event's - the 384 "Players"
+ * on a tournament of fifty. People are read through `tournament_players` (this tournament) or
+ * `search_players` (the desk, a name at a time). The view that allowed the other way is no longer
+ * granted, so a reintroduced read would fail at runtime for everyone; this catches it earlier.
+ */
+describe("the player roster is not read as a whole", () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(path);
+      return /\.(ts|tsx)$/.test(entry.name) && !/\.test\./.test(entry.name) ? [path] : [];
+    });
+
+  it("selects neither public_players nor players directly", () => {
+    const offenders = walk(join(process.cwd(), "src"))
+      .filter((file) => !file.endsWith(join("integrations", "supabase", "types.ts")))
+      .filter((file) =>
+        /\.from\(\s*["'](public_players|players)["']\s*\)\s*\.select/.test(
+          readFileSync(file, "utf8"),
+        ),
+      )
+      .map((file) => relative(process.cwd(), file));
+    expect(offenders).toEqual([]);
+  });
+});

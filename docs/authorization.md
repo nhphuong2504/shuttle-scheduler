@@ -585,7 +585,12 @@ the placement stage — and be refused for exactly the entrants who have not bee
 
 Creation stays broader than reading, on purpose: an operator may create a walk-in they cannot
 read back, because contact data is readable only through an entry and a fresh walk-in has none.
-The roster those screens render is `public_players`, which carries no email address and no link.
+The people those screens render come from `tournament_players(tournament)` - id, name and gender of
+everyone with an entry in that tournament, no email and no link - and the desk finds someone new through
+`search_players(tournament, text)`, which only an editor of that tournament may call. The roster as a whole
+is not readable by anyone: `public_players` is no longer granted to `anon` or `authenticated`
+([`20261009000000`](../supabase/migrations/20261009000000_scoped_player_reads.sql)). A walk-in is created with
+`add_walk_in_player`, which returns the id the table insert cannot.
 
 ### The request entries
 
@@ -694,9 +699,9 @@ entry, the entry says so — the list is a record of what was deferred and why, 
    — a tournament scope, read from an entry rather than from a placement projection
    (Section 7). The residual is that `tournament_editors` is per tournament rather than per
    team, so an editor can read the contact data of every entrant in their tournament, which is
-   the same set of people the desk is calling about. `public_players` remains the anonymous-safe
-   projection (`id, name, gender, created_at`), and `anon` still has no `SELECT` on `players`
-   itself.
+   the same set of people the desk is calling about. The roster
+   projection `public_players` is no longer granted to either client role; the names on a tournament are
+   read through `tournament_players`, and `anon` still has no `SELECT` on `players` itself.
 4. **`desk_activity` has no tournament scope.** The policy resolves a tournament from the
    match, so the debt is bounded per match rather than per tournament.
 5. **Re-application is open, re-decision is not.** The unique key is partial on

@@ -651,18 +651,15 @@ describe("a two-day placement tournament, played end to end", () => {
     const tag = Date.now().toString(36);
     const refs = [...new Set(EVENTS.flatMap((e) => e.entries.flat()).filter((r): r is string => !!r))];
     expect(refs).toHaveLength(50);
-    for (const ref of refs) {
-      await createPlayer({ name: `sim ${tag} ${ref}`, gender: ref.startsWith("m") ? "M" : "F" });
-    }
-    const roster = must(
-      await admin.client.from("public_players").select("id, name").like("name", `sim ${tag} %`).limit(200),
-    ) as { id: string; name: string }[];
     const idOf = new Map<string, string>();
-    for (const row of roster) idOf.set(row.name.replace(`sim ${tag} `, ""), row.id);
     for (const ref of refs) {
-      const id = idOf.get(ref);
-      expect(id, `the roster did not show ${ref}`).toBeTruthy();
-      playerIds.push(id as string);
+      const id = await createPlayer({
+        name: `sim ${tag} ${ref}`,
+        gender: ref.startsWith("m") ? "M" : "F",
+      });
+      expect(id, `creating ${ref} returned no id`).toBeTruthy();
+      idOf.set(ref, id);
+      playerIds.push(id);
     }
 
     let totalEntries = 0;

@@ -746,10 +746,9 @@ const buildFixture = (
       tournament_day_breaks: [],
       courts,
       categories,
+      // Served to `rpc/tournament_players` and `rpc/search_players` by the app mock; the roster
+      // is no longer a readable table.
       players,
-      // The roster the app reads is the definer projection, not `players`: the table's own
-      // policy keys on tournament edit access, which a participant does not have.
-      public_players: players,
       teams,
       placement_entrants: entrants,
       placement_matches: [],

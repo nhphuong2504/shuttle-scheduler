@@ -1134,27 +1134,26 @@ export function useCourts() {
 }
 
 /**
- * The global player roster.
+ * The people in the current tournament.
  *
- * Reads the `public_players` projection, which is a definer view over the roster
- * columns: id, name, gender, when the row was added. It is deliberately not
- * `players`, and the reason is now narrower than when this was written. That
- * table's read policy admits the person the row belongs to and the owner or
- * editors of a tournament it has entered - so a participant can read their own
- * contact row, and cannot read anybody else's, and no reader sees the roster as a
- * whole. Every screen wants the roster as a whole, including for people who can
- * read nothing on `players` at all (a visitor), so the projection is what they
- * read. It is also the only shape that never carries an email address.
+ * Not the roster. `players` is global - one row per person ever entered anywhere - and this
+ * used to read all of it through `public_players` on every page, which made the Entries screen
+ * report the whole platform as "Players" and let anyone list everybody who had ever played.
+ * A page wants the names of the people on *this* tournament's entries, and
+ * `tournament_players` answers exactly that: id, name and gender of everyone with a team row
+ * here, no email, no phone, no link. Pickers that need to reach beyond the tournament use
+ * `searchPlayers` instead.
  */
 export function usePlayers() {
+  const tournamentId = useTournamentId();
   return useQuery({
-    queryKey: keys.players,
+    queryKey: scopedKey(keys.players, tournamentId),
+    enabled: !!tournamentId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("public_players").select("*").order("name");
+      const { data, error } = await supabase.rpc("tournament_players", {
+        p_tournament_id: tournamentId as string,
+      });
       if (error) throw new Error(error.message);
-      // The view's columns are all nullable as far as PostgREST can tell, so the rows
-      // are narrowed here rather than asserted. A row without an id or a name is not a
-      // player the roster can render, and dropping it is better than a blank line.
       const players: Player[] = [];
       for (const row of data ?? []) {
         if (!row.id || !row.name) continue;
@@ -1163,6 +1162,31 @@ export function usePlayers() {
       return players;
     },
   });
+}
+
+/** Fewest characters the server will search on; shorter text is not worth a request. */
+export const PLAYER_SEARCH_MIN_CHARS = 2;
+
+/**
+ * Looks a person up in the global roster by name, for the desk adding an entry.
+ *
+ * Editors of the tournament only, at least two characters, at most `limit` rows. Returns an
+ * empty list for text that is too short rather than asking, so a half-typed box costs nothing.
+ */
+export async function searchPlayers(
+  tournamentId: string,
+  query: string,
+  limit = 20,
+): Promise<Player[]> {
+  const text = query.trim();
+  if (text.length < PLAYER_SEARCH_MIN_CHARS) return [];
+  const { data, error } = await supabase.rpc("search_players", {
+    p_tournament_id: tournamentId,
+    p_query: text,
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({ id: row.id, name: row.name, gender: row.gender }));
 }
 
 export function useTeams() {
