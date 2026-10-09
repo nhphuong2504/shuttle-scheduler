@@ -26,7 +26,13 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-import type { BaselineSlot } from "@/lib/scheduling";
+import { compareIds, normalizeBreaks, relateToDecided } from "@/lib/scheduling";
+import type {
+  BaselineSlot,
+  CandidateInterval,
+  DecidedInterval,
+  RestConstraint,
+} from "@/lib/scheduling";
 
 import type { ScheduleSummary } from "./actions";
 import type {
@@ -137,6 +143,28 @@ function dayOwning(start: number, orderedDays: readonly TournamentDay[]): number
     if (dayWindowBounds(byWindow[candidate]!).start <= start) index = candidate;
   }
   return index;
+}
+
+/**
+ * An item's own rest rules, in the shape the core's `relateToDecided` reads.
+ *
+ * `placementItems` and `tierItems` already write each row's stage rest gap onto `restAfterMinutes`,
+ * so this hands the freeze the same numbers `resolveStageItems` would apply to a solver run. It
+ * copies the fields rather than spreading the whole item so a later addition to `StageItem` cannot
+ * silently flow into the rest relation.
+ */
+function restRulesOf(constraint: RestConstraint): RestConstraint {
+  return {
+    ...(constraint.restAfterMinutes === undefined
+      ? {}
+      : { restAfterMinutes: constraint.restAfterMinutes }),
+    ...(constraint.restBeforeMinutes === undefined
+      ? {}
+      : { restBeforeMinutes: constraint.restBeforeMinutes }),
+    ...(constraint.restOverrides === undefined
+      ? {}
+      : { restOverrides: constraint.restOverrides }),
+  };
 }
 
 export {
@@ -367,6 +395,14 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
    * The same guard applies to the court's decided history: a match that has since overrun into this
    * window cannot be pinned against it, because two fixed matches overlapping on one resource is a
    * physical impossibility the problem validator rejects outright.
+   *
+   * A pin is a **validity** claim as well as "do not move the match the desk is about to call". A
+   * frozen item is `fixed: true` in the problem, and the validators exempt a fixed match from the
+   * floor, the hard end, breaks, availability and rest — an exemption meant for *decided history*,
+   * which a pin is not. A pin whose time the day has already passed, that sleeps inside a break,
+   * that finishes after a non-final day's close, or that breaks rest with decided history or with
+   * another pin is therefore not taken: the row stays movable and the solver re-places it. Kept as
+   * it stands, the freeze would preserve a time the solver itself would have refused to choose.
    */
   const committedById = new Map<string, BaselineSlot>();
   for (const match of existing) {
@@ -398,20 +434,143 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     decidedWindowsByCourt.set(item.courtNumber, list);
   }
 
-  const applyFreeze = (item: StageItem): StageItem => {
-    if (item.fixed || !freezeIds.has(item.id)) return item;
+  /**
+   * The decided history a pin must not contradict: every fixed (reported, in-progress or walkover)
+   * occupancy, with the rest gap its own stage gives it.
+   */
+  interface Occupancy {
+    start: number;
+    end: number;
+    courtNumber: number | null;
+    participantIds: readonly string[];
+    rest: RestConstraint;
+  }
+  const decidedOccupancies: Occupancy[] = [];
+  for (const item of [...placementRaw, ...knockoutRaw]) {
+    if (!item.fixed || item.start == null || item.end == null) continue;
+    decidedOccupancies.push({
+      start: item.start,
+      end: item.end,
+      courtNumber: item.courtNumber ?? null,
+      participantIds: item.participantIds,
+      rest: restRulesOf(item),
+    });
+  }
+
+  /** The last day a plan may overrun on, which is the last day that has courts. */
+  const lastCourtDayId =
+    [...orderedDays]
+      .filter((day) => courtsForDay(allCourts, dayCourtIds?.get(day.id) ?? new Set()).length > 0)
+      .pop()?.id ?? null;
+
+  /** A row the freeze would pin, with the window its current time implies. */
+  interface FreezeCandidate {
+    item: StageItem;
+    start: number;
+    end: number;
+  }
+
+  /** Rows the freeze would pin, minus the ones whose current time is no longer legal. */
+  const candidates: FreezeCandidate[] = [];
+  for (const item of [...placementRaw, ...knockoutRaw]) {
+    if (item.fixed || !freezeIds.has(item.id)) continue;
     const committed = committedById.get(item.id);
-    if (!committed) return item;
+    if (!committed) continue;
     const owningDay = orderedDays[dayOwning(committed.start, orderedDays)];
-    const dayCourts = owningDay
-      ? courtsForDay(allCourts, dayCourtIds?.get(owningDay.id) ?? new Set())
-      : [];
-    if (!dayCourts.some((court) => court.id === committed.resourceId)) return item;
+    if (!owningDay) continue;
+    const dayCourts = courtsForDay(allCourts, dayCourtIds?.get(owningDay.id) ?? new Set());
+    if (!dayCourts.some((court) => court.id === committed.resourceId)) continue;
+
     const start = committed.start;
     const end = start + item.durationMinutes * MINUTE;
+
+    // A pin is the match the desk is about to call, and one the day has already passed is not that
+    // match any more. Releasing it lets the solver pull it forward to the floor rather than keeping
+    // a stale time the desk can no longer act on.
+    if (start < nextWholeMinute) continue;
+    // A match may not sleep inside a break. The day runner steps movable work over breaks, so a pin
+    // that kept a break-violating time would preserve exactly what the run exists to fix.
+    const breaks = normalizeBreaks(
+      breakWindowsFor(owningDay, breaksByDayId?.get(owningDay.id)),
+      dayWindowBounds(owningDay).end,
+    );
+    if (breaks.some((brk) => start < brk.end && brk.start < end)) continue;
+    // Every day but the last is a wall, and the last day is where a long plan is allowed to overrun.
+    // So a pin crossing a non-final day's close is invalid; the same on the final day is left alone.
+    if (owningDay.id !== lastCourtDayId && end > dayWindowBounds(owningDay).end) continue;
+    // The court's decided history, kept exactly as it was: two fixed matches on one resource is a
+    // physical impossibility the problem validator rejects.
     const busy = decidedWindowsByCourt.get(item.courtNumber ?? -1) ?? [];
-    if (busy.some((window) => start < window.end && window.start < end)) return item;
-    return { ...item, frozen: true, fixed: true, start, end };
+    if (busy.some((window) => start < window.end && window.start < end)) continue;
+
+    candidates.push({ item, start, end });
+  }
+
+  /**
+   * Whether pinning `candidate` would collide with `occupancy`: same court at overlapping times, or
+   * a shared player inside the forbidden rest window.
+   *
+   * The rest maths and the direction of the comparison both come from the core's own
+   * `relateToDecided`, so the freeze cannot invent a rule the solver would not apply. Each item
+   * carries the gap of its own stage, which is the number `placementItems`/`tierItems` wrote and the
+   * one `resolveStageItems` applies when both items are in the same stage — the only case where a
+   * pin is decided against another row of the same run.
+   */
+  const collidesWith = (candidate: FreezeCandidate, occupancy: Occupancy): boolean => {
+    if (
+      candidate.item.courtNumber != null &&
+      occupancy.courtNumber === candidate.item.courtNumber &&
+      candidate.start < occupancy.end &&
+      occupancy.start < candidate.end
+    ) {
+      return true;
+    }
+    const shared = candidate.item.participantIds.filter((id) =>
+      occupancy.participantIds.includes(id),
+    );
+    if (!shared.length) return false;
+    const interval: CandidateInterval = {
+      durationMinutes: candidate.item.durationMinutes,
+      ...restRulesOf(candidate.item),
+    };
+    const decided: DecidedInterval = {
+      start: occupancy.start,
+      end: occupancy.end,
+      ...occupancy.rest,
+    };
+    return shared.some(
+      (id) => relateToDecided(candidate.start, interval, decided, id) === "conflict",
+    );
+  };
+
+  /**
+   * The rows that actually get pinned. A candidate must clear decided history and every pin already
+   * accepted before it. Sorting by time then id means two pins that conflict resolve to the earlier
+   * one — a held pair of reflow rows is half-released rather than both kept, and the later row goes
+   * back to the solver.
+   */
+  const acceptedPins: Occupancy[] = [];
+  const frozenWindow = new Map<string, { start: number; end: number }>();
+  for (const candidate of [...candidates].sort(
+    (a, b) => a.start - b.start || compareIds(a.item.id, b.item.id),
+  )) {
+    if (decidedOccupancies.some((occupancy) => collidesWith(candidate, occupancy))) continue;
+    if (acceptedPins.some((occupancy) => collidesWith(candidate, occupancy))) continue;
+    acceptedPins.push({
+      start: candidate.start,
+      end: candidate.end,
+      courtNumber: candidate.item.courtNumber ?? null,
+      participantIds: candidate.item.participantIds,
+      rest: restRulesOf(candidate.item),
+    });
+    frozenWindow.set(candidate.item.id, { start: candidate.start, end: candidate.end });
+  }
+
+  const applyFreeze = (item: StageItem): StageItem => {
+    const window = frozenWindow.get(item.id);
+    return window
+      ? { ...item, frozen: true, fixed: true, start: window.start, end: window.end }
+      : item;
   };
 
   const placementAll = placementRaw.map(applyFreeze);

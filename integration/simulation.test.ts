@@ -331,6 +331,25 @@ async function conflictsNow(): Promise<ScheduleConflict[]> {
 // --- Scheduling ------------------------------------------------------------------
 
 /** Generates whatever stage is missing, then plans and applies the whole queue. */
+/**
+ * The planner's "now" when Update schedule is pressed.
+ *
+ * The simulation plays courts one after another, so `clock` (the end of the last match played)
+ * runs ahead of the other courts' next matches, which in a real venue would already be on court.
+ * Handing the planner that clock makes every one of those matches look overdue, and an overdue
+ * match that has not started is released and moved to "now" - so each rebuild would push every
+ * other court forward and the delay would compound until the last matches spilled onto a third day.
+ * The planner's "now" is therefore the earliest start still ahead: nothing unplayed is in the past,
+ * which is what a real desk with concurrent courts looks like.
+ *
+ * This means the simulation never exercises the rule that releases a pin whose time has passed;
+ * that rule is covered by the unit tests in `placement-schedule.test.ts`.
+ */
+function plannerNow(snap: Snapshot): number {
+  const next = playable(snap)[0];
+  return next ? Math.min(clock, Date.parse(next.row.scheduled_time as string)) : clock;
+}
+
 async function buildSchedule(): Promise<{ generated: number }> {
   let snap = await snapshot();
   const outcome = await generateMissingStages({
@@ -355,7 +374,7 @@ async function buildSchedule(): Promise<{ generated: number }> {
     placementMatches: snap.placement,
     tierMatches: snap.tier,
     categoryOrder: new Map(snap.categories.map((c) => [c.id, c.sort_order])),
-    now: clock,
+    now: plannerNow(snap),
   });
   // A plan with nothing to place is not an error; a plan that cannot place something is, and
   // `applyPlacementSchedulePlan` says which.
@@ -557,7 +576,7 @@ function dayCloseFor(snap: Snapshot, at: number): number | null {
 }
 
 /**
- * Whether an overlap between two still-`scheduled` matches is the reflow's held behaviour rather
+ * Whether an overlap that ends in a still-`scheduled` match is the reflow's held behaviour rather
  * than a bug.
  *
  * When a result pushes the rest of a day past its close, the reflow may not move the whole day into
@@ -573,9 +592,12 @@ function dayCloseFor(snap: Snapshot, at: number): number | null {
  *       (`court_overlap` for a court, `rest_shortfall`/`court_overlap` for a player). An overlap no
  *       conflict row names is one the desk cannot see, so it can never be a tolerated held overlap.
  *
- * Either half failing keeps the overlap a violation. Only two `scheduled` matches qualify at all: a
- * match that is done or on court is history the desk cannot move, and an overlap with one is still a
- * double booking.
+ * Either half failing keeps the overlap a violation. The LATER match must still be `scheduled`: it
+ * is the one the desk can move, so it is the one the conflict is raised against. The EARLIER match
+ * may be in any state - the usual case is the very match whose overrun triggered the reflow, which
+ * is `reported` by then, and the held match left behind it overlaps it. What stays a violation is a
+ * later match that is already done or on court: that is history overlapping history, a real double
+ * booking the reflow can neither cause nor repair.
  */
 function isHeldOverlap(args: {
   prev: Block;
@@ -585,7 +607,7 @@ function isHeldOverlap(args: {
   conflicts: readonly ScheduleConflict[];
 }): boolean {
   const { prev, cur, kind, snap, conflicts } = args;
-  if (!prev.scheduled || !cur.scheduled) return false;
+  if (!cur.scheduled) return false;
   const dayClose = dayCloseFor(snap, cur.start);
   if (dayClose == null) return false;
   const duration = cur.end - cur.start;

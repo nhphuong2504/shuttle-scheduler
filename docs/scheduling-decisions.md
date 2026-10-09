@@ -441,6 +441,17 @@ about to call could move. `planPlacementSchedule` now pins the earliest still-`s
 court at its current court and time. `freezeHorizonMinutes` is an option defaulting to **0** — one match
 per court, no time window — to be raised only if a churn measurement says a longer window is needed.
 
+**A pin is only taken while its time is still legal.** The solver cannot move a pinned match, and the
+validator exempts fixed matches from the floor, break, closing-time and rest checks, so a pin on a bad
+time would be kept silently instead of repaired. A committed match is therefore pinned only if it is not
+before the rebuild's floor (`nextWholeMinute`), does not overlap a break, does not finish after the close
+of a day that is not the last day with courts (the last day may overrun), does not collide with a decided
+match on its court or inside a shared player's rest window, and does not do the same to a pin already
+taken. When two pins conflict the earlier one (then the lower id) is kept and the other is left to the
+solver. The rest check is the solver's own gate (`relateToDecided`), so a pin and the solver cannot
+disagree. A match whose time has already passed but that has not started is released and moves to the
+floor, which the preview shows as a move; the desk's overdue alert is unaffected.
+
 **Frozen is not fixed, and the distinction is load-bearing.** A frozen match is `fixed: true` in the
 *problem* so the solver cannot move it, but it remains a `scheduled` row for the *writer* and the
 *preview*. `payloadFor` excludes `fixedSet`, so treating a frozen row as decided history would clear it

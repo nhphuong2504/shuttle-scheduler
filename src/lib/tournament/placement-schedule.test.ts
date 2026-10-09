@@ -1964,17 +1964,23 @@ describe("planPlacementSchedule — near-term freeze", () => {
     expect(result.diff.changes.map((entry) => entry.matchId).sort()).toEqual(["free", "late"]);
   });
 
-  it("does not push an overdue but unplayed match further down", () => {
-    // The row's time has already passed and nobody has reported it. Reconsidering it would move it
-    // to the back of the day, which is the behaviour the freeze exists to stop.
-    const overdue = committed("overdue", "e1", "e2", "c1", "2026-09-17T08:00:00");
+  it("releases a match the day has already passed and keeps one exactly at the floor", () => {
+    // `now` is 09:00, so the planner's floor is the next whole minute, also 09:00. A pin one
+    // minute earlier is a time the desk cannot act on any more, so it is released and the solver
+    // pulls it forward; one exactly at the floor is still the match about to be called and is kept.
     const result = plan({
-      placementMatches: [overdue, placementMatch("free", "round1", "e3", "e4")],
+      placementMatches: [
+        committed("passed", "e1", "e2", "c1", "2026-09-17T08:59:00"),
+        committed("kept", "e3", "e4", "c2", "2026-09-17T09:00:00"),
+      ],
     });
 
-    expect(result.frozenMatchIds).toEqual(["overdue"]);
-    const pinned = result.slots.find((slot) => slot.matchId === "overdue");
-    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T08:00:00").toISOString());
+    expect(result.frozenMatchIds).toEqual(["kept"]);
+    const kept = result.slots.find((slot) => slot.matchId === "kept");
+    expect(kept?.start.toISOString()).toBe(new Date("2026-09-17T09:00:00").toISOString());
+    // The released row is still placed, at the floor rather than at its stale time.
+    const passed = result.slots.find((slot) => slot.matchId === "passed");
+    expect(passed?.start.getTime()).toBeGreaterThanOrEqual(DAY_START);
   });
 
   it("freezes only the earliest committed match on a court, not the whole queue", () => {
@@ -2136,22 +2142,21 @@ describe("frozenMatchIdsFor", () => {
 });
 
 // ---------------------------------------------------------------------------
-// applyFreeze — current behaviour, revisited in Step 4
+// applyFreeze — a pin has to be a legal time
 // ---------------------------------------------------------------------------
 
 /**
- * `applyFreeze` pins the next committed match on each court *as it stands*. It never asks
- * whether that time is still sensible: a row whose time has already passed, or one that
- * now sits inside a day break, is frozen exactly the same way. The pin is "do not move the
- * match the desk is about to call", not "is this time legal", so it is deliberately blind
- * to the clock and to the break list.
+ * `applyFreeze` pins the next committed match on each court only when its current time is still
+ * legal: at or after the planner's floor, outside the day's breaks, inside a non-final day's close,
+ * and with its rest honoured against decided history and against the other pins. A time that fails
+ * any of those is not a time the solver would have chosen, so the row is left movable and re-placed
+ * rather than preserved.
  *
- * This is recorded as the CURRENT behaviour, on purpose, because Step 4 changes the freeze
- * to reconsider a row the day has overtaken. When that lands these two expectations will
- * have to be rewritten; the test sits here so the change is made knowingly rather than
- * noticed later. It does not touch `applyFreeze`.
+ * A frozen item is `fixed: true` in the problem, and the validators exempt a fixed match from the
+ * floor, the hard end, breaks and rest — an exemption for decided history. The freeze must therefore
+ * make that claim honestly, or a stale pin would ride through the run as if it were a result.
  */
-describe("applyFreeze — current behaviour (Step 4 will change this)", () => {
+describe("applyFreeze — a pin has to be a legal time", () => {
   /** Still `scheduled`, but already on a court at a time, which is what the freeze reads. */
   const committed = (id: string, entrantA: string, entrantB: string, courtId: string, time: string) =>
     placementMatch(id, "round1", entrantA, entrantB, {
@@ -2160,9 +2165,9 @@ describe("applyFreeze — current behaviour (Step 4 will change this)", () => {
       scheduled_time: new Date(time).toISOString(),
     });
 
-  it("still pins a committed match whose time is already in the past", () => {
-    // 08:00 is an hour before the day opens and before the planner's `now`, and it is
-    // pinned anyway: the freeze does not compare against `now`.
+  it("releases a committed match whose time is already in the past", () => {
+    // 08:00 is an hour before the day opens and before the planner's `now`, so it is not a time
+    // the desk can act on. It is left movable and the solver puts it back at the floor.
     const result = plan({
       placementMatches: [
         committed("past", "e1", "e2", "c1", "2026-09-17T08:00:00"),
@@ -2170,15 +2175,14 @@ describe("applyFreeze — current behaviour (Step 4 will change this)", () => {
       ],
     });
 
-    expect(result.frozenMatchIds).toEqual(["past"]);
-    const pinned = result.slots.find((slot) => slot.matchId === "past");
-    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T08:00:00").toISOString());
+    expect(result.frozenMatchIds).toEqual([]);
+    const released = result.slots.find((slot) => slot.matchId === "past");
+    expect(released?.start.getTime()).toBeGreaterThanOrEqual(DAY_START);
   });
 
-  it("still pins a committed match that now sits inside a day break", () => {
-    // The row is committed at 10:15, which the 10:00-11:00 break now covers. The freeze
-    // does not consult the break list, so it is pinned inside the break rather than
-    // stepped past it, and it stays there in the plan.
+  it("releases a committed match that now sits inside a day break", () => {
+    // The row is committed at 10:15, which the 10:00-11:00 break now covers. The freeze does not
+    // keep it there: left movable, the day runner steps it wholly past the break.
     const result = plan({
       breaks: [dayBreak("10:00:00", "11:00:00")],
       placementMatches: [
@@ -2187,9 +2191,155 @@ describe("applyFreeze — current behaviour (Step 4 will change this)", () => {
       ],
     });
 
-    expect(result.frozenMatchIds).toEqual(["inbreak"]);
-    const pinned = result.slots.find((slot) => slot.matchId === "inbreak");
-    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T10:15:00").toISOString());
+    expect(result.frozenMatchIds).toEqual([]);
+    const released = result.slots.find((slot) => slot.matchId === "inbreak");
+    // Either side of the break is fine; inside it is not, and a released row is placed at the
+    // earliest slot rather than kept at the time the break now covers.
+    const breakStart = new Date("2026-09-17T10:00:00").getTime();
+    const breakEnd = new Date("2026-09-17T11:00:00").getTime();
+    expect(
+      released!.end.getTime() <= breakStart || released!.start.getTime() >= breakEnd,
+    ).toBe(true);
+  });
+
+  it("releases a committed match that would straddle a break", () => {
+    // 09:50-10:20 crosses the 10:00 break rather than sitting wholly inside it. Overlap is what
+    // matters: a match cannot be paused part-way, so the pin must step wholly to one side.
+    const result = plan({
+      breaks: [dayBreak("10:00:00", "11:00:00")],
+      placementMatches: [
+        committed("straddle", "e1", "e2", "c1", "2026-09-17T09:50:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual([]);
+    const released = result.slots.find((slot) => slot.matchId === "straddle")!;
+    const breakStart = new Date("2026-09-17T10:00:00").getTime();
+    const breakEnd = new Date("2026-09-17T11:00:00").getTime();
+    expect(
+      released.end.getTime() <= breakStart || released.start.getTime() >= breakEnd,
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyFreeze — closing time and the player conflicts
+// ---------------------------------------------------------------------------
+
+/**
+ * The rest of the legality claim: a pin must not finish after a non-final day's close, must not
+ * break rest with decided history, and must not fight another pin over a shared player. The last is
+ * the reflow's held pair — two still-`scheduled` rows that share a player and overlap on different
+ * courts — which the per-court freeze would otherwise pin together and preserve.
+ */
+describe("applyFreeze — closing time and the player conflicts", () => {
+  const committed = (
+    id: string,
+    entrantA: string,
+    entrantB: string,
+    courtId: string,
+    time: string,
+  ) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "scheduled",
+      court_id: courtId,
+      scheduled_time: new Date(time).toISOString(),
+    });
+
+  it("still pins a legal row, so the ordinary case is unchanged", () => {
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00")],
+      courts: [court(1)],
+      placementMatches: [committed("next", "e1", "e2", "c1", "2026-09-17T10:00:00")],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["next"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "next");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T10:00:00").toISOString());
+    expect(pinned?.courtNumber).toBe(1);
+  });
+
+  it("releases a pin that would finish after a non-final day's close", () => {
+    // 17:45 + a 30 minute slot ends 18:15, past the 18:00 close. Day two is still to come, so the
+    // spill has somewhere to go and the pin is not a time the day can honour.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "18:00:00")],
+      courts: [court(1)],
+      placementMatches: [
+        committed("late", "e1", "e2", "c1", "2026-09-17T17:45:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual([]);
+  });
+
+  it("keeps a pin that would finish after the final day's close, which may overrun", () => {
+    // The same 18:15 finish, on the last day that has courts. The last day is where a long plan is
+    // allowed to overrun, so there is nothing to fix and the pin stands.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "18:00:00")],
+      courts: [court(1)],
+      placementMatches: [committed("late", "e1", "e2", "c1", "2026-09-18T17:45:00")],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["late"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "late");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-18T17:45:00").toISOString());
+  });
+
+  it("releases a pin that breaks rest with a decided match on another court", () => {
+    // `played` is reported and ended at 10:30; `next` is committed at 10:40 and shares a player, and
+    // the placement gap is 20 minutes. The row is not a legal pin, so the solver pushes it out.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00")],
+      courts: [court(1), court(2)],
+      placementMatches: [
+        placementMatch("played", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T10:00:00",
+          ended_at: "2026-09-17T10:30:00",
+        }),
+        committed("next", "e1", "e3", "c2", "2026-09-17T10:40:00"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual([]);
+    const decided = result.slots.find((slot) => slot.matchId === "played")!;
+    const released = result.slots.find((slot) => slot.matchId === "next")!;
+    // Re-placed clear of the decided row by the placement rest gap, on whichever side fits.
+    const gap = Math.max(
+      decided.start.getTime() - released.end.getTime(),
+      released.start.getTime() - decided.end.getTime(),
+    );
+    expect(gap).toBeGreaterThanOrEqual(20 * MINUTE);
+  });
+
+  it("keeps only the earlier of two pins that share a player across courts", () => {
+    // The reflow's held pair: `early` on court 1 at 10:00 and `later` on court 2 at 10:15 share a
+    // player. Each is the next committed row on its own court, so the per-court freeze would pin
+    // both and keep the overlap. Processing earliest-first drops the later one instead.
+    const result = scheduleQueue({
+      days: [queueDay(1, "09:00:00", "18:00:00")],
+      courts: [court(1), court(2)],
+      placementMatches: [
+        committed("early", "e1", "e2", "c1", "2026-09-17T10:00:00"),
+        committed("later", "e1", "e3", "c2", "2026-09-17T10:15:00"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["early"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "early")!;
+    const released = result.slots.find((slot) => slot.matchId === "later")!;
+    expect(released).toBeDefined();
+    // Re-placed clear of the pinned row by the placement rest gap, on whichever side fits.
+    const gap = Math.max(
+      pinned.start.getTime() - released.end.getTime(),
+      released.start.getTime() - pinned.end.getTime(),
+    );
+    expect(gap).toBeGreaterThanOrEqual(20 * MINUTE);
   });
 });
 
