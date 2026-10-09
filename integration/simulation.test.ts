@@ -557,7 +557,7 @@ function dayCloseFor(snap: Snapshot, at: number): number | null {
 }
 
 /**
- * Whether an overlap between two still-`scheduled` matches is the reflow's held behaviour rather
+ * Whether an overlap that ends in a still-`scheduled` match is the reflow's held behaviour rather
  * than a bug.
  *
  * When a result pushes the rest of a day past its close, the reflow may not move the whole day into
@@ -573,9 +573,12 @@ function dayCloseFor(snap: Snapshot, at: number): number | null {
  *       (`court_overlap` for a court, `rest_shortfall`/`court_overlap` for a player). An overlap no
  *       conflict row names is one the desk cannot see, so it can never be a tolerated held overlap.
  *
- * Either half failing keeps the overlap a violation. Only two `scheduled` matches qualify at all: a
- * match that is done or on court is history the desk cannot move, and an overlap with one is still a
- * double booking.
+ * Either half failing keeps the overlap a violation. The LATER match must still be `scheduled`: it
+ * is the one the desk can move, so it is the one the conflict is raised against. The EARLIER match
+ * may be in any state - the usual case is the very match whose overrun triggered the reflow, which
+ * is `reported` by then, and the held match left behind it overlaps it. What stays a violation is a
+ * later match that is already done or on court: that is history overlapping history, a real double
+ * booking the reflow can neither cause nor repair.
  */
 function isHeldOverlap(args: {
   prev: Block;
@@ -585,7 +588,7 @@ function isHeldOverlap(args: {
   conflicts: readonly ScheduleConflict[];
 }): boolean {
   const { prev, cur, kind, snap, conflicts } = args;
-  if (!prev.scheduled || !cur.scheduled) return false;
+  if (!cur.scheduled) return false;
   const dayClose = dayCloseFor(snap, cur.start);
   if (dayClose == null) return false;
   const duration = cur.end - cur.start;
