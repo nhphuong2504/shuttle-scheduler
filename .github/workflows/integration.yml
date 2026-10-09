@@ -87,6 +87,16 @@ jobs:
         run: npm run integration:target -- local
 
       - name: Run the integration suite
+        # The suite's planner reads a day's window with `new Date("YYYY-MM-DDTHH:mm")` in the
+        # *process* timezone (`combineDateTime` in `src/lib/tournament/scheduling/day-plan.ts`),
+        # while the database reads the same window in `tournaments.venue_timezone`. The runners
+        # are UTC and the fixtures are built in `America/Chicago`, so without this the two ends
+        # disagree by six hours: the planner lays matches out from 09:00 UTC, which the database
+        # sees as 03:00 Chicago, before the window opens. Making the process timezone match the
+        # fixtures' venue is the suite's standing assumption, not a per-test one - it belongs to
+        # this step rather than the job so no other step inherits it.
+        env:
+          TZ: America/Chicago
         run: |
           set -o pipefail
           npm run test:integration 2>&1 | tee integration-vitest.log

@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "@/integrations/supabase/client";
 import { createPlayer, createTeam } from "@/lib/tournament/actions";
 import { fetchCourts, fetchPlacementEntrants, fetchScheduleConflicts } from "@/lib/tournament/data";
-import { reportPlacementMatch, syncPlacementEntrants } from "@/lib/tournament/placement-actions";
+import { reportPlacementMatch, startPlacementMatch, syncPlacementEntrants } from "@/lib/tournament/placement-actions";
 
 import {
   createIdentity,
@@ -31,11 +31,21 @@ import {
  * THE VIRTUAL CLOCK
  *
  * The days are dated in 2020 so the first-match gate is open, and `report_placement_result`
- * stamps `ended_at = COALESCE(ended_at, now())`. Each case writes the source's `ended_at`
- * (service role, a fixture and never an assertion) BEFORE reporting, so the reflow reads the
- * virtual finish instead of the wall clock. Every other match is left `scheduled`, so the
- * only instant the reflow can read from the clock is the source's own - which the fixture
- * already set - and the run is deterministic.
+ * stamps `ended_at = COALESCE(ended_at, now())`. Each case writes the source's whole virtual
+ * window (service role, a fixture and never an assertion) BEFORE reporting - `ended_at` at the
+ * scripted finish and `started_at` one slot before it - so the reflow reads a virtual span
+ * instead of the wall clock and the played row has a real window rather than an inverted one.
+ * Every other match is left `scheduled`, so the only instant the reflow can read from the clock
+ * is the source's own - which the fixture already set - and the run is deterministic.
+ *
+ * THE TOURNAMENT IS CONFIGURED FIRST, THEN STARTED
+ *
+ * A tournament is only configurable while `upcoming`, so `seed` leaves it there and does not
+ * force a status: writing days, teams and entrants happens before it starts. The move to
+ * `in_progress` is then the same side effect `simulation.test.ts` and `lifecycle.test.ts` rely
+ * on - starting a match in `reportAt` - because `assert_tournament_live`, which reporting
+ * needs, refuses an upcoming tournament and `start_tournament` is a button that requires
+ * readiness this fixture does not walk.
  *
  * A COURT AND A DAY ARE NOT THE SAME THING
  *
@@ -55,6 +65,11 @@ const TZ = "UTC";
 const DAY1 = "2020-01-04";
 const DAY2 = "2020-01-05";
 const COURT_NUMBERS = [1, 2, 3];
+
+/** The tournaments here are created without timings, so this is `group_slot_minutes`'s default
+ * and the length of one placement match. Reported matches are given a virtual start one slot
+ * before their finish so their window is real rather than inverted. */
+const SLOT_MINUTES = 20;
 
 const iso = (day: string, time: string) => `${day}T${time}:00Z`;
 
@@ -96,6 +111,11 @@ afterAll(async () => {
 /**
  * A tournament with hand-placed matches ready to report.
  *
+ * Configuring a tournament - writing its days, teams and entrants - is only allowed while it
+ * is `upcoming` ("A tournament can only be configured before it starts"), so this is left
+ * upcoming here. It is moved to `in_progress` later, by starting a match in `reportAt`, which
+ * is the transition `simulation.test.ts` and `lifecycle.test.ts` both rely on.
+ *
  * `entrants` are singles entries whose players share nobody, so a match never constrains
  * another through a rest gap unless a case deliberately pairs two entrants twice.
  */
@@ -122,7 +142,6 @@ async function seed(options: {
     name: `itest-reflow-${options.label}-${Date.now().toString(36)}`,
     timezone: TZ,
     days,
-    status: "in_progress",
   });
   created.tournaments.push(tournamentId);
 
@@ -205,17 +224,31 @@ async function placeMatch(
 }
 
 /**
- * Reports a match at a virtual finish and lets the reflow run.
+ * Starts a match, reports it at a virtual finish, and lets the reflow run.
  *
- * The service role writes `ended_at` first, because `report_placement_result` preserves it
- * with `COALESCE(ended_at, now())`; without it the reflow would read the wall clock.
+ * Starting it first is what moves the tournament to `in_progress`: `start_placement_match`
+ * flips an upcoming tournament as a side effect (`mark_tournament_started`), which is the
+ * transition `simulation.test.ts` and `lifecycle.test.ts` get from starting their first match.
+ * Reporting needs `assert_tournament_live`, so this cannot be skipped.
+ *
+ * The service role then writes the match's whole virtual window, `started_at` and `ended_at`
+ * together, because `report_placement_result` preserves `ended_at` with `COALESCE(ended_at,
+ * now())` but the start has already been stamped with the wall clock - and 2026 is not 2020.
+ * A row with `started_at > ended_at` is an inverted window: the reflow reads
+ * `COALESCE(fixed.actual_start, ...)` as the far edge of a done match's span, and
+ * `schedule_conflicts` reads `eff_start = COALESCE(started_at, scheduled_time)`, so a played
+ * match whose span ran backwards would block and be flagged against nothing. The virtual start
+ * is one slot before the finish, the same length the planner gives the match. Both columns are
+ * written by the service role, a fixture and never an assertion.
  */
 async function reportAt(matchId: string, endedAt: string, tournamentId: string): Promise<void> {
+  await startPlacementMatch(matchId, null);
+  const startedAt = new Date(Date.parse(endedAt) - SLOT_MINUTES * 60_000).toISOString();
   const { error } = await serviceClient()
     .from("placement_matches")
-    .update({ ended_at: endedAt })
+    .update({ ended_at: endedAt, started_at: startedAt })
     .eq("id", matchId);
-  if (error) throw new Error(`setting the virtual finish failed: ${error.message}`);
+  if (error) throw new Error(`setting the virtual clock failed: ${error.message}`);
   await reportPlacementMatch(matchId, [{ a: 21, b: 10 }], tournamentId);
 }
 
@@ -342,7 +375,8 @@ describe("live reflow", () => {
     const a3 = await placeMatch(seeded, { key: "f-a3", a: 4, b: 5, court: 1, at: iso(DAY1, "10:50") });
     // Shares entrant 2 (a player) with a2, so a2's move pulls it.
     const b1 = await placeMatch(seeded, { key: "f-b1", a: 2, b: 6, court: 2, at: iso(DAY1, "09:35") });
-    const b2 = await placeMatch(seeded, { key: "f-b2", a: 6, b: 7, court: 2, at: iso(DAY1, "10:00") });
+    // Shares nobody with b1, so only court two's sequence moves it: b1 ends at 10:40.
+    const b2 = await placeMatch(seeded, { key: "f-b2", a: 7, b: 9, court: 2, at: iso(DAY1, "10:00") });
     // Shares entrant 4 with the held a3, on its own court: it must not move.
     const c1 = await placeMatch(seeded, { key: "f-c1", a: 4, b: 8, court: 3, at: iso(DAY1, "10:30") });
 
@@ -364,34 +398,36 @@ describe("live reflow", () => {
     // history the desk already accepted. Only a still-scheduled match is actionable.
     const seeded = await seed({ label: "g", entrants: 10 });
     const played = await placeMatch(seeded, { key: "g-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
-    // Shares entrant 0 with `played`, and starts before its rest window allows.
-    const shortRest = await placeMatch(seeded, {
-      key: "g-2",
-      a: 0,
-      b: 2,
-      court: 2,
-      at: iso(DAY1, "09:10"),
-    });
     // Overlaps `played` on the same court.
     const overlapped = await placeMatch(seeded, {
-      key: "g-3",
-      a: 3,
-      b: 4,
+      key: "g-2",
+      a: 2,
+      b: 3,
       court: 1,
       at: iso(DAY1, "09:00"),
     });
-    // A genuinely still-scheduled overlap, so the read is known to return rows.
-    const liveA = await placeMatch(seeded, { key: "g-4", a: 5, b: 6, court: 1, at: iso(DAY1, "12:00") });
-    const liveB = await placeMatch(seeded, { key: "g-5", a: 7, b: 8, court: 1, at: iso(DAY1, "12:10") });
+    // Shares entrant 0 with `played`, and starts before its rest window allows.
+    const shortRest = await placeMatch(seeded, {
+      key: "g-3",
+      a: 0,
+      b: 4,
+      court: 2,
+      at: iso(DAY1, "09:05"),
+    });
+    // A still-scheduled overlap the reflows above cannot reach: a third court whose players
+    // appear in nothing else, so no move pulls it and the pair stays overlapping. Without it a
+    // broken read that returned nothing would pass this test vacuously.
+    const liveA = await placeMatch(seeded, { key: "g-4", a: 5, b: 6, court: 3, at: iso(DAY1, "12:00") });
+    const liveB = await placeMatch(seeded, { key: "g-5", a: 7, b: 8, court: 3, at: iso(DAY1, "12:10") });
 
     await reportAt(played, iso(DAY1, "09:20"), seeded.tournamentId);
-    await reportAt(shortRest, iso(DAY1, "09:30"), seeded.tournamentId);
     await reportAt(overlapped, iso(DAY1, "09:20"), seeded.tournamentId);
+    await reportAt(shortRest, iso(DAY1, "09:20"), seeded.tournamentId);
 
     const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
     const playedIds = new Set([played, shortRest, overlapped]);
     expect(conflicts.some((row) => playedIds.has(row.match_id))).toBe(false);
-    // And the read still works: the scheduled pair is reported.
+    // And the read still works: the schedules that are still to play are the ones reported.
     const liveIds = new Set(conflicts.map((row) => row.match_id));
     expect(liveIds.has(liveA) || liveIds.has(liveB)).toBe(true);
   });
