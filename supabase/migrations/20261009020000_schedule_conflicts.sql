@@ -4,18 +4,39 @@
 --
 -- The desk needs to know when a live schedule has become impossible to honour:
 -- two matches on one court, a player back on court too soon, a match asleep inside
--- a break, a day running past its closing time, a match ordered before the match it
--- waits on, or a still-scheduled match whose time has already passed. None of these
--- is a flag that gets written and then has to be un-written when the desk fixes it.
--- They are all derivable from the rows themselves, in one place, so the answer the
--- organiser sees and the answer the moderator sees are the same answer.
+-- a break, a day running past its closing time, or a match ordered before the match
+-- it waits on. None of these is a flag that gets written and then has to be
+-- un-written when the desk fixes it. They are all derivable from the rows
+-- themselves, in one place, so the answer the organiser sees and the answer the
+-- moderator sees are the same answer.
 --
--- This is deliberately a *read*. `20261009010000` makes the live reflow refuse to
--- write a schedule it cannot make safe; this is how the resulting conflict is then
--- shown instead of being silently swallowed. The two share the same definition of
--- "safe" - same day, outside breaks, before closing time, enough rest, after every
--- prerequisite - but they compute it over different schedules: the reflow over the
--- cascade it is about to write, this over the rows that exist.
+-- This is deliberately a *read*. `20261009010000` makes the live reflow hold a match
+-- it cannot place safely; this is how the resulting conflict is then shown instead
+-- of being silently swallowed. The two share the same definition of "safe" - same
+-- day, outside breaks, before closing time, enough rest, after every prerequisite -
+-- but they compute it over different schedules: the reflow over the cascade it is
+-- about to write, this over the rows that exist.
+--
+-- REPORT ONLY WHAT CAN STILL BE ACTED ON
+--
+-- A conflict is a job for the desk, and the only match the desk can still move is one
+-- that has not been played. So each kind is reported against the match that is still
+-- `status = 'scheduled'`:
+--
+--   * `court_overlap` is reported once per still-scheduled side of the pair. If both
+--     matches are already done, nothing is reported.
+--   * `rest_shortfall` is reported on the later match, and only while it is still
+--     scheduled.
+--   * `break` and `before_prerequisite` likewise only on a still-scheduled match.
+--   * `past_closing` is the exception: a match already `in-progress` is still
+--     running, so it is reported too.
+--
+-- The effect is that a match already played is never flagged - not even when its rest
+-- was short or its span overlapped, which the desk saw and accepted at the time. A
+-- report about history cannot be acted on, and a permanent one would train the reader
+-- to ignore the list. Being merely *late* is not a conflict either: the desk's own
+-- overdue alert (`desk-transitions.ts`) covers that, and it is about the clock rather
+-- than about two rows contradicting each other, so this function does not repeat it.
 --
 -- Authorization: an editor-only read, guarded like `tournament_readiness` rather
 -- than granted to every signed-in caller. A viewer has no business reconstructing
@@ -135,7 +156,10 @@ BEGIN
         WHEN m.st = 'in-progress' THEN GREATEST(m.planned_end, statement_timestamp())
         ELSE m.planned_end
       END AS eff_end,
-      public.tournament_day_at(p_tournament_id, m.sched) AS day_id
+      public.tournament_day_at(p_tournament_id, m.sched) AS day_id,
+      -- The one predicate every actionable conflict shares: only a match the desk
+      -- can still move is worth reporting. Named so the intent is checkable.
+      (m.st = 'scheduled') AS is_scheduled
     FROM m
   ),
   players AS (
@@ -175,30 +199,43 @@ BEGIN
       e.ended,
       e.eff_start,
       e.rest_gap,
+      e.is_scheduled,
       lag(e.eff_end) OVER (PARTITION BY p.pid ORDER BY e.eff_start, e.mid) AS prev_end
     FROM players p
     JOIN eff e ON e.mt = p.mt AND e.mid = p.mid
   ),
-  conflicts AS (
+  -- Each overlapping court pair once, both sides carried, so a conflict can be
+  -- reported against whichever side (or sides) is still scheduled. The ordering
+  -- tuple means no pair is produced twice.
+  overlap_pairs AS (
     SELECT
-      e.mt, e.mid, e.cid, e.sched, e.ended,
-      'overdue'::text AS kind,
-      'Scheduled time has already passed'::text AS detail
-    FROM eff e
-    WHERE e.st = 'scheduled' AND e.sched < statement_timestamp()
-
-    UNION ALL
-
-    SELECT
-      a.mt, a.mid, a.cid, a.sched, a.ended,
-      'court_overlap'::text,
-      format('Overlaps another match on the same court (%s)', left(b.mid::text, 8))
+      a.mt AS a_mt, a.mid AS a_mid, a.cid AS a_cid, a.sched AS a_sched, a.ended AS a_ended,
+      a.is_scheduled AS a_scheduled,
+      b.mt AS b_mt, b.mid AS b_mid, b.cid AS b_cid, b.sched AS b_sched, b.ended AS b_ended,
+      b.is_scheduled AS b_scheduled
     FROM eff a
     JOIN eff b
       ON a.cid = b.cid
      AND (a.mt, a.mid::text) < (b.mt, b.mid::text)
      AND a.eff_start < b.eff_end
      AND b.eff_start < a.eff_end
+  ),
+  conflicts AS (
+    SELECT
+      p.a_mt AS mt, p.a_mid AS mid, p.a_cid AS cid, p.a_sched AS sched, p.a_ended AS ended,
+      'court_overlap'::text AS kind,
+      format('Overlaps another match on the same court (%s)', left(p.b_mid::text, 8)) AS detail
+    FROM overlap_pairs p
+    WHERE p.a_scheduled
+
+    UNION ALL
+
+    SELECT
+      p.b_mt, p.b_mid, p.b_cid, p.b_sched, p.b_ended,
+      'court_overlap'::text,
+      format('Overlaps another match on the same court (%s)', left(p.a_mid::text, 8))
+    FROM overlap_pairs p
+    WHERE p.b_scheduled
 
     UNION ALL
 
@@ -207,7 +244,8 @@ BEGIN
       'rest_shortfall'::text,
       format('Only %s of the required rest', to_char(r.eff_start - r.prev_end, 'FMHH24:MI'))
     FROM rest_seq r
-    WHERE r.prev_end IS NOT NULL
+    WHERE r.is_scheduled
+      AND r.prev_end IS NOT NULL
       AND r.eff_start < r.prev_end + r.rest_gap
 
     UNION ALL
@@ -220,7 +258,7 @@ BEGIN
     JOIN settings s ON true
     JOIN public.tournament_days d ON d.id = e.day_id
     JOIN public.tournament_day_breaks br ON br.day_id = d.id
-    WHERE e.st = 'scheduled'
+    WHERE e.is_scheduled
       AND e.sched < ((d.date + br.end_time) AT TIME ZONE s.tz)
       AND e.planned_end > ((d.date + br.start_time) AT TIME ZONE s.tz)
 
@@ -244,7 +282,8 @@ BEGIN
       format('Starts before the match it waits on (%s) has finished', left(pre.mid::text, 8))
     FROM eff e
     JOIN eff pre ON pre.mid = ANY(e.prereqs)
-    WHERE e.eff_start < pre.eff_end
+    WHERE e.is_scheduled
+      AND e.eff_start < pre.eff_end
   )
   SELECT
     c.mt AS match_table,
@@ -283,6 +322,29 @@ BEGIN
       AND p.prosrc LIKE '%before_prerequisite%'
   ) THEN
     RAISE EXCEPTION 'M4: schedule_conflicts is missing a conflict kind';
+  END IF;
+
+  -- The retired kind. It reported a merely-late match, which is the desk's own
+  -- overdue alert rather than a contradiction between two rows, and it must not
+  -- come back through a later edit.
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'schedule_conflicts'
+      AND p.prosrc LIKE '%overdue%'
+  ) THEN
+    RAISE EXCEPTION 'M4: schedule_conflicts still reports the retired lateness kind';
+  END IF;
+
+  -- Every actionable kind keys on a still-scheduled match, including the per-side
+  -- court overlap. Without this the function flags history the desk cannot fix.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'schedule_conflicts'
+      AND p.prosrc LIKE '%is_scheduled%'
+      AND p.prosrc LIKE '%a_scheduled%'
+      AND p.prosrc LIKE '%b_scheduled%'
+  ) THEN
+    RAISE EXCEPTION 'M4: schedule_conflicts does not restrict itself to still-scheduled matches';
   END IF;
 
   IF has_function_privilege('anon', 'public.schedule_conflicts(uuid)', 'execute') THEN

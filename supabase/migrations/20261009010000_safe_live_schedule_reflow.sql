@@ -1,6 +1,6 @@
 -- ---------------------------------------------------------------------------
--- The live reflow only ever pushes matches later, stays inside their own day,
--- and refuses to write a schedule it cannot make safe.
+-- The live reflow only ever pushes matches later, stays inside their own day, and
+-- holds any match it cannot place safely instead of writing a time that breaks the day.
 --
 -- Reporting a result calls `shift_live_schedule_after_match`, which since
 -- `20261008040000` is a wrapper around `shift_live_schedule_core`. The core was a
@@ -21,10 +21,10 @@
 --    uses in the client - so the queue is now scoped to the source's own day.
 --
 -- 3. IT DID NOT READ `prerequisite_ids`. A placement match that waits for other
---    matches (the held entrant's make-up fixtures) could be shifted to a start
---    before the matches it is explicitly ordered behind, and a dependent sitting on
---    another court was not shifted at all - the queue was seeded only with the
---    source's own court. It is now seeded with the source's dependents too.
+--    matches (a make-up fixture for an entrant who was carried) could be shifted to
+--    a start before the matches it is explicitly ordered behind, and a dependent
+--    sitting on another court was not shifted at all - the queue was seeded only with
+--    the source's own court. It is now seeded with the source's dependents too.
 --
 -- 4. THE BREAK PASS WAS A SEPARATE, LATER STEP. `20261008040000` pushed a match out
 --    of a break *after* the core had finished, without re-checking player rest, and
@@ -38,14 +38,28 @@
 --       GREATEST(its own published time, the previous match's real end,
 --                the player's rest window, its prerequisites' end)
 --     so a match can only ever move later, never earlier;
---   * a broken break or a start past the day's closing time aborts the whole
---     reflow before a single row is written - the last known-good schedule is kept
---     and the conflict is left for `schedule_conflicts` and the desk to see, rather
---     than a half-applied cascade being committed;
+--   * a break is a wall the loop moves a match wholly past, and the day's closing
+--     time is enforced inside the same loop;
+--   * atomicity is *per chain*, not per run. A match that cannot be made to fit
+--     before the day's close is **held**: it keeps its published time, and so does
+--     every still-movable match after it on the same court and day, because that
+--     court's order cannot be preserved any further. A held match pushes nothing -
+--     no shared player, no dependent on another court - so the rest of the day, and
+--     every unrelated chain, still reflows and is written in the same transaction.
+--     The held rows and their predecessors end up overlapping on purpose, and
+--     `schedule_conflicts` reports that rather than it being papered over. A held
+--     run is surfaced with `RAISE NOTICE` (ids and reason only) and never with
+--     `RAISE EXCEPTION`, so the caller's saved result is never rolled back;
 --   * the name and signature of both `shift_live_schedule_core` and the
 --     `shift_live_schedule_after_match` wrapper are unchanged, so every caller
 --     (`report_placement_result`, `report_tier_draw_result`, the walkover paths)
 --     keeps working.
+--
+-- Closing time is enforced on *every* day, including the tournament's last. The
+-- planner treats its cutoff as a soft objective term, so a complete schedule that
+-- runs long can still win; a reflow may not *create* that spill, so a cascade that
+-- would do so stops at the held match and warns instead. The two rules disagree on
+-- purpose; see `docs/scheduling-decisions.md` for the planner's side.
 --
 -- `clear_breaks_after_reflow` is superseded by the loop and dropped: keeping it
 -- defined but unused would leave the very pass this migration is replacing sitting
@@ -109,7 +123,8 @@ DECLARE
   v_day_end timestamptz;
   v_break_end timestamptz;
   v_prereq_end timestamptz;
-  v_violation text;
+  v_held_list text;
+  v_held_count int;
   current_match record;
   blocking_match record;
   next_start timestamptz;
@@ -120,10 +135,17 @@ BEGIN
     RAISE EXCEPTION 'Unsupported match table';
   END IF;
 
-  -- The global key is the one every schedule writer already takes; the per-tournament
-  -- key is what this migration adds, so two tournaments no longer serialise on the
-  -- reflow alone. The global lock is kept for compatibility with `apply_*_schedule`,
-  -- the resets and `start_match_safe`.
+  -- Three global keys, taken in the same order every schedule writer takes them
+  -- (`apply_day_schedule`, `apply_placement_day_schedule`, `start_match_safe` and the
+  -- resets all take `live-schedule` and at least one `schedule:N`). They serialise
+  -- every writer in the database against every other, which is what makes this reflow
+  -- safe to run concurrently with a rebuild.
+  --
+  -- The per-tournament key below is currently redundant: the global keys are already
+  -- held, so no second tournament can reach it at the same time. It is kept as the
+  -- first half of a move to per-tournament locking that cannot happen until the
+  -- writers above also stop taking the global keys - dropping the global keys here
+  -- alone would break that mutual exclusion, not narrow it.
   PERFORM pg_advisory_xact_lock(hashtext('live-schedule'));
   PERFORM pg_advisory_xact_lock(hashtext('schedule:1'));
   PERFORM pg_advisory_xact_lock(hashtext('schedule:2'));
@@ -183,6 +205,9 @@ BEGIN
     status text NOT NULL,
     movable boolean NOT NULL,
     dirty boolean NOT NULL DEFAULT false,
+    -- A held match keeps its published time: it could not be made to fit before the
+    -- day's close, so it is never marked dirty and never written. See the header.
+    held boolean NOT NULL DEFAULT false,
     day_id uuid,
     prereq_ids uuid[] NOT NULL DEFAULT '{}',
     PRIMARY KEY (match_table, match_id)
@@ -405,6 +430,14 @@ BEGIN
     WHERE match_table = current_match.match_table
       AND match_id = current_match.match_id;
 
+    -- A held match is skipped however it reached the queue: its own court's tail, a
+    -- shared player on another court, or a dependent of a moved prerequisite. It
+    -- keeps its published time and pushes nothing, so a dependent or a co-player the
+    -- queue brought in here is left for an independent, non-held reason to move.
+    IF current_match.held THEN
+      CONTINUE;
+    END IF;
+
     -- Preserve the court's existing sequence, but derive availability from the
     -- previous match's real end when known. Scoped to this day so a prior day's
     -- last match cannot be mistaken for this day's predecessor.
@@ -565,16 +598,33 @@ BEGIN
       END LOOP;
     END IF;
 
-    -- Closing time. A cascade that cannot finish its day inside the day's own
-    -- window is not a schedule this function is allowed to commit: the whole
-    -- reflow is abandoned and every match keeps its published time, so the
-    -- conflict shows up in `schedule_conflicts` instead of being written silently.
+    -- Closing time, exercised on every day including the tournament's last. A match
+    -- that cannot fit before the close is *held*: it keeps its published time, and so
+    -- does every still-movable match after it on the same court and day, because that
+    -- court's order can no longer be preserved. Held rows are never marked dirty, so
+    -- the write below leaves them alone, and they push nothing - the loop continues
+    -- with the rest of the day. The conflict this creates (a held match left
+    -- overlapping its shifted predecessor) is intentional and is what
+    -- `schedule_conflicts` reports.
     IF v_day_end IS NOT NULL AND next_start + current_match.duration > v_day_end THEN
-      v_violation := format(
-        '%s on %s cannot absorb a late finish without running past closing time',
-        current_match.match_id, v_day_date
-      );
-      EXIT;
+      UPDATE live_schedule_work
+      SET held = true
+      WHERE NOT held
+        AND movable
+        AND day_id = current_match.day_id
+        AND court_id = current_match.court_id
+        AND (original_time, match_table, match_id::text)
+          >= (current_match.original_time, current_match.match_table, current_match.match_id::text);
+
+      -- The tail just held is removed from the queue. It also cannot be re-added by a
+      -- held match, because a held match never reaches the propagation block below.
+      DELETE FROM live_schedule_queue q
+      USING live_schedule_work w
+      WHERE w.held
+        AND w.match_table = q.match_table
+        AND w.match_id = q.match_id;
+
+      CONTINUE;
     END IF;
 
     IF next_start IS DISTINCT FROM current_match.shifted_time THEN
@@ -627,12 +677,22 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- Atomic: a reflow that could not be made safe writes nothing. The result that
-  -- triggered it is already committed by its caller, so the day keeps the times it
-  -- had and the conflict is reported rather than papered over.
-  IF v_violation IS NOT NULL THEN
-    RAISE NOTICE 'Live reflow skipped: %', v_violation;
-    RETURN;
+  -- Held matches are reported, not written. Held rows were never marked dirty, so the
+  -- writes below already skip them; this notice names them and the one reason. The
+  -- caller's saved result is already committed, so a notice is the right channel - an
+  -- exception here would roll the result back.
+  SELECT count(*),
+         string_agg(
+           format('%s/%s', w.match_table, w.match_id::text),
+           ', ' ORDER BY w.original_time, w.match_table, w.match_id
+         )
+  INTO v_held_count, v_held_list
+  FROM live_schedule_work w
+  WHERE w.held;
+
+  IF v_held_count > 0 THEN
+    RAISE NOTICE 'Live reflow held % match(es) that would run past closing time: %',
+      v_held_count, v_held_list;
   END IF;
 
   UPDATE public.pool_matches pm
@@ -641,6 +701,7 @@ BEGIN
   WHERE work.match_table = 'pool_matches'
     AND work.match_id = pm.id
     AND work.dirty
+    AND NOT work.held
     AND pm.status = 'scheduled';
 
   UPDATE public.draw_matches dm
@@ -649,6 +710,7 @@ BEGIN
   WHERE work.match_table = 'draw_matches'
     AND work.match_id = dm.id
     AND work.dirty
+    AND NOT work.held
     AND dm.status = 'scheduled';
 
   UPDATE public.placement_matches pmet
@@ -657,6 +719,7 @@ BEGIN
   WHERE work.match_table = 'placement_matches'
     AND work.match_id = pmet.id
     AND work.dirty
+    AND NOT work.held
     AND pmet.status = 'scheduled';
 
   UPDATE public.tier_draw_matches tdm
@@ -665,6 +728,7 @@ BEGIN
   WHERE work.match_table = 'tier_draw_matches'
     AND work.match_id = tdm.id
     AND work.dirty
+    AND NOT work.held
     AND tdm.status = 'scheduled';
 
   UPDATE public.pools pool
@@ -731,10 +795,10 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.proname = 'shift_live_schedule_core'
-      AND p.prosrc LIKE '%v_violation%'
-      AND p.prosrc LIKE '%running past closing time%'
+      AND p.prosrc LIKE '%held = true%'
+      AND p.prosrc LIKE '%would run past closing time%'
   ) THEN
-    RAISE EXCEPTION 'M3: the reflow core does not refuse a shift past closing time';
+    RAISE EXCEPTION 'M3: the reflow core does not hold a match that would run past closing time';
   END IF;
 
   IF NOT EXISTS (

@@ -2824,3 +2824,153 @@ DROP FUNCTION public.tournament_players(uuid);
 
 The application reads the three functions, so roll it back with the migration; rolling back only the
 grant leaves a build that works but shows the whole roster again.
+
+## Applying `20261009010000_safe_live_schedule_reflow.sql`
+
+### What it does
+
+Rewrites `shift_live_schedule_core`, the algorithm that runs after a result lands and moves the
+rest of the day around it. `shift_live_schedule_after_match` keeps its name and signature as a thin
+wrapper, so `report_placement_result`, `report_tier_draw_result` and the walkover paths are untouched.
+It also adds `tournament_day_at(uuid, timestamptz)` (the database twin of the client's
+`sliceRowsByDay`) and drops `clear_breaks_after_reflow`, whose separate break pass is now part of the
+loop.
+
+Four defects the old core had, and what replaced them:
+
+1. **It pulled matches earlier.** The next start was floored at the previous match's real end, with no
+   floor at the match's own published time, so an early finish dragged the queue forward. Every start
+   is now `GREATEST(its published time, the previous end, the player's rest window, its
+   prerequisites' end)` — later only, never earlier.
+2. **It did not know about days.** The queue is now scoped to the source's own day
+   (`tournament_day_at`), so day two's first match is not dragged back toward the end of day one.
+3. **It did not read `prerequisite_ids`.** The queue is seeded with the source's dependents as well as
+   its own court, and a start is floored at every prerequisite's end.
+4. **The break pass ran afterwards, separately,** without re-checking rest or the closing time.
+   Breaks and the closing time are enforced inside the shifting loop now.
+
+### The held match, and per-chain atomicity
+
+The rewrite is atomic **per chain**, not per run. A match that cannot be made to fit before the day's
+close is **held**: it keeps its published time, and so does every still-movable match after it on the
+same court and day, because that court's order can no longer be preserved. A held match pushes
+nothing — no shared player, no dependent on another court — so the rest of the day, and every
+unrelated chain, still reflows and is written in the same transaction. This is the deliberate trade
+the old code refused: it abandoned the whole cascade on a closing-time violation, which meant one
+crashing tail froze every court. A held run is surfaced with `RAISE NOTICE` naming the matches and
+the reason, and never with `RAISE EXCEPTION`, so the caller's saved result is never rolled back.
+
+**The held rows and their predecessors overlap on purpose.** That is what `schedule_conflicts`
+reports; it is not a bug in this migration. The four writes that publish times each carry
+`AND NOT work.held`, and held rows are never marked `dirty`, so they are never written.
+
+### Closing time, and how this differs from the planner
+
+Closing time is enforced on **every** day, including the last. The planner treats its cutoff as a soft
+objective term, so a full schedule that runs long can still win; a reflow may not *create* that spill,
+so a cascade that would do so stops at the held match and warns instead. The two rules disagree on
+purpose — see `docs/scheduling-decisions.md` for the planner's side.
+
+### Locking, stated plainly
+
+Three global advisory locks (`live-schedule`, `schedule:1`, `schedule:2`) are taken first, exactly as
+`apply_day_schedule`, `apply_placement_day_schedule`, `start_match_safe` and the schedule resets take
+them. This migration also takes `'live-schedule:' || tournament_id`, but that key is **redundant
+today**: the global keys are already held, so no second tournament can reach it. It is the first half
+of a move to per-tournament locking that cannot happen until those other writers also take a
+per-tournament key — dropping the global keys here alone would break the mutual exclusion, not narrow
+it. The global keys are deliberately kept.
+
+### Timezone
+
+`venue_timezone` is `NOT NULL` on `tournaments` (`20260909233700_tournament_hardening.sql`), so the
+`(date + time) AT TIME ZONE tz` arithmetic here never sees a NULL and needs no fallback branch.
+
+### Verify after applying
+
+```sql
+-- The core holds rather than aborting, floors at the published time, and warns rather than raises.
+SELECT prosrc LIKE '%held = true%'                                        AS holds,
+       prosrc LIKE '%GREATEST(current_match.shifted_time, previous_end)%' AS never_earlier,
+       prosrc LIKE '%would run past closing time%'                        AS warns,
+       prosrc LIKE '%v_violation%'                                        AS still_aborts  -- false
+FROM pg_proc WHERE proname = 'shift_live_schedule_core';
+
+-- The superseded pass is gone.
+SELECT to_regprocedure('public.clear_breaks_after_reflow(uuid)');  -- NULL
+
+-- The wrapper is not a client RPC.
+SELECT has_function_privilege(
+  'authenticated', 'public.shift_live_schedule_after_match(text, uuid)', 'execute');  -- false
+```
+
+The migration asserts the same things itself in `DO $verify$` and fails if any is wrong. Then run
+`npm run test:integration` on a local stack: `integration/live-reflow.test.ts` reports a late head and
+checks that the held tail keeps its time, that an unrelated court still reflows, and that a held match
+pulls nobody.
+
+### Rolling back
+
+There is no data rollback: the rewrite changed no column and no stored value. Restore the previous
+`shift_live_schedule_core` / `clear_breaks_after_reflow` definitions from `20260917030000` (and the
+later replays of them) if you must revert, but note that the old core aborts a whole cascade on a
+closing-time violation — reverting re-introduces that freeze.
+
+## Applying `20261009020000_schedule_conflicts.sql`
+
+### What it returns
+
+`schedule_conflicts(p_tournament_id)` is a computed, editor-only read (`can_edit_tournament`) over the
+rows that exist, not a stored flag. It returns zero or more rows of `(match_table, match_id, court_id,
+scheduled_time, ended_at, conflict_kind, detail)`. The kinds are:
+
+- `court_overlap` — two matches on one court whose windows overlap.
+- `rest_shortfall` — a player back on court before the rest gap.
+- `break` — a match sleeping inside a day break.
+- `past_closing` — a match finishing after its day's closing time.
+- `before_prerequisite` — a match before a match it waits on.
+
+There is deliberately **no lateness kind**. A merely-late match is the desk's own overdue alert
+(`desk-transitions.ts`), which is about the clock rather than about two rows contradicting each other;
+the function does not repeat it. The `DO $verify$` block fails if `overdue` ever reappears in the
+source.
+
+### Only actionable rows
+
+A conflict is a job for the desk, and the desk can only move a match that has not been played. So:
+
+- `court_overlap` is emitted once per still-`scheduled` side of the pair — if both matches are already
+  done, nothing is reported.
+- `rest_shortfall`, `break` and `before_prerequisite` are emitted only for a still-`scheduled` match.
+- `past_closing` is emitted for `scheduled` and `in-progress` (a match still running is still
+  actionable).
+
+The effect: a match already played is never flagged — not even when its rest was short or its span
+overlapped, which the desk saw and accepted at the time.
+
+### Verify after applying
+
+```sql
+-- The retired kind is gone; the still-scheduled gate is present on both overlap sides.
+SELECT prosrc LIKE '%overdue%'      AS still_has_overdue,        -- false
+       prosrc LIKE '%is_scheduled%' AS gates_on_scheduled,       -- true
+       prosrc LIKE '%a_scheduled%'  AS gates_overlap_side_a,     -- true
+       prosrc LIKE '%b_scheduled%'  AS gates_overlap_side_b      -- true
+FROM pg_proc WHERE proname = 'schedule_conflicts';
+
+-- Not callable by anon.
+SELECT has_function_privilege('anon', 'public.schedule_conflicts(uuid)', 'execute');  -- false
+```
+
+The `DO $verify$` block asserts the same on apply. `integration/live-reflow.test.ts` also checks that a
+played match with short rest or a historical overlap produces no row, and that a still-scheduled match
+the clock has overtaken produces none either.
+
+### Rolling back
+
+```sql
+DROP FUNCTION public.schedule_conflicts(uuid);
+```
+
+The read has no client callers yet — `useScheduleConflicts` in `src/lib/tournament/data.ts` is defined
+but not wired to any surface — so dropping it breaks nothing.

@@ -1776,6 +1776,18 @@ export type Database = {
         Args: { p_days: Json; p_tournament_id: string }
         Returns: undefined
       }
+      schedule_conflicts: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          conflict_kind: string
+          court_id: string | null
+          detail: string
+          ended_at: string | null
+          match_id: string
+          match_table: string
+          scheduled_time: string | null
+        }[]
+      }
       search_players: {
         Args: { p_limit?: number; p_query: string; p_tournament_id: string }
         Returns: { gender: string; id: string; name: string }[]

@@ -84,6 +84,35 @@ export type StageName = "group" | "knockout";
  */
 export type PlacementStageName = "placement" | "knockout";
 
+/**
+ * The kinds of conflict `schedule_conflicts(uuid)` reports about a published schedule.
+ *
+ * Computed, never stored: a conflict is a property of the rows as they stand, so it
+ * disappears the moment the desk fixes it rather than needing to be cleared by hand.
+ *
+ * Each is reported only against a match the desk can still act on - one still
+ * `scheduled` (`past_closing` also covers an `in-progress` match) - so a match that
+ * has already been played is never flagged. Being merely *late* is not here either:
+ * the desk's own overdue alert covers that.
+ */
+export type ScheduleConflictKind =
+  | "court_overlap"
+  | "rest_shortfall"
+  | "break"
+  | "past_closing"
+  | "before_prerequisite";
+
+/** One reason a still-scheduled match cannot currently be played as published. */
+export interface ScheduleConflict {
+  match_table: string;
+  match_id: string;
+  court_id: string | null;
+  scheduled_time: string | null;
+  ended_at: string | null;
+  conflict_kind: ScheduleConflictKind;
+  detail: string;
+}
+
 async function must<T>(
   p: PromiseLike<{ data: T | null; error: { message: string } | null }>,
 ): Promise<T> {
@@ -131,6 +160,8 @@ export const keys = {
   tournamentDays: ["tournament_days"] as const,
   tournamentById: ["tournament_by_id"] as const,
   tournamentReadiness: ["tournament_readiness"] as const,
+  /** The computed conflicts in a schedule, per tournament. See `schedule_conflicts`. */
+  scheduleConflicts: ["schedule_conflicts"] as const,
   dayCourts: ["tournament_day_courts"] as const,
   dayBreaks: ["tournament_day_breaks"] as const,
   tournamentEditors: ["tournament_editors"] as const,
@@ -1474,5 +1505,33 @@ export function useTierDrawMatches() {
     enabled: !!tournamentId,
     refetchInterval: 20_000,
     queryFn: () => fetchTierDrawMatches(tournamentId as string),
+  });
+}
+
+/**
+ * The computed conflicts in the current tournament's schedule.
+ *
+ * `schedule_conflicts` is a read, not a stored flag, so this needs the same short
+ * refetch window the desk's other schedule reads use: a conflict appears the moment the
+ * rows that contradict each other exist, and disappears the moment the desk fixes it.
+ *
+ * The result is deliberately not surfaced anywhere yet. It exists so a caller can ask
+ * "is this schedule still playable" without re-deriving the rules in TypeScript.
+ */
+export async function fetchScheduleConflicts(tournamentId: string): Promise<ScheduleConflict[]> {
+  const { data, error } = await supabase.rpc("schedule_conflicts", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as ScheduleConflict[];
+}
+
+export function useScheduleConflicts() {
+  const tournamentId = useTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.scheduleConflicts, tournamentId),
+    enabled: !!tournamentId,
+    refetchInterval: 20_000,
+    queryFn: () => fetchScheduleConflicts(tournamentId as string),
   });
 }
