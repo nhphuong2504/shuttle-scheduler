@@ -1,108 +1,96 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  DEFAULT_DAY_END,
-  DEFAULT_DAY_START,
-  MAX_TOURNAMENT_DAYS,
-  buildDayRange,
+  SETUP_STEPS,
   countIsoDays,
-  dateRangeLabel,
   defaultForm,
+  setupSteps,
   shiftIsoDate,
+  stepForCheck,
   todayIso,
+  windowLabel,
 } from "./types";
 
-describe("buildDayRange", () => {
-  it("makes one row per date, inclusive of both ends", () => {
-    const days = buildDayRange("2026-09-18", "2026-09-20");
-    expect(days.map((day) => day.date)).toEqual(["2026-09-18", "2026-09-19", "2026-09-20"]);
-  });
-
-  it("treats a single date as a one-day tournament", () => {
-    const days = buildDayRange("2026-09-18", "2026-09-18");
-    expect(days).toHaveLength(1);
-    expect(days[0]?.date).toBe("2026-09-18");
-  });
-
-  it("falls back to the start date when no end is given", () => {
-    expect(buildDayRange("2026-09-18", "").map((day) => day.date)).toEqual(["2026-09-18"]);
-  });
-
-  it("leaves the hours and court list to the first build", () => {
-    // Setup only decides which dates run. Courts, hours and breaks are configured
-    // later, where the courts exist, so a fresh day carries only neutral defaults.
-    const [day] = buildDayRange("2026-09-18", "2026-09-18");
-    expect(day?.startTime).toBe(DEFAULT_DAY_START);
-    expect(day?.endTime).toBe(DEFAULT_DAY_END);
-    expect(day?.courts).toEqual([]);
-    expect(day?.breaks).toEqual([]);
-  });
-
-  it("rejects a range that runs backwards", () => {
-    expect(() => buildDayRange("2026-09-20", "2026-09-18")).toThrow(/end date cannot be before/i);
-  });
-
-  it("rejects a range longer than the database would accept", () => {
-    // `save_tournament_days` refuses more than MAX_TOURNAMENT_DAYS rows, so the
-    // picker must not be able to build a payload that could never be saved.
-    expect(() => buildDayRange("2026-09-01", "2026-09-30")).toThrow(
-      new RegExp(`at most ${MAX_TOURNAMENT_DAYS} days`),
-    );
-  });
-
-  it("allows exactly the maximum", () => {
-    const days = buildDayRange("2026-09-01", shiftIsoDate("2026-09-01", MAX_TOURNAMENT_DAYS - 1));
-    expect(days).toHaveLength(MAX_TOURNAMENT_DAYS);
-  });
-
-  it("returns nothing when there is no start date", () => {
-    expect(buildDayRange("", "2026-09-18")).toEqual([]);
-  });
-
-  it("crosses a month and a year boundary without drifting", () => {
-    expect(buildDayRange("2026-12-31", "2027-01-02").map((day) => day.date)).toEqual([
-      "2026-12-31",
-      "2027-01-01",
-      "2027-01-02",
-    ]);
-  });
-});
-
-describe("date helpers", () => {
+describe("countIsoDays", () => {
   it("counts inclusively", () => {
     expect(countIsoDays("2026-09-18", "2026-09-18")).toBe(1);
     expect(countIsoDays("2026-09-18", "2026-09-20")).toBe(3);
   });
 
-  it("shifts by whole days", () => {
+  it("is not capped: a window is not the number of days played", () => {
+    expect(countIsoDays("2026-10-20", "2026-10-30")).toBe(11);
+    expect(countIsoDays("2026-01-01", "2026-12-31")).toBe(365);
+  });
+});
+
+describe("shiftIsoDate", () => {
+  it("moves by whole days in either direction", () => {
     expect(shiftIsoDate("2026-09-18", 0)).toBe("2026-09-18");
     expect(shiftIsoDate("2026-09-18", 6)).toBe("2026-09-24");
+    expect(shiftIsoDate("2026-10-01", -1)).toBe("2026-09-30");
   });
 
-  it("reads today as a plain date", () => {
+  it("crosses month and year ends", () => {
+    expect(shiftIsoDate("2026-12-31", 1)).toBe("2027-01-01");
+    expect(shiftIsoDate("2027-01-01", -1)).toBe("2026-12-31");
+  });
+});
+
+describe("todayIso", () => {
+  it("is a calendar date", () => {
     expect(todayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
 
-describe("dateRangeLabel", () => {
-  it("collapses a single day and spells out a range", () => {
-    expect(dateRangeLabel(buildDayRange("2026-09-18", "2026-09-18"))).toBe("2026-09-18");
-    expect(dateRangeLabel(buildDayRange("2026-09-18", "2026-09-20"))).toBe(
-      "2026-09-18 to 2026-09-20",
-    );
+describe("windowLabel", () => {
+  it("names one day by its date and a window by its two", () => {
+    expect(windowLabel("2026-09-18", "2026-09-18")).toBe("2026-09-18");
+    expect(windowLabel("2026-09-18", "")).toBe("2026-09-18");
+    expect(windowLabel("2026-09-18", "2026-09-20")).toBe("2026-09-18 to 2026-09-20");
   });
 
-  it("says so when there are no days", () => {
-    expect(dateRangeLabel([])).toBe("No days yet");
+  it("says so when there is no window yet", () => {
+    expect(windowLabel("", "")).toBe("No dates yet");
   });
 });
 
 describe("defaultForm", () => {
-  it("starts on a single day and carries no match rules", () => {
+  it("starts with no dates, so the host has to choose them", () => {
     const form = defaultForm();
-    expect(form.days).toHaveLength(1);
-    // Scoring, durations and rest gaps are set on the Schedule page, so the wizard
-    // form no longer carries them at all.
-    expect(form).not.toHaveProperty("rules");
+    expect(form.startsOn).toBe("");
+    expect(form.endsOn).toBe("");
+    expect(form.events).toEqual([]);
+  });
+
+  it("offers registration by default, with its times left to the suggestion", () => {
+    expect(defaultForm().registration).toEqual({ enabled: true, opensAt: "", closesAt: "" });
+  });
+
+  it("holds no playing days: those are chosen when the schedule is built", () => {
+    expect("days" in defaultForm()).toBe(false);
+  });
+});
+
+describe("the steps", () => {
+  it("names the last one for what it does to the tournament", () => {
+    expect(SETUP_STEPS.at(-1)?.label).toBe("Review and create");
+    expect(setupSteps(false).at(-1)?.label).toBe("Review and create");
+    expect(setupSteps(true).at(-1)?.label).toBe("Review");
+  });
+});
+
+describe("stepForCheck", () => {
+  it("sends each check to the step that fixes it", () => {
+    expect(stepForCheck("basics")).toBe("details");
+    expect(stepForCheck("timezone")).toBe("details");
+    expect(stepForCheck("window")).toBe("details");
+    expect(stepForCheck("categories")).toBe("events");
+    expect(stepForCheck("category_caps")).toBe("events");
+    expect(stepForCheck("registration")).toBe("events");
+  });
+
+  it("sends a check it does not know nowhere, rather than guessing", () => {
+    expect(stepForCheck("days")).toBeNull();
+    expect(stepForCheck("anything-else")).toBeNull();
   });
 });

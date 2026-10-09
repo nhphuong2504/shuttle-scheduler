@@ -41,7 +41,7 @@ import {
   type TournamentDay,
 } from "@/lib/tournament/data";
 import { formatProjectedFinishDelta } from "@/lib/tournament/schedule-diff";
-import { timeLabel } from "@/lib/tournament/format";
+import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 
 /**
  * The day-by-day court schedule, for the round-robin format.
@@ -344,7 +344,7 @@ export function DayPlanner() {
       title="Court schedule"
       subtitle="Build each day of the running order, or safely rebuild the remaining group matches from the current time."
       actions={
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {tournament ? `${tournament.name} · ${dayCount} day${dayCount === 1 ? "" : "s"}` : ""}
         </span>
       }
@@ -360,7 +360,7 @@ export function DayPlanner() {
                   <Link
                     to="/tournaments/$tournamentId/settings"
                     params={{ tournamentId }}
-                    className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                    className="text-sm font-semibold text-primary underline-offset-2 hover:underline"
                   >
                     Open tournament setup
                   </Link>
@@ -381,7 +381,7 @@ export function DayPlanner() {
             <p className="font-semibold text-foreground">
               {hasGroupSchedule ? "Group rebuild mode" : "Before the first group build"}
             </p>
-            <p className="mt-0.5 text-xs">
+            <p className="mt-0.5 text-sm">
               {hasGroupSchedule
                 ? windowUnlocked
                   ? "Window editing is unlocked. Rebuilding keeps reported, walkover, and in-progress matches fixed."
@@ -402,11 +402,13 @@ export function DayPlanner() {
                 title={`Day ${day.day_number} · ${stageTitle(day.day_number, dayCount)}`}
               >
                 <div className="space-y-3">
+                  {canEdit ? (
+                    <>
                   <div className="flex flex-wrap items-end gap-2">
                     <div>
                       <Label
                         htmlFor={`day-${day.id}-date`}
-                        className="text-xs text-muted-foreground"
+                        className="text-sm text-muted-foreground"
                       >
                         Date
                       </Label>
@@ -423,7 +425,7 @@ export function DayPlanner() {
                     <div>
                       <Label
                         htmlFor={`day-${day.id}-start`}
-                        className="text-xs text-muted-foreground"
+                        className="text-sm text-muted-foreground"
                       >
                         Start
                       </Label>
@@ -440,7 +442,7 @@ export function DayPlanner() {
                     <div>
                       <Label
                         htmlFor={`day-${day.id}-end`}
-                        className="text-xs text-muted-foreground"
+                        className="text-sm text-muted-foreground"
                       >
                         End
                       </Label>
@@ -492,7 +494,7 @@ export function DayPlanner() {
                       })}
                     </div>
                   ) : (
-                    <p className="rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+                    <p className="rounded-md bg-muted px-2 py-1.5 text-sm text-muted-foreground">
                       Groups run on day 1 and knockouts on the final day, so this day only gets a
                       window. Spilling the group stage across extra days is not supported yet.
                     </p>
@@ -519,12 +521,12 @@ export function DayPlanner() {
                           matches placed · {s.anchorCount} anchors kept · {util}% of the {utilLabel}
                         </p>
                         {s.movedCount > 0 ? (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-sm text-muted-foreground">
                             {s.movedCount} match{s.movedCount === 1 ? "" : "es"} moved
                           </p>
                         ) : null}
                         {s.projectedFinish ? (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-sm text-muted-foreground">
                             Projected finish {timeLabel(s.projectedFinish)}
                             {s.overrunMinutes > 0
                               ? ` · ${s.overrunMinutes} min past ${window.end}`
@@ -532,23 +534,23 @@ export function DayPlanner() {
                           </p>
                         ) : null}
                         {util > 90 ? (
-                          <p className="rounded-md bg-warn-surface px-2 py-1 text-xs text-warn-foreground">
+                          <p className="rounded-md bg-warn-surface px-2 py-1 text-sm text-warn-foreground">
                             Above 90% utilisation — very little buffer for overruns.
                           </p>
                         ) : null}
                         {s.unscheduled > 0 ? (
-                          <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
+                          <p className="rounded-md bg-danger-surface px-2 py-1 text-sm text-danger-foreground">
                             {s.unscheduled} matches could not be placed — desk intervention needed.
                           </p>
                         ) : null}
                         {s.awaitingTeams > 0 ? (
-                          <p className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                          <p className="rounded-md bg-muted px-2 py-1 text-sm text-muted-foreground">
                             {s.awaitingTeams} match{s.awaitingTeams === 1 ? "" : "es"} awaiting team
                             assignment.
                           </p>
                         ) : null}
                         {s.overrun ? (
-                          <p className="rounded-md bg-danger-surface px-2 py-1 text-xs text-danger-foreground">
+                          <p className="rounded-md bg-danger-surface px-2 py-1 text-sm text-danger-foreground">
                             Some matches run past the planned day end.
                           </p>
                         ) : null}
@@ -559,6 +561,17 @@ export function DayPlanner() {
                   {dayTargets.length && !dayTargets.some((target) => summary[target.key]) ? (
                     <p className="text-sm text-muted-foreground">Not built in this session.</p>
                   ) : null}
+                    </>
+                  ) : (
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                      <span className="font-score font-semibold text-foreground">
+                        {dayDateLabel(windowFor(day).date)}
+                      </span>
+                      <span>
+                        {windowFor(day).start}–{windowFor(day).end}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </Panel>
             );
@@ -595,20 +608,20 @@ export function DayPlanner() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td className="font-score text-xs font-semibold">{timeLabel(r.start)}</td>
+                      <td className="font-score text-sm font-semibold">{timeLabel(r.start)}</td>
                       <td>
                         <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-t4 font-semibold text-primary-ink">
                           C{r.courtNumber || "—"}
                         </span>
                       </td>
-                      <td className="font-score text-xs">{r.categoryCode}</td>
+                      <td className="font-score text-sm">{r.categoryCode}</td>
                       {/*
                        * `stageLabel` owns these two words, so the cell reads them from there
                        * rather than from the row's own key. `capitalize` is then doing what it
                        * says - lifting a mid-sentence word to the head of a cell - instead of
                        * standing in for a vocabulary that already exists one function up.
                        */}
-                      <td className="text-xs capitalize text-muted-foreground">
+                      <td className="text-sm capitalize text-muted-foreground">
                         {stageLabel(r.kind)}
                       </td>
                       <td>
@@ -647,7 +660,7 @@ export function DayPlanner() {
                     {previewPlan.plan.diff.movedCount} moving
                   </p>
                   {previewPlan.plan.summary.projectedFinish ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       Projected finish {timeLabel(previewPlan.plan.summary.projectedFinish)}
                       {previewPlan.plan.summary.overrunMinutes > 0
                         ? ` · ${previewPlan.plan.summary.overrunMinutes} min past ${previewWindow?.end ?? "day end"}`
@@ -677,11 +690,11 @@ export function DayPlanner() {
                       {previewPlan.plan.blocked.length === 1 ? "" : "es"} could not be placed.
                     </p>
                     {previewPlan.plan.summary.diagnostics?.deadlockReason ? (
-                      <p className="mt-1 text-xs">
+                      <p className="mt-1 text-sm">
                         {previewPlan.plan.summary.diagnostics.deadlockReason}
                       </p>
                     ) : null}
-                    <ul className="mt-2 space-y-1 text-xs">
+                    <ul className="mt-2 space-y-1 text-sm">
                       {previewPlan.plan.blocked.map((matchId) => (
                         <li key={matchId}>{matchLabel(matchId)}</li>
                       ))}
@@ -690,7 +703,7 @@ export function DayPlanner() {
                 ) : null}
 
                 {previewPlan.plan.awaitingTeams.length > 0 ? (
-                  <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
                     {previewPlan.plan.awaitingTeams.length} match
                     {previewPlan.plan.awaitingTeams.length === 1 ? "" : "es"} awaiting team
                     assignment and will stay unscheduled.
@@ -725,17 +738,17 @@ export function DayPlanner() {
                           {visibleChanges.map((change) => (
                             <tr key={change.matchId}>
                               <td className="text-sm">{matchLabel(change.matchId)}</td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
                                 {timeLabel(change.toStart)}
                               </td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.fromCourtNumber != null
                                   ? `C${change.fromCourtNumber}`
                                   : "—"}{" "}
                                 → C{change.toCourtNumber}
                               </td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.shiftMinutes > 0 ? "+" : ""}
                                 {change.shiftMinutes || "—"}
                               </td>

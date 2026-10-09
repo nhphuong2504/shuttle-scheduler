@@ -88,11 +88,11 @@ function SettingsPage() {
 
   return (
     <Page
-      title={tournament?.name ?? "Tournament setup"}
-      subtitle={SETUP_STEPS[index]?.hint ?? ""}
+      title="Setup"
+      subtitle="Name, dates, events and format. Each step is saved as you go."
       actions={
         <Button size="sm" variant="ghost" asChild>
-          <Link to="/me/tournaments">All tournaments</Link>
+          <Link to="/me/tournaments">← My tournaments</Link>
         </Button>
       }
     >

@@ -316,9 +316,17 @@ export interface DayFixture {
 export interface OwnedTournamentOptions {
   name?: string;
   timezone?: string;
-  /** Written after creation. Omitted leaves the tournament with no days, hence not ready. */
+  /**
+   * Playing days, written after creation. The tournament window is the span of their dates, so
+   * they always lie inside it. Omitted gives one day in the distant past, so the first-match
+   * gate is already open; `[]` leaves the tournament with a window and no playing days.
+   */
   days?: DayFixture[];
-  /** Writes one open Men's Singles event. Defaults to true, because readiness needs one. */
+  /**
+   * Whether the tournament keeps its one Men's Singles event. A tournament is created
+   * complete, so it always starts with one; `false` removes it again afterwards, which is the
+   * only way left to reach the "not ready" registration state.
+   */
   category?: boolean;
   /**
    * Moves the tournament's status with the service role. Setup, never an assertion - the
@@ -366,37 +374,61 @@ export async function saveCategory(identity: TestIdentity, tournamentId: string)
   if (error) throw new Error(`save_tournament_categories failed: ${error.message}`);
 }
 
+/** The event every fixture tournament is created with, because creation requires one. */
+const FIXTURE_EVENT = {
+  code: "MS",
+  name: "Men's Singles",
+  entry_type: "individual",
+  gender: "men",
+  sort_order: 1,
+  active: true,
+  max_entries: null,
+};
+
 /**
- * Creates an `upcoming` tournament owned by `identity`, optionally configured to be ready.
+ * Creates an `upcoming` tournament owned by `identity`.
  *
  * Called on the identity's own client, so `owner_profile_id` is that profile and RLS applies
- * exactly as it does for the real creator. A default fixture is ready: readiness needs a
- * day, a timezone and an event, and a tournament that cannot start makes almost every
- * lifecycle assertion harder to express than the thing it is testing.
+ * exactly as it does for the real creator. Creation is atomic - a window, a timezone and an
+ * event go in together or nothing does - so a fixture is always complete; playing days are
+ * added afterwards, inside the window, the way the Schedule page adds them.
  */
 export async function createOwnedTournament(
   identity: TestIdentity,
   options: OwnedTournamentOptions = {},
 ): Promise<string> {
+  const days =
+    options.days ??
+    // Far in the past, so the first-match gate (00:00 of the window's first date) is already
+    // open and a lifecycle test is about the lifecycle rather than about the clock. A test
+    // that cares about the clock passes its own dates.
+    [{ date: "2020-01-04", startTime: "09:00", endTime: "18:00", courts: [1, 2] }];
+  const dates = days.map((day) => day.date).sort();
+  const startsOn = dates[0] ?? "2020-01-04";
+  const endsOn = dates[dates.length - 1] ?? startsOn;
+
   const { data, error } = await identity.client.rpc("create_tournament", {
     p_payload: {
       name: options.name ?? `itest-${randomTag("tournament")}`,
       format: "two_round_placement",
       venue_name: "Integration Test Venue",
       venue_timezone: options.timezone ?? "America/Chicago",
+      starts_on: startsOn,
+      ends_on: endsOn,
+      categories: [FIXTURE_EVENT],
     },
   } as never);
   if (error) throw new Error(`create_tournament failed: ${error.message}`);
   const tournamentId = data as unknown as string;
 
-  const days =
-    options.days ??
-    // Far in the past, so `start_tournament`'s derived-start floor is already satisfied and
-    // a start test is about readiness rather than about the clock. A test that cares about
-    // the floor passes its own dates.
-    [{ date: "2020-01-04", startTime: "09:00", endTime: "18:00", courts: [1, 2] }];
   if (days.length > 0) await saveDays(identity, tournamentId, days);
-  if (options.category !== false) await saveCategory(identity, tournamentId);
+  if (options.category === false) {
+    const cleared = await identity.client.rpc("save_tournament_categories", {
+      p_tournament_id: tournamentId,
+      p_categories: [],
+    } as never);
+    if (cleared.error) throw new Error(`clearing the event failed: ${cleared.error.message}`);
+  }
   if (options.status) await forceStatus(tournamentId, options.status);
 
   return tournamentId;

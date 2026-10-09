@@ -147,17 +147,24 @@ describe("the setup wizard asks only for what activation needs", () => {
     const create = read("tournaments/new.tsx");
     expect(create).toMatch(/<TournamentWizard[\s\S]{0,80}tournamentId=\{null\}/);
     expect(create).not.toMatch(/DetailsStep|EventsStep|StructureStep|ReviewStep/);
-    // The create flow writes the row and then moves the address to it, which is what makes
-    // a refresh resume rather than start a second tournament.
-    expect(create).toMatch(/onCreated=\{\(tournamentId, nextStep\)/);
-    expect(create).toMatch(/to: "\/tournaments\/\$tournamentId\/settings"/);
+    // Nothing is written until the last step, so the create page has no id to move its
+    // address to: the wizard makes the tournament in one call and sends the caller to its
+    // own page, and the answers it holds meanwhile are cleared with it.
+    expect(create).not.toMatch(/onCreated/);
+    expect(wizard).toMatch(/createTournament\(\{/);
+    expect(wizard).toMatch(/clearLocalDraft\(\)/);
+    expect(wizard).toMatch(/to: "\/tournaments\/\$tournamentId"/);
   });
 
-  it("describes the days step as a date range", () => {
-    // Setup decides which dates run, not the hours or the courts each one plays on.
-    expect(types).toMatch(/export function buildDayRange\(/);
-    expect(review).toMatch(/dateRangeLabel/);
-    expect(review).not.toMatch(/courtPoolSize|day\.courts|day\.breaks/);
+  it("asks for the tournament window, and leaves the playing days to the schedule", () => {
+    // Setup decides which dates the tournament promises. Which days are played, and the
+    // hours and courts of each, are chosen when the schedule is built, inside the window.
+    expect(types).toMatch(/startsOn: string/);
+    expect(types).toMatch(/endsOn: string/);
+    expect(types).not.toMatch(/buildDayRange|MAX_TOURNAMENT_DAYS/);
+    expect(review).toMatch(/windowLabel/);
+    expect(review).not.toMatch(/courtPoolSize|day\.courts|day\.breaks|form\.days/);
+    expect(wizard).not.toMatch(/saveTournamentDays|form\.days/);
   });
 
   it("leaves scoring, durations and rest gaps to the schedule page", () => {
@@ -180,7 +187,11 @@ describe("the setup wizard asks only for what activation needs", () => {
 
   it("still persists the basics it does own", () => {
     expect(wizard).toMatch(/maxCategoriesPerPlayer: form\.maxCategoriesPerPlayer/);
-    expect(wizard).toMatch(/saveTournamentDays\(id, form\.days\)/);
+    // The window has its own writer, because its rules (the first date locks once the
+    // tournament is in progress; no playing day may fall outside it) belong to it alone.
+    expect(wizard).toMatch(/updateTournamentWindow\(id, form\.startsOn, form\.endsOn\)/);
+    // And so does the registration window, for the same reason.
+    expect(wizard).toMatch(/setRegistrationWindow\(/);
   });
 });
 
@@ -366,30 +377,53 @@ describe("each reset is scoped to the tab that owns it", () => {
 /**
  * The day count used to be decided in setup and frozen at activation, so an event
  * that overran could not be given another day without rebuilding the tournament. The
- * Schedule page now adds and removes days, guarded so that neither can strand a match.
+ * Schedule page now chooses the playing days from the tournament window, guarded so that
+ * neither adding nor removing one can strand a match.
  */
 describe("playing days can be managed after activation", () => {
   const schedule = readScheduleView("placement-scheduler.tsx");
 
-  it("offers an add-day control that stops at the seven-day cap", () => {
+  it("offers the window's own dates to choose from, with no cap on how many", () => {
     expect(schedule).toMatch(/addTournamentDay/);
-    expect(schedule).toMatch(/Add day/);
-    expect(schedule).toMatch(/tournamentDays\.length < 7/);
+    expect(schedule).toMatch(/<PlayingDayPicker/);
+    // The window the picker draws is the tournament's own, so a date outside it cannot be
+    // typed: the database refuses one for every writer, and the page does not offer it.
+    expect(schedule).toMatch(/startsOn=\{String\(tournament\.starts_on\)/);
+    expect(schedule).toMatch(/endsOn=\{String\(tournament\.ends_on\)/);
+    // And no ceiling: the old limit of seven lived in two constraints and two functions and
+    // is gone from all of them.
+    expect(schedule).not.toMatch(/tournamentDays\.length < 7|7 is the maximum/);
   });
 
-  it("suggests the day after the last, since overrunning is the common case", () => {
-    expect(schedule).toMatch(/suggestedNewDayDate/);
-    // Built from the day's own YYYY-MM-DD: a bare `new Date(dateString)` is read as
-    // UTC midnight and lands a day early west of Greenwich.
-    expect(schedule).toMatch(/T00:00:00/);
-    expect(schedule).not.toMatch(/new Date\(last\.date\)/);
+  it("treats a tournament with no playing days as the ordinary starting state", () => {
+    // Choosing the days is part of the one Settings panel, not a page in front of it and not a
+    // dead end that sends the host back to setup - the days are chosen here, inside the window.
+    expect(schedule).not.toMatch(/Set up a tournament first/);
+    expect(schedule).not.toMatch(/Which days do you play\?/);
+    expect(schedule).toMatch(/Choose at least one playing day first/);
+    expect(schedule).toMatch(/Choose the days you play first/);
   });
 
-  it("disables remove rather than letting it fail, at both refusals", () => {
+  it("says what is missing instead of greying the build out, courts before days", () => {
+    // A new tournament has no court rows, so courts are as much a precondition as days are.
+    expect(schedule).toMatch(/const buildBlocker =/);
+    expect(schedule).toMatch(/Set the courts and choose at least one playing day first/);
+    expect(schedule).toMatch(/aria-describedby=\{buildBlocker \? "build-blocker" : undefined\}/);
+    // One build button at a time: in the header, or in the bar at the foot while settings are open.
+    expect(schedule).toMatch(/\{showSettings \? null : buildButton\}/);
+  });
+
+  it("follows one set of hours for every day, and opens a day only to change it", () => {
+    expect(schedule).toMatch(/Change for all days/);
+    expect(schedule).toMatch(/applyHoursToAll/);
+    expect(schedule).toMatch(/Different/);
+  });
+
+  it("disables remove rather than letting it fail, when matches are on the day", () => {
     expect(schedule).toMatch(/removeTournamentDay/);
-    // The last day cannot go, and a day with matches on it cannot go.
-    expect(schedule).toMatch(/tournamentDays\.length <= 1/);
+    // A day with matches on it cannot go. The last day can: a tournament may have none.
     expect(schedule).toMatch(/daysWithMatches\.has\(day\.id\)/);
+    expect(schedule).not.toMatch(/tournamentDays\.length <= 1/);
   });
 
   it("disables remove using the same attribution the running order is built from", () => {
@@ -635,6 +669,50 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
       ),
     );
     expect(definers).toEqual([deskFile]);
+  });
+
+  it("keeps the desk out of the read-only nav", () => {
+    // The read-only row is the operational sections *minus the Desk*, derived rather than
+    // restated, so the two lists cannot drift. A second literal list is how the Desk would
+    // quietly return to the readers the nav is meant to withhold it from - and the split is
+    // on `can_edit`, not on a session, so a signed-in viewer loses it too.
+    const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
+    expect(shell).toMatch(/READ_ONLY_SECTIONS = SECTIONS\.filter\([\s\S]{0,80}?DESK_PATH/);
+    expect(shell).toMatch(
+      /access\.can_edit \? \[\.\.\.SECTIONS, \.\.\.EDITOR_SECTIONS\][\s\S]{0,40}?READ_ONLY_SECTIONS/,
+    );
+  });
+
+  it("gives every caller the app's own navigation inside a tournament", () => {
+    /**
+     * The bar above a tournament is the app's, and it is the same bar `PublicShell` draws.
+     *
+     * It used to be split by the edit right: a reader got Browse, and an operator got nothing
+     * at all in the bar - opening a tournament took Browse, My tournaments and New tournament
+     * away from the person running it. Now one component draws the row for both shells, so
+     * the two cannot drift, and the tournament's own sections stay a second row under its
+     * name. The operator's switcher stays where it was: the section row.
+     */
+    const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
+    const workspace = shell.slice(
+      shell.indexOf("export function WorkspaceShell"),
+      shell.indexOf("export function PublicShell"),
+    );
+    expect(workspace).toMatch(/<PrimaryNav signedIn=\{signedIn\} marked=\{false\} \/>/);
+    // In the bar beside the brand, above the title.
+    expect(workspace.indexOf("<PrimaryNav")).toBeLessThan(workspace.indexOf("{tournament?.name"));
+    // The same component draws the public bar, so there is one row, not two that agree.
+    expect(shell.slice(shell.indexOf("export function PublicShell"))).toMatch(
+      /<PrimaryNav signedIn=\{signedIn\} marked \/>/,
+    );
+    // The switcher's place, unchanged: the section row, for a caller who may edit.
+    expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
+    // The row itself: Browse for everyone, My tournaments and New tournament once signed in.
+    expect(shell).toMatch(/\{ label: "Browse tournaments", to: "\/explore" \}/);
+    expect(shell).toMatch(/\{ label: "My tournaments", to: "\/me\/tournaments" \}/);
+    expect(shell).toMatch(/<Link to="\/tournaments\/new" className=\{NEW_TOURNAMENT_CLASS\}>/);
+    // The create door is drawn by the shared row, never written into the workspace header.
+    expect(workspace).not.toContain('to="/tournaments/new"');
   });
 
   it("leaves the temporary shim gone from `/`, not merely shadowed", () => {
@@ -895,10 +973,125 @@ describe("the working-tournament pointer is written in one place per act", () =>
       [
         // The definition itself, which names the function it exports.
         join("lib", "tournament", "actions.ts"),
-        join("components", "tournament-setup", "TournamentWizard.tsx"),
+        // Not the wizard: `create_tournament` points the creator at the new tournament in
+        // the same transaction, so creating is not a separate act that needs the call.
         join("components", "tournament-switcher.tsx"),
         join("routes", "me", "tournaments.tsx"),
       ].sort(),
     );
+  });
+});
+
+/**
+ * A reader without the edit right is shown data and navigation, never a control.
+ *
+ * The read-only treatment is one fact - this caller may not change anything here - but it
+ * has to be applied per surface, and the shape it must take is the same everywhere: the
+ * control is *removed*, not disabled. A disabled control still says "here is the act you
+ * cannot do", which is the opposite of a page that is meant to be read; a viewer and a
+ * signed-out visitor get the identical treatment, so the split is on `can_edit` rather
+ * than on a session.
+ *
+ * The layout already derives `readOnly` from `access.can_edit` and the nav withholds the
+ * Desk and the three editor sections; these guards cover the pages beneath it, where the
+ * controls actually lived. They read the sources because "is this control inside the
+ * edit-right branch" is a property of the rendered tree that a component test on one page
+ * cannot see across the five.
+ */
+describe("the read-only workspace removes the operator's controls, rather than disabling them", () => {
+  const entries = readWorkspace("entries.tsx");
+  const schedule = readScheduleView("placement-scheduler.tsx");
+  const dayPlanner = readScheduleView("day-planner.tsx");
+  const scores = readWorkspace("scores.tsx");
+
+  it("keeps the entries desk forms inside the edit-right branch", () => {
+    // Both forms - the player and the entry - are the desk's, and they render only for
+    // a caller who may write. The column that holds them is the conditional, and the
+    // grid collapses to one column when it is absent.
+    expect(entries).toMatch(
+      /cn\("grid grid-cols-1 gap-4", canEdit && "lg:grid-cols-\[340px_1fr\]"\)/,
+    );
+    expect(entries).toMatch(/Panel title="Add player"/);
+    expect(entries).toMatch(/Panel title="Add entry"/);
+  });
+
+  it("keeps the per-entry acts inside the edit-right branch", () => {
+    // Withdraw / Remove used to render disabled for a viewer; they are now inside the
+    // branch, so their absence is the whole statement.
+    const withdraw = entries.indexOf("await setTeamWithdrawn");
+    expect(withdraw).toBeGreaterThan(-1);
+    expect(entries.lastIndexOf("canEdit ? (", withdraw)).toBeGreaterThan(-1);
+    // And the old shape - a rendered button merely disabled by the right - is gone from
+    // the per-entry act.
+    expect(entries).not.toMatch(/variant="ghost"\s+disabled=\{!canEdit\}/);
+  });
+
+  it("does not open the schedule settings for a read-only reader", () => {
+    // The first-build effect auto-opens the panel on an unbuilt tournament. Without the
+    // gate, a viewer met the whole editor panel opened on arrival.
+    expect(schedule).toMatch(/if \(!canEdit\) return;/);
+    expect(schedule).toMatch(/\{canEdit && showSettings \? \(/);
+    // The toggle and the build action are the editor's; a viewer gets no header actions.
+    expect(schedule).toMatch(/actions=\{\s*canEdit \? \(/);
+    // What is missing before a build instructs an operator, and the bar that builds is the
+    // operator's too: both go with the panel.
+    expect(schedule).toMatch(/\{canEdit && showSettings \? \(\s*<div className="sticky/);
+    expect(schedule).toMatch(/actions=\{\s*canEdit \? \(\s*<div className="flex flex-col items-end gap-1">/);
+  });
+
+  it("hides the tournament-wide forecast from a read-only reader", () => {
+    // Stage progress is planning oversight, not the event's state, so it is withheld
+    // rather than shown to a spectator.
+    expect(schedule).toMatch(/\{canEdit \? \(\s*<Panel\s+title="Stage progress"/);
+  });
+
+  it("gives the day planner a read-only day summary instead of its inputs", () => {
+    // The date/start/end fields and the build buttons are the editor's; the read-only
+    // branch prints the day's date and window as static text.
+    expect(dayPlanner).toMatch(
+      /\{canEdit \? \(\s*<>\s*<div className="flex flex-wrap items-end gap-2">/,
+    );
+    expect(dayPlanner).toMatch(/dayDateLabel\(windowFor\(day\)\.date\)/);
+  });
+
+  it("withholds the score dialog's way in, and the dialog with it", () => {
+    // Open is the editor's route into scoring. It is absent for a reader in all three
+    // row shapes - the shared MatchRow, the round-robin list and the draw list - and the
+    // dialog cannot be opened without it.
+    expect(scores).toMatch(
+      /\{canEdit \? \(\s*<Button size="sm" variant="outline" onClick=\{onOpen\}>/,
+    );
+    expect(scores).toMatch(/\{!isByeMatch\(m\) && canEdit \? \(/);
+    expect(scores).toMatch(/open=\{!!selectedMatch && canEdit\}/);
+  });
+});
+
+/**
+ * No screen reads the roster as a whole.
+ *
+ * `players` is global, so a screen that selects all of it learns about every tournament but
+ * its own, and the number it shows is the platform's rather than the event's - the 384 "Players"
+ * on a tournament of fifty. People are read through `tournament_players` (this tournament) or
+ * `search_players` (the desk, a name at a time). The view that allowed the other way is no longer
+ * granted, so a reintroduced read would fail at runtime for everyone; this catches it earlier.
+ */
+describe("the player roster is not read as a whole", () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(path);
+      return /\.(ts|tsx)$/.test(entry.name) && !/\.test\./.test(entry.name) ? [path] : [];
+    });
+
+  it("selects neither public_players nor players directly", () => {
+    const offenders = walk(join(process.cwd(), "src"))
+      .filter((file) => !file.endsWith(join("integrations", "supabase", "types.ts")))
+      .filter((file) =>
+        /\.from\(\s*["'](public_players|players)["']\s*\)\s*\.select/.test(
+          readFileSync(file, "utf8"),
+        ),
+      )
+      .map((file) => relative(process.cwd(), file));
+    expect(offenders).toEqual([]);
   });
 });

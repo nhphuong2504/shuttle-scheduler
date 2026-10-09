@@ -1,4 +1,10 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
@@ -78,6 +84,35 @@ export type StageName = "group" | "knockout";
  */
 export type PlacementStageName = "placement" | "knockout";
 
+/**
+ * The kinds of conflict `schedule_conflicts(uuid)` reports about a published schedule.
+ *
+ * Computed, never stored: a conflict is a property of the rows as they stand, so it
+ * disappears the moment the desk fixes it rather than needing to be cleared by hand.
+ *
+ * Each is reported only against a match the desk can still act on - one still
+ * `scheduled` (`past_closing` also covers an `in-progress` match) - so a match that
+ * has already been played is never flagged. Being merely *late* is not here either:
+ * the desk's own overdue alert covers that.
+ */
+export type ScheduleConflictKind =
+  | "court_overlap"
+  | "rest_shortfall"
+  | "break"
+  | "past_closing"
+  | "before_prerequisite";
+
+/** One reason a still-scheduled match cannot currently be played as published. */
+export interface ScheduleConflict {
+  match_table: string;
+  match_id: string;
+  court_id: string | null;
+  scheduled_time: string | null;
+  ended_at: string | null;
+  conflict_kind: ScheduleConflictKind;
+  detail: string;
+}
+
 async function must<T>(
   p: PromiseLike<{ data: T | null; error: { message: string } | null }>,
 ): Promise<T> {
@@ -125,6 +160,8 @@ export const keys = {
   tournamentDays: ["tournament_days"] as const,
   tournamentById: ["tournament_by_id"] as const,
   tournamentReadiness: ["tournament_readiness"] as const,
+  /** The computed conflicts in a schedule, per tournament. See `schedule_conflicts`. */
+  scheduleConflicts: ["schedule_conflicts"] as const,
   dayCourts: ["tournament_day_courts"] as const,
   dayBreaks: ["tournament_day_breaks"] as const,
   tournamentEditors: ["tournament_editors"] as const,
@@ -377,9 +414,12 @@ export interface TournamentSummary {
   name: string;
   venue_name: string | null;
   status: TournamentStatus;
-  /** Derived from the days and the venue's timezone, null while there are no days. */
+  /** The tournament window as instants: 00:00 of its first date, and 00:00 after its last. */
   starts_at: string | null;
   ends_at: string | null;
+  /** The first and last playing day as instants. Null until playing days are chosen. */
+  play_starts_at: string | null;
+  play_ends_at: string | null;
   /** The window as one word, decided by the database rather than by the browser's clock. */
   registration_state: RegistrationState;
   /** Entries (`teams`), which is the entry per I3 - never a derived projection. */
@@ -422,13 +462,38 @@ export async function fetchTournamentSummaries(
 
   const { data, error } = await supabase.rpc("tournament_summary", args);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map(toTournamentSummary);
+}
+
+/**
+ * One summary row, with the vocabularies narrowed.
+ *
+ * Shared by every read that returns the card shape - `tournament_summary` and
+ * `explore_tournaments` - so a card cannot be built from the same fields two different ways.
+ */
+function toTournamentSummary(row: {
+  id: string;
+  name: string;
+  venue_name: string | null;
+  status: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  play_starts_at?: string | null;
+  play_ends_at?: string | null;
+  registration_state: string;
+  entry_count: number | null;
+  category_count: number | null;
+  access_level: string;
+}): TournamentSummary {
+  return {
     id: row.id,
     name: row.name,
     venue_name: row.venue_name,
     status: normalizeTournamentStatus(row.status),
     starts_at: row.starts_at,
     ends_at: row.ends_at,
+    play_starts_at: row.play_starts_at ?? null,
+    play_ends_at: row.play_ends_at ?? null,
     registration_state: normalizeRegistrationState(row.registration_state),
     entry_count: row.entry_count ?? 0,
     category_count: row.category_count ?? 0,
@@ -438,7 +503,68 @@ export async function fetchTournamentSummaries(
       row.access_level === "editor"
         ? row.access_level
         : "viewer",
-  }));
+  };
+}
+
+/** The date windows Explore offers, as `explore_tournaments` spells them. */
+export const EXPLORE_RANGES = ["week", "month", "quarter"] as const;
+export type ExploreRange = (typeof EXPLORE_RANGES)[number];
+
+/** The orders Explore offers, as `explore_tournaments` spells them. */
+export const EXPLORE_SORTS = ["soonest", "newest", "entries", "name"] as const;
+export type ExploreSort = (typeof EXPLORE_SORTS)[number];
+
+/** What narrows the list, apart from the status, which each section asks for itself. */
+export interface ExploreFilters {
+  query?: string | null;
+  registrationOpen?: boolean;
+  range?: ExploreRange | null;
+  sort?: ExploreSort;
+}
+
+/** One page of the list and the size of the whole result it was cut from. */
+export interface ExplorePage {
+  rows: TournamentSummary[];
+  total: number;
+}
+
+export async function fetchExplorePage(
+  params: ExploreFilters & { status?: TournamentStatus | null; limit: number; offset: number },
+): Promise<ExplorePage> {
+  // Every filter is omitted rather than sent as null, for the reason fetchTournamentSummaries
+  // gives: an absent argument takes the function's default, and cannot be mistaken for a
+  // filter whose value is null.
+  const args: Database["public"]["Functions"]["explore_tournaments"]["Args"] = {
+    p_limit: params.limit,
+    p_offset: params.offset,
+  };
+  const query = params.query?.trim();
+  if (query) args.p_query = query;
+  if (params.status) args.p_status = params.status;
+  if (params.registrationOpen) args.p_registration_open = true;
+  if (params.range) args.p_range = params.range;
+  if (params.sort) args.p_sort = params.sort;
+
+  const { data, error } = await supabase.rpc("explore_tournaments", args);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  return { rows: rows.map(toTournamentSummary), total: rows[0]?.total_count ?? 0 };
+}
+
+export async function fetchExploreCounts(
+  filters: ExploreFilters,
+): Promise<Record<TournamentStatus, number>> {
+  const args: Database["public"]["Functions"]["explore_tournament_counts"]["Args"] = {};
+  const query = filters.query?.trim();
+  if (query) args.p_query = query;
+  if (filters.registrationOpen) args.p_registration_open = true;
+  if (filters.range) args.p_range = filters.range;
+
+  const { data, error } = await supabase.rpc("explore_tournament_counts", args);
+  if (error) throw new Error(error.message);
+  const counts: Record<TournamentStatus, number> = { upcoming: 0, in_progress: 0, completed: 0 };
+  for (const row of data ?? []) counts[normalizeTournamentStatus(row.status)] = row.total;
+  return counts;
 }
 
 /**
@@ -528,6 +654,86 @@ export function useExploreTournaments(params: {
     // Keeps the previous page's rows on screen while the next answer arrives, which is
     // what stops the card grid blinking its way through every keystroke.
     placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * One status group of Explore, a page at a time.
+ *
+ * Each group is its own read - the page asks for live, upcoming and completed separately -
+ * so a group pages on its own and a long list of finished tournaments cannot push a live one
+ * out of sight. `loadMore` fetches the next `pageSize` rows; the rows already shown stay
+ * where they are, and `total` is what the database says the whole group holds.
+ *
+ * `enabled` lets the page leave a group unread when a status filter has already chosen
+ * another one.
+ */
+export function useExploreSection(
+  status: TournamentStatus,
+  filters: ExploreFilters,
+  pageSize: number,
+  enabled = true,
+) {
+  const query = filters.query?.trim() ?? "";
+  const registrationOpen = filters.registrationOpen ?? false;
+  const range = filters.range ?? null;
+  const sort = filters.sort ?? "soonest";
+
+  const result = useInfiniteQuery({
+    queryKey: [
+      ...keys.tournamentSummaries,
+      "explore-section",
+      status,
+      query,
+      registrationOpen,
+      range,
+      sort,
+      pageSize,
+    ],
+    enabled,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      fetchExplorePage({
+        status,
+        query,
+        registrationOpen,
+        range,
+        sort,
+        limit: pageSize,
+        offset: pageParam,
+      }),
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.rows.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    // The previous answer stays on screen while a new filter loads, for the reason
+    // useExploreTournaments gives.
+    placeholderData: keepPreviousData,
+  });
+
+  const rows = useMemo(() => result.data?.pages.flatMap((page) => page.rows) ?? [], [result.data]);
+  return {
+    rows,
+    total: result.data?.pages[0]?.total ?? 0,
+    isLoading: result.isLoading,
+    isError: result.isError,
+    error: result.error,
+    hasMore: !!result.hasNextPage,
+    isLoadingMore: result.isFetchingNextPage,
+    loadMore: () => void result.fetchNextPage(),
+    refetch: () => void result.refetch(),
+  };
+}
+
+/** How many tournaments each status filter would show, for the numbers on its buttons. */
+export function useExploreCounts(filters: ExploreFilters) {
+  const query = filters.query?.trim() ?? "";
+  const registrationOpen = filters.registrationOpen ?? false;
+  const range = filters.range ?? null;
+  return useQuery({
+    queryKey: [...keys.tournamentSummaries, "explore-counts", query, registrationOpen, range],
+    queryFn: () => fetchExploreCounts({ query, registrationOpen, range }),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -704,14 +910,44 @@ export function useTournamentRegistrationQueue(
   return useQuery({
     queryKey: scopedKey(keys.registrationQueue, tournamentId),
     enabled: enabled && !!tournamentId,
-    queryFn: async (): Promise<RegistrationQueue> => {
-      const { data, error } = await supabase.rpc("review_tournament_registrations", {
-        p_tournament_id: tournamentId as string,
-      });
-      if (error) throw new Error(error.message);
-      return toRegistrationQueue((data ?? []) as unknown as ReviewRegistrationRow[]);
-    },
+    queryFn: () => fetchRegistrationQueue(tournamentId as string),
   });
+}
+
+async function fetchRegistrationQueue(tournamentId: string): Promise<RegistrationQueue> {
+  const { data, error } = await supabase.rpc("review_tournament_registrations", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+  return toRegistrationQueue((data ?? []) as unknown as ReviewRegistrationRow[]);
+}
+
+/**
+ * How many requests are waiting for a decision, for each of several tournaments.
+ *
+ * Home asks about every tournament the caller may edit, and a hook cannot be called in a loop,
+ * so this is the same read as the queue above issued once per id. It shares the queue's cache
+ * key, so a tournament whose queue is already open costs nothing, and the Registrations page
+ * and the nav badge see the same answer. The ids passed are the caller's own, so the editor
+ * gate on the read is met; an answer that fails reads as zero rather than as an error, since
+ * "none waiting" is the safe thing for a summary line to say when it cannot tell.
+ */
+export function usePendingRegistrationCounts(tournamentIds: readonly string[]) {
+  const results = useQueries({
+    queries: tournamentIds.map((id) => ({
+      queryKey: scopedKey(keys.registrationQueue, id),
+      queryFn: () => fetchRegistrationQueue(id),
+    })),
+  });
+  return useMemo(() => {
+    const counts = new Map<string, number>();
+    tournamentIds.forEach((id, index) => {
+      counts.set(id, results[index]?.data?.pending.length ?? 0);
+    });
+    return counts;
+    // `results` is a new array every render; its contents are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentIds.join(","), results.map((r) => r.dataUpdatedAt).join(",")]);
 }
 
 export interface ReadinessCheck {
@@ -929,27 +1165,26 @@ export function useCourts() {
 }
 
 /**
- * The global player roster.
+ * The people in the current tournament.
  *
- * Reads the `public_players` projection, which is a definer view over the roster
- * columns: id, name, gender, when the row was added. It is deliberately not
- * `players`, and the reason is now narrower than when this was written. That
- * table's read policy admits the person the row belongs to and the owner or
- * editors of a tournament it has entered - so a participant can read their own
- * contact row, and cannot read anybody else's, and no reader sees the roster as a
- * whole. Every screen wants the roster as a whole, including for people who can
- * read nothing on `players` at all (a visitor), so the projection is what they
- * read. It is also the only shape that never carries an email address.
+ * Not the roster. `players` is global - one row per person ever entered anywhere - and this
+ * used to read all of it through `public_players` on every page, which made the Entries screen
+ * report the whole platform as "Players" and let anyone list everybody who had ever played.
+ * A page wants the names of the people on *this* tournament's entries, and
+ * `tournament_players` answers exactly that: id, name and gender of everyone with a team row
+ * here, no email, no phone, no link. Pickers that need to reach beyond the tournament use
+ * `searchPlayers` instead.
  */
 export function usePlayers() {
+  const tournamentId = useTournamentId();
   return useQuery({
-    queryKey: keys.players,
+    queryKey: scopedKey(keys.players, tournamentId),
+    enabled: !!tournamentId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("public_players").select("*").order("name");
+      const { data, error } = await supabase.rpc("tournament_players", {
+        p_tournament_id: tournamentId as string,
+      });
       if (error) throw new Error(error.message);
-      // The view's columns are all nullable as far as PostgREST can tell, so the rows
-      // are narrowed here rather than asserted. A row without an id or a name is not a
-      // player the roster can render, and dropping it is better than a blank line.
       const players: Player[] = [];
       for (const row of data ?? []) {
         if (!row.id || !row.name) continue;
@@ -958,6 +1193,31 @@ export function usePlayers() {
       return players;
     },
   });
+}
+
+/** Fewest characters the server will search on; shorter text is not worth a request. */
+export const PLAYER_SEARCH_MIN_CHARS = 2;
+
+/**
+ * Looks a person up in the global roster by name, for the desk adding an entry.
+ *
+ * Editors of the tournament only, at least two characters, at most `limit` rows. Returns an
+ * empty list for text that is too short rather than asking, so a half-typed box costs nothing.
+ */
+export async function searchPlayers(
+  tournamentId: string,
+  query: string,
+  limit = 20,
+): Promise<Player[]> {
+  const text = query.trim();
+  if (text.length < PLAYER_SEARCH_MIN_CHARS) return [];
+  const { data, error } = await supabase.rpc("search_players", {
+    p_tournament_id: tournamentId,
+    p_query: text,
+    p_limit: limit,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({ id: row.id, name: row.name, gender: row.gender }));
 }
 
 export function useTeams() {
@@ -1080,6 +1340,9 @@ export function useTournamentEditors(tournamentId: string | null | undefined) {
   });
 }
 
+/** How long the channel must be quiet before the cache is refetched. */
+const REALTIME_DEBOUNCE_MS = 400;
+
 export function useRealtimeRefresh() {
   const qc = useQueryClient();
   // Keep the first server and browser render identical; network state is only
@@ -1094,11 +1357,20 @@ export function useRealtimeRefresh() {
     if (!navigator.onLine) setStatus("offline");
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
+    // One reported result writes the match, its activity row, every match it pushes and the
+    // next round - dozens of events within a few hundred milliseconds. Refetching the whole
+    // cache on each one is a storm on venue wifi (and `invalidateQueries` cancels the fetch in
+    // flight each time), so a burst collapses into a single refetch once it goes quiet.
+    let pending: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel("ops-live")
       .on("postgres_changes", { event: "*", schema: "public" }, () => {
         setLastUpdatedAt(Date.now());
-        void qc.invalidateQueries();
+        if (pending) clearTimeout(pending);
+        pending = setTimeout(() => {
+          pending = null;
+          void qc.invalidateQueries();
+        }, REALTIME_DEBOUNCE_MS);
       })
       .subscribe((next) => {
         if (!navigator.onLine) setStatus("offline");
@@ -1109,6 +1381,7 @@ export function useRealtimeRefresh() {
         else if (next === "CLOSED") setStatus("connecting");
       });
     return () => {
+      if (pending) clearTimeout(pending);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
       void supabase.removeChannel(channel);
@@ -1232,5 +1505,33 @@ export function useTierDrawMatches() {
     enabled: !!tournamentId,
     refetchInterval: 20_000,
     queryFn: () => fetchTierDrawMatches(tournamentId as string),
+  });
+}
+
+/**
+ * The computed conflicts in the current tournament's schedule.
+ *
+ * `schedule_conflicts` is a read, not a stored flag, so this needs the same short
+ * refetch window the desk's other schedule reads use: a conflict appears the moment the
+ * rows that contradict each other exist, and disappears the moment the desk fixes it.
+ *
+ * The result is deliberately not surfaced anywhere yet. It exists so a caller can ask
+ * "is this schedule still playable" without re-deriving the rules in TypeScript.
+ */
+export async function fetchScheduleConflicts(tournamentId: string): Promise<ScheduleConflict[]> {
+  const { data, error } = await supabase.rpc("schedule_conflicts", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as ScheduleConflict[];
+}
+
+export function useScheduleConflicts() {
+  const tournamentId = useTournamentId();
+  return useQuery({
+    queryKey: scopedKey(keys.scheduleConflicts, tournamentId),
+    enabled: !!tournamentId,
+    refetchInterval: 20_000,
+    queryFn: () => fetchScheduleConflicts(tournamentId as string),
   });
 }

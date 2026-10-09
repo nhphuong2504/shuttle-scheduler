@@ -25,17 +25,20 @@ Three audiences, and the address says which one it belongs to:
 
 | Address | Surface |
 | --- | --- |
-| `/` | Landing for a visitor (what Tournova is, Explore, sign in); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
+| `/` | **Placeholder** Landing for a visitor (a bare "browse or sign in", not yet designed); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
 | `/explore` | Every tournament, searchable over name, venue and event, with a status filter |
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me** |
-| `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, against a new row |
+| `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
-| `/tournaments/$tournamentId/` | One tournament's public page: the card, and the Register panel |
+| `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card on `…/entries` instead, so a visitor who only came to read never sees this page |
 
 These are the only addresses that can be reached without naming a tournament. Each draws
 `PublicShell`, because there is no tournament for a header to describe. `/tournaments/new` is a
 sibling of `$tournamentId`, not a child, precisely because creating a tournament happens before
 there is one to be inside.
+
+`…/entries` is where reading a tournament begins: a card in `/explore` links there, and it is
+the first of the five sections the read-only workspace offers (see [The shells](#3-the-shells)).
 
 ### Tournament-scoped
 
@@ -52,7 +55,7 @@ mounts `WorkspaceShell` around the child page.
 | `…/knockout` | The tier-draw brackets | Operator |
 | `…/schedule` | Tournament-wide planning. One address for both engines: the route reads `tournament.format` and renders the placement scheduler or the day planner | Organiser |
 | `…/scores` | Result entry | Operator |
-| `…/settings` | Configuration and the lifecycle, hosted in the shared wizard | Editor |
+| `…/settings` | Setting up a tournament that exists, hosted in the shared wizard: every step while it is upcoming, and only what can still change once it has started | Editor |
 | `…/access` | Who else may operate this tournament | Editor |
 | `…/pools`, `…/draws` | The legacy round-robin brackets, reachable by URL while a legacy tournament is read | Viewer |
 
@@ -97,32 +100,59 @@ there is to work on than a sign-in form.
 Two shells, and which one a page draws is decided by whether it is about one tournament.
 
 - **`WorkspaceShell`** — mounted once, by the layout route. It draws the tournament header
-  (name, lifecycle status, the section nav, the workspace switcher) and the caller's
-  access-aware actions. No page below it renders a shell of its own; a page composes `Page`,
-  which puts a title row over the page's own content.
+  (name, lifecycle status, the section nav, and — for a caller who may edit — the workspace
+  switcher) and the caller's access-aware actions. No page below it renders a shell of its own;
+  a page composes `Page`, which puts a title row over the page's own content.
 - **`PublicShell`** — drawn by each of the five public routes above, since no layout knows what
-  to put in a header outside a tournament. It carries the public nav (Explore, My tournaments,
-  New tournament), which does not change with the session: a nav row that grows an entry once
-  the session settles moves the row the reader is aiming at.
+  to put in a header outside a tournament. It carries the public nav, which is one entry
+  (**Browse tournaments**, at `/explore`): a bar a signed-out visitor reads should not be a
+  list of the caller's own work, and what is left does not change with the session, so the row
+  does not move once the session settles. `/me/tournaments` and `/tournaments/new` stay
+  reachable from the pages that link them.
 
-The workspace nav is two lists. The operational six (`desk`, `entries`, `placement`, `knockout`,
-`schedule`, `scores`) are offered to anyone who can read the tournament. The three editor
-entries (`registrations`, `settings`, `access`) are gated on `can_edit`, because a nav entry
-that leads to a page saying no is a worse answer than not offering the trip; the pages
-themselves still refuse, since the nav is presentation.
+The workspace nav is split by the edit right, not by the session. A caller who may edit gets
+the operational six (`desk`, `entries`, `placement`, `knockout`, `schedule`, `scores`) plus the
+three editor entries (`registrations`, `settings`, `access`). The editor entries are gated on
+`can_edit`, because a nav entry that leads to a page saying no is a worse answer than not
+offering the trip; the pages themselves still refuse, since the nav is presentation.
+
+A read-only reader — a signed-in viewer or an anonymous visitor — gets five of them: the
+operational sections **without the Desk**. The Desk is a live console for one court rather than
+a page about the tournament, so it is the one operational entry that is not part of reading an
+event. The list is derived from the operational one minus the Desk rather than restated, so a
+section added later is offered to everyone reading the tournament by default. A read-only
+workspace therefore opens on `entries` (the logo points at the first offered section, not at
+the Desk), and the tournament's participant page at `/tournaments/$tournamentId/` is not part of
+that experience.
+
+The header's own line — brand, then the tournament's name and status — carries one more entry
+for a reader, and it follows the same split as the section nav. An operator gets the workspace
+switcher in the section row, because the tournaments they may work in are a list they hold and
+moving between them is their own act. A reader gets **Browse tournaments** at `/explore`, in
+the position `PublicShell` puts its public nav: immediately after the brand. It is the entry a
+card came in by, and a reader who left the list should find the way back where they left it.
+There is no create-tournament button in either case: starting a tournament is an operator's
+act, and a header that offers no way to change this one should not offer a way to begin
+another.
 
 ## 4. The flows
 
-### Finding and entering a tournament
+### Finding a tournament
 
 ```mermaid
 flowchart LR
   visitor["Visitor"] --> landing["/" ]
   landing --> explore["/explore"]
-  explore --> card["/tournaments/:id/"]
-  card -->|"Register, signed in"| auth["/auth?redirect=/tournaments/:id/"]
-  auth -->|"returns"| card
+  explore --> card["/tournaments/:id/entries"]
+  card --> sections["the read-only five:<br/>entries, placement,<br/>knockout, schedule, scores"]
 ```
+
+The participant page at `/tournaments/:id/` — the card and the Register panel — is no longer one
+of the *reading* steps. Explore sends a card to the read-only workspace so the browse surface opens
+on the event's state rather than on a form. It is still the destination of **Register**, which is
+the one action on the card that means "I want to enter" rather than "I want to look": a signed-in
+caller lands on the form, and a visitor is sent to sign in first, carrying this page as the place
+to come back to.
 
 Explore is the only search surface, and it renders one shape per row — `tournament_summary`,
 which computes the status, the derived start and end, the registration state, the entry counts
@@ -134,10 +164,12 @@ what a tournament is.
 
 `/tournaments/new` hosts the same four-step wizard that Setup hosts
 ([`src/components/tournament-setup`](../src/components/tournament-setup)), against a tournament
-that does not exist yet. The step that writes the row creates it, points the caller's working
-pointer at it, and moves the address to `/tournaments/:id/settings` — which is what makes a
-refresh resume the wizard rather than start a second tournament. There is one wizard with two
-hosts, and neither host owns the steps.
+that does not exist yet. Nothing is written until the last step: the answers live in the page
+and in the browser's session storage, so a reload keeps them, and "Create tournament" makes the
+tournament whole in one call, points the caller's working pointer at it, clears the stored
+answers and goes to `/tournaments/:id`. There is no draft row, so there is nothing for a
+refresh to resume and no half-made tournament for anyone else to find. There is one wizard with
+two hosts, and neither host owns the steps.
 
 ### Working in one
 
@@ -196,8 +228,6 @@ requests, "Entries" is the roster.
 - **A shipped link resolves.** Every literal `to=` target is checked against the router's own
   generated route ids, so a link to an address with no route fails the unit suite rather than a
   click.
-- **The theme takes no pathname.** Navigating must never change the lighting; the fallback is
-  the operating system, not the route.
 - **Nothing global decides where you are.** No default tournament, no server-side pointer read,
   no redirect that happens before the session is known.
 

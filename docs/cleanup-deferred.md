@@ -13,15 +13,12 @@ tournament format or scoring rule was touched, and no rendered surface was remov
 | --- | --- |
 | 36 of the 46 `src/components/ui/*` primitives | No import from outside `src/components/ui` in `src`, `e2e`, `scripts` or `docs`, and no barrel, dynamic import or Storybook consumer. Five of them (`separator`, `sheet`, `skeleton`, `toggle`, `tooltip`) were reachable only through `sidebar.tsx`, which was itself unused. |
 | `src/hooks/use-mobile.tsx` | Only consumer was the deleted `sidebar.tsx`. |
-| The `chart-*` and `sidebar-*` colour tokens | Their only consumers were `chart.tsx` and `sidebar.tsx`. Their `--color-*` keys and both theme declarations went with the primitives. |
-| `createTournament` and its `CreateTournamentInput` / `TournamentCategoryInput` types in `src/lib/tournament/actions.ts` | Superseded and marked deprecated; no caller. The wizard writes a draft with `createTournamentDraft` and activates it with `activateTournament`. The `create_tournament` RPC is untouched. |
+| The `chart-*` and `sidebar-*` colour tokens | Their only consumers were `chart.tsx` and `sidebar.tsx`. Their `--color-*` keys and their declarations went with the primitives. |
+| The first `createTournament` and its `CreateTournamentInput` / `TournamentCategoryInput` types in `src/lib/tournament/actions.ts` | Superseded and marked deprecated; no caller. (A different `createTournament` now exists: the wizard's atomic call to `create_tournament`, with a window and events. This entry is about the old one.) |
 | `src/integrations/supabase/auth-middleware.ts` | Exported `requireSupabaseAuth` with no importer. The live path is `auth-attacher.ts`, wired in `src/start.ts`. |
 | 32 packages | The eight shadcn-only runtime packages, the twenty `@radix-ui` packages whose only consumers were the deleted wrappers, and `@hookform/resolvers`, `date-fns`, `zod` and `@testing-library/jest-dom`, which had no import or test registration anywhere. 85 transitive packages left with them. |
 | `supabase/.temp/cli-latest` (untracked) | Machine-local CLI scratch state. `.gitignore` already ignored `supabase/.temp/`; the file was tracked anyway. |
 | `.cursor/plans/sport-agnostic_scheduling_core_3ca401f1.plan.md` | A superseded planning artifact. The scheduling core it describes is shipped under `src/lib/scheduling`, and its decisions are recorded in [`scheduling-decisions.md`](scheduling-decisions.md). |
-
-`KNOWN_DEAD` in [`tokens.test.ts`](../src/lib/design/tokens.test.ts) shrank from 11 to 6
-tokens with the same change.
 
 ## Deferred, with the evidence
 
@@ -59,16 +56,14 @@ with two callers. Do not merge them without reading
 
 ### `info-*` tone tokens
 
-`--info-surface`, `--info-border` and `--info-foreground` are defined in both themes and
+`--info-surface`, `--info-border` and `--info-foreground` are defined and
 rendered by nothing. They are design vocabulary rather than scaffolding, so retiring them is
-a design-system decision. They stay pinned in `KNOWN_DEAD`.
+a design decision, left for when the design settles.
 
 ### `card` / `card-foreground`
 
-Also pinned in `KNOWN_DEAD`. No component renders `bg-card`, but they are the third step of
-the chassis ramp (`--background` -> `--surface` -> `--card`) named in
-[`design-system.md`](design-system.md), so the token is kept and the dead-token list records
-why rather than deleting a documented surface.
+No component renders `bg-card`, but it is the third step of the surface ramp
+(`--background` -> `--surface` -> `--card`), so the token is kept until the design settles.
 
 ### `@tanstack/router-plugin` is a direct dependency
 

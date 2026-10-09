@@ -23,7 +23,9 @@ export const routes = {
    * The public page for one tournament, under the workspace layout.
    *
    * The only surface written for a participant rather than an operator: what the tournament
-   * is, whether the window is open, and how to enter.
+   * is, whether the window is open, and how to enter. Explore's reading trip opens a card on
+   * the read-only workspace at `entries` instead, so this page is reached from **Register**
+   * and from the participant-facing sweeps.
    */
   tournament: `/tournaments/${TOURNAMENT_ID}`,
   desk: `/tournaments/${TOURNAMENT_ID}/desk`,

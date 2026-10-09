@@ -39,6 +39,7 @@ function tournament(overrides: Partial<Tournament> = {}): Tournament {
     court_count: 2,
     created_at: "2026-09-17T00:00:00Z",
     day_count: 1,
+    ends_on: "2026-09-17",
     format: "two_round_placement",
     group_rest_gap_minutes: 20,
     group_slot_minutes: 30,
@@ -56,6 +57,7 @@ function tournament(overrides: Partial<Tournament> = {}): Tournament {
     placement_games_to: 21,
     placement_win_by: 2,
     rest_gap_minutes: 30,
+    starts_on: "2026-09-17",
     status: "in_progress",
     owner_profile_id: "00000000-0000-0000-0000-0000000000a1",
     registration_opens_at: null,
@@ -2130,5 +2132,140 @@ describe("frozenMatchIdsFor", () => {
 
   it("returns nothing when there is nothing committed", () => {
     expect(frozenMatchIdsFor({ committed: [], now: 0 })).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyFreeze — current behaviour, revisited in Step 4
+// ---------------------------------------------------------------------------
+
+/**
+ * `applyFreeze` pins the next committed match on each court *as it stands*. It never asks
+ * whether that time is still sensible: a row whose time has already passed, or one that
+ * now sits inside a day break, is frozen exactly the same way. The pin is "do not move the
+ * match the desk is about to call", not "is this time legal", so it is deliberately blind
+ * to the clock and to the break list.
+ *
+ * This is recorded as the CURRENT behaviour, on purpose, because Step 4 changes the freeze
+ * to reconsider a row the day has overtaken. When that lands these two expectations will
+ * have to be rewritten; the test sits here so the change is made knowingly rather than
+ * noticed later. It does not touch `applyFreeze`.
+ */
+describe("applyFreeze — current behaviour (Step 4 will change this)", () => {
+  /** Still `scheduled`, but already on a court at a time, which is what the freeze reads. */
+  const committed = (id: string, entrantA: string, entrantB: string, courtId: string, time: string) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "scheduled",
+      court_id: courtId,
+      scheduled_time: new Date(time).toISOString(),
+    });
+
+  it("still pins a committed match whose time is already in the past", () => {
+    // 08:00 is an hour before the day opens and before the planner's `now`, and it is
+    // pinned anyway: the freeze does not compare against `now`.
+    const result = plan({
+      placementMatches: [
+        committed("past", "e1", "e2", "c1", "2026-09-17T08:00:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["past"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "past");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T08:00:00").toISOString());
+  });
+
+  it("still pins a committed match that now sits inside a day break", () => {
+    // The row is committed at 10:15, which the 10:00-11:00 break now covers. The freeze
+    // does not consult the break list, so it is pinned inside the break rather than
+    // stepped past it, and it stays there in the plan.
+    const result = plan({
+      breaks: [dayBreak("10:00:00", "11:00:00")],
+      placementMatches: [
+        committed("inbreak", "e1", "e2", "c1", "2026-09-17T10:15:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["inbreak"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "inbreak");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T10:15:00").toISOString());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A fixed knockout on another event's court
+// ---------------------------------------------------------------------------
+
+/**
+ * Two events share one day and one court pool. `cat1` has already reached its knockouts, so one of
+ * its rows is a committed `scheduled` knockout that the freeze pins on court 1; `cat2` still has
+ * placement work to place. Pass A (placement) and pass B (knockout) are separate solver runs, and
+ * the placement pass did not see the other stage's fixed work, so it was free to hand court 1 at
+ * 09:00 to `cat2`'s placement match. Pass B then held both as fixed on that same court, which the
+ * problem validator refuses as a double booking — the whole plan was rejected before a single match
+ * was placed.
+ */
+describe("planPlacementSchedule — a fixed knockout on another event's court", () => {
+  /** cat1's knockout (optional) plus cat2's still-pending placement match, on two events. */
+  function twoEvents(knockout?: { courtId: string; time: string }) {
+    const teams = [
+      team("team-a1", "p1", "p2"),
+      team("team-a2", "p3", "p4"),
+      { ...team("team-b1", "p5", "p6"), category_id: "cat2" },
+      { ...team("team-b2", "p7", "p8"), category_id: "cat2" },
+    ];
+    const entrants = [
+      entrant("ea1", "team-a1", 1),
+      entrant("ea2", "team-a2", 2),
+      { ...entrant("eb1", "team-b1", 1), category_id: "cat2" },
+      { ...entrant("eb2", "team-b2", 2), category_id: "cat2" },
+    ];
+    return plan({
+      teams,
+      entrants,
+      categoryOrder: new Map([
+        ["cat1", 1],
+        ["cat2", 2],
+      ]),
+      draws: [tierDraw("A")],
+      placementMatches: [placementMatch("b1", "round1", "eb1", "eb2", { category_id: "cat2" })],
+      tierMatches: knockout
+        ? [
+            tierMatch("k-1", 1, 1, "ea1", "ea2", {
+              status: "scheduled",
+              court_id: knockout.courtId,
+              // Stored as an instant, the way a row comes back from the database.
+              scheduled_time: new Date(knockout.time).toISOString(),
+            }),
+          ]
+        : [],
+    });
+  }
+
+  it("places the pending placement match without colliding with the pinned knockout", () => {
+    const result = twoEvents({ courtId: "c1", time: "2026-09-17T09:00:00" });
+
+    expect(result.blocked).toEqual([]);
+    const placement = result.slots.find((slot) => slot.matchId === "b1");
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1");
+    expect(placement).toBeDefined();
+    expect(knockout).toBeDefined();
+    // The knockout holds court 1 from 09:00, so nothing may be laid on top of it there.
+    const collides =
+      placement!.courtNumber === knockout!.courtNumber &&
+      placement!.start < knockout!.end &&
+      knockout!.start < placement!.end;
+    expect(collides).toBe(false);
+  });
+
+  it("control: with no fixed knockout the plan is exactly as before", () => {
+    const result = twoEvents();
+
+    expect(result.blocked).toEqual([]);
+    const placement = result.slots.find((slot) => slot.matchId === "b1");
+    // Nothing is holding a court, so the placement match keeps the earliest slot it always had.
+    expect(placement?.courtNumber).toBe(1);
+    expect(placement?.start.toISOString()).toBe(new Date("2026-09-17T09:00:00").toISOString());
   });
 });

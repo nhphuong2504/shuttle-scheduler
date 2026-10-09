@@ -107,14 +107,26 @@ scheduler checks all four players independently.
 
 ## Play days
 
-Play days are **not fixed at setup**. They are created in the wizard as a start and
-end date range, and then managed from the Schedule page:
+Setup does not choose the days a tournament plays on. It chooses the **window**: a first and a
+last date, which are what the public sees and have no maximum length. The days actually played
+are chosen later, on the Schedule page, when the schedule is built:
 
-- Days can be **added and removed after the tournament is activated**.
-- `add_tournament_day` renumbers existing days; `remove_tournament_day` refuses to
-  remove the last day or a day with scheduled matches on it.
+- Every playing day must lie **inside the window**, and they need not be consecutive. A window
+  of 20-30 October may be played on the 20th, the 22nd and the 29th. There is no limit on how
+  many playing days there are.
+- A tournament may have **no playing days yet**; choosing at least one is what building a
+  schedule asks for, not what creating a tournament asks for.
+- Days can be **added and removed after the first match**. `add_tournament_day` renumbers
+  existing days; `remove_tournament_day` refuses a day with scheduled matches on it.
+- The window's last date can be extended at any time before completion; its first date is
+  locked once the first match has started. A window cannot be shrunk past a playing day.
 - A database trigger keeps `day_number` and `date` in chronological order for every
-  modification, so out-of-order dates cannot be introduced.
+  modification, so out-of-order dates cannot be introduced, and a second one keeps every day
+  inside the window.
+
+Registration is a separate window again. It closes at or before 00:00 of the tournament's
+first date, so people register before the tournament and never during it; see
+[`authorization.md`](authorization.md) section 6.
 
 The old "day 1 is groups, day 2 is knockouts" split is no longer a structural
 constraint, because the number of days is not fixed.

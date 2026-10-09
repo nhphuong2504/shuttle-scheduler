@@ -1,13 +1,50 @@
-import type { TournamentDayInput, TournamentEventInput } from "@/lib/tournament/actions";
+import type { TournamentEventInput } from "@/lib/tournament/actions";
 
 export type SetupStep = "details" | "events" | "structure" | "review";
 
+/**
+ * The steps, in order. `hint` is the one line the step rail prints beneath the name, so a host
+ * can tell what a step is for without opening it.
+ *
+ * The last step is "Review and create" while a tournament is being made and "Review" once it
+ * exists, so it is named by `setupSteps(existing)` rather than read from here directly.
+ */
 export const SETUP_STEPS: { id: SetupStep; label: string; hint: string }[] = [
-  { id: "details", label: "Details", hint: "Name, dates and timezone" },
-  { id: "events", label: "Events", hint: "Which categories run" },
-  { id: "structure", label: "Structure", hint: "How the competition runs" },
-  { id: "review", label: "Review", hint: "Checks and activation" },
+  { id: "details", label: "Details", hint: "Name, dates, venue" },
+  { id: "events", label: "Events", hint: "What is played, and who can register" },
+  { id: "structure", label: "Structure", hint: "How it is played" },
+  { id: "review", label: "Review and create", hint: "Check, then create" },
 ];
+
+/** The steps as the rail names them: creating a tournament, or setting up one that exists. */
+export function setupSteps(existing: boolean): { id: SetupStep; label: string; hint: string }[] {
+  if (!existing) return SETUP_STEPS;
+  return SETUP_STEPS.map((step) =>
+    step.id === "review" ? { ...step, label: "Review", hint: "Checks and summary" } : step,
+  );
+}
+
+/**
+ * Which step fixes a readiness check.
+ *
+ * The database names its checks by id (`basics`, `timezone`, `categories`, `category_caps`) and
+ * the wizard adds two of its own (`window`, `registration`); a failing one is only useful if it
+ * says where to go. A check this does not know leads nowhere rather than to a guess.
+ */
+export function stepForCheck(checkId: string): SetupStep | null {
+  switch (checkId) {
+    case "basics":
+    case "timezone":
+    case "window":
+      return "details";
+    case "categories":
+    case "category_caps":
+    case "registration":
+      return "events";
+    default:
+      return null;
+  }
+}
 
 export function isSetupStep(value: unknown): value is SetupStep {
   return typeof value === "string" && SETUP_STEPS.some((step) => step.id === value);
@@ -29,27 +66,35 @@ export interface BasicsForm {
   organizerPhone: string;
 }
 
+/**
+ * The registration window as the host types it: wall-clock `YYYY-MM-DDTHH:mm` strings in the
+ * venue's timezone, which is the form a `datetime-local` input speaks and the form that
+ * compares chronologically as text. They become instants only at the edge, where the
+ * tournament is saved.
+ *
+ * An empty `opensAt` means "as soon as the tournament is created", and an empty `closesAt`
+ * means the suggestion (the end of the day before the tournament starts); both are shown in
+ * the field so the host sees what they will get.
+ */
+export interface RegistrationForm {
+  enabled: boolean;
+  opensAt: string;
+  closesAt: string;
+}
+
 export interface DraftForm {
   basics: BasicsForm;
   /**
-   * One row per tournament date. Setup only decides *which* dates the tournament
-   * runs on; the hours, courts and breaks each day plays on are configured at the
-   * first build, where the courts actually exist.
+   * The tournament window: the first and last date, `YYYY-MM-DD`, in the venue's timezone.
+   * It is what the public sees. Which days are actually played, and the hours and courts of
+   * each, are chosen on the Schedule page when the schedule is built - inside this window.
    */
-  days: TournamentDayInput[];
+  startsOn: string;
+  endsOn: string;
   events: TournamentEventInput[];
   maxCategoriesPerPlayer: number;
+  registration: RegistrationForm;
 }
-
-/** What a day looks like before the first build gives it hours and courts. */
-export const DEFAULT_DAY_START = "09:00";
-export const DEFAULT_DAY_END = "18:30";
-
-/**
- * The database refuses more than this many days (`save_tournament_days`), so the
- * picker stops the host at the same limit rather than letting a save fail.
- */
-export const MAX_TOURNAMENT_DAYS = 7;
 
 /** The date part of "now" in the host's own timezone, as `YYYY-MM-DD`. */
 export function todayIso(): string {
@@ -58,62 +103,18 @@ export function todayIso(): string {
   return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
 }
 
-/** Adds whole days to a `YYYY-MM-DD` string, staying clear of local-time drift. */
-export function shiftIsoDate(iso: string, days: number): string {
-  const date = new Date(`${iso}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
+// Date arithmetic lives with the other calendar-date helpers, so the Schedule page's day
+// picker and this wizard cannot disagree about what a window contains.
+export { countIsoDays, shiftIsoDate } from "@/lib/tournament/iso-date";
 
-/** Inclusive day count between two `YYYY-MM-DD` strings; at least 1. */
-export function countIsoDays(start: string, end: string): number {
-  const from = Date.parse(`${start}T00:00:00Z`);
-  const to = Date.parse(`${end}T00:00:00Z`);
-  return Math.round((to - from) / 86_400_000) + 1;
-}
-
-/**
- * Expands a start/end date range into one row per day, in date order.
- *
- * A single date is a one-day tournament. Zero-padded `YYYY-MM-DD` strings compare
- * chronologically as text, so the range checks are plain string comparisons.
- */
-export function buildDayRange(start: string, end: string): TournamentDayInput[] {
-  if (!start) return [];
-  const last = end || start;
-  if (last < start) {
-    throw new Error("The end date cannot be before the start date.");
-  }
-  const span = countIsoDays(start, last);
-  if (span > MAX_TOURNAMENT_DAYS) {
-    throw new Error(`A tournament can span at most ${MAX_TOURNAMENT_DAYS} days.`);
-  }
-  return Array.from({ length: span }, (_, index) => ({
-    date: shiftIsoDate(start, index),
-    startTime: DEFAULT_DAY_START,
-    endTime: DEFAULT_DAY_END,
-    courts: [],
-    breaks: [],
-  }));
-}
-
-/**
- * The date range is derived from the day rows rather than stored separately, so
- * the summary always agrees with what the host configured.
- */
-export function dateRangeLabel(days: TournamentDayInput[]): string {
-  const dates = days
-    .map((day) => day.date)
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
-  if (!dates.length) return "No days yet";
-  const first = dates[0] as string;
-  const last = dates[dates.length - 1] as string;
-  return first === last ? first : `${first} to ${last}`;
+/** "2026-10-20 to 2026-10-30", "2026-10-20" for one day, or a prompt if there is no window. */
+export function windowLabel(startsOn: string, endsOn: string): string {
+  if (!startsOn) return "No dates yet";
+  const last = endsOn || startsOn;
+  return last === startsOn ? startsOn : `${startsOn} to ${last}`;
 }
 
 export function defaultForm(): DraftForm {
-  const today = todayIso();
   return {
     basics: {
       name: "",
@@ -125,8 +126,10 @@ export function defaultForm(): DraftForm {
       organizerEmail: "",
       organizerPhone: "",
     },
-    days: buildDayRange(today, today),
+    startsOn: "",
+    endsOn: "",
     events: [],
     maxCategoriesPerPlayer: 2,
+    registration: { enabled: true, opensAt: "", closesAt: "" },
   };
 }

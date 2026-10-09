@@ -10,7 +10,6 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { DARK_CLASS, SYSTEM_DARK_QUERY, THEME_STORAGE_KEY } from "@/lib/design/theme";
 
 import appCss from "../styles.css?url";
 
@@ -26,7 +25,7 @@ function NotFoundComponent() {
         <div className="mt-6">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
           >
             Go home
           </Link>
@@ -55,7 +54,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
           >
             Try again
           </button>
@@ -76,13 +75,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      // Declares that both schemes are supported, so the browser paints its own
-      // chrome - the canvas behind the page, scrollbars, native form controls - in
-      // the right scheme from the first frame rather than after the stylesheet
-      // resolves. The per-theme `color-scheme` declarations in styles.css then pin it
-      // once the class is known. Without this, a dark-preferring browser can show a
-      // white flash before any of our CSS applies.
-      { name: "color-scheme", content: "light dark" },
+      // Tells the browser to paint its own chrome - the canvas behind the page,
+      // scrollbars, native form controls - light from the first frame, before the
+      // stylesheet resolves. Light is the app's only theme; styles.css pins the same
+      // value once it loads.
+      { name: "color-scheme", content: "light" },
       { title: "Tournova | Badminton Tournament Operations" },
       {
         name: "description",
@@ -111,13 +108,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
-    // The pre-paint script is rendered as a real inline element in RootShell rather than
-    // declared here, and that placement is deliberate: the theme spec proves the `dark`
-    // class arrives with the application bundle blocked, which only holds for a script
-    // that is in the document before React hydrates. A second, theme-only boot script was
-    // merged in from the Lovable branch and is deliberately not reinstated - it would
-    // duplicate a decision APPEARANCE_BOOTSTRAP already makes, and the two would disagree
-    // about what a stored value means.
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -125,51 +115,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
-/**
- * Applies the theme before first paint.
- *
- * Without this the theme is set in an effect, which runs after the browser has
- * already laid out the page, so every load would flash a full-brightness light page
- * before correcting itself - which in a dim venue is exactly the thing dark mode
- * exists to prevent.
- *
- * The stored-value literals are injected from the same module the runtime uses, so
- * the script cannot drift from `parseStoredTheme`. This runs before the bundle, so
- * it reads `localStorage` directly instead of importing that module.
- */
-const APPEARANCE_BOOTSTRAP = `
-(function () {
-  var root = document.documentElement;
-
-  try {
-    var theme = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
-    if (theme !== "light" && theme !== "dark") {
-      theme =
-        window.matchMedia &&
-        window.matchMedia(${JSON.stringify(SYSTEM_DARK_QUERY)}).matches
-          ? "dark"
-          : "light";
-    }
-    root.classList.toggle(${JSON.stringify(DARK_CLASS)}, theme === "dark");
-  } catch (error) {
-    // Blocked storage or a throwing matchMedia leaves no class, which resolves to the
-    // light tokens the stylesheet already assumes. Deliberately no else-branch: there
-    // is nothing to correct, only a default to fall back to.
-  }
-})();
-`;
-
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    // `suppressHydrationWarning` is required, not cosmetic. APPEARANCE_BOOTSTRAP adds
-    // the `dark` class to this element before React runs, so the
-    // server HTML and the client's expected props genuinely differ. React would
-    // otherwise log a hydration mismatch and refuse to patch them - and an
-    // unavoidable warning here would hide a real one added later.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
         <HeadContent />
-        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_BOOTSTRAP }} />
       </head>
       <body>
         {children}
@@ -184,13 +134,10 @@ function RootComponent() {
 
   // Marks the point at which React has attached its event handlers.
   //
-  // The theme class appears before hydration - deliberately, so there is no flash -
-  // which means "the appearance is already correct" says nothing about whether the page
-  // is interactive yet. An
-  // interaction test that clicks as soon as the attribute looks right can click a
-  // button React has not wired up, and then fail for a reason that has nothing to do
-  // with the behaviour it is testing.
-  // Published as an attribute rather than a global so it needs no test-only types.
+  // A test that clicks as soon as the markup looks right can click a button React has
+  // not wired up, and then fail for a reason that has nothing to do with the behaviour
+  // it is testing. Published as an attribute rather than a global so it needs no
+  // test-only types.
   useEffect(() => {
     document.documentElement.dataset["hydrated"] = "true";
   }, []);

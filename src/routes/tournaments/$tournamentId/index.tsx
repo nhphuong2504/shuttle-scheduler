@@ -10,6 +10,7 @@ import {
   RegistrationStatePill,
   TournamentStatusPill,
 } from "@/components/app-shell";
+import { tournamentPhase } from "@/lib/tournament/phase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -184,7 +185,12 @@ function TournamentPage() {
       title={name}
       subtitle={[venue || "Venue not set", range].filter(Boolean).join(" · ")}
       actions={
-        summary ? <TournamentStatusPill status={normalizeTournamentStatus(summary.status)} /> : null
+        summary ? (
+          <TournamentStatusPill
+            status={normalizeTournamentStatus(summary.status)}
+            phase={tournamentPhase(summary)}
+          />
+        ) : null
       }
     >
       <div className="space-y-4">
@@ -224,11 +230,16 @@ function TournamentPage() {
           {/* The signed-out reading of the same affordance: the trip that changes what a
               visitor can do, carrying this page as the place to come back to. Offered only
               while the window is open, because a sign-in that leads to a closed form is a
-              longer way round to a refusal. */}
+              longer way round to a refusal.
+
+              The errand is named too, so the sign-in page can say where this ends - which
+              matters most here, because the caller is standing on the destination already and
+              the useful thing to know is that they come back to it. Explore's Register
+              control offers the same trip with the same word. */}
           {open && !signedIn ? (
             <div className="mt-3">
               <Button asChild>
-                <Link to="/auth" search={signInSearch(href)}>
+                <Link to="/auth" search={signInSearch(href, "register")}>
                   Sign in to register
                 </Link>
               </Button>
@@ -266,7 +277,7 @@ function TournamentPage() {
               </ul>
             ) : null}
 
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-sm text-muted-foreground">
               Sent {instantText(registration.createdAt)}
             </p>
 
@@ -441,7 +452,7 @@ function RegisterForm({
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   "disabled:cursor-not-allowed disabled:opacity-60",
                   // The pressed state carries a fill *and* a ring, and the ring is the part
-                  // that matters: in light mode the tint alone measures about 1.1:1 against
+                  // that matters: the tint alone measures about 1.1:1 against
                   // the panel behind it, which is a selected state that is not a shape at
                   // all. `--border-selected` is the token solved for exactly this pair.
                   choice
@@ -509,7 +520,7 @@ function RegisterForm({
               ? "Update request"
               : "Send registration request"}
         </Button>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {entries.length === 0
             ? "Choose at least one event."
             : partnerIncomplete

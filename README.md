@@ -84,13 +84,11 @@ review the diff.
 
 | Document | Contents |
 | --- | --- |
-| [`AGENTS.md`](AGENTS.md) | Working rules: design system, security, workflow, gates, review tiering |
-| [`docs/design-system.md`](docs/design-system.md) | Invariants and conventions (Part 1); tokens, states, components (Part 2) |
+| [`AGENTS.md`](AGENTS.md) | Working rules: security, workflow, gates, review tiering |
 | [`docs/authorization.md`](docs/authorization.md) | Who may do what: platform role vs per-tournament access, the lifecycle guards, registration, and the column privileges |
 | [`docs/information-architecture.md`](docs/information-architecture.md) | The URL scheme, the two shells, and the flows between them |
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
-| [`docs/ux-review-checklist.md`](docs/ux-review-checklist.md) | The manual checks no automated gate covers |
 | [`docs/recovery-runbook.md`](docs/recovery-runbook.md) | Getting the database back after data loss: what a backup does and does not contain, and the restore procedure |
 | [`docs/cleanup-deferred.md`](docs/cleanup-deferred.md) | What an earlier cleanup removed, and the candidates it deliberately left alone |
 | [`supabase/migrations/README.md`](supabase/migrations/README.md) | Applying and verifying database migrations |

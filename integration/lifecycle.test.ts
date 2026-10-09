@@ -2,15 +2,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
+  addTournamentDay,
+  completeTournament,
   createPlayer,
   createTeam,
   createTournament,
   deleteTournament,
   generatePoolsForCategory,
   reportPoolMatch,
-  saveTournamentDays,
-  saveTournamentEvents,
-  startTournament,
+  setTournamentCourts,
+  startMatch,
 } from "@/lib/tournament/actions";
 import type { Team } from "@/lib/tournament/data";
 
@@ -34,15 +35,15 @@ import { createIdentity, destroyIdentity, type TestIdentity } from "./env";
  * WHY THE STEPS ARE THIS ORDERED
  *
  * The lifecycle is three states and no reverse edge: `upcoming -> in_progress -> completed`.
- * Two different server guards divide the writes between them, and the order below is what
- * those guards make legal rather than a preference:
+ * Nothing presses Start: the first match started on the Desk moves the tournament on, and
+ * Complete is the host's own act. Two server guards divide the writes between the states:
  *
- *   - `assert_tournament_configurable` - upcoming only. Days, events and pool generation.
- *   - `assert_tournament_live`        - in progress only. Starting and reporting matches.
+ *   - `assert_tournament_configurable` - upcoming only. Events and pool generation.
+ *   - `assert_tournament_live`        - in progress only. Reporting matches.
  *
- * So the entries and their pools have to be built while the tournament is still upcoming,
- * and the results can only be reported after it has started. Getting that order wrong fails
- * with a guard message that names the state, which is the point of the guard.
+ * So the entries and their pools have to be built while the tournament is still upcoming, the
+ * first match starts it, and the results can only be reported after that. Getting that order
+ * wrong fails with a guard message that names the state, which is the point of the guard.
  */
 
 const CATEGORY_CODE = "MS";
@@ -108,53 +109,47 @@ afterAll(async () => {
 }, 120_000);
 
 describe("a tournament can be created and run end to end", () => {
-  it("creates an upcoming tournament, promotes it, registers entries and reports a complete pool", async () => {
+  it("creates an upcoming tournament, starts it with its first match, reports a complete pool and completes it", async () => {
     // --- Creation ---------------------------------------------------------------
-    // `venueName` is not decoration. The start gate refuses a tournament whose `venue_name`
-    // is NULL, and the action layer maps an absent value to an empty string rather than to
-    // NULL - so leaving it out is precisely what "not ready" looks like, and the promotion
-    // below would be refused for a reason that has nothing to do with what this test is
-    // proving.
+    // One call, complete or not at all: the window, the timezone and an event go in
+    // together. The window is in the past so the first-match gate (00:00 of its first date at
+    // the venue) has already opened and this test is about the lifecycle rather than the clock.
     tournamentId = await createTournament({
       name: `itest-lifecycle-${Date.now().toString(36)}`,
       venueName: "Integration Test Venue",
       venueTimezone: "America/Chicago",
+      startsOn: "2020-01-04",
+      endsOn: "2020-01-06",
+      events: [
+        {
+          code: CATEGORY_CODE,
+          name: "Men's Singles",
+          entryType: "individual",
+          gender: "men",
+        },
+      ],
     });
     expect(tournamentId).toBeTruthy();
 
-    // Creation starts nothing. The 3-state machine stays `upcoming` until
-    // `start_tournament` is called on it - so this is the real "nothing happened yet"
-    // assertion. There is no global active pointer any more, so the status is the whole
-    // claim: a freshly created tournament is not live and is nobody's default.
+    // Creation starts nothing, and a freshly created tournament is complete without a single
+    // playing day: those are chosen when the schedule is built.
     const { data: created, error: createdError } = await admin.client
       .from("tournaments")
-      .select("status")
+      .select("status, starts_on, ends_on")
       .eq("id", tournamentId)
       .single();
     if (createdError) throw new Error(createdError.message);
     expect(created?.status).toBe("upcoming");
+    expect(created?.starts_on).toBe("2020-01-04");
+    expect(created?.ends_on).toBe("2020-01-06");
 
-    // --- Configuration, while upcoming ------------------------------------------
-    // A past date, so `start_tournament`'s derived-start floor is already satisfied and this
-    // test is about the lifecycle rather than about the clock.
-    await saveTournamentDays(tournamentId, [
-      {
-        date: "2020-01-04",
-        startTime: "09:00",
-        endTime: "18:00",
-        courts: [1, 2],
-        breaks: [],
-      },
-    ]);
-
-    await saveTournamentEvents(tournamentId, [
-      {
-        code: CATEGORY_CODE,
-        name: "Men's Singles",
-        entryType: "individual",
-        gender: "men",
-      },
-    ]);
+    // --- Playing days, inside the window ----------------------------------------
+    // Not consecutive, and a day outside the window is refused with the window named.
+    await addTournamentDay(tournamentId, "2020-01-04");
+    await addTournamentDay(tournamentId, "2020-01-06");
+    await expect(addTournamentDay(tournamentId, "2020-02-01")).rejects.toThrow(
+      /outside the tournament window/i,
+    );
 
     const { data: categories, error: categoryError } = await admin.client
       .from("categories")
@@ -163,7 +158,7 @@ describe("a tournament can be created and run end to end", () => {
       .eq("code", CATEGORY_CODE);
     if (categoryError) throw new Error(categoryError.message);
     const categoryId = categories?.[0]?.id;
-    expect(categoryId, "the configured tournament lost its category").toBeTruthy();
+    expect(categoryId, "the created tournament lost its category").toBeTruthy();
 
     // --- Entries, still upcoming -------------------------------------------------
     // `createTeam` rather than a direct insert: the shape trigger, the per-category cap and
@@ -172,19 +167,11 @@ describe("a tournament can be created and run end to end", () => {
     const teams: Team[] = [];
     for (let i = 0; i < PLAYER_COUNT; i += 1) {
       const playerName = `itest lifecycle player ${i}`;
-      await createPlayer({ name: playerName, gender: "M" });
-      // The id comes from the roster projection rather than from the insert, which is what
-      // the desk does too: `createPlayer` returns nothing because PostgreSQL checks
-      // `RETURNING` against the read policy, and a freshly created player has no entry, so
-      // nobody may read it back yet. `public_players` is the definer view that carries it.
-      const { data: rosterPlayers, error: rosterError } = await admin.client
-        .from("public_players")
-        .select("id")
-        .eq("name", playerName)
-        .limit(1);
-      if (rosterError) throw new Error(rosterError.message);
-      const playerId = rosterPlayers?.[0]?.id;
-      expect(playerId, `the roster did not show ${playerName}`).toBeTruthy();
+      // The id comes back from the call: `add_walk_in_player` returns it, which a table insert
+      // cannot (PostgreSQL checks `RETURNING` against the read policy, and a fresh walk-in has
+      // no entry yet), and the roster is no longer readable as a whole to look it up in.
+      const playerId = await createPlayer({ name: playerName, gender: "M" });
+      expect(playerId, `creating ${playerName} returned no id`).toBeTruthy();
       playerIds.push(playerId as string);
       const team = await createTeam({
         categoryId: categoryId as string,
@@ -197,7 +184,7 @@ describe("a tournament can be created and run end to end", () => {
 
     // --- Pool generation, still upcoming -----------------------------------------
     // `apply_pool_generation` calls `assert_tournament_configurable`, so this is the last of
-    // the writes that must happen before the tournament starts.
+    // the writes that must happen before the first match starts.
     await generatePoolsForCategory(categoryId as string, teams);
 
     const { data: pools, error: poolError } = await admin.client
@@ -218,11 +205,27 @@ describe("a tournament can be created and run end to end", () => {
     expect(matches).toHaveLength(EXPECTED_MATCHES);
     expect(matches?.every((m) => m.status === "scheduled")).toBe(true);
 
-    // --- Promotion, upcoming -> in progress ---------------------------------------
-    // Readiness is re-checked here, so a tournament missing a day, a court or an event is
-    // refused. That refusal is the assertion: reaching this line proves the wizard's output
-    // satisfies the gate.
-    await startTournament(tournamentId);
+    // Still upcoming: building the entries and the pools started nothing.
+    const { data: beforeStart } = await admin.client
+      .from("tournaments")
+      .select("status")
+      .eq("id", tournamentId)
+      .single();
+    expect(beforeStart?.status).toBe("upcoming");
+
+    // --- The first match starts the tournament -----------------------------------
+    await setTournamentCourts(tournamentId, 2);
+    const { data: courts, error: courtError } = await admin.client
+      .from("courts")
+      .select("id")
+      .eq("tournament_id", tournamentId)
+      .order("number");
+    if (courtError) throw new Error(courtError.message);
+    const courtId = courts?.[0]?.id as string;
+    expect(courtId, "the tournament has no court").toBeTruthy();
+
+    const first = matches?.[0];
+    await startMatch("pool_matches", first?.id as string, courtId);
 
     const { data: started, error: startedError } = await admin.client
       .from("tournaments")
@@ -232,14 +235,14 @@ describe("a tournament can be created and run end to end", () => {
     if (startedError) throw new Error(startedError.message);
     expect(started?.status).toBe("in_progress");
 
-    // The machine has no reverse edge, so the transition is not merely applied - it cannot
-    // be applied twice. A second start would mean `status` is not the guard's only input.
-    await expect(startTournament(tournamentId)).rejects.toThrow(/already started/i);
+    // A match is on court, so the tournament cannot be completed yet.
+    await expect(completeTournament(tournamentId)).rejects.toThrow(/still being played/i);
 
     // --- Reporting, in progress --------------------------------------------------
     // Deterministic: team A always wins, so the expected winner is knowable rather than
     // merely "someone". `report_pool_result` calls `assert_tournament_live`, which is why
-    // this is the first write that needed the promotion above.
+    // this is the first write that needed the tournament to have started. The match that
+    // was started is reported like the rest.
     for (const match of matches ?? []) {
       await reportPoolMatch(match.id, 21, 10);
     }
@@ -259,5 +262,17 @@ describe("a tournament can be created and run end to end", () => {
       // the scoring rule, not a presentation detail.
       expect(match.winner_id, `match ${match.id} recorded no winner`).toBe(match.team_a_id);
     }
+
+    // --- Completion, by hand ------------------------------------------------------
+    // Nothing is on court any more, so the host's own act now goes through, and it cannot be
+    // done twice.
+    await completeTournament(tournamentId);
+    const { data: done } = await admin.client
+      .from("tournaments")
+      .select("status")
+      .eq("id", tournamentId)
+      .single();
+    expect(done?.status).toBe("completed");
+    await expect(completeTournament(tournamentId)).rejects.toThrow(/already completed/i);
   }, 300_000);
 });

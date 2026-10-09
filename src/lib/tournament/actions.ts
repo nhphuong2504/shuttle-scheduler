@@ -124,36 +124,32 @@ async function withScheduleImpact(
 }
 
 /**
- * Adds a person to the global player roster.
+ * Adds a person to the global player roster and returns the new id.
  *
- * Returns nothing, and that is forced rather than a preference. PostgreSQL applies
- * the table's **select** policy to `RETURNING`, and `players` deliberately does not
- * admit the row a client has just created: `players read` is "you are this person,
- * or a tournament they entered", and a walk-in has no entry at that moment. Requesting
- * representation therefore fails with "new row violates row-level security policy" -
- * the write is permitted and the read-back is not.
- *
- * The callers do not need the row: the roster they render comes from the
- * `public_players` projection, which carries the id, and it is refetched after this
- * returns. `createTeam` below *does* return its row, because a team is readable by
- * whoever may edit its tournament - which is the person creating it.
+ * Through `add_walk_in_player` rather than a table insert, and the return value is the reason.
+ * PostgreSQL applies the table's **select** policy to `RETURNING`, and `players` deliberately
+ * does not admit the row a client has just created: "you are this person, or a tournament they
+ * entered", and a walk-in has no entry at that moment. A direct insert therefore had to return
+ * nothing and leave the caller to find the person again in the roster - which no longer exists
+ * as a readable whole. The function runs as definer, checks `can_add_walk_in_player()` itself,
+ * and hands back the id, which `createTeam` can use straight away.
  */
 export async function createPlayer(input: {
   name: string;
   email?: string;
   phone?: string;
   gender?: string;
-}): Promise<void> {
-  // `profile_id` is not accepted here, and could not be set if it were: the column is
-  // withheld from `authenticated`, and the guard trigger refuses an insert that names
-  // it. A person's link is established by approving their registration request.
-  const { error } = await supabase.from("players").insert({
-    name: input.name.trim(),
-    email: input.email?.trim() || null,
-    phone: input.phone?.trim() || null,
-    gender: input.gender || null,
+}): Promise<string> {
+  // `profile_id` is not accepted here, and could not be set if it were: the function has no such
+  // parameter. A person's link is established by approving their registration request.
+  const { data, error } = await supabase.rpc("add_walk_in_player", {
+    p_name: input.name.trim(),
+    ...(input.email?.trim() ? { p_email: input.email.trim() } : {}),
+    ...(input.phone?.trim() ? { p_phone: input.phone.trim() } : {}),
+    ...(input.gender ? { p_gender: input.gender } : {}),
   });
   if (error) throw new Error(error.message);
+  return data as string;
 }
 
 // `tournament_id` is intentionally omitted: the `teams_shape` trigger derives it
@@ -204,6 +200,33 @@ export async function generatePoolsForCategory(categoryId: string, teams: Team[]
     p_force: force,
     p_payload: payload,
   });
+}
+
+/**
+ * Refuses to save a result against a match that has changed since the dialog opened.
+ *
+ * The dialog holds a snapshot of the match. If another desk reported, reset or started it in the
+ * meantime, "recorded" versus "corrected" and the not-started confirmation were decided against
+ * stale state, and the save would silently overwrite the other desk's entry. The check is a
+ * read just before the write, so it narrows that window to a round trip rather than closing it.
+ */
+export async function assertMatchUnchanged(
+  table: "pool_matches" | "draw_matches" | "placement_matches" | "tier_draw_matches",
+  matchId: string,
+  expectedStatus: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from(table)
+    .select("status")
+    .eq("id", matchId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("This match no longer exists.");
+  if (data.status !== expectedStatus) {
+    throw new Error(
+      `This match changed to "${data.status}" while you were entering the result. Close this window and reopen the match to see the latest.`,
+    );
+  }
 }
 
 export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: number) {
@@ -999,17 +1022,16 @@ export async function setTournamentDayBreaks(
 }
 
 // ---------------------------------------------------------------------------
-// Tournament creation: a persisted, resumable tournament
+// Tournament creation: atomic, and nothing is stored until it is complete
 //
-// The wizard writes an Upcoming tournament on its first step and saves each later
-// step into the same row, so an unfinished creation survives a refresh.
-// `startTournament` is the only thing that moves it to In Progress.
+// A tournament is created in one call, with its window and its events, or it is not
+// created. The wizard keeps the answers in the browser until then. There is no Draft
+// row and no Start call: the first match started on the Desk is what moves a tournament
+// to In Progress, and `completeTournament` is the only other transition.
 //
-// There is no Draft. `upcoming` is the state that means "not started yet", and the
-// old `draft`/`published` split was a second axis that never earned its keep: a
-// tournament was either started or it was not. Every mutating RPC re-checks that the
-// tournament is still upcoming before writing, so a wizard left open across a start
-// is refused by the database rather than silently writing to a live event.
+// Every mutating RPC after creation re-checks the lifecycle itself, so a page left open
+// across a start is refused by the database rather than silently writing to a live
+// event.
 // ---------------------------------------------------------------------------
 
 /** The identity, venue, organizer and rules captured by the basics and rules steps. */
@@ -1043,6 +1065,17 @@ export interface TournamentDraftInput {
    */
   registrationOpensAt?: string | null;
   registrationClosesAt?: string | null;
+}
+
+/**
+ * Everything a tournament cannot exist without. `startsOn` and `endsOn` are the
+ * tournament window: calendar dates in the venue's timezone, not instants. Playing days
+ * are chosen later, inside the window, when the schedule is built.
+ */
+export interface NewTournamentInput extends TournamentDraftInput {
+  startsOn: string;
+  endsOn: string;
+  events: TournamentEventInput[];
 }
 
 /** The JSON keys are the database column names, so they are declared explicitly. */
@@ -1108,12 +1141,13 @@ function draftBasicsPayload(input: TournamentDraftInput): DraftPayload {
 }
 
 /**
- * Creates an upcoming tournament owned by the caller and makes it their working scope.
+ * Creates an upcoming tournament, complete, owned by the caller, and makes it their
+ * working scope. All or nothing: a refusal leaves nothing behind.
  *
  * No role check beyond being signed in: anyone who signs up may run a tournament, and
  * the database is where that is enforced. The creator becomes the owner.
  */
-export async function createTournament(input: TournamentDraftInput): Promise<string> {
+export async function createTournament(input: NewTournamentInput): Promise<string> {
   const { data, error } = await supabase.rpc("create_tournament", {
     p_payload: {
       name: input.name.trim(),
@@ -1125,10 +1159,100 @@ export async function createTournament(input: TournamentDraftInput): Promise<str
       organizer_name: input.organizerName ?? "",
       organizer_email: input.organizerEmail ?? "",
       organizer_phone: input.organizerPhone ?? "",
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      ...(input.maxCategoriesPerPlayer !== undefined
+        ? { max_categories_per_player: input.maxCategoriesPerPlayer }
+        : {}),
+      categories: eventsPayload(input.events),
+      ...(input.registrationOpensAt && input.registrationClosesAt
+        ? {
+            registration_opens_at: input.registrationOpensAt,
+            registration_closes_at: input.registrationClosesAt,
+          }
+        : {}),
     } as never,
   });
   if (error) throw new Error(error.message);
   return data as string;
+}
+
+/**
+ * Moves the tournament window. The last date may move later until completion; the first
+ * date is locked once the tournament is in progress. The database refuses a move that
+ * would leave a playing day outside the window, or push the first date past the
+ * registration deadline, and its message names the day.
+ */
+export async function updateTournamentWindow(
+  tournamentId: string,
+  startsOn: string,
+  endsOn: string,
+): Promise<void> {
+  const { error } = await supabase.rpc("update_tournament_window", {
+    p_tournament_id: tournamentId,
+    p_starts_on: startsOn,
+    p_ends_on: endsOn,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Sets the registration window: both instants, or both null to switch registration off.
+ * "Close now" is `closes = now` with the same `opens`. The database enforces the rules -
+ * it must close by 00:00 of the first window date, its opening time is fixed once passed,
+ * and it cannot be extended once a schedule exists - and says which one was broken.
+ */
+export async function setRegistrationWindow(
+  tournamentId: string,
+  opensAt: string | null,
+  closesAt: string | null,
+): Promise<void> {
+  const { error } = await supabase.rpc("set_registration_window", {
+    p_tournament_id: tournamentId,
+    p_opens: opensAt as never,
+    p_closes: closesAt as never,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Name, note, venue, address and organiser contact, until the tournament is completed.
+ *
+ * The narrow writer for what can still change once a tournament has started. It touches
+ * nothing that alters a game: events, format, rules, window and timezone have their own
+ * writers, and a payload key for any of them is ignored by the database rather than applied.
+ */
+export async function updateTournamentDetails(
+  tournamentId: string,
+  input: TournamentDraftInput,
+): Promise<void> {
+  const { error } = await supabase.rpc("update_tournament_details", {
+    p_tournament_id: tournamentId,
+    p_payload: draftBasicsPayload(input) as never,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** What is left to play, for the Complete dialog. */
+export interface CompletionCheck {
+  /** Matches on court right now. Completing is refused while this is above zero. */
+  onCourt: number;
+  /** Matches that were scheduled and never played. Completing is allowed, with a warning. */
+  unplayed: number;
+  total: number;
+}
+
+export async function fetchCompletionCheck(tournamentId: string): Promise<CompletionCheck> {
+  const { data, error } = await supabase.rpc("tournament_completion_check", {
+    p_tournament_id: tournamentId,
+  });
+  if (error) throw new Error(error.message);
+  const row = (data ?? {}) as { on_court?: number; unplayed?: number; total?: number };
+  return {
+    onCourt: row.on_court ?? 0,
+    unplayed: row.unplayed ?? 0,
+    total: row.total ?? 0,
+  };
 }
 
 /**
@@ -1193,42 +1317,37 @@ export interface TournamentEventInput {
   maxEntries?: number | null;
 }
 
-/** Replaces the event list. Only a draft with no entries may be rewritten. */
+/** The event list as the database reads it. Shared by creation and by an edit. */
+function eventsPayload(events: TournamentEventInput[]) {
+  return events.map((event, index) => ({
+    code: event.code,
+    name: event.name,
+    entry_type: event.entryType,
+    gender: event.gender,
+    sort_order: event.sortOrder ?? index + 1,
+    active: event.active ?? true,
+    max_entries: event.maxEntries ?? null,
+  }));
+}
+
+/** Replaces the event list. Only an upcoming tournament with no entries may be rewritten. */
 export async function saveTournamentEvents(
   tournamentId: string,
   events: TournamentEventInput[],
 ): Promise<void> {
   const { error } = await supabase.rpc("save_tournament_categories", {
     p_tournament_id: tournamentId,
-    p_categories: events.map((event, index) => ({
-      code: event.code,
-      name: event.name,
-      entry_type: event.entryType,
-      gender: event.gender,
-      sort_order: event.sortOrder ?? index + 1,
-      active: event.active ?? true,
-      max_entries: event.maxEntries ?? null,
-    })) as never,
+    p_categories: eventsPayload(events) as never,
   });
   if (error) throw new Error(error.message);
 }
 
 /**
- * Upcoming -> In Progress.
+ * In Progress -> Completed. Terminal, except for a platform admin's repair path.
  *
- * The RPC re-checks readiness itself and refuses if the tournament's own start time has
- * not arrived yet, in the venue's timezone. No gate is pre-applied here on purpose: the
- * refusal carries the reason ("the tournament starts at 09:00 on 3 October"), and a
- * client-side pre-check could only replace that with a vaguer one, or disagree with it.
+ * Refused while a match is on court. Unplayed matches do not block it; the dialog warns
+ * about them first (see `fetchCompletionCheck`).
  */
-export async function startTournament(tournamentId: string): Promise<void> {
-  const { error } = await supabase.rpc("start_tournament", {
-    p_tournament_id: tournamentId,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/** In Progress -> Completed. Terminal, except for a platform admin's repair path. */
 export async function completeTournament(tournamentId: string): Promise<void> {
   const { error } = await supabase.rpc("complete_tournament", {
     p_tournament_id: tournamentId,

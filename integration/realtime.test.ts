@@ -202,25 +202,25 @@ describe("realtime delivery", () => {
     // A second table family: structure changes are what the organiser's Schedule tab watches,
     // and they are a different code path from the desk's match refresh.
     const { data: tournamentId, error: createError } = await admin.client.rpc("create_tournament", {
-      p_payload: { name: `itest-realtime-${Date.now().toString(36)}` },
+      p_payload: {
+        name: `itest-realtime-${Date.now().toString(36)}`,
+        starts_on: "2026-11-07",
+        ends_on: "2026-11-08",
+        categories: [
+          { code: "MS", name: "Men's Singles", entry_type: "individual", gender: "men" },
+        ],
+      },
     } as never);
     if (createError) throw new Error(`creating the tournament failed: ${createError.message}`);
 
     try {
       const events = await collectEvents(async () => {
-        const { error } = await admin.client.rpc("save_tournament_days", {
+        // A playing day, chosen inside the window - the write the Schedule page makes.
+        const { error } = await admin.client.rpc("add_tournament_day", {
           p_tournament_id: tournamentId,
-          p_days: [
-            {
-              date: "2026-11-07",
-              start_time: "09:00",
-              end_time: "18:00",
-              courts: [1, 2],
-              breaks: [],
-            },
-          ],
+          p_date: "2026-11-07",
         } as never);
-        if (error) throw new Error(`saving days failed: ${error.message}`);
+        if (error) throw new Error(`adding a day failed: ${error.message}`);
       });
 
       const structureEvents = events.filter(

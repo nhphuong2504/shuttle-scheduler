@@ -1,0 +1,121 @@
+name: Integration (local Supabase)
+
+# The integration suite drives the real application against a real Postgres, a real Auth
+# service and a real Realtime stream, so it needs a container runtime. Many workstations do
+# not have one, and the machine that wrote the safe-reflow and schedule-conflict migrations
+# did not - which meant those migrations were never parsed by Postgres locally. `ubuntu-latest`
+# ships with Docker, so this workflow is where the suite can actually run.
+#
+# It is deliberately not part of `ci.yml` and is not a required check. It runs by hand
+# (`workflow_dispatch`) or on a pull request that touches the surfaces it covers, so a docs or
+# UI change does not pay for a multi-minute stack startup. `workflow_dispatch` only appears in
+# the Actions UI once this file is on the default branch, which is why the `pull_request`
+# trigger is what makes it usable from a feature branch.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "integration/**"
+      - "scripts/integration-target.mjs"
+      - "vitest.integration.config.ts"
+      - ".github/workflows/integration.yml"
+
+# The suite writes rows and flips the active-tournament pointer, which is only safe against the
+# local stack this job starts - whose keys are the Supabase CLI's fixed demo values. So this
+# workflow reads no repository secret and no environment file that names a hosted project. That
+# is what keeps the "CI holds no credentials" rule in AGENTS.md intact.
+permissions:
+  contents: read
+
+# Its own group: this run takes minutes and must never cancel a shard of the main CI.
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Real app against a local stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # `supabase` is a devDependency, so this is the pinned CLI rather than whatever a
+      # marketplace action happens to install. `tee` keeps a complete copy of the output: when a
+      # migration fails to apply, the parse error or a `DO $verify$` exception is in this step's
+      # log, and that log is the main reason the job exists. `set -o pipefail` stops `tee`'s zero
+      # exit code from masking a failed start.
+      - name: Start the local Supabase stack
+        id: stack
+        run: |
+          set -o pipefail
+          npx supabase start 2>&1 | tee supabase-start.log
+
+      # When the stack does not come up the reason is usually in a container's own log rather
+      # than in the CLI's, so capture those before the runner is torn down. Scoped to a failed
+      # start rather than `failure()` generally, so a failed `npm ci` does not trigger it.
+      # Deliberately no `docker inspect` and no `supabase status`: both print the containers'
+      # environment, which holds the stack's keys, and those are not needed to diagnose a start.
+      - name: Collect container logs if the stack did not start
+        if: failure() && steps.stack.outcome == 'failure'
+        run: |
+          {
+            echo "== docker ps -a =="
+            docker ps -a
+            echo
+            for id in $(docker ps -aq); do
+              echo "== docker logs $id =="
+              docker logs "$id" 2>&1 | tail -n 300
+              echo
+            done
+          } > supabase-container-logs.txt 2>&1
+
+      # The suite refuses to run unless `integration/.env` and the application agree on the
+      # project. `integration:target local` writes all six values from `supabase status`, so they
+      # cannot drift apart. It creates `integration/.env` when it is absent - which is the case on
+      # a fresh checkout, so no sample file is needed - and, because the file is then empty, takes
+      # no `.env.staging` snapshot.
+      - name: Point the suite at the local stack
+        run: npm run integration:target -- local
+
+      - name: Run the integration suite
+        # The suite's planner reads a day's window with `new Date("YYYY-MM-DDTHH:mm")` in the
+        # *process* timezone (`combineDateTime` in `src/lib/tournament/scheduling/day-plan.ts`),
+        # while the database reads the same window in `tournaments.venue_timezone`. The runners
+        # are UTC and the fixtures are built in `America/Chicago`, so without this the two ends
+        # disagree by six hours: the planner lays matches out from 09:00 UTC, which the database
+        # sees as 03:00 Chicago, before the window opens. Making the process timezone match the
+        # fixtures' venue is the suite's standing assumption, not a per-test one - it belongs to
+        # this step rather than the job so no other step inherits it.
+        env:
+          TZ: America/Chicago
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee integration-vitest.log
+
+      # Always, even when a step above failed: a stopped stack is the difference between a runner
+      # with disk space and one without, and `--no-backup` skips a dump nobody would restore.
+      - name: Stop the local Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+      # Two files, both safe to keep: the vitest output and the container logs from a failed
+      # start. `integration/.env` is deliberately not in this list - it holds the stack's
+      # service-role key, and an artifact is a copy of that key that outlives the runner.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: integration-logs
+          path: |
+            integration-vitest.log
+            supabase-container-logs.txt
+          retention-days: 7
+          if-no-files-found: ignore

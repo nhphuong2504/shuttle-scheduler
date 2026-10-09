@@ -23,35 +23,29 @@ operator at all, and no surface should present participation as authority.
 
 ## Before you start
 
-1. Read [`docs/design-system.md`](docs/design-system.md) before any UI change.
-2. Read [`docs/tournament-format.md`](docs/tournament-format.md) before any change to
+1. Read [`docs/tournament-format.md`](docs/tournament-format.md) before any change to
    tournament rules, and [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md)
    before touching the scheduler.
-3. Read [`docs/authorization.md`](docs/authorization.md) before any change to access
+2. Read [`docs/authorization.md`](docs/authorization.md) before any change to access
    control: who may edit a tournament, who may manage its editors, or what a platform
    admin may override.
-4. Read [`docs/information-architecture.md`](docs/information-architecture.md) before adding,
+3. Read [`docs/information-architecture.md`](docs/information-architecture.md) before adding,
    moving or redirecting an address.
-5. Check the repository state and do not discard existing work.
+4. Check the repository state and do not discard existing work.
 
-## Design system
+## Design
 
-Read [`docs/design-system.md`](docs/design-system.md). Part 1 is mandatory. Some invariants
-are enforced by tests; others require review or measurement. The document says which is
-which, so this file does not restate them.
+The visual design is not settled. There is no design system to conform to and no UI rule
+beyond the audience split above: layout, colour, type, spacing and components are yours to
+choose, and existing styling is not a constraint. Keep the result accessible — the
+accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
+`states.spec.ts`) still run. Current colour, type and size guidance is in
+[`docs/design-principles.md`](docs/design-principles.md); it is guidance, not a gate.
 
-### What a UI change must justify
-
-A change must improve the actual user experience, a clearly defined design-system
-invariant, or maintainability with an explicit downstream benefit. "Technically conforms" on
-its own is not enough.
-
-- **State the screen's audience and its primary job in one sentence before editing it.**
-- **No broad mechanical sweeps as drive-by work.** A bulk class or token migration takes its
-  own commit, a stated reason, and ideally a test that enforces the end state. Never mix it
-  with a design change, so the real diff stays readable.
-- **Shared UI primitives (`src/components/ui`) stay out of broad mechanical sweeps** unless
-  the primitive itself is intentionally being redesigned or corrected.
+**The landing page is a placeholder.** What a signed-out visitor sees at `/` (the Landing
+branch of [`src/routes/index.tsx`](src/routes/index.tsx)) has not been designed yet. Its
+current copy and layout are stand-ins, not decisions, so don't treat them as a reference
+for other pages and don't polish them. Redesign it from scratch when it is picked up.
 
 ## Security rules
 
@@ -84,11 +78,11 @@ time comes from running fewer tests per machine rather than more workers on one.
 flowchart LR
   branch["Short-lived branch"] --> dev[Implement]
   dev --> tier{"Change tier"}
-  tier -->|"UI-only iteration"| ui["local visual check + typecheck"]
-  tier -->|"Feature checkpoint"| cp["typecheck + relevant tests + UX review"]
+  tier -->|"UI-only iteration"| ui["typecheck"]
+  tier -->|"Feature checkpoint"| cp["typecheck + relevant tests"]
   tier -->|"PR / phase close"| gate1["typecheck + test"]
   gate1 --> gate2["hermetic Playwright"]
-  gate2 --> final["build + final e2e + UX record"]
+  gate2 --> final["build + final e2e"]
   final --> pr["Pull request"]
   pr --> ci["CI: checks + 4 browser shards"]
   ci --> merge["Merge to main"]
@@ -101,9 +95,9 @@ every small change is wasted effort; reaching a PR without it is a broken branch
 
 | Tier | When | Required | Optional |
 | --- | --- | --- | --- |
-| **UI-only iteration** | Tightening a screen while it is still moving — layout, copy, spacing, token or markup changes that alter no behaviour | Local visual check (`npm run dev`) in both themes, at one wide viewport (and a mobile viewport for public-facing surfaces) + `npm run typecheck` | Focused tests (`npx vitest run <path>`) |
-| **Feature checkpoint** | The feature is finished and about to be reviewed or handed over | `npm run typecheck` + the relevant tests + the UX review ([`docs/ux-review-checklist.md`](docs/ux-review-checklist.md)) | — |
-| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run typecheck` + `npm run test` + `npm run test:e2e` + `npm run build` + `npm run test:e2e:final` + a UX record row if the change alters state treatment, hierarchy, interaction or layout | — |
+| **UI-only iteration** | Changing a screen's look — layout, copy, spacing, styling or markup changes that alter no behaviour | `npm run typecheck` | A local look (`npm run dev`), focused tests (`npx vitest run <path>`) |
+| **Feature checkpoint** | The feature is finished and about to be reviewed or handed over | `npm run typecheck` + the relevant tests | — |
+| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run typecheck` + `npm run test` + `npm run test:e2e` + `npm run build` + `npm run test:e2e:final` | — |
 
 **A high-risk change takes the PR / phase-close bar at every stage.** Scheduling, scoring,
 authorization, the database and RPCs get the full verification regardless of how small the
@@ -153,6 +147,14 @@ npm run build
   stack is not streaming yet, which is why `realtime.test.ts` warms the tenant before it
   asserts: without that, the first test to run fails on a cold stack and passes on every
   later run.
+- **There is a CI workflow for the same suite.** [`.github/workflows/integration.yml`](.github/workflows/integration.yml)
+  starts its own local stack on `ubuntu-latest` and runs `npm run test:integration` there,
+  by hand (`workflow_dispatch`) or on a pull request that touches `supabase/migrations/**`,
+  `integration/**`, `scripts/integration-target.mjs` or `vitest.integration.config.ts`. It
+  exists for a machine without a container runtime - the reason the reflow and conflict
+  migrations were first written without ever being parsed by Postgres - and it holds no
+  credentials, because the stack's keys are the CLI's demo values. It is **not a required
+  check** and does not replace running the suite locally when you can.
 - **`npm run lint` is not a gate.** It reports a large pre-existing Prettier backlog
   that predates the current design work. Do not run a repo-wide format as part of an
   unrelated change; it buries the real diff.
@@ -160,7 +162,7 @@ npm run build
 ### Review tiering
 
 Match the review to the risk. **Lightweight** — one reviewer, gates green — for
-docs, copy and token-only CSS changes.
+docs, copy and UI styling changes.
 
 **Stronger** — a second reviewer, and reasoning written into the PR — for:
 
@@ -183,20 +185,3 @@ tests are the floor, not the argument.
 - **Squash is not mandatory.** Preserve independent commits where they carry meaning.
 - Never force-push or rewrite published commits; they are shared history.
 - Keep `main` working. Every commit on it should build and pass tests.
-
-## When a change alters how the UI looks or behaves
-
-Run the manual checklist in
-[`docs/ux-review-checklist.md`](docs/ux-review-checklist.md). It covers what no automated
-gate can judge; automated invariants are deliberately not repeated there.
-
-What that costs depends on the tier:
-
-- **UI-only iteration** — a local visual check, in both themes and at the viewports above.
-  No record.
-- **Feature checkpoint** — work the checklist and fix what it finds.
-- **PR / phase close** — append a record row *if* the change alters state treatment, visual
-  hierarchy, interaction or layout, and state the skip count explicitly.
-
-Copy changes, token-only changes and refactors that move no pixel take no run and no row.
-A change that does qualify is never recorded as `not yet run`.

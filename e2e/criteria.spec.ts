@@ -2,7 +2,7 @@ import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
 
-import { openCell, ROUTES, THEMES } from "./fixtures/matrix";
+import { cellLabel, MATRIX_CELLS, openCell, ROUTES } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 
 /**
@@ -18,8 +18,7 @@ import { routes } from "./fixtures/routes";
  *
  *   1.4.11 Non-text contrast    - "3:1 for UI borders" is stated in styles.css, and the
  *                                 gate had never measured a border. It found the selected
- *                                 state at 1.02:1 in dark mode, on every control that
- *                                 marks a choice.
+ *                                 state at 1.09:1, on every control that marks a choice.
  *   1.4.10 Reflow               - the sweep asserted no horizontal scroll at 1366px, which
  *                                 is a desktop width and not the criterion's.
  *   2.4.11 Focus not obscured   - new in 2.2, and this app has a sticky header.
@@ -119,6 +118,11 @@ const COLOUR_HELPERS = `
     }
     if (s.borderTopStyle !== "none" && parseFloat(s.borderTopWidth) >= 1) {
       const c = toRgb(s.borderTopColor);
+      if (c && c[3] >= 0.3) out.push({ rgba: c, via: "border" });
+    }
+    // A rule on the bottom edge only, which is how a tab row marks the open section.
+    if (s.borderBottomStyle !== "none" && parseFloat(s.borderBottomWidth) >= 1) {
+      const c = toRgb(s.borderBottomColor);
       if (c && c[3] >= 0.3) out.push({ rgba: c, via: "border" });
     }
     const fill = toRgb(s.backgroundColor);
@@ -344,14 +348,14 @@ const lines = (rows: Control[]) =>
 test.describe("1.4.11 non-text contrast, which no axe rule covers", () => {
   test.describe.configure({ timeout: 600_000 });
 
-  for (const theme of THEMES) {
-    test(`every selected state and control edge clears 3:1 (${theme})`, async ({ page }) => {
+  for (const cell of MATRIX_CELLS) {
+    test(`every selected state and control edge clears 3:1 (${cellLabel(cell)})`, async ({ page }) => {
       const failures: string[] = [];
       let selected = 0;
       let edged = 0;
 
       for (const route of ROUTES) {
-        await openCell(page, route, { theme });
+        await openCell(page, route, cell);
         const result = await measureControls(page);
         selected += result.selected.length;
         edged += result.edged.length;
@@ -360,15 +364,23 @@ test.describe("1.4.11 non-text contrast, which no axe rule covers", () => {
       }
 
       // A sweep that measured nothing would pass. These counts are the guard against it.
-      expect(selected, `no selected-state markers were measured in ${theme}`).toBeGreaterThan(10);
-      expect(edged, `no control edges were measured in ${theme}`).toBeGreaterThan(5);
+      expect(selected, `no selected-state markers were measured in ${cellLabel(cell)}`).toBeGreaterThan(10);
+      /**
+       * The edge floor is anti-vacuity, not a coverage target, and it moved with the
+       * surface. The read-only pass removed every input from the signed-out tournament
+       * pages - the Entries desk forms, the Schedule settings panel and the day planner's
+       * date/time fields are the editor's alone now - so the edged controls this sweep can
+       * still find are the public search fields and the sign-in form. The floor stays high
+       * enough to fail a sweep that measured almost nothing, and no higher.
+       */
+      expect(edged, `no control edges were measured in ${cellLabel(cell)}`).toBeGreaterThan(3);
       expect(failures, `non-text contrast under 3:1\n${failures.join("\n")}`).toEqual([]);
       console.log(
-        `[1.4.11 ${theme}] ${selected} selected markers, ${edged} control edges, all >= 3:1`,
+        `[1.4.11 ${cellLabel(cell)}] ${selected} selected markers, ${edged} control edges, all >= 3:1`,
       );
     });
 
-    test(`every focus indicator clears 3:1 across real focus order (${theme})`, async ({
+    test(`every focus indicator clears 3:1 across real focus order (${cellLabel(cell)})`, async ({
       page,
     }) => {
       const failures: string[] = [];
@@ -376,7 +388,7 @@ test.describe("1.4.11 non-text contrast, which no axe rule covers", () => {
       let stops = 0;
 
       for (const route of ROUTES) {
-        await openCell(page, route, { theme });
+        await openCell(page, route, cell);
         const walked = await tabThrough(page, 45);
         stops += walked.length;
         const bad = walked
@@ -387,11 +399,11 @@ test.describe("1.4.11 non-text contrast, which no axe rule covers", () => {
         if (bad.length) failures.push(`${route}\n  ${lines(bad)}`);
       }
 
-      expect(stops, `no focus stops were visited in ${theme}`).toBeGreaterThan(50);
-      expect(measured, `no focus indicators were measured in ${theme}`).toBeGreaterThan(20);
+      expect(stops, `no focus stops were visited in ${cellLabel(cell)}`).toBeGreaterThan(50);
+      expect(measured, `no focus indicators were measured in ${cellLabel(cell)}`).toBeGreaterThan(20);
       expect(failures, `focus indicators under 3:1\n${failures.join("\n")}`).toEqual([]);
       console.log(
-        `[1.4.11 focus ${theme}] ${measured} indicators across ${stops} focus stops, all >= 3:1`,
+        `[1.4.11 focus ${cellLabel(cell)}] ${measured} indicators across ${stops} focus stops, all >= 3:1`,
       );
     });
   }
@@ -416,7 +428,7 @@ test.describe("1.4.10 reflow", () => {
     const failures: string[] = [];
 
     for (const route of ROUTES) {
-      await openCell(page, route, { theme: "light" });
+      await openCell(page, route, MATRIX_CELLS[0]!);
       const overflow = await page.evaluate(() => {
         const doc = document.documentElement;
         const visible = doc.clientWidth;
@@ -457,15 +469,15 @@ test.describe("2.4.11 focus not obscured, new in WCAG 2.2", () => {
    * is deliberately the criterion's bar and not a stricter one: asserting more than the
    * requirement would make this a test of the design rather than of conformance.
    */
-  for (const theme of THEMES) {
-    test(`no focused control is entirely hidden by the sticky header (${theme})`, async ({
+  for (const cell of MATRIX_CELLS) {
+    test(`no focused control is entirely hidden by the sticky header (${cellLabel(cell)})`, async ({
       page,
     }) => {
       const failures: string[] = [];
       const perRoute: number[] = [];
 
       for (const route of ROUTES) {
-        await openCell(page, route, { theme });
+        await openCell(page, route, cell);
         const walked = await tabThrough(page, 45);
         const relevant = walked.filter((s) => !s.insideHeader);
         perRoute.push(relevant.length);
@@ -481,7 +493,7 @@ test.describe("2.4.11 focus not obscured, new in WCAG 2.2", () => {
       expect(total, `focus stops per route: ${perRoute.join(", ")}`).toBeGreaterThan(ROUTES.length);
       expect(failures, `focused controls entirely hidden by the header`).toEqual([]);
       console.log(
-        `[2.4.11 ${theme}] ${total} focus stops outside the header (per route: ${perRoute.join(", ")})`,
+        `[2.4.11 ${cellLabel(cell)}] ${total} focus stops outside the header (per route: ${perRoute.join(", ")})`,
       );
     });
   }
@@ -494,10 +506,10 @@ test.describe("2.3.3 reduced motion", () => {
    * responded to the preference before this phase, and this check is what keeps the new
    * rule from being deleted by someone who does not know what it was for.
    */
-  for (const theme of THEMES) {
-    test(`a reduced-motion preference actually reduces motion (${theme})`, async ({ page }) => {
+  for (const cell of MATRIX_CELLS) {
+    test(`a reduced-motion preference actually reduces motion (${cellLabel(cell)})`, async ({ page }) => {
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await openCell(page, routes.desk, { theme });
+      await openCell(page, routes.desk, cell);
 
       const durations = await page.evaluate(() => {
         const out: number[] = [];
@@ -548,7 +560,7 @@ test.describe("2.5.7 dragging movements, new in WCAG 2.2", () => {
   test.use({ appMock: { preset: "layout", role: "admin" } });
 
   test("every draggable row keeps a non-drag alternative", async ({ page }) => {
-    await openCell(page, routes.placement, { theme: "light" });
+    await openCell(page, routes.placement, MATRIX_CELLS[0]!);
 
     const result = await page.evaluate(() => {
       const rows = [...document.querySelectorAll('tr[draggable="true"]')];

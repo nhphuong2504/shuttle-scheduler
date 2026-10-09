@@ -72,7 +72,7 @@ function PoolsPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-display text-lg font-bold">
                   {c.code} — {c.name}
-                  <span className="ml-2 font-score text-xs font-normal text-muted-foreground">
+                  <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
                     {catTeams.length} entries · {catPools.length} pools
                   </span>
                 </h2>
@@ -153,22 +153,22 @@ function PoolsPage() {
                               const entry = poolEntries.find((e) => e.team_id === s.teamId);
                               return (
                                 <tr key={s.teamId}>
-                                  <td className="font-score text-xs font-semibold text-primary">
+                                  <td className="font-score text-sm font-semibold text-primary">
                                     {s.rank}
                                   </td>
                                   <td className="pr-2 font-medium">
                                     {teamLabel(teamMap.get(s.teamId), playerMap)}
                                   </td>
-                                  <td className="text-right font-score text-xs">
+                                  <td className="text-right font-score text-sm">
                                     {s.wins}-{s.losses}
                                   </td>
-                                  <td className="text-right font-score text-xs">
+                                  <td className="text-right font-score text-sm">
                                     {signed(s.diff)}
                                   </td>
                                   <td className="pl-2 text-right">
                                     {canEdit && entry ? (
                                       <button
-                                        className="text-t4 uppercase tracking-wide text-muted-foreground hover:text-primary"
+                                        className="text-sm text-muted-foreground hover:text-primary"
                                         onClick={async () => {
                                           const input = window.prompt(
                                             "Manual rank (coin toss). Leave blank to clear.",

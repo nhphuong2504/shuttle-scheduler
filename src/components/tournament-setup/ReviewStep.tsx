@@ -1,313 +1,414 @@
-import { Panel } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import type { TournamentStatus } from "@/lib/auth/authorization";
-import type { TournamentReadiness } from "@/lib/tournament/data";
+import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
 import { cn } from "@/lib/utils";
-import { dateRangeLabel, type DraftForm } from "./types";
+import { effectiveRegistration } from "./problems";
+import { SetupSection } from "./section";
+import {
+  countIsoDays,
+  setupSteps,
+  stepForCheck,
+  windowLabel,
+  type DraftForm,
+  type SetupStep,
+} from "./types";
+
+/** One line of the checklist, whether it came from the browser or from the database. */
+export interface ReviewCheck {
+  id: string;
+  label: string;
+  ok: boolean;
+  detail?: string | null | undefined;
+  /** False for a check that is advice rather than a blocker. Absent means it blocks. */
+  blocking?: boolean | undefined;
+}
 
 /**
- * The final summary. The checks come from `tournament_readiness`, which is the
- * same function the activation RPC re-runs, so what is shown here is what the
- * database will enforce.
+ * The last step: whether the tournament can be created (or is set up, once it exists), what
+ * was set up, and the one act that belongs here.
  *
- * The checklist covers only what this wizard collects, so every check below is
- * blocking. A check can still declare itself advisory (`blocking: false`) and the
- * rendering honours that, but nothing uses it today: the settings that used to be
- * advisory — the venue's courts — are configured on the Schedule page instead.
+ * While a tournament is being made, the checks come from the form itself - there is no row
+ * to ask - and the page opens with the answer in one sentence ("ready to create", or "N
+ * things to fix"), because a host arrives here to learn exactly that. Each thing to fix
+ * carries the button that goes to the step that fixes it. Once it exists the checks are the
+ * database's own `tournament_readiness`, the same function that decides whether registration
+ * can open.
  *
- * The checklist is information, not the gate. Start is enabled whenever the tournament
- * exists, and the RPC names its own refusal: it knows the blockers and the venue-local
- * start time, and a disabled button would only be able to say "no".
+ * There is no Start button. A tournament starts by itself when its first match is started on
+ * the Desk, so the act that belongs on an existing tournament's last step is only the end of
+ * it: Complete, while it is running.
+ *
+ * `onGoToStep` is absent once the configuration is frozen (the tournament has started), and
+ * with it the Edit and fix buttons: a button that goes to a step that can no longer be
+ * changed would be a door to a form that lies.
  */
 export function ReviewStep({
+  mode,
   form,
-  readiness,
-  readinessError,
+  checks,
+  loading,
+  error,
   busy,
-  hasTournament,
   status,
-  onStart,
+  onCreate,
   onComplete,
   onDiscard,
+  onGoToStep,
 }: {
+  mode: "create" | "existing";
   form: DraftForm;
-  readiness: TournamentReadiness | undefined;
-  readinessError: string | null;
+  checks: ReviewCheck[];
+  loading: boolean;
+  error: string | null;
   busy: boolean;
-  /** Whether the tournament exists yet. The first step creates it. */
-  hasTournament: boolean;
   status: TournamentStatus;
-  onStart: () => void;
+  onCreate: () => void;
   onComplete: () => void;
   onDiscard: () => void;
+  onGoToStep?: ((step: SetupStep) => void) | undefined;
 }) {
   const activeEvents = form.events.filter((event) => event.active !== false);
-  const checks = readiness?.checks ?? [];
   const blockers = checks.filter((check) => !check.ok && check.blocking !== false);
   const advisories = checks.filter((check) => !check.ok && check.blocking === false);
-  const ready = readiness?.ready === true;
+  const ready = !loading && !error && blockers.length === 0;
+  const registration = effectiveRegistration(form);
+  const days = form.startsOn ? countIsoDays(form.startsOn, form.endsOn || form.startsOn) : 0;
+  const steps = setupSteps(mode === "existing");
 
   return (
-    <div className="space-y-4">
-      <Panel
-        title="Checks"
-        right={
-          checks.length ? (
-            <span className="font-score text-t4 text-muted-foreground">
-              {checks.length - blockers.length - advisories.length}/{checks.length} passed
-            </span>
-          ) : null
-        }
-        bodyClassName="p-0"
-      >
-        {readinessError ? (
-          <p className="p-4 text-sm text-danger-foreground">{readinessError}</p>
-        ) : !readiness ? (
-          <p className="p-4 text-sm text-muted-foreground">Running checks…</p>
-        ) : (
-          <>
-            <div
-              className={cn(
-                "flex items-center gap-3 border-b border-hairline px-4 py-3",
-                ready ? "bg-success/10" : "bg-warn-surface",
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "grid size-8 shrink-0 place-items-center rounded-full font-score text-sm font-bold",
-                  ready
-                    ? "bg-success/50 text-foreground"
-                    : "bg-warn-border/50 text-warn-foreground",
-                )}
-              >
-                {ready ? "✓" : "!"}
-              </span>
-              <p className={cn("text-sm font-semibold", ready ? "" : "text-warn-foreground")}>
-                {ready
-                  ? advisories.length
-                    ? `Ready to activate. ${advisories.length} setting${
-                        advisories.length === 1 ? "" : "s"
-                      } below ${advisories.length === 1 ? "is" : "are"} finished at the first build.`
-                    : "All checks passed. This tournament is ready to activate."
-                  : `${blockers.length} check${blockers.length === 1 ? "" : "s"} to resolve before activation.`}
-              </p>
-            </div>
-            <ul className="divide-y divide-hairline">
-              {checks.map((check) => {
-                const advisory = !check.ok && check.blocking === false;
-                return (
-                  <li key={check.id} className="flex items-start gap-2.5 px-4 py-2.5">
-                    <span
-                      className={cn(
-                        "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-t4 font-bold",
-                        check.ok
-                          ? "bg-success/40 text-foreground"
-                          : advisory
-                            ? "bg-warn-border/40 text-warn-foreground"
-                            : "bg-danger-surface text-danger-foreground",
-                      )}
-                      aria-hidden
-                    >
-                      {check.ok ? "✓" : "!"}
-                    </span>
-                    <span className="min-w-0">
-                      <span
-                        className={cn(
-                          "block text-sm",
-                          check.ok ? "text-muted-foreground" : "font-semibold",
-                        )}
-                      >
-                        {check.label}
-                      </span>
-                      {!check.ok && check.detail ? (
-                        <span
-                          className={cn(
-                            "block text-xs",
-                            advisory ? "text-warn-foreground" : "text-danger-foreground",
-                          )}
-                        >
-                          {check.detail}
-                        </span>
-                      ) : null}
-                      {advisory ? (
-                        <span className="mt-0.5 block text-t4 text-muted-foreground">
-                          Set on the Schedule page at the first build.
-                        </span>
-                      ) : null}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-      </Panel>
+    <div className="space-y-5">
+      <Verdict
+        mode={mode}
+        loading={loading}
+        error={error}
+        ready={ready}
+        blockers={blockers.length}
+        advisories={advisories.length}
+      />
 
-      <Panel title="Basics">
-        <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-          <Row label="Name" value={form.basics.name.trim() || "Not set"} />
-          <Row label="Timezone" value={form.basics.venueTimezone || "Not set"} />
-          <Row label="Venue" value={form.basics.venueName.trim() || "Not set"} />
-          <Row label="Address" value={form.basics.venueAddress.trim() || "Not set"} />
-          <Row label="Organizer" value={form.basics.organizerName.trim() || "Not set"} />
+      {checks.length ? (
+        <section aria-label="Checks" className="overflow-hidden rounded-2xl border border-hairline bg-surface shadow-panel">
+          <ul className="divide-y divide-hairline">
+            {checks.map((check) => {
+              const advisory = !check.ok && check.blocking === false;
+              const fixIn = !check.ok && !advisory ? stepForCheck(check.id) : null;
+              return (
+                <li key={check.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-2 px-5 py-3.5">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "grid size-6 shrink-0 place-items-center rounded-full font-score text-sm font-extrabold",
+                      check.ok
+                        ? "bg-success/15 text-foreground"
+                        : advisory
+                          ? "bg-secondary text-muted-foreground"
+                          : "bg-danger-surface text-danger-foreground",
+                    )}
+                  >
+                    {check.ok ? "✓" : advisory ? "i" : "!"}
+                  </span>
+                  <span className="min-w-[14rem] flex-1">
+                    <span className={cn("block text-base", check.ok ? "" : "font-semibold")}>
+                      {check.label}
+                    </span>
+                    {!check.ok && check.detail ? (
+                      <span className="block text-sm text-muted-foreground">{check.detail}</span>
+                    ) : null}
+                    {advisory ? (
+                      <span className="block text-sm text-muted-foreground">
+                        Finished on the Schedule page. It does not hold anything up.
+                      </span>
+                    ) : null}
+                  </span>
+                  {fixIn && onGoToStep ? (
+                    <Button variant="outline" onClick={() => onGoToStep(fixIn)}>
+                      Go to {steps.find((entry) => entry.id === fixIn)?.label}
+                    </Button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
+      <SetupSection headingId="review-summary" title="What you set up">
+        <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
           <Row
-            label="Contact"
+            label="Name"
+            value={form.basics.name.trim() || "Not set"}
+            editStep="details"
+            onGoToStep={onGoToStep}
+          />
+          <Row
+            label="Tournament dates"
+            value={`${windowLabel(form.startsOn, form.endsOn)}${
+              days ? ` · ${days} day${days === 1 ? "" : "s"}` : ""
+            } · ${form.basics.venueTimezone || "no timezone"}`}
+          />
+          <Row
+            label="Venue"
             value={
-              [form.basics.organizerEmail.trim(), form.basics.organizerPhone.trim()]
+              [form.basics.venueName.trim(), form.basics.venueAddress.trim()]
+                .filter(Boolean)
+                .join(", ") || "Not set"
+            }
+          />
+          <Row
+            label="Organiser"
+            value={
+              [
+                form.basics.organizerName.trim(),
+                form.basics.organizerEmail.trim(),
+                form.basics.organizerPhone.trim(),
+              ]
                 .filter(Boolean)
                 .join(" · ") || "Not set"
             }
           />
-          <div className="sm:col-span-2">
-            <dt className="text-t4 font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Note
+          <div className="min-w-0">
+            <dt className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Events</span>
+              <EditLink step="events" onGoToStep={onGoToStep} />
             </dt>
-            <dd className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
-              {form.basics.notes.trim() || "None"}
+            <dd className="mt-0.5 break-words text-base font-semibold">
+              {activeEvents.length === 0 ? (
+                <span className="text-danger-foreground">None yet</span>
+              ) : (
+                activeEvents.map((event) => event.code).join(", ")
+              )}
+            </dd>
+          </div>
+          <Row
+            label="Entries per player"
+            value={`Up to ${form.maxCategoriesPerPlayer}`}
+          />
+          <div className="min-w-0">
+            <dt className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Registration</span>
+              <EditLink step="events" onGoToStep={onGoToStep} />
+            </dt>
+            <dd className="mt-0.5 break-words text-base font-semibold">
+              {form.registration.enabled
+                ? `${registration.opensAt.replace("T", " ")} to ${registration.closesAt.replace("T", " ")}`
+                : "Off"}
+            </dd>
+          </div>
+          {form.basics.notes.trim() ? (
+            <div className="min-w-0 sm:col-span-2">
+              <dt className="text-sm text-muted-foreground">Note</dt>
+              <dd className="mt-0.5 whitespace-pre-wrap text-base">{form.basics.notes.trim()}</dd>
+            </div>
+          ) : null}
+          <div className="min-w-0 border-t border-hairline pt-5 sm:col-span-2">
+            <dt className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Format</span>
+              <EditLink step="structure" onGoToStep={onGoToStep} />
+            </dt>
+            <dd className="mt-0.5 text-base font-semibold">{SUPPORTED_FORMAT.name}</dd>
+            <dd className="mt-2 flex flex-wrap gap-2 text-sm">
+              {PLACEMENT_TIERS.map((tier) => (
+                <span key={tier.tier} className="rounded-full bg-secondary px-3 py-0.5">
+                  <span className="font-score">{tier.record}</span> → {tier.label} · {tier.title}
+                </span>
+              ))}
             </dd>
           </div>
         </dl>
-      </Panel>
-
-      <Panel title="Dates">
-        <dl className="mb-3 grid gap-x-4 gap-y-3 sm:grid-cols-3">
-          <Row label="Date range" value={dateRangeLabel(form.days)} />
-          <Row label="Days" value={String(form.days.length)} />
-        </dl>
-        <ol className="divide-y divide-hairline">
-          {form.days.map((day, index) => (
-            <li key={day.date || index} className="flex items-center gap-3 py-2 text-xs">
-              <span className="font-semibold">Day {index + 1}</span>
-              <span className="font-score">{day.date || "No date"}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-3 text-xs text-muted-foreground">
-          The venue&apos;s courts, each day&apos;s hours and breaks, match lengths and scoring rules
-          are set on the Schedule page at the first build, where the courts exist.
+        <p className="mt-5 text-sm text-muted-foreground">
+          Which days are played, the venue&apos;s courts, each day&apos;s hours and breaks, match
+          lengths and scoring rules are set on the Schedule page when the schedule is built,
+          where the courts exist.
         </p>
-      </Panel>
+      </SetupSection>
 
-      <Panel title="Events">
-        {activeEvents.length === 0 ? (
-          <p className="text-sm text-danger-foreground">No events. Add at least one.</p>
-        ) : (
-          <ul className="divide-y divide-hairline">
-            {activeEvents.map((event) => (
-              <li key={event.code} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                <span className="font-score font-semibold">{event.code}</span>
-                <span>{event.name}</span>
-                <Badge variant="outline">
-                  {event.gender === "open" ? "Open" : `${event.gender}`}
-                </Badge>
-                <Badge variant="outline">
-                  {event.entryType === "pair" ? "Doubles" : "Singles"}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {event.maxEntries == null ? "No entry cap" : `Cap ${event.maxEntries}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-3 text-xs text-muted-foreground">
-          A player may enter at most{" "}
-          <span className="font-semibold text-foreground">
-            {form.maxCategoriesPerPlayer} event{form.maxCategoriesPerPlayer === 1 ? "" : "s"}
-          </span>
-          .
-        </p>
-      </Panel>
-
-      <Panel title="Structure">
-        <p className="text-sm font-semibold">{SUPPORTED_FORMAT.name}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{SUPPORTED_FORMAT.summary}</p>
-        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-          {PLACEMENT_TIERS.map((tier) => (
-            <li key={tier.tier} className="flex items-center gap-2 text-xs">
-              <Badge variant="outline" className="font-score">
-                {tier.record}
-              </Badge>
-              <span className="text-muted-foreground">→</span>
-              <span className="font-semibold">{tier.label}</span>
-              <span className="text-muted-foreground">{tier.title}</span>
-            </li>
-          ))}
-        </ul>
-      </Panel>
-
-      <Panel title="Finish">
-        {/*
-          The lifecycle in one paragraph, and only the actions valid right now beneath it.
-          Two states reach this panel with a button: an upcoming tournament can be started
-          or discarded, and a running one can be completed.
-        */}
-        {status === "upcoming" ? (
+      <SetupSection
+        headingId="review-finish"
+        title={
+          mode === "create"
+            ? "Create the tournament"
+            : status === "in_progress"
+              ? "Finish the tournament"
+              : status === "completed"
+                ? "Completed"
+                : "Starting"
+        }
+      >
+        {mode === "create" ? (
           <>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Starting moves this tournament from{" "}
-              <span className="font-semibold">Upcoming</span> to{" "}
-              <span className="font-semibold">In progress</span> and makes it the tournament you
-              are working in. It will not start before every check passes and its own start time
-              has arrived. Discarding deletes it and everything it owns.
+            <p className="mb-4 text-base text-muted-foreground">
+              Creating saves it as <strong className="text-foreground">Upcoming</strong>. It is
+              listed in Explore, and people can register while registration is open. It becomes{" "}
+              <strong className="text-foreground">In progress</strong> by itself when the first
+              match is started on the Desk, from the first day at 00:00.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {/*
-                Enabled whenever the tournament exists, even with failing checks. The RPC
-                re-runs the checklist and refuses with the blockers named - and it is the only
-                thing that knows the venue-local start time, so pre-empting it in the browser
-                would replace a precise refusal with a vague one.
-              */}
-              <Button disabled={busy || !hasTournament} onClick={onStart}>
-                {busy ? "Working…" : "Start tournament"}
-              </Button>
-              <Button variant="outline" disabled={busy || !hasTournament} onClick={onDiscard}>
-                Discard tournament
-              </Button>
-            </div>
-            {ready ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Every check passes. If the start time has not arrived yet, starting will say when
-                it does.
-              </p>
-            ) : readiness ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Starting is refused until every blocking check passes. The database enforces the
-                same checks, and if you press it early it will name what is missing.
+            <Button
+              className="h-12 px-7 text-base"
+              disabled={busy || !ready}
+              onClick={onCreate}
+            >
+              {busy ? "Creating…" : "Create tournament"}
+            </Button>
+            {!ready && !loading ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Fix the {blockers.length === 1 ? "check" : "checks"} above to create it.
               </p>
             ) : null}
           </>
+        ) : status === "upcoming" ? (
+          <p className="text-base text-muted-foreground">
+            Nobody presses Start. This tournament becomes{" "}
+            <strong className="text-foreground">In progress</strong> by itself when the first match is
+            started on the Desk, from {form.startsOn || "the first day"} at 00:00. Until then
+            everything on the previous steps can still change.
+          </p>
         ) : status === "in_progress" ? (
           <>
-            <p className="mb-3 text-xs text-muted-foreground">
-              This tournament is running. Its configuration is now frozen, so the settings above
-              are read-only. Completing it closes the event.
+            <p className="mb-4 text-base text-muted-foreground">
+              This tournament is running. Its events, caps and format are now fixed; its name,
+              venue and last day can still change. Completing it closes the event.
             </p>
-            <Button disabled={busy || !hasTournament} onClick={onComplete}>
+            <Button className="h-12 px-7 text-base" disabled={busy} onClick={onComplete}>
               {busy ? "Working…" : "Complete tournament"}
             </Button>
           </>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             This tournament is completed. Nothing can be started or changed here; a platform admin
             can repair individual results from the desk.
           </p>
         )}
-      </Panel>
+      </SetupSection>
+
+      {mode === "create" || status === "upcoming" ? (
+        <div className="flex justify-end border-t border-hairline pt-3">
+          {/* A link-sized act, set apart from the one above: discarding is rare and final. */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDiscard}
+            className="inline-flex min-h-11 items-center rounded-md px-2 text-sm font-semibold text-danger-foreground underline underline-offset-2 hover:bg-danger-surface disabled:opacity-50"
+          >
+            {mode === "create" ? "Discard these answers" : "Discard this tournament"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/** The one-sentence answer the page opens with. */
+function Verdict({
+  mode,
+  loading,
+  error,
+  ready,
+  blockers,
+  advisories,
+}: {
+  mode: "create" | "existing";
+  loading: boolean;
+  error: string | null;
+  ready: boolean;
+  blockers: number;
+  advisories: number;
+}) {
+  let tone: "ok" | "warn" | "plain" = "plain";
+  let mark = "…";
+  let title = "Running checks…";
+  let detail: string | null = null;
+
+  if (error) {
+    tone = "warn";
+    mark = "!";
+    title = "The checks could not run";
+    detail = error;
+  } else if (!loading && ready) {
+    tone = "ok";
+    mark = "✓";
+    title = mode === "create" ? "Ready to create" : "Set up";
+    detail = advisories
+      ? `${advisories} setting${advisories === 1 ? "" : "s"} below ${
+          advisories === 1 ? "is" : "are"
+        } finished on the Schedule page.`
+      : "Every check passes.";
+  } else if (!loading) {
+    tone = "warn";
+    mark = "!";
+    const things = blockers === 1 ? "1 thing" : `${blockers} things`;
+    title =
+      mode === "create"
+        ? `${things} to fix before you can create it`
+        : `${things} to fix`;
+    detail = "The rest is ready.";
+  }
+
+  return (
+    <section
+      aria-live="polite"
+      className={cn(
+        "flex flex-wrap items-center gap-4 rounded-2xl border bg-surface p-5 shadow-panel sm:px-6",
+        tone === "warn" ? "border-warn-border" : "border-hairline",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "grid size-11 shrink-0 place-items-center rounded-xl font-display text-xl font-extrabold",
+          tone === "ok"
+            ? "bg-success/15 text-foreground"
+            : tone === "warn"
+              ? "bg-warn-surface text-warn-foreground"
+              : "bg-secondary text-muted-foreground",
+        )}
+      >
+        {mark}
+      </span>
+      <div className="min-w-0 flex-1">
+        <h2 className="font-display text-xl font-bold">{title}</h2>
+        {detail ? <p className="mt-0.5 text-base text-muted-foreground">{detail}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function EditLink({
+  step,
+  onGoToStep,
+}: {
+  step: SetupStep;
+  onGoToStep?: ((step: SetupStep) => void) | undefined;
+}) {
+  if (!onGoToStep) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onGoToStep(step)}
+      className="inline-flex min-h-11 items-center rounded-md px-1 text-sm font-semibold text-primary-ink hover:underline"
+    >
+      Edit
+    </button>
+  );
+}
+
+function Row({
+  label,
+  value,
+  editStep,
+  onGoToStep,
+}: {
+  label: string;
+  value: string;
+  editStep?: SetupStep;
+  onGoToStep?: ((step: SetupStep) => void) | undefined;
+}) {
   return (
     <div className="min-w-0">
-      <dt className="text-t4 font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
+      <dt className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>{label}</span>
+        {editStep ? <EditLink step={editStep} onGoToStep={onGoToStep} /> : null}
       </dt>
-      <dd className="break-words text-sm">{value}</dd>
+      <dd className="mt-0.5 break-words text-base font-semibold">{value}</dd>
     </div>
   );
 }

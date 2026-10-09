@@ -3,21 +3,14 @@ import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
 
-import {
-  cellLabel,
-  MATRIX_CELLS,
-  openCell,
-  ROUTES,
-  WCAG_TAGS,
-  type MatrixCell,
-} from "./fixtures/matrix";
+import { cellLabel, MATRIX_CELLS, openCell, ROUTES, WCAG_TAGS } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 
 /**
  * P4: the infrastructure matrix, validated.
  *
- * Three properties are checked against every route in both cells - light and dark -
- * because each one has already been a blind spot in turn:
+ * Three properties are checked against every route, because each one has already been
+ * a blind spot in turn:
  *
  *   contrast headroom   the axe gate catches a *failure*; it cannot see a pair that
  *                       passes at 4.51:1 and is therefore one token tweak from breaking
@@ -48,10 +41,10 @@ test.use({ viewport: VIEWPORT });
  *
  * Reading `passes` as well as `violations` is the whole point: a violation list answers
  * "is anything broken", while the passing nodes answer "how close is anything to
- * breaking". The distinction found a real fact about this system - the tightest pair
- * either theme can produce is 4.6:1 against a 4.5:1 requirement, a margin of 0.1, on the
- * same translucent primary chip that P3 fixed in dark mode. Light mode passes, but it
- * passes by 0.1, and nothing would have reported that until it stopped passing.
+ * breaking". The distinction found a real fact about this system - the tightest pair it
+ * can produce is 4.6:1 against a 4.5:1 requirement, a margin of 0.1, on the translucent
+ * primary chip. It passes, but it passes by 0.1, and nothing would have reported that
+ * until it stopped passing.
  */
 const MIN_MARGIN = 0.05;
 
@@ -233,13 +226,13 @@ type LayoutReport = {
  * against an unsettled one and reports drift that is not there.
  *
  * That is exactly what happened to `/draws` and `/` when the whole suite ran on four
- * workers: "measured no landmarks in dark mode - expected 3, received 4". Both passed
- * when the same tests ran alone, which is the signature of a race rather than a defect,
- * and a theme-parity gate that fails for a non-theme reason is a gate nobody will trust.
+ * workers: "measured no landmarks - expected 3, received 4". Both passed when the same
+ * tests ran alone, which is the signature of a race rather than a defect, and a gate that
+ * fails for a timing reason is a gate nobody will trust.
  *
  * Polling until the count repeats is the honest fix. It removes the race without
- * weakening the assertion: a page whose landmark set genuinely differs between themes
- * still fails, because both sides are now measured in the same settled state.
+ * weakening the assertion: a page whose landmark set genuinely differs from its settled
+ * state still fails, because every measurement is now taken in the same settled state.
  *
  * The count is stashed on `window`, which each `openCell` resets by navigating, so the
  * stability counter cannot leak from one measurement into the next.
@@ -343,72 +336,3 @@ test.describe("layout integrity across the matrix", () => {
   }
 });
 
-/**
- * The theme must not move anything.
- *
- * Dark mode changes colour tokens only, so every box should land in exactly the same
- * place. This is a different class of check from the two above: it does not ask whether a
- * layout is good, it asks whether switching themes is free. A dark rule that quietly
- * changed a border width, a font size or a padding would otherwise be invisible to every
- * other test in the suite, all of which look at one theme at a time.
- */
-test.describe("theme does not change layout", () => {
-  for (const route of ROUTES) {
-    test(`${route} has identical geometry in both themes`, async ({ page }) => {
-      const light = await (async () => {
-        await openCell(page, route, { theme: "light" });
-        return measureLayout(page);
-      })();
-
-      const dark = await (async () => {
-        await openCell(page, route, { theme: "dark" });
-        return measureLayout(page);
-      })();
-
-      expect(dark.geometry.length, `${route} measured no landmarks in dark mode`).toBe(
-        light.geometry.length,
-      );
-
-      const drift = light.geometry
-        .map((box, index) => {
-          const other = dark.geometry[index]!;
-          return {
-            tag: box.tag,
-            index,
-            dx: Math.abs(box.x - other.x),
-            dy: Math.abs(box.y - other.y),
-            dw: Math.abs(box.w - other.w),
-            dh: Math.abs(box.h - other.h),
-          };
-        })
-        .filter((d) => d.dx > 0.5 || d.dy > 0.5 || d.dw > 0.5 || d.dh > 0.5);
-
-      expect(
-        drift,
-        `theme changed layout: ${drift
-          .map((d) => `#${d.index} <${d.tag}> dx${d.dx} dy${d.dy} dw${d.dw} dh${d.dh}`)
-          .join(" | ")}`,
-      ).toEqual([]);
-    });
-  }
-});
-
-/** Guards the matrix itself: two cells, and no cell silently equal to another. */
-test.describe("the matrix is what it claims to be", () => {
-  test("has two distinct cells", () => {
-    const keys = new Set(MATRIX_CELLS.map((cell: MatrixCell) => cell.theme));
-    expect(keys.size).toBe(2);
-  });
-
-  test("each cell renders at its own theme", async ({ page }) => {
-    const seen = new Set<string>();
-    for (const cell of MATRIX_CELLS) {
-      await openCell(page, routes.desk, cell);
-      const resolved = await page.evaluate(() =>
-        document.documentElement.classList.contains("dark") ? "dark" : "light",
-      );
-      seen.add(resolved);
-    }
-    expect([...seen].sort()).toEqual(["dark", "light"]);
-  });
-});

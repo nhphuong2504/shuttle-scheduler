@@ -288,6 +288,9 @@ const tournament = {
   knockout_rest_gap_minutes: 30,
   court_count: COURT_COUNT,
   day_count: 1,
+  // The window is the one fixture day; the playing day sits inside it.
+  starts_on: DAY_DATE,
+  ends_on: DAY_DATE,
   status: "in_progress",
   format: "two_round_placement",
   max_categories_per_player: 3,
@@ -606,6 +609,9 @@ export interface MockTournamentSummary {
   entry_count: number;
   category_count: number;
   access_level: string;
+  /** The first and last playing day, as instants. Null until playing days are chosen. */
+  play_starts_at: string | null;
+  play_ends_at: string | null;
 }
 
 /** The filters `tournament_summary` takes that this fixture models. */
@@ -653,6 +659,7 @@ const buildFixture = (
   status: MockTournamentStatus | undefined,
   membership: MockMembership,
   format: MockTournamentFormat | undefined,
+  registrationState: string | null | undefined,
 ): DeskFixture => {
   // The lifecycle word is the one thing a spec needs to vary and cannot click its way
   // to: the fixture is a running event, and `Upcoming` and `Completed` are the other two
@@ -676,14 +683,25 @@ const buildFixture = (
    * The lifecycle answers first and the fixture configures no window at all, so a running or
    * finished tournament reads `started` / `completed` and an upcoming one reads `not_offered`.
    * The remaining words (`open`, `opens_soon`, `closed`) need a window this fixture does not
-   * have; a spec that wants them arrives with one in the commit that ships registration.
+   * have; a spec that wants them arrives with one.
+   *
+   * ## Why `registrationState` overrides the two *reads* rather than one
+   *
+   * `tournament_summary` does not compute this word, it *calls*
+   * `tournament_registration_state(t.id)` for it - so in the database the card on Explore and
+   * the Register panel on the participant page are the same value from the same function, and
+   * they cannot disagree. The fixture has to reproduce that or it is weaker than the system it
+   * stands in for: a summary read saying `not_offered` beside an RPC saying `open` would let a
+   * spec pass against a state no tournament can be in. So one option drives both, and the
+   * lifecycle derivation below is only the *default* for a spec that asks for neither.
    */
-  const registrationState =
+  const lifecycleState =
     servedStatus === "completed"
       ? "completed"
       : servedStatus === "in_progress"
         ? "started"
         : "not_offered";
+  const servedRegistrationState = registrationState ?? lifecycleState;
 
   const summary: MockTournamentSummary = {
     id: TID,
@@ -696,7 +714,10 @@ const buildFixture = (
     // presence, not an offset arithmetic the mock would have to reimplement.
     starts_at: DAY_OPEN,
     ends_at: DAY_CLOSE,
-    registration_state: registrationState,
+    // The one playing day fills the window, so the plan and the promise coincide here.
+    play_starts_at: DAY_OPEN,
+    play_ends_at: DAY_CLOSE,
+    registration_state: servedRegistrationState,
     // The entry is `teams` and the events are `categories` - never a derived projection.
     entry_count: teams.length,
     category_count: categories.length,
@@ -725,10 +746,9 @@ const buildFixture = (
       tournament_day_breaks: [],
       courts,
       categories,
+      // Served to `rpc/tournament_players` and `rpc/search_players` by the app mock; the roster
+      // is no longer a readable table.
       players,
-      // The roster the app reads is the definer projection, not `players`: the table's own
-      // policy keys on tournament edit access, which a participant does not have.
-      public_players: players,
       teams,
       placement_entrants: entrants,
       placement_matches: [],
@@ -812,6 +832,7 @@ export function deskFixture(
   status?: MockTournamentStatus,
   membership: MockMembership = "owner",
   format?: MockTournamentFormat,
+  registrationState?: string | null,
 ): DeskFixture {
   const chosen = PRESETS[preset];
   return buildFixture(
@@ -824,5 +845,6 @@ export function deskFixture(
     status,
     membership,
     format,
+    registrationState,
   );
 }

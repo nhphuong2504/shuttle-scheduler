@@ -53,13 +53,12 @@ export const Route = createFileRoute("/tournaments/new")({
  * form rather than the subject of the page. Here the wizard's subject is nothing, which is
  * exactly what it is.
  *
- * ## The address moves when the row exists
+ * ## Nothing exists until the last step
  *
- * The first "Create and continue" writes the tournament and then sends the caller to
- * `/tournaments/$id/settings?step=events`, so from that point the wizard is configuring a
- * tournament that exists at its own address, and a refresh resumes where it left off
- * instead of starting a second one. The alternative - staying here and holding the id in
- * memory - would make a refresh look like a fresh creation.
+ * The four steps keep their answers in the page (and in the browser's session storage, so a
+ * reload does not lose them), and "Create tournament" on the last step makes the tournament
+ * in one call and sends the caller to its own page. Until then there is no row, no id and no
+ * public trace: a tournament is created complete or not at all.
  *
  * ## Signed in, or told why not
  *
@@ -120,26 +119,14 @@ function NewTournamentPage() {
   return (
     <PublicShell
       title="New tournament"
-      subtitle={SETUP_STEPS[index]?.hint ?? ""}
+      subtitle="Four short steps. Nothing is created until the last one, and your answers stay on this device if you leave."
       actions={
         <Button size="sm" variant="ghost" asChild>
-          <Link to="/me/tournaments">Cancel</Link>
+          <Link to="/me/tournaments">← My tournaments</Link>
         </Button>
       }
     >
-      <TournamentWizard
-        tournamentId={null}
-        step={step}
-        onStepChange={setStep}
-        onCreated={(tournamentId, nextStep) => {
-          void navigate({
-            to: "/tournaments/$tournamentId/settings",
-            params: { tournamentId },
-            search: { step: nextStep },
-            replace: true,
-          });
-        }}
-      />
+      <TournamentWizard tournamentId={null} step={step} onStepChange={setStep} />
     </PublicShell>
   );
 }

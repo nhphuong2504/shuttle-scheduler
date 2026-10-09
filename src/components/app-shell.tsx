@@ -1,17 +1,20 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
-import { useTheme } from "@/hooks/useTheme";
+import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
+import { useTournamentSummary } from "@/lib/tournament/data";
+import { isReminderPhase, phaseLabel, tournamentPhase, type TournamentPhase } from "@/lib/tournament/phase";
+import { shortDays } from "@/lib/tournament/summary-format";
 import { supabase } from "@/integrations/supabase/client";
 import {
   normalizeTournamentStatus,
   tournamentStatusLabel,
   type TournamentStatus,
 } from "@/lib/auth/authorization";
-import type { Theme } from "@/lib/design/theme";
 import { signInSearch } from "@/lib/routing/redirect";
 import {
   registrationDecisionHint,
@@ -64,6 +67,15 @@ import { cn } from "@/lib/utils";
  */
 
 /**
+ * The Desk's address, named rather than repeated.
+ *
+ * It is the one operational section the read-only nav withholds, so the two lists have to
+ * point at the same address without either owning the literal - a second spelling of it is
+ * how "drop the Desk" would drop the wrong entry.
+ */
+const DESK_PATH = "/tournaments/$tournamentId/desk" as const;
+
+/**
  * The workspace navigation.
  *
  * Pools and Draws are deliberately absent: the tournament creation flow replaced
@@ -88,13 +100,28 @@ import { cn } from "@/lib/utils";
  * tournament, which is what "Entries" says and "Registration" no longer does.
  */
 const SECTIONS = [
-  { label: "Desk", scoped: "/tournaments/$tournamentId/desk" },
+  { label: "Desk", scoped: DESK_PATH },
   { label: "Entries", scoped: "/tournaments/$tournamentId/entries" },
   { label: "Placement", scoped: "/tournaments/$tournamentId/placement" },
   { label: "Knockout", scoped: "/tournaments/$tournamentId/knockout" },
   { label: "Schedule", scoped: "/tournaments/$tournamentId/schedule" },
   { label: "Scores", scoped: "/tournaments/$tournamentId/scores" },
 ] as const;
+
+/**
+ * What a reader without the edit right is offered: the operational sections, minus the Desk.
+ *
+ * The Desk is a live console for one court rather than a page about the tournament: it is
+ * where a moderator works in real time, with the day's board in front of them. Reading a
+ * tournament is a different job - who is in, the draws, when it plays and what the results
+ * were - so the read-only workspace opens on Entries and carries these five, and the Desk is
+ * not one of them.
+ *
+ * Derived from `SECTIONS` rather than restated, so a section added to the operational list
+ * later is offered to *everyone* reading the tournament rather than to editors alone by
+ * accident. The Desk is the deliberate exception, not the shape of the list.
+ */
+const READ_ONLY_SECTIONS = SECTIONS.filter((section) => section.scoped !== DESK_PATH);
 
 /**
  * The entries that belong to the people who run the tournament.
@@ -123,36 +150,50 @@ const EDITOR_SECTIONS = [
 const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as const;
 
 /**
- * The public navigation: the three addresses that are not about one tournament.
+ * The public navigation: the address that is not about one tournament.
  *
  * The workspace nav resolves its sections against a tournament id, and outside a
  * workspace there is none - so until S6 this shell rendered the *flat* legacy paths and
  * let them resolve on the caller's pointer. That is gone, and it is the better answer
  * rather than merely the tidier one: a nav entry that silently moves a reader to
  * whichever tournament their pointer names is a nav entry that lies about where it goes.
- * These three say what they are.
+ * This one says where it goes.
  *
- * It does not change with the session. "My tournaments" and "New tournament" lead a
- * visitor to a page that states plainly what it needs rather than to a dead link, and a
- * nav that grows an entry once the session settles would move the row the reader is
- * aiming at.
+ * It carries browsing and nothing else. "My tournaments" and "New tournament" used to sit
+ * beside it, and they are still reachable from the pages that need them (Home's panels,
+ * the create flow's neighbours), but a bar that a signed-out visitor also reads should not
+ * be a list of the caller's own work. What is left does not change with the session, so
+ * the row does not move once the session settles.
  */
-const PUBLIC_SECTIONS = [
-  { label: "Explore", to: "/explore" },
-  { label: "My tournaments", to: "/me/tournaments" },
-  { label: "New tournament", to: "/tournaments/new" },
-] as const;
+const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as const;
 
-const THEME_OPTIONS: { value: Theme; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
+/**
+ * The same bar for somebody signed in, with the place their own tournaments live.
+ *
+ * Creating one is not a section, so it is drawn beside the list as an action (`NEW_CLASS`)
+ * rather than in it: it is something to do, not somewhere to be.
+ */
+const SIGNED_IN_SECTIONS = [
+  { label: "Browse tournaments", to: "/explore" },
+  { label: "My tournaments", to: "/me/tournaments" },
+] as const;
+const NEW_TOURNAMENT_CLASS =
+  "inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-info-surface px-4 text-sm font-bold text-info-foreground transition-colors hover:bg-info-border/60";
 
 /** Shared so the two nav branches cannot drift into two different-looking navs. */
 const NAV_ITEM_CLASS =
-  "rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+  "inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
 const NAV_ACTIVE_CLASS =
   "bg-primary text-primary-foreground shadow-panel hover:bg-primary hover:text-primary-foreground";
+/**
+ * The sections of one tournament, as tabs on a rule rather than as pills.
+ *
+ * A tournament's sections are places inside one thing, so they read as a row of tabs under the
+ * tournament's name, with the open one marked by a line on the row's own edge. The pill
+ * treatment above stays for the public bar, where the entries are separate destinations.
+ */
+const TAB_ITEM_CLASS =
+  "inline-flex min-h-12 shrink-0 items-center border-b-[3px] border-transparent px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground";
 /**
  * The count of work waiting, beside its section.
  *
@@ -165,66 +206,29 @@ const NAV_BADGE_CLASS =
   "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full border border-warn-border bg-warn-surface px-1 font-score text-t4 leading-tight text-warn-foreground";
 
 /**
- * Theme switch.
+ * The foot of every page, in both shells.
  *
- * The shell's only appearance control. A `role="group"` of pressed buttons rather
- * than a radiogroup, on the same reasoning as any other immediate-apply control:
- * themes take effect as they are pressed and are not a form field awaiting
- * submission, so `aria-pressed` describes them accurately while a radio role would
- * imply a pending value.
- *
- * The honesty rule: the pressed button reflects what is actually rendering,
- * including when that came from the operating system rather than from a choice made
- * here. On a first visit nothing is stored, the system supplies the theme, and the
- * button for it reads as pressed — which is the state the operator can see, so it is
- * the state the control reports.
- *
- * There are two buttons and no third. The reset that returned to following the
- * operating system used to sit beside them and is gone, and its cost is real rather
- * than cosmetic: a chosen theme is now the only reachable state, so an operator who
- * picks one cannot go back to following the system. What is *not* gone is the
- * fallback itself — an unset preference still resolves from the operating system, as
- * `resolveTheme` has always done, which is why the controls work without a choice
- * having been made. See `useTheme` for why nothing ever writes that preference.
+ * It carries only what exists: the name, the year, and the one public door. Privacy, terms
+ * and support links are left out until those pages do, because a link to nothing is worse
+ * than no link. The door is worded "Find a tournament" rather than repeating the header's
+ * "Browse tournaments", so a page never offers two links with the same name.
  */
-function ThemeToggle({
-  theme,
-  onChange,
-}: {
-  theme: Theme;
-  onChange: (next: Theme) => void;
-}) {
+function SiteFooter() {
   return (
-    <div
-      role="group"
-      aria-label="Colour theme"
-      className="hidden items-center rounded-full border border-hairline bg-muted/60 p-0.5 sm:flex"
-    >
-      {THEME_OPTIONS.map((option) => {
-        const active = theme === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "rounded-full px-2.5 py-1 font-semibold transition-colors",
-              "text-t4",
-              // The ring is the selected-state boundary. Without it the active segment
-              // is `bg-surface` on a `bg-muted` container, which measures 1.09:1 in
-              // light and 1.02:1 in dark - a selected state a low-vision user cannot
-              // see. `ring` draws a box-shadow, so this costs no layout.
-              active
-                ? "bg-surface text-foreground shadow-panel ring-1 ring-border-selected"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
+    <footer className="mt-auto border-t border-hairline bg-background">
+      <div className="mx-auto flex max-w-[1400px] flex-col items-start justify-between gap-3 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-display text-base font-bold text-foreground">Tournova</span>
+          <span>© {new Date().getFullYear()} Tournova. All rights reserved.</span>
+        </p>
+        <Link
+          to="/explore"
+          className="inline-flex min-h-11 items-center rounded-lg font-semibold transition-colors hover:text-foreground"
+        >
+          Find a tournament
+        </Link>
+      </div>
+    </footer>
   );
 }
 
@@ -232,12 +236,13 @@ function ThemeToggle({
 function BrandMark() {
   return (
     <>
-      <span className="grid size-7 place-items-center rounded-lg bg-primary font-display text-t2 font-bold text-primary-foreground shadow-panel">
+      <span
+        aria-hidden="true"
+        className="grid size-8 place-items-center rounded-[10px] bg-primary font-display text-lg font-bold leading-none text-primary-foreground"
+      >
         T
       </span>
-      <span className="font-display text-sm font-bold tracking-tight text-primary">
-        TOURNOVA<span className="text-muted-foreground"> / ops</span>
-      </span>
+      <span className="font-display text-lg font-bold tracking-tight text-foreground">Tournova</span>
     </>
   );
 }
@@ -249,7 +254,7 @@ function BrandMark() {
  * shape the live status pill draws its glyph from, but `--presence-ink` is a separate
  * value so the mark reads as "someone is signed in" rather than "a match is live", and so
  * tuning it cannot move the state palette (`--state-live-ink` is read by the court-state
- * vocabulary and the status pills). Decorative — the email and role beside it carry the
+ * vocabulary and the status pills). Decorative — the email beside it carries the
  * meaning — so it stays out of the accessibility tree.
  *
  * The chip names its own tier (`text-t4`) rather than inheriting: the shell sets no size
@@ -270,14 +275,15 @@ function BrandMark() {
  * away from is not a kindness.
  */
 function SessionBlock() {
-  const { session, signedIn, systemRole } = useSession();
+  const { session, signedIn, isPlatformAdmin } = useSession();
   const navigate = useNavigate();
   const href = useLocation({ select: (location) => location.href });
-
   if (!signedIn) {
     return (
       <Button
         size="sm"
+        variant="outline"
+        className="h-11 px-4 text-sm"
         onClick={() => navigate({ to: "/auth", search: signInSearch(href) })}
       >
         Sign in
@@ -290,8 +296,8 @@ function SessionBlock() {
       <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-t4 text-muted-foreground sm:inline-flex">
         <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
         {session?.userEmail}
-        {systemRole ? ` · ${systemRole}` : ""}
       </span>
+      {isPlatformAdmin ? <ViewModeSwitch /> : null}
       <Button
         size="sm"
         variant="outline"
@@ -303,6 +309,43 @@ function SessionBlock() {
         Sign out
       </Button>
     </>
+  );
+}
+
+/**
+ * The platform admin's choice between the ordinary `user` view and the `admin` one.
+ *
+ * Only a platform admin is offered it; everyone else sees their email and nothing more.
+ * It is a view preference, not a permission - the server still decides what any caller may
+ * do. The admin view itself is not designed yet, so for now the choice is only remembered.
+ */
+function ViewModeSwitch() {
+  const { viewMode, setViewMode } = useViewMode();
+  const options: ViewMode[] = ["user", "admin"];
+
+  return (
+    <div
+      role="group"
+      aria-label="View as"
+      className="inline-flex items-center rounded-full border border-hairline bg-muted/60 p-0.5 text-t4"
+    >
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={viewMode === option}
+          onClick={() => setViewMode(option)}
+          className={cn(
+            "min-h-7 rounded-full px-3 font-semibold capitalize transition-colors",
+            viewMode === option
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -326,12 +369,42 @@ function SessionBlock() {
  * Exported because Explore and My Tournaments draw the same pill: it is the tournament's
  * identity, not the workspace header's private drawing of it.
  */
-export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
-  const label = tournamentStatusLabel(status);
+export function TournamentStatusPill({
+  status,
+  phase,
+}: {
+  status: TournamentStatus;
+  /**
+   * The status read against the clock (see `tournamentPhase`). Given, it names the phase and
+   * draws the two late ones as reminders: amber, with a "!" so they survive grayscale.
+   */
+  phase?: TournamentPhase | undefined;
+}) {
+  const label = phase ? phaseLabel(phase) : tournamentStatusLabel(status);
+
+  if (phase && isReminderPhase(phase)) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warn-surface px-2 py-0.5 font-score text-sm uppercase tracking-wide text-warn-foreground ring-1 ring-inset ring-warn-border">
+        <span aria-hidden="true" className="font-extrabold">
+          !
+        </span>
+        {label}
+      </span>
+    );
+  }
+
+  if (phase === "starts_today") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-score text-sm uppercase tracking-wide text-primary-foreground ring-1 ring-inset ring-primary">
+        {STATE_GLYPH["scheduled"]}
+        {label}
+      </span>
+    );
+  }
 
   if (status === "completed") {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 font-score text-t4 uppercase tracking-wider text-state-completed-ink">
+      <span className="inline-flex shrink-0 items-center gap-1 font-score text-sm uppercase tracking-wide text-state-completed-ink">
         {STATE_GLYPH["completed"]}
         {label}
       </span>
@@ -341,7 +414,7 @@ export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-sm uppercase tracking-wide ring-1 ring-inset",
         status === "in_progress"
           ? "bg-state-live-chip text-state-live-ink ring-state-live-ink/25"
           : "bg-muted text-muted-foreground ring-hairline",
@@ -358,7 +431,7 @@ export function TournamentStatusPill({ status }: { status: TournamentStatus }) {
  *
  * This is the treatment the read-only notice and Access's ownership notice both draw, and
  * they drew it as two hand-written copies of the same five classes before this pass - one
- * naming the type tier, one reaching around the scale with Tailwind's own `text-xs`. One
+ * naming the type tier, one reaching around the scale with Tailwind's own `text-sm`. One
  * component, because the treatment is one fact ("this is standing information, set apart
  * from the page") and the tone is the only thing a caller chooses. `warn` is standing
  * information that changes what the reader should do, and it is the tone both live copies
@@ -385,7 +458,7 @@ export function Notice({
   return (
     <div
       className={cn(
-        "mb-4 rounded-lg border px-3 py-2 text-t4 font-medium",
+        "mb-4 rounded-lg border px-3.5 py-2.5 text-sm font-medium",
         tone === "warn"
           ? "border-warn-border bg-warn-surface text-warn-foreground"
           : "border-info-border bg-info-surface text-info-foreground",
@@ -411,7 +484,7 @@ export function Notice({
  */
 function ReadOnlyNotice({ signedIn }: { signedIn: boolean }) {
   return (
-    <Notice data-read-only>
+    <Notice tone="info" data-read-only>
       {signedIn
         ? "Read-only view. You can see this tournament but not change it — ask its owner for edit access."
         : "Read-only view. Sign in to start, score and schedule matches."}
@@ -449,7 +522,7 @@ export function RegistrationStatePill({ state }: { state: RegistrationState }) {
   if (state === "completed") {
     return (
       <span
-        className="inline-flex shrink-0 items-center gap-1 font-score text-t4 uppercase tracking-wider text-state-completed-ink"
+        className="inline-flex shrink-0 items-center gap-1 font-score text-sm uppercase tracking-wide text-state-completed-ink"
         title={registrationStateHint(state)}
       >
         {REGISTRATION_GLYPH[state]}
@@ -461,7 +534,7 @@ export function RegistrationStatePill({ state }: { state: RegistrationState }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-sm uppercase tracking-wide ring-1 ring-inset",
         state === "open"
           ? "bg-state-live-chip text-state-live-ink ring-state-live-ink/25"
           : "bg-muted text-muted-foreground ring-hairline",
@@ -544,7 +617,7 @@ export function RegistrationDecisionPill({ decision }: { decision: RegistrationD
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-t4 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-score text-sm uppercase tracking-wide ring-1 ring-inset",
         DECISION_CLASS[decision],
       )}
       title={registrationDecisionHint(decision)}
@@ -552,6 +625,46 @@ export function RegistrationDecisionPill({ decision }: { decision: RegistrationD
       {DECISION_GLYPH[decision]}
       {registrationDecisionLabel(decision)}
     </span>
+  );
+}
+
+/**
+ * The app's own navigation: where you go that is not about this tournament.
+ *
+ * It is the bar `PublicShell` draws, and the tournament's header draws the same one, for
+ * everybody. Opening a tournament used to take it away from an operator - the bar held the
+ * brand and the session and nothing else - so somebody running a tournament had no way to
+ * Browse, to see their other tournaments or to start another except the browser's back
+ * button. The tournament's own sections are a second row under its name; this row is the
+ * app, and it does not change when you go inside one.
+ *
+ * Signed in, it is Browse and My tournaments with New tournament beside them as an action.
+ * Signed out it is Browse alone, so the row does not move once the session settles for a
+ * reader. No `activeProps` are needed inside a workspace: none of these is the current
+ * address while a tournament is on screen, and `PublicShell` passes its own.
+ */
+function PrimaryNav({ signedIn, marked }: { signedIn: boolean; marked: boolean }) {
+  return (
+    <>
+      <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
+        {(signedIn ? SIGNED_IN_SECTIONS : PUBLIC_SECTIONS).map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className={NAV_ITEM_CLASS}
+            {...(marked ? { activeProps: { className: NAV_ACTIVE_CLASS } } : {})}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+      {signedIn ? (
+        <Link to="/tournaments/new" className={NEW_TOURNAMENT_CLASS}>
+          <Plus aria-hidden="true" className="size-4" />
+          New tournament
+        </Link>
+      ) : null}
+    </>
   );
 }
 
@@ -566,9 +679,24 @@ export function RegistrationDecisionPill({ decision }: { decision: RegistrationD
 export function WorkspaceShell({ children }: { children: ReactNode }) {
   const { tournament, tournamentId, access, accessLoading } = useTournamentContext();
   const { signedIn } = useSession();
-  const { theme, setTheme } = useTheme();
 
-  const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : SECTIONS;
+  /**
+   * The row, split by the edit right rather than by a session.
+   *
+   * Someone who may edit gets the operational sections and the three that change the
+   * tournament. Everyone else gets the read-only five: the operations without the Desk, and
+   * none of the editor acts. See `READ_ONLY_SECTIONS` for why the Desk is the odd one out.
+   */
+  const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : READ_ONLY_SECTIONS;
+  /**
+   * Where the logo goes: the first section this caller is offered.
+   *
+   * For an editor that is the Desk, which is where the work is. For anyone else it is
+   * Entries, because the Desk is not one of their sections - a logo that led somewhere the
+   * nav does not offer would be the one link on the page contradicting the row under the
+   * tournament's name.
+   */
+  const homeSection = sections[0]?.scoped ?? DESK_PATH;
   const readOnly = !accessLoading && !access.can_edit;
   /**
    * How much is waiting on the Registrations queue.
@@ -581,66 +709,105 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const registrationQueue = useTournamentRegistrationQueue(tournamentId, {
     enabled: access.can_edit,
   });
+  /**
+   * When and where, for the line under the tournament's name.
+   *
+   * The summary read rather than the tournament row: the start and end are derived from the
+   * playing days, and the page about a tournament must describe it the way the card that led
+   * to it did.
+   */
+  const summary = useTournamentSummary(tournamentId).data;
+  const meta = summary
+    ? [shortDays(summary.starts_at, summary.ends_at), summary.venue_name]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const pendingRegistrations = registrationQueue.data?.pending.length ?? 0;
 
   return (
-    <div className="min-h-screen bg-background font-body text-foreground">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 pt-2.5">
+    <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
+      {/*
+        The tournament's own header, in three parts.
+
+        The bar is the app: the brand, the way back to the public list for somebody who may not
+        edit, and the session. Under it is the tournament - its name as a title, its status, and
+        when and where it is - because the name is the thing a reader came for and used to sit
+        in the bar at the size of a menu item. The sections come last, as tabs on a rule of
+        their own.
+
+        All three are the one `header` landmark, so the tournament's name, the way back to the
+        list and the sections are found together. The header scrolls away with the page: it is
+        too tall to keep on screen, and a section is one tap from the top.
+      */}
+      <header className="border-b border-hairline bg-surface">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           {/*
             The brand goes to the tournament you are looking at, never to `/`. It used to
             point at `/` always, which after the workspace move would send an operator
             working in tournament B to whatever their pointer happened to name - possibly
             A. A logo that moves you to a different event than the one on screen is worse
-            than one that does nothing.
+            than one that does nothing. It points at the first section this caller is
+            offered, so a read-only reader lands on Entries rather than on a Desk their nav
+            does not carry.
           */}
           {tournamentId ? (
-            <Link
-              to="/tournaments/$tournamentId/desk"
-              params={{ tournamentId }}
-              className="flex items-center gap-2"
-            >
+            <Link to={homeSection} params={{ tournamentId }} className="flex items-center gap-2.5">
               <BrandMark />
             </Link>
           ) : (
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2.5">
               <BrandMark />
             </span>
           )}
 
           {/*
-            Which tournament this is. The name is truncated rather than wrapped, because a
-            long name must not push the nav onto a third line, and the status beside it is
-            the one fact a host needs before touching anything.
+            The app's own navigation, for everybody, in the position `PublicShell` puts it:
+            immediately after the brand. It is not a section of this tournament, so it does not
+            belong inside the sections landmark below. An operator gets the same Browse, My
+            tournaments and New tournament a reader of the public pages has - opening a
+            tournament must not take the rest of the app away - and a reader who arrived from
+            Explore finds the way back where the list they came from had it.
           */}
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-display text-sm font-semibold">
-              {tournament?.name ?? "Loading…"}
-            </span>
-            {tournament ? (
-              <TournamentStatusPill status={normalizeTournamentStatus(tournament.status)} />
-            ) : null}
-          </div>
+          <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
+          <PrimaryNav signedIn={signedIn} marked={false} />
 
           <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle theme={theme} onChange={setTheme} />
             <SessionBlock />
           </div>
         </div>
 
+        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight">
+              {tournament?.name ?? "Loading…"}
+            </p>
+            {tournament ? (
+              <TournamentStatusPill
+                status={normalizeTournamentStatus(tournament.status)}
+                phase={summary ? tournamentPhase(summary) : undefined}
+              />
+            ) : null}
+          </div>
+          {meta ? <p className="mt-1 break-words text-sm text-muted-foreground">{meta}</p> : null}
+        </div>
+
+        <div>
         {/*
           The section row, and the reason it is a `div` wrapping the `nav` rather than the
           `nav` itself.
 
-          Two things live on this line: the sections of the tournament you are reading, and
-          the control that changes which tournament that is. The second is not a section, so
-          it does not belong inside the sections landmark. It also anchors its panel to this
-          row, which is the last row of the header: `relative` here is what puts the panel's
-          right edge on the same container edge the nav is aligned to, and its top on the
-          header's own bottom edge. See `TournamentSwitcher` for what those two facts buy.
+          Two things have shared this line: the sections of the tournament you are reading,
+          and the control that changes which tournament that is. The second is not a section,
+          so it does not belong inside the sections landmark. It also anchors its panel to
+          this row: `relative` here is what puts the panel's right edge on the same container
+          edge the nav is aligned to, and its top on the row's own bottom edge. See
+          `TournamentSwitcher` for what those two facts buy.
         */}
-        <div className="relative mx-auto flex max-w-[1400px] flex-wrap items-center gap-1 px-4 py-2">
-          <nav aria-label="Tournament sections" className="flex flex-wrap items-center gap-1">
+        <div className="relative mx-auto flex max-w-[1400px] items-center gap-2 border-t border-hairline px-4">
+          <nav
+            aria-label="Tournament sections"
+            className="-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+          >
             {tournamentId
               ? sections.map((item) => {
                   const waiting =
@@ -650,8 +817,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                       key={item.scoped}
                       to={item.scoped}
                       params={{ tournamentId }}
-                      className={NAV_ITEM_CLASS}
-                      activeProps={{ className: NAV_ACTIVE_CLASS }}
+                      className={TAB_ITEM_CLASS}
                     >
                       {item.label}
                       {waiting > 0 ? (
@@ -667,14 +833,21 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 })
               : null}
           </nav>
-          <TournamentSwitcher currentId={tournamentId} />
+          {/*
+            The switcher, for a caller who may edit - the same split the nav beside it and
+            the public list above it follow. A reader is not left with an empty slot: the
+            thing that leaves their tournament is up in the bar.
+          */}
+          {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
+        </div>
         </div>
       </header>
 
-      <main className="mx-auto min-h-[calc(100vh-5.5rem)] max-w-[1400px] px-4 py-6">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
         {readOnly ? <ReadOnlyNotice signedIn={signedIn} /> : null}
         {children}
       </main>
+      <SiteFooter />
     </div>
   );
 }
@@ -683,8 +856,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
  * The pages that are not about one tournament.
  *
  * Sign-in, Explore, My Tournaments, the create flow and the front door. It has no
- * tournament to name and no section nav, and it renders the public nav instead - three
- * addresses that need no id, rather than the flat legacy paths that used to resolve on
+ * tournament to name and no section nav, and it renders the public nav instead - one
+ * address that needs no id, rather than the flat legacy paths that used to resolve on
  * the caller's pointer. See `PUBLIC_SECTIONS` for why that matters.
  */
 export function PublicShell({
@@ -698,38 +871,27 @@ export function PublicShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { theme, setTheme } = useTheme();
-
+  const { signedIn } = useSession();
   return (
-    <div className="min-h-screen bg-background font-body text-foreground">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-surface/85 backdrop-blur-md">
+    <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
+      <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2.5">
             <BrandMark />
           </Link>
-          <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
-            {PUBLIC_SECTIONS.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={NAV_ITEM_CLASS}
-                activeProps={{ className: NAV_ACTIVE_CLASS }}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
+          <PrimaryNav signedIn={signedIn} marked />
           <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle theme={theme} onChange={setTheme} />
             <SessionBlock />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto min-h-[calc(100vh-3.5rem)] max-w-[1400px] px-4 py-6">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
         <PageHeader title={title} subtitle={subtitle} actions={actions} />
         {children}
       </main>
+      <SiteFooter />
     </div>
   );
 }
@@ -816,7 +978,7 @@ export function Panel({
     >
       {title || right ? (
         <header className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-hairline px-4 py-2.5">
-          <h2 className="font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          <h2 className="font-display text-base font-bold tracking-tight text-foreground">
             {title}
           </h2>
           {right}
@@ -851,7 +1013,7 @@ export function StatTile({
    *
    * Phase 6 found this by scanning the desk with data in it for the first time, which
    * is the only way it could be found: on an empty tournament no tile is ever toned,
-   * so the pair was never rendered and never measured. In dark mode the label measured
+   * so the pair was never rendered and never measured. The label measured
    * 3.95:1 on the warning surface against the 4.5:1 that 12px needs - a real AA failure
    * on three tiles at once, on the row a moderator reads to decide what to do next.
    *
@@ -869,7 +1031,7 @@ export function StatTile({
         : "text-muted-foreground";
   return (
     <div className={cn("rounded-xl border p-3 shadow-panel", toneClass)}>
-      <p className={cn("text-t4 font-semibold uppercase tracking-[0.12em]", labelClass)}>{label}</p>
+      <p className={cn("text-sm font-medium", labelClass)}>{label}</p>
       <p className="mt-1 font-score text-t1 font-semibold leading-none tracking-tight">{value}</p>
       {hint ? <p className={cn("mt-1 text-t4", labelClass)}>{hint}</p> : null}
     </div>
@@ -888,7 +1050,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-hairline bg-muted/30 px-4 py-8 text-center">
       <p className="font-display text-sm font-semibold">{title}</p>
-      {hint ? <p className="max-w-md text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="max-w-md text-sm text-muted-foreground">{hint}</p> : null}
       {action}
     </div>
   );
@@ -921,11 +1083,11 @@ const STATE_CLASS: Record<string, string> = {
    * Void is the exceptional neutral, and the ring is the exception.
    *
    * A heavier, more opaque inset ring is what makes it read as marked rather
-   * than merely empty, and it is the channel that survives dark mode - where the
-   * neutral ramp is too compressed for a lightness step to separate void from
-   * scheduled at all (7.2% of luminance, against 14.2% in light). Expressing it
-   * as an edge rather than a hue keeps it inside the three-hue rule and away from
-   * the destructive red, which means disputed or destructive and nothing else.
+   * than merely empty, and it is the redundant channel that carries the exception
+   * when the lightness step between two neutrals is not enough on its own.
+   * Expressing it as an edge rather than a hue keeps it inside the three-hue rule
+   * and away from the destructive red, which means disputed or destructive and
+   * nothing else.
    */
   void: "bg-state-void-chip text-state-void-ink ring-2 ring-state-void-ink/50",
 };
@@ -1069,7 +1231,7 @@ export function StatusPill({ status }: { status: string }) {
    */
   if (!display) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-score text-t2 uppercase tracking-wider text-muted-foreground ring-1 ring-inset ring-hairline">
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-score text-t2 uppercase tracking-wide text-muted-foreground ring-1 ring-inset ring-hairline">
         {STATE_FALLBACK_GLYPH}
         {status.replace(/_/g, " ")}
       </span>
@@ -1084,7 +1246,7 @@ export function StatusPill({ status }: { status: string }) {
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 font-score text-t2 uppercase tracking-wider",
+          "inline-flex items-center gap-1 font-score text-t2 uppercase tracking-wide",
           STATE_TIER4_CLASS,
         )}
       >
@@ -1097,7 +1259,7 @@ export function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ring-1 ring-inset",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wide ring-1 ring-inset",
         STATE_CLASS[display],
       )}
     >
@@ -1127,7 +1289,7 @@ export function StatusPill({ status }: { status: string }) {
 export function ByeMarker() {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-dashed border-hairline px-2 py-0.5 font-score text-t2 uppercase tracking-wider text-muted-foreground"
+      className="inline-flex items-center gap-1 rounded-full border border-dashed border-hairline px-2 py-0.5 font-score text-t2 uppercase tracking-wide text-muted-foreground"
       title={BYE_NOTE}
     >
       {BYE_GLYPH}

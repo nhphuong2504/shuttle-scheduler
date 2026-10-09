@@ -1,0 +1,115 @@
+# Design principles
+
+Guidance for colour, type and size. This is not a rulebook and no test pins it: the
+accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
+`states.spec.ts`) are the only enforcement. Break a principle when a screen needs it, and say
+why in the PR.
+
+The values live in [`src/styles.css`](../src/styles.css). This file explains what they are for.
+
+## Two modes
+
+The app has two kinds of screen, and they should not feel like two products.
+
+| | **Operate** | **Watch** |
+| --- | --- | --- |
+| Screens | Desk, Scores while entering, Schedule while planning | Landing, Explore, a tournament seen read-only |
+| Reader | An operator, at a desk, mid-match, on imperfect wifi | A player or spectator, on a phone |
+| Goal | Know what needs doing, do it once, never misclick | Find a match, see the score |
+| Density | Dense, 44px targets, state is the loudest thing | Airy, one clear next step |
+
+Both share the same tokens and the same meaning of every colour. The Desk is the reference: if a
+choice works there, the Watch screens inherit it with more room.
+
+## Colour
+
+Neutral by default. A screen where nothing needs attention should look nearly grey. Colour
+appears only when it carries meaning, and one colour carries one meaning.
+
+| Role | Token | Hex | Means |
+| --- | --- | --- | --- |
+| Ground | `--background` | `#F4F5F4` | The page |
+| Surface | `--surface`, `--card` | `#FFFFFF` | Cards and panels |
+| Text | `--foreground` | `#171A1D` | Primary text |
+| Text, secondary | `--muted-foreground` | `#5B656C` | Supporting text, captions |
+| Hairline | `--border` | `#D9DDDF` | Decorative edges only |
+| Control edge | `--border-control` | `#7F8A91` | Anything the user must locate: inputs, selects |
+| Interaction | `--primary` | `#5B4FC7` | Buttons, links, active nav, selected tab |
+| Live | `--state-live-chip` | `#D8FF4F` | A match or court that is playing right now |
+| Success | `--success` | `#16865C` | Fill only. Healthy, completed |
+| Warning | `--warn-*` | amber | Delayed, needs attention |
+| Danger | `--destructive`, `--danger-*` | red | Overrun, error, destructive action |
+
+Rules:
+
+- **Violet is for interaction and nothing else.** If a thing is not clickable and not selected,
+  it is not violet. A "ready" court tinted violet is acceptable because it is an action waiting.
+- **Lime is for realtime and never stands alone.** It is 1.15:1 against white, so a lime chip
+  always carries a ring and ink text, and lime is never text, a border or an icon on a light surface.
+- **Success, warning and danger each have two forms.** A saturated fill (a button, a dot, an
+  icon) and a darker ink for text. Do not use the fill as text: amber `#C97812` is 3.4:1 on white,
+  the text ink `#8F5300` is 5.5:1.
+- **A filled control darkens on hover, and never lightens.** The fill exists to carry white text
+  at 4.5:1, and lightening it spends that headroom. `--destructive` is 4.93:1 at rest, so the
+  shadcn `hover:bg-destructive/90` default composited to 4.22:1 — under the floor, in the one
+  state a pointer left resting on a control produces. Hover therefore moves *toward* the ink
+  (`--primary-hover` 8.76:1, `--destructive-hover` 6.31:1) rather than away from it, so the
+  hovered state can never be the state that fails. Lightness moves and the hue does not, so the
+  control reads as the same colour pressed in.
+- **Colour is never the only signal.** Every state also has a word and a glyph. Green and red
+  are close under red-green colour blindness, so completed and overrun must differ by label and
+  icon, not by hue.
+- **Do not add a hue.** Five semantic colours and a neutral ground is the budget. A new need
+  usually means a new label, not a new colour.
+- **Large tinted areas stay pale.** A tinted tile is a wash, not a block. Saturated surfaces are
+  for the single primary action on a screen.
+
+## Court state
+
+The five derived states in `src/lib/tournament/court-state.ts`. Each has a label, a glyph and
+a colour, so a wall of eight courts can be read without reading any of them.
+
+| State | Reads as | Colour |
+| --- | --- | --- |
+| Playing | A match is on | Lime chip with ring, white tile |
+| Overrun | On court past its slot | Danger |
+| Ready | Free, next match can start | Violet wash |
+| Waiting | Free, waiting for players | Warning |
+| Idle | Free, nothing queued | Neutral |
+
+## Type
+
+Two families: **Bricolage Grotesque** (`font-display`) for page titles, panel titles and court
+numbers, **Instrument Sans** for everything else.
+
+- **Body and controls: 14px minimum, 16px for what is read on the move.** Names on a court tile,
+  rows in Act now and match names in dialogs are 16px. 12px is for tertiary detail only
+  (a timestamp, a footnote) and never for navigation, labels or buttons.
+- **Labels are sentence case.** Do not set labels in uppercase with wide tracking. It is slower to
+  read and the old 12px uppercase labels were the smallest text on the Desk.
+- **Chrome is not smaller than content.** Navigation, panel titles and column headers are at
+  least as large as the rows they label.
+- **Numbers use tabular figures** (`tabular-nums`): times, scores, counts, progress. Columns
+  must line up while values change.
+- **Scores and court numbers are the largest type on an Operate screen.** Score inputs are 30px,
+  a court number is the first thing in its tile.
+
+Scale in use on the Desk: panel title 16px bold, nav 14px semibold, body and chips 14px, names
+16px semibold, dialog title 24px, score input 30px bold.
+
+## Size and space
+
+- **Targets are 44px minimum on Operate screens**: nav links, day selector, Refresh, rows in Act
+  now, dialog buttons and inputs. Watch screens follow the same floor on a phone.
+- **Primary action in a dialog is 48px** and full width.
+- **Corners:** the base radius is 16px. Dense tiles and rows use less, cards use it.
+- **One primary action per tile or dialog.** Secondary and exceptional actions (walkover, void)
+  are visually quieter and sit apart, and anything destructive asks for confirmation.
+- **Do not move things when data changes.** Realtime updates change content, not layout.
+
+## Not decided
+
+- A dark theme. It was removed on purpose; a dark Desk is an open question for dim halls.
+- The Watch screens' final layout (Landing, Explore). A mockup exists but is not built.
+- Whether the type scale tokens in `styles.css` (`--type-t1` to `--type-t4`) should move to match
+  the sizes above. The Desk currently sets sizes with utility classes.

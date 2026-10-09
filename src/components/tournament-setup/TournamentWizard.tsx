@@ -1,18 +1,34 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
-import { ReviewStep } from "@/components/tournament-setup/ReviewStep";
+import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
 import { StructureStep } from "@/components/tournament-setup/StructureStep";
-import { hydrateForm } from "@/components/tournament-setup/hydrate";
 import {
-  MAX_TOURNAMENT_DAYS,
+  hydrateForm,
+  registrationOrigin,
+  type RegistrationOrigin,
+} from "@/components/tournament-setup/hydrate";
+import {
+  clearLocalDraft,
+  loadLocalDraft,
+  saveLocalDraft,
+} from "@/components/tournament-setup/local-draft";
+import {
+  effectiveRegistration,
+  localChecks,
+  problemsForStep,
+} from "@/components/tournament-setup/problems";
+import {
   SETUP_STEPS,
   defaultForm,
   setupStepIndex,
+  setupSteps,
   type DraftForm,
   type SetupStep,
 } from "@/components/tournament-setup/types";
@@ -20,74 +36,72 @@ import { Button } from "@/components/ui/button";
 import {
   isConfigurable,
   normalizeTournamentStatus,
-  tournamentStatusLabel,
   type TournamentStatus,
 } from "@/lib/auth/authorization";
 import {
   completeTournament,
   createTournament,
   discardTournament,
+  fetchCompletionCheck,
   saveTournamentConfig,
-  saveTournamentDays,
   saveTournamentEvents,
-  setCurrentTournament,
-  startTournament,
+  setRegistrationWindow,
+  updateTournamentDetails,
+  updateTournamentWindow,
   type TournamentDraftInput,
 } from "@/lib/tournament/actions";
-import {
-  useTournamentDraftData,
-  useTournamentReadiness,
-} from "@/lib/tournament/data";
+import { useTournamentDraftData, useTournamentReadiness } from "@/lib/tournament/data";
+import { zonedToInstant } from "@/lib/tournament/zoned-time";
 import { cn } from "@/lib/utils";
 
 /**
  * The tournament wizard: details, events, structure, review.
  *
  * It exists as one component because there is one wizard. Creating a tournament and
- * configuring one are the same four steps asked against the same row - the only difference
- * is whether the row exists yet - and S5 splits the *address* rather than the flow:
- * `/tournaments/new` creates, `/tournaments/$id/settings` configures, and both render
- * this. Two copies of the steps would be two places for the day rules, the event rules and
- * the save order to drift apart, and a host would meet the drift as a tournament that
- * refuses to start for a reason one of the copies does not know about.
+ * setting one up are the same four steps; the difference is what "continue" does.
+ * `/tournaments/new` creates and `/tournaments/$id/settings` sets up, and both render this.
+ * Two copies of the steps would be two places for the date rules, the event rules and the
+ * registration rules to drift apart.
+ *
+ * ## Creating: nothing is stored until the end
+ *
+ * A tournament is created complete or not at all. While it is being made the answers live
+ * in this component and, as insurance against a reload or a flat battery, in the browser's
+ * session storage (see `local-draft.ts`). "Continue" only moves between steps. The one act
+ * that touches the database is "Create tournament" on the last step, which sends everything
+ * in a single call, so there is never a half-made tournament for anyone else to find.
+ *
+ * ## Setting up: each step saves itself
+ *
+ * Once the tournament exists the steps write straight to it, and the database refuses every
+ * write from a tournament that is no longer upcoming. A tournament that has started cannot
+ * change its events, caps or format, so the wizard shows what can still change (its name,
+ * venue and last day) and the end of it, and says why the rest is gone.
  *
  * ## It owns the step, the route owns the address
  *
- * `step` arrives as a prop and every move is reported through `onStepChange`, so the
- * caller decides whether the position lives in a search param (`/tournaments/new?step=…`)
- * or in the route's own scope (`?step=…` under an existing tournament). The wizard never
- * navigates on its own except where the destination is fixed by what just happened: a
- * discarded tournament is gone, so it leaves; a started one belongs on its Desk.
- *
- * ## Why the first save creates the row
- *
- * The tournament is written on the first "Save and continue" rather than held in memory
- * until the end, so an unfinished creation survives a refresh, a flat battery or wifi
- * dropping out. Every later step writes into the same row. `startTournament` is the only
- * thing that moves it out of `upcoming`, and the database refuses every write below from a
- * tournament that has started - so a wizard left open across a start is refused rather than
- * silently rewriting a live event.
+ * `step` arrives as a prop and every move is reported through `onStepChange`, so the caller
+ * decides whether the position lives in a search param. The wizard navigates on its own only
+ * where the destination is fixed by what just happened: a created tournament belongs on its
+ * own page, a discarded one is gone.
  */
 export interface TournamentWizardProps {
-  /** The tournament being configured, or null while one is being created. */
+  /** The tournament being set up, or null while one is being created. */
   tournamentId: string | null;
   /** Which step to show. Owned by the caller so it can live in the URL. */
   step: SetupStep;
   onStepChange: (step: SetupStep) => void;
-  /**
-   * Called once, with the id of a tournament this wizard has just created and the step to
-   * continue on, so the caller can move the address to the new tournament's own settings.
-   */
-  onCreated?: ((tournamentId: string, nextStep: SetupStep) => void) | undefined;
 }
 
 /**
- * Maps the wizard form onto the payload the draft RPCs accept.
+ * Maps the wizard form onto the payload the config RPCs accept.
  *
  * Match lengths, rest gaps and scoring rules are deliberately absent: the row is created
  * with usable defaults, and the Schedule page owns them from the first build onward.
  * Leaving them out here also means the wizard cannot overwrite a tournament's timings with
- * stale form state.
+ * stale form state. The registration window is absent too: it has its own writer, because
+ * its rules (an opening time that cannot move once passed, a deadline that cannot be
+ * extended under a schedule) belong to it alone.
  */
 function toDraftInput(form: DraftForm): TournamentDraftInput {
   return {
@@ -104,106 +118,127 @@ function toDraftInput(form: DraftForm): TournamentDraftInput {
   };
 }
 
-export function TournamentWizard({
-  tournamentId,
-  step,
-  onStepChange,
-  onCreated,
-}: TournamentWizardProps) {
+/** The registration window as instants, or null when it is switched off or unreadable. */
+function registrationInstants(
+  form: DraftForm,
+  origin: RegistrationOrigin | null,
+): { opens: string; closes: string } | null {
+  if (!form.registration.enabled) return null;
+  const zone = form.basics.venueTimezone;
+  const { opensAt, closesAt } = effectiveRegistration(form);
+  // An untouched field keeps the stored instant: the form holds minutes, the database
+  // microseconds, and rounding an opening time that has already passed would look like a
+  // change to it.
+  const opens =
+    origin?.opensAt && opensAt === origin.opensLocal ? origin.opensAt : zonedToInstant(opensAt, zone);
+  const closes =
+    origin?.closesAt && closesAt === origin.closesLocal
+      ? origin.closesAt
+      : zonedToInstant(closesAt, zone);
+  return opens && closes ? { opens, closes } : null;
+}
+
+export function TournamentWizard({ tournamentId, step, onStepChange }: TournamentWizardProps) {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  /**
-   * The id a fresh creation acquired.
-   *
-   * Held here rather than sent back through the caller because the caller may not have
-   * moved the address yet, and the remaining steps of *this* save still have to name the
-   * row they are writing into. `tournamentId` wins when it is set, so a wizard rendered
-   * under an existing tournament never looks at this.
-   */
-  const [createdId, setCreatedId] = useState<string | null>(null);
-  const draftId = tournamentId ?? createdId;
-  const isNew = !draftId;
+  const isNew = !tournamentId;
 
-  const draftData = useTournamentDraftData(draftId);
-  const readinessQuery = useTournamentReadiness(draftId);
+  const draftData = useTournamentDraftData(tournamentId);
+  const readinessQuery = useTournamentReadiness(tournamentId);
 
   const [form, setForm] = useState<DraftForm>(defaultForm);
   const [busy, setBusy] = useState(false);
+  /** The Complete dialog, which counts what is left to play each time it opens. */
+  const [completing, setCompleting] = useState(false);
+  const completion = useQuery({
+    queryKey: ["completion-check", tournamentId],
+    queryFn: () => fetchCompletionCheck(tournamentId as string),
+    enabled: completing && !!tournamentId,
+    // Counted fresh every time: a match may have gone on court since the page loaded.
+    staleTime: 0,
+    gcTime: 0,
+  });
+  /**
+   * Whether the host has pressed "continue" on this step with something missing.
+   *
+   * Problems are drawn beside their fields only after that. A form that complains before
+   * anybody has typed in it is telling the host they have already done something wrong; one
+   * that waits until they try to move on is telling them what is missing.
+   */
+  const [attempted, setAttempted] = useState(false);
+  /** True once the saved answers (if any) have been read back, so they are not overwritten. */
+  const [draftRead, setDraftRead] = useState(false);
   const hydratedFor = useRef<string | null>(null);
+  const origin = useRef<RegistrationOrigin | null>(null);
 
   const currentIndex = setupStepIndex(step);
+  const steps = setupSteps(!isNew);
 
-  // Load a persisted tournament into the form exactly once per id, so a background refetch
-  // can never overwrite what the host is typing.
+  // Creating: read back what was typed before a reload, once, after the page has mounted
+  // (storage does not exist on the server), then keep it up to date.
   useEffect(() => {
-    if (!draftId) {
+    if (!isNew) return;
+    const saved = loadLocalDraft();
+    if (saved) setForm(saved);
+    setDraftRead(true);
+  }, [isNew]);
+
+  useEffect(() => {
+    if (isNew && draftRead) saveLocalDraft(form);
+  }, [form, isNew, draftRead]);
+
+  // Setting up: load the stored tournament into the form exactly once per id, so a
+  // background refetch can never overwrite what the host is typing.
+  useEffect(() => {
+    if (!tournamentId) {
       hydratedFor.current = null;
       return;
     }
-    if (hydratedFor.current === draftId) return;
+    if (hydratedFor.current === tournamentId) return;
     if (draftData.isLoading || !draftData.tournament) return;
-    setForm(
-      hydrateForm(
-        draftData.tournament,
-        draftData.days,
-        draftData.courts,
-        draftData.dayCourts,
-        draftData.dayBreaks,
-        draftData.categories,
-      ),
-    );
-    hydratedFor.current = draftId;
-  }, [draftId, draftData]);
+    setForm(hydrateForm(draftData.tournament, draftData.categories));
+    origin.current = registrationOrigin(draftData.tournament);
+    hydratedFor.current = tournamentId;
+  }, [tournamentId, draftData]);
 
   const patchForm = (patch: Partial<DraftForm>) => setForm((prev) => ({ ...prev, ...patch }));
 
+  /** Moving between steps starts a clean attempt: the next step has not been tried yet. */
+  const goTo = (next: SetupStep) => {
+    setAttempted(false);
+    onStepChange(next);
+  };
+
   const problems = useMemo(() => problemsForStep(step, form), [step, form]);
 
-  /**
-   * Whether the configuration can still be changed, which is exactly "is it upcoming".
-   *
-   * The rename from `draftStillEditable` is not cosmetic: `draft` was a lifecycle state and
-   * `upcoming` is the one that replaced it, so the question is about the lifecycle again
-   * rather than about a wizard artifact.
-   */
   const tournamentStatus: TournamentStatus = normalizeTournamentStatus(
     draftData.tournament?.status,
   );
+  /** Whether the events, caps and format can still change: the tournament is upcoming. */
   const configEditable = isNew || isConfigurable(tournamentStatus);
 
   const refresh = () => qc.invalidateQueries();
 
-  /** Saves whatever the current step owns, then advances. */
+  /** Continues. While creating that only moves on; once it exists it saves the step first. */
   const saveAndContinue = async () => {
     if (problems.length) {
-      toast.error(problems[0] ?? "Check this step.");
+      setAttempted(true);
       return;
     }
+    const next = SETUP_STEPS[Math.min(currentIndex + 1, SETUP_STEPS.length - 1)];
+    const nextStep: SetupStep = next ? next.id : "review";
+
+    if (!tournamentId) {
+      goTo(nextStep);
+      return;
+    }
+
     setBusy(true);
     try {
-      const next = SETUP_STEPS[Math.min(currentIndex + 1, SETUP_STEPS.length - 1)];
-      const nextStep: SetupStep = next ? next.id : "review";
-
-      let id = draftId;
-      let justCreated = false;
-      if (!id) {
-        id = await createTournament(toDraftInput(form));
-        setCreatedId(id);
-        hydratedFor.current = id;
-        justCreated = true;
-        // The first step now owns the dates too, so they are saved with the tournament.
-        await saveTournamentDays(id, form.days);
-      } else {
-        await saveStep(step, id, form);
-      }
-
+      await saveStep(step, tournamentId, form, origin.current);
       await refresh();
-
-      // Advancing past the first step means the tournament now exists, so the caller must
-      // move the address to carry its id or a refresh would lose the position.
-      if (justCreated && onCreated) onCreated(id, nextStep);
-      else onStepChange(nextStep);
+      goTo(nextStep);
       toast.success("Saved");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save");
@@ -213,31 +248,47 @@ export function TournamentWizard({
   };
 
   /**
-   * Upcoming -> In Progress.
+   * Creates the tournament: everything at once, or nothing.
    *
-   * The readiness gate and the start-time floor are both enforced by the RPC, and this
-   * deliberately does not pre-empt either: the refusal carries the venue-local start time,
-   * and a client-side check could only replace that with a vaguer message or disagree with
-   * it. The checklist above the button is information; the button is the real attempt.
-   *
-   * Making it the working tournament afterwards is the successor to what the old activate
-   * did globally. It is per user now, so starting a tournament changes what this person
-   * sees and nobody else's desk.
+   * Every step is checked here, not only the one on screen, because the host can reach
+   * Review without visiting a step. The database checks again and its refusal names what is
+   * missing; the point of the client checks is to say so before the round trip.
    */
-  const start = async () => {
-    if (!draftId) return;
+  const create = async () => {
+    const all = [
+      ...problemsForStep("details", form),
+      ...problemsForStep("events", form),
+    ];
+    if (all.length) {
+      setAttempted(true);
+      toast.error(all[0] ?? "Check the steps first");
+      return;
+    }
+    const registration = registrationInstants(form, null);
+    if (form.registration.enabled && !registration) {
+      toast.error("Check the registration times.");
+      return;
+    }
     setBusy(true);
     try {
-      await startTournament(draftId);
-      await setCurrentTournament(draftId);
+      const id = await createTournament({
+        ...toDraftInput(form),
+        startsOn: form.startsOn,
+        endsOn: form.endsOn,
+        events: form.events,
+        registrationOpensAt: registration?.opens ?? null,
+        registrationClosesAt: registration?.closes ?? null,
+      });
+      clearLocalDraft();
       await refresh();
-      toast.success("Tournament started");
+      toast.success("Tournament created");
       void navigate({
-        to: "/tournaments/$tournamentId/desk",
-        params: { tournamentId: draftId },
+        to: "/tournaments/$tournamentId",
+        params: { tournamentId: id },
+        replace: true,
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not start the tournament");
+      toast.error(error instanceof Error ? error.message : "Could not create the tournament");
     } finally {
       setBusy(false);
     }
@@ -245,10 +296,11 @@ export function TournamentWizard({
 
   /** In Progress -> Completed. Terminal apart from a platform admin's repair paths. */
   const complete = async () => {
-    if (!draftId) return;
+    if (!tournamentId) return;
     setBusy(true);
     try {
-      await completeTournament(draftId);
+      await completeTournament(tournamentId);
+      setCompleting(false);
       await refresh();
       toast.success("Tournament completed");
     } catch (error) {
@@ -259,224 +311,347 @@ export function TournamentWizard({
   };
 
   /**
-   * Discards an upcoming tournament and everything it owns.
+   * Throws the answers away (while creating) or deletes the tournament (once it exists and
+   * is still upcoming).
    *
-   * Available only while upcoming, which is exactly what protects a start-line mistake.
-   * Deleting a tournament that has already started is the explicitly destructive path, and
-   * it lives on the tournament's card in My Tournaments rather than here - a button whose
-   * only job is to destroy a live event does not belong in the flow that configures one.
-   *
-   * The page cannot stay where it is afterwards: the tournament it is about no longer
-   * exists, and the workspace layout would 404 on the address. So this leaves, and the
-   * successor to "the tournament you were just in" is the caller's own list.
+   * Deleting a tournament that has already started is the explicitly destructive path, and it
+   * lives on the tournament's card in My Tournaments rather than here - a button whose only
+   * job is to destroy a live event does not belong in the flow that sets one up.
    */
   const discard = async () => {
-    if (!draftId) return;
+    if (!tournamentId) {
+      if (!window.confirm("Discard these answers? Nothing has been created yet.")) return;
+      clearLocalDraft();
+      setForm(defaultForm());
+      goTo("details");
+      toast.success("Answers discarded");
+      return;
+    }
     if (!window.confirm("Discard this tournament? Everything configured so far is deleted.")) return;
     setBusy(true);
     try {
-      await discardTournament(draftId);
+      await discardTournament(tournamentId);
       await refresh();
       toast.success("Tournament discarded");
       void navigate({ to: "/me/tournaments", replace: true });
     } catch (error) {
-      // An attempt to discard a tournament that has already started is refused here, and
-      // the refusal is the useful message.
       toast.error(error instanceof Error ? error.message : "Could not discard the tournament");
     } finally {
       setBusy(false);
     }
   };
 
-  /**
-   * The final step's props, assembled once.
-   *
-   * The readiness answer is the same function the start RPC re-runs, so the checklist the
-   * host reads and the refusal they might get cannot disagree. `hasTournament` is what
-   * disables the lifecycle buttons while a first step has not been saved yet, and it is why
-   * this is a wizard concern rather than a review-step one.
-   */
-  const reviewProps = {
-    form,
-    readiness: readinessQuery.data,
-    readinessError: readinessQuery.error instanceof Error ? readinessQuery.error.message : null,
-    busy,
-    hasTournament: !!draftId,
-    status: tournamentStatus,
-    onStart: () => void start(),
-    onComplete: () => void complete(),
-    onDiscard: () => void discard(),
+  /** After the tournament has started: what can still change, saved on its own. */
+  const saveLiveDetails = async () => {
+    if (!tournamentId) return;
+    const found = problemsForStep("details", form);
+    if (found.length) {
+      setAttempted(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      // The last date first: it is the one the database may refuse, and it names why.
+      if (form.endsOn !== String(draftData.tournament?.ends_on).slice(0, 10)) {
+        await updateTournamentWindow(tournamentId, form.startsOn, form.endsOn);
+      }
+      await updateTournamentDetails(tournamentId, toDraftInput(form));
+      await refresh();
+      toast.success("Saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
   };
 
+  /**
+   * The review step's checks: the form's own while the tournament does not exist, the
+   * database's once it does. The database's are the same function that decides whether
+   * registration can open, so the list and the behaviour cannot disagree.
+   */
+  const checks: ReviewCheck[] = isNew
+    ? localChecks(form)
+    : (readinessQuery.data?.checks ?? []).map((check) => ({
+        id: check.id,
+        label: check.label,
+        ok: check.ok,
+        detail: check.detail ?? null,
+        blocking: check.blocking,
+      }));
+
+  const reviewProps = {
+    mode: isNew ? ("create" as const) : ("existing" as const),
+    form,
+    checks,
+    loading: isNew ? false : !readinessQuery.data && !readinessQuery.error,
+    error: readinessQuery.error instanceof Error ? readinessQuery.error.message : null,
+    busy,
+    status: tournamentStatus,
+    onCreate: () => void create(),
+    onComplete: () => setCompleting(true),
+    onDiscard: () => void discard(),
+    onGoToStep: configEditable ? goTo : undefined,
+  };
+
+  const registrationOpened = Boolean(
+    origin.current?.opensAt && Date.parse(origin.current.opensAt) <= Date.now(),
+  );
+
   return (
-    <div className="wizard-flow mx-auto w-full max-w-3xl">
+    <div className="wizard-flow mx-auto w-full max-w-[64rem]">
+      <CompleteDialog
+        open={completing}
+        onOpenChange={setCompleting}
+        name={draftData.tournament?.name ?? form.basics.name}
+        check={completion.data}
+        loading={completing && completion.isPending}
+        error={completion.error instanceof Error ? completion.error.message : null}
+        busy={busy}
+        onConfirm={() => void complete()}
+      />
       {configEditable ? (
-        <>
-          <ol className="mb-5 flex items-center gap-2">
-            {SETUP_STEPS.map((entry, index) => {
-              const isCurrent = entry.id === step;
-              const isDone = index < currentIndex && !!draftId;
-              return (
-                <li key={entry.id} className="flex flex-1 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onStepChange(entry.id)}
-                    aria-current={isCurrent ? "step" : undefined}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
-                      isCurrent
-                        ? "border-border-selected bg-primary/10"
-                        : "border-hairline bg-surface hover:bg-muted/60",
-                    )}
-                  >
-                    <span
+        <div className="grid items-start gap-6 lg:grid-cols-[16.25rem_minmax(0,1fr)] lg:gap-10">
+          {/*
+            Where you are, as a rail on a wide screen and a bar on a narrow one.
+
+            The rail names each step and says what it is for in a line, marks the ones that are
+            done, and marks a finished step that still needs something - so a host who skipped
+            ahead sees where to go back to. It is a list of buttons because moving between
+            steps is a deliberate act.
+          */}
+          <nav aria-label="Setup steps" className="hidden lg:sticky lg:top-24 lg:block">
+            <ol className="space-y-1.5">
+              {steps.map((entry, index) => {
+                const isCurrent = entry.id === step;
+                const visited = index < currentIndex;
+                const needs = visited && problemsForStep(entry.id, form).length > 0;
+                const isDone = visited && !needs;
+                return (
+                  <li key={entry.id}>
+                    <button
+                      type="button"
+                      onClick={() => goTo(entry.id)}
+                      aria-current={isCurrent ? "step" : undefined}
                       className={cn(
-                        "grid size-5 shrink-0 place-items-center rounded-full font-score text-t4 font-bold",
+                        "flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
                         isCurrent
-                          ? "bg-primary text-primary-foreground"
-                          : isDone
-                            ? "bg-primary/50 text-foreground"
-                            : "bg-muted text-muted-foreground",
+                          ? "border-border-selected bg-surface"
+                          : "border-transparent hover:bg-muted/60",
                       )}
                     >
-                      {isDone ? "✓" : index + 1}
-                    </span>
-                    <span
-                      className={cn(
-                        "truncate text-sm font-semibold",
-                        isCurrent ? "text-foreground" : "text-muted-foreground",
-                      )}
-                    >
-                      {entry.label}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-
-          {step === "details" ? (
-            <DetailsStep form={form} onChange={patchForm} isNew={isNew} />
-          ) : null}
-          {step === "events" ? <EventsStep form={form} onChange={patchForm} /> : null}
-          {step === "structure" ? <StructureStep /> : null}
-          {step === "review" ? <ReviewStep {...reviewProps} /> : null}
-
-          {step !== "review" && problems.length ? (
-            <div className="mt-4 rounded-xl border border-warn-border bg-warn-surface px-4 py-3">
-              <ul className="space-y-1">
-                {problems.map((problem) => (
-                  <li key={problem} className="flex items-start gap-2 text-xs text-warn-foreground">
-                    <span aria-hidden className="mt-1 size-1.5 shrink-0 rounded-full bg-current" />
-                    {problem}
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded-full font-score text-sm font-bold",
+                          isCurrent
+                            ? "bg-primary text-primary-foreground"
+                            : needs
+                              ? "bg-warn-surface text-warn-foreground"
+                              : isDone
+                                ? "bg-success/15 text-foreground"
+                                : "bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {isCurrent ? index + 1 : needs ? "!" : isDone ? "✓" : index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span
+                          className={cn(
+                            "block text-base font-semibold",
+                            isCurrent || isDone || needs ? "text-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {entry.label}
+                        </span>
+                        <span
+                          className={cn(
+                            "mt-0.5 block text-sm",
+                            needs ? "font-semibold text-warn-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {needs ? "Needs one more thing" : entry.hint}
+                        </span>
+                      </span>
+                    </button>
                   </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+                );
+              })}
+            </ol>
+            <p className="mt-4 flex items-center gap-2 px-3.5 text-sm text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className={cn("size-2 rounded-full", isNew ? "bg-border-control" : "bg-success")}
+              />
+              {isNew ? "Kept on this device. Created at the end." : "Saved as you go."}
+            </p>
+          </nav>
 
-          <div className="sticky bottom-0 z-20 mt-4 -mx-1 flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-surface/90 px-4 py-3 shadow-raise backdrop-blur-md">
-            {currentIndex > 0 ? (
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  const previous = SETUP_STEPS[currentIndex - 1];
-                  if (previous) onStepChange(previous.id);
-                }}
-              >
-                ← Back
-              </Button>
+          <div className="lg:hidden">
+            <p className="flex justify-between gap-3 text-sm text-muted-foreground">
+              <strong className="text-foreground">
+                Step {currentIndex + 1} of {steps.length} · {steps[currentIndex]?.label}
+              </strong>
+              <span>{isNew ? "Kept on this device" : "Saved as you go"}</span>
+            </p>
+            <div aria-hidden="true" className="mt-2 grid grid-cols-4 gap-1.5">
+              {steps.map((entry, index) => (
+                <span
+                  key={entry.id}
+                  className={cn(
+                    "h-1.5 rounded-full",
+                    index <= currentIndex ? "bg-primary" : "bg-hairline",
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="min-w-0 max-w-3xl">
+            {step === "details" ? (
+              <DetailsStep form={form} onChange={patchForm} isNew={isNew} showErrors={attempted} />
             ) : null}
-            <span className="font-score text-t4 text-muted-foreground">
-              Step {currentIndex + 1} / {SETUP_STEPS.length}
-            </span>
-            <div className="ml-auto flex items-center gap-3">
+            {step === "events" ? (
+              <EventsStep
+                form={form}
+                onChange={patchForm}
+                showErrors={attempted}
+                registrationOpened={registrationOpened}
+              />
+            ) : null}
+            {step === "structure" ? <StructureStep /> : null}
+            {step === "review" ? <ReviewStep {...reviewProps} /> : null}
+
+            {step !== "review" && attempted && problems.length ? (
+              <div
+                role="alert"
+                className="mt-5 rounded-xl border border-danger-border bg-danger-surface px-4 py-3"
+              >
+                <p className="text-base font-semibold text-danger-foreground">
+                  {problems.length === 1 ? "One thing to fix to continue" : "Things to fix to continue"}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {problems.map((problem) => (
+                    <li key={problem} className="text-sm text-foreground">
+                      {problem}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {/*
+              The step's buttons, kept at the foot of the window. A step can be taller than the
+              screen, and "continue" should not be a long scroll away from the field a host has
+              just finished. The bar is flat - a rule and a surface, no shadow - so it reads as
+              the edge of the form rather than as something floating over it, and the wizard's
+              scroll margin (`--action-bar-clearance`) keeps a focused field clear of it.
+            */}
+            <div className="sticky bottom-0 z-20 -mx-4 mt-6 flex items-center gap-3 border-t border-hairline bg-surface px-4 py-3 lg:mx-0 lg:rounded-2xl lg:border lg:px-5">
+              {currentIndex > 0 ? (
+                <Button
+                  variant="outline"
+                  className="h-12 px-5"
+                  disabled={busy}
+                  onClick={() => {
+                    const previous = SETUP_STEPS[currentIndex - 1];
+                    if (previous) goTo(previous.id);
+                  }}
+                >
+                  ← Back
+                </Button>
+              ) : null}
+              <span className="hidden text-sm text-muted-foreground lg:inline">
+                Step {currentIndex + 1} of {steps.length}
+              </span>
               {step !== "review" ? (
-                <Button disabled={busy} onClick={saveAndContinue}>
-                  {busy ? "Saving…" : isNew ? "Create and continue" : "Save and continue →"}
+                <Button
+                  className="ml-auto h-12 flex-1 px-7 text-base font-semibold lg:flex-none"
+                  disabled={busy}
+                  onClick={saveAndContinue}
+                >
+                  {busy ? "Saving…" : isNew ? "Continue →" : "Save and continue →"}
                 </Button>
               ) : null}
             </div>
           </div>
-        </>
+        </div>
       ) : (
-        <>
+        <div className="max-w-3xl space-y-5">
           {/*
-            A started tournament's configuration is fixed, and the database refuses these
-            writes rather than this notice doing so. Rendering the steps as editable fields
-            that could only fail would be a form that lies, so the wizard shows the one step
-            that still has actions and says where the rest moved to.
+            A started tournament's events, caps and format are fixed, and the database
+            refuses those writes rather than this notice doing so. Rendering them as editable
+            fields that could only fail would be a form that lies, so what can still change is
+            shown as a form, and the rest is said once, here.
           */}
-          <div className="mb-4 rounded-xl border border-info-border bg-info-surface px-4 py-3 text-xs text-info-foreground">
-            This tournament is {tournamentStatusLabel(tournamentStatus)}, so its name, dates and
-            events can no longer be changed. Courts, timings and scoring are adjusted on the Schedule
-            page. The checks below still say whether it is ready.
+          <div className="rounded-xl border border-info-border bg-info-surface px-4 py-3 text-sm text-info-foreground">
+            {tournamentStatus === "completed"
+              ? "This tournament is completed, so nothing here can change."
+              : "This tournament has started, so its events, entry caps and format are fixed, and so are its first day and timezone. Its name, venue and last day can still change. Playing days, courts and timings are adjusted on the Schedule page."}
           </div>
+          <DetailsStep
+            form={form}
+            onChange={patchForm}
+            isNew={false}
+            showErrors={attempted}
+            lock={{
+              all: tournamentStatus === "completed",
+              start: true,
+              timezone: true,
+            }}
+          />
+          {tournamentStatus === "completed" ? null : (
+            <div className="flex justify-end">
+              <Button className="h-12 px-7 text-base" disabled={busy} onClick={saveLiveDetails}>
+                {busy ? "Saving…" : "Save details"}
+              </Button>
+            </div>
+          )}
           <ReviewStep {...reviewProps} />
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-async function saveStep(step: SetupStep, id: string, form: DraftForm): Promise<void> {
+/** Saves what one step of an existing tournament owns. */
+async function saveStep(
+  step: SetupStep,
+  id: string,
+  form: DraftForm,
+  origin: RegistrationOrigin | null,
+): Promise<void> {
   switch (step) {
     case "details":
-      // The first step owns the name, venue, timezone and the dates.
+      // The window first: it is the write the database is most likely to refuse (a playing
+      // day would fall outside it), and its message names the day.
+      await updateTournamentWindow(id, form.startsOn, form.endsOn);
       await saveTournamentConfig(id, toDraftInput(form));
-      await saveTournamentDays(id, form.days);
       return;
-    case "events":
+    case "events": {
       await saveTournamentConfig(id, toDraftInput(form));
       await saveTournamentEvents(id, form.events);
+      await saveRegistration(id, form, origin);
       return;
+    }
     default:
       await saveTournamentConfig(id, toDraftInput(form));
       return;
   }
 }
 
-/** Client-side checks per step. The database re-validates everything. */
-function problemsForStep(step: SetupStep, form: DraftForm): string[] {
-  const issues: string[] = [];
-
-  if (step === "details") {
-    if (!form.basics.name.trim()) issues.push("Give the tournament a name.");
-    if (!form.basics.venueTimezone.trim()) issues.push("Choose a timezone.");
-    if (form.days.length === 0) issues.push("Pick the first day.");
-    if (form.days.length > MAX_TOURNAMENT_DAYS) {
-      issues.push(`A tournament can span at most ${MAX_TOURNAMENT_DAYS} days.`);
-    }
-    const dates = new Set<string>();
-    for (const day of form.days) {
-      if (!day.date) {
-        issues.push("Every tournament day needs a date.");
-        continue;
-      }
-      if (dates.has(day.date)) issues.push(`Two days use ${day.date}.`);
-      dates.add(day.date);
-    }
-    return issues;
+/** Writes the registration window if the host changed it, and only then. */
+async function saveRegistration(
+  id: string,
+  form: DraftForm,
+  origin: RegistrationOrigin | null,
+): Promise<void> {
+  const next = registrationInstants(form, origin);
+  if (!form.registration.enabled) {
+    if (origin?.opensAt || origin?.closesAt) await setRegistrationWindow(id, null, null);
+    return;
   }
-
-  if (step === "events") {
-    if (form.events.length === 0) issues.push("Add at least one event.");
-    const codes = form.events.map((event) => event.code);
-    if (new Set(codes).size !== codes.length) issues.push("Two events share a code.");
-    for (const event of form.events) {
-      if (event.gender === "mixed" && event.entryType !== "pair") {
-        issues.push(`${event.code} is mixed, so it must be a doubles event.`);
-      }
-      if (event.maxEntries != null && event.maxEntries < 2) {
-        issues.push(`${event.code} needs an entry cap of 2 or more, or no cap.`);
-      }
-    }
-    if (form.maxCategoriesPerPlayer < 1 || form.maxCategoriesPerPlayer > 5) {
-      issues.push("The per-player event limit must be between 1 and 5.");
-    }
-    return issues;
-  }
-
-  return issues;
+  if (!next) throw new Error("Check the registration times.");
+  if (next.opens === origin?.opensAt && next.closes === origin?.closesAt) return;
+  await setRegistrationWindow(id, next.opens, next.closes);
 }

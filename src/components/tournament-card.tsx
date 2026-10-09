@@ -3,6 +3,7 @@ import { type ReactNode } from "react";
 
 import { RegistrationStatePill, TournamentStatusPill } from "@/components/app-shell";
 import type { TournamentSummary } from "@/lib/tournament/data";
+import { tournamentPhase } from "@/lib/tournament/phase";
 import { countText, dateRangeText } from "@/lib/tournament/summary-format";
 
 /**
@@ -28,12 +29,12 @@ import { countText, dateRangeText } from "@/lib/tournament/summary-format";
  * card is not. A card-sized click target swallows the footer's own buttons on a touch
  * screen, and a link whose text is a whole paragraph tells a screen reader nothing.
  *
- * The destination is the tournament's own page - the participant surface at
- * `/tournaments/:id`, which draws the registration window and the way in for somebody who
- * has not entered yet. An operator reading the same card still reaches the desk from the
- * workspace nav or from My Tournaments' own "work in this one", so nothing is lost by
- * sending the card at the public reading: for a visitor it is the only page that can do
- * anything for them.
+ * The destination defaults to the tournament's own page - the participant surface at
+ * `/tournaments/:id`. A page whose reader is there to *read* the tournament overrides it:
+ * Explore opens a card on the read-only workspace at `…/entries`, which is the first of the
+ * five sections a reader without the edit right is offered. An operator reading the same card
+ * still reaches the desk from the workspace nav or from My Tournaments' own "work in this
+ * one", so nothing is lost by a page choosing the reading it wants.
  *
  * ## Why the card is `min-w-0`, and why its facts are a plain list
  *
@@ -52,26 +53,33 @@ export function TournamentCard({
   summary,
   actions,
   footnote,
+  to = "/tournaments/$tournamentId",
 }: {
   summary: TournamentSummary;
   /** Page-specific controls, rendered in the footer beside the window pill. */
   actions?: ReactNode;
   /** One line under the counts for something the page knows and the summary does not. */
   footnote?: ReactNode;
+  /**
+   * Where the title links, for a page that sends the card somewhere other than the
+   * tournament's public page. Explore points it at the read-only workspace; every other
+   * caller keeps the default.
+   */
+  to?: "/tournaments/$tournamentId" | "/tournaments/$tournamentId/entries";
 }) {
   return (
     <article className="flex h-full min-w-0 flex-col gap-3 rounded-xl border border-hairline bg-surface p-4 shadow-panel transition-shadow hover:shadow-raise">
       <div className="flex items-start justify-between gap-3">
         <h2 className="min-w-0 font-display text-sm font-semibold">
           <Link
-            to="/tournaments/$tournamentId"
+            to={to}
             params={{ tournamentId: summary.id }}
             className="block truncate rounded-sm hover:text-primary-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {summary.name}
           </Link>
         </h2>
-        <TournamentStatusPill status={summary.status} />
+        <TournamentStatusPill status={summary.status} phase={tournamentPhase(summary)} />
       </div>
 
       {/*
@@ -86,15 +94,20 @@ export function TournamentCard({
         the one place name on the card. Nothing is drawn that only a screen reader can hear,
         and no reader is given a term the value already implies.
       */}
-      <ul className="space-y-1 text-xs text-muted-foreground">
+      <ul className="space-y-1 text-sm text-muted-foreground">
+        {/* When, then where, then how big - the order a reader asks them, and the order
+            `ExploreCard` uses. The two cards answer different questions ("what is there to
+            work on" and "what is mine") but they describe the *same* tournament, so the
+            order is part of the shape they share rather than each card's own choice.
+
+            Both values come from `summary-format.ts`, which exists so these two cards cannot
+            disagree. They used to be re-implemented here; the em dash rather than a blank
+            when a tournament has no playing days is that module's decision, not this card's. */}
+        <li className="truncate">{dateRangeText(summary.starts_at, summary.ends_at)}</li>
         <li className="truncate">{summary.venue_name || "Venue not set"}</li>
-        {/* An em dash rather than a blank when there are no playing days yet: an upcoming
-            tournament legitimately has none, and an empty line reads as a rendering fault
-            rather than as a state. */}
-        <li className="truncate">{dateRange(summary.starts_at, summary.ends_at)}</li>
         <li className="truncate">
-          {count(summary.entry_count, "entry", "entries")} ·{" "}
-          {count(summary.category_count, "event", "events")}
+          {countText(summary.entry_count, "entry", "entries")} ·{" "}
+          {countText(summary.category_count, "event", "events")}
         </li>
         {footnote ? <li className="truncate">{footnote}</li> : null}
       </ul>
@@ -105,49 +118,4 @@ export function TournamentCard({
       </div>
     </article>
   );
-}
-
-/**
- * The start and end instants as one readable range.
- *
- * The timezone abbreviation is printed rather than left implicit, and that is the point of
- * using the browser's own zone here. The summary deliberately carries no venue timezone -
- * it is a public shape, and the zone is configuration - so the honest thing is to say which
- * zone the times are being shown in rather than to present a bare local time as if it were
- * the venue's. A reader in another zone sees the abbreviation and knows.
- */
-function dateRange(startsAt: string | null, endsAt: string | null): string {
-  if (!startsAt) return "No playing days yet";
-
-  // Components rather than `dateStyle`/`timeStyle`, because `dateStyle` may not be combined
-  // with `timeZoneName` - the pair throws, and the throw happens while rendering the card.
-  // The zone abbreviation is the point: the summary deliberately carries no venue timezone,
-  // so the honest thing is to say which zone these times are in rather than to present a
-  // local time as if it were the venue's.
-  const day = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
-  const start = day.format(new Date(startsAt));
-  if (!endsAt) return `Starts ${start}`;
-
-  const end = new Date(endsAt);
-  const startDay = new Date(startsAt).toDateString();
-  const endText =
-    end.toDateString() === startDay
-      ? new Intl.DateTimeFormat(undefined, {
-          hour: "numeric",
-          minute: "2-digit",
-          timeZoneName: "short",
-        }).format(end)
-      : day.format(end);
-  return `${start} → ${endText}`;
-}
-
-/** "1 entry" and "2 entries", because "1 entries" is the kind of detail a host notices. */
-function count(value: number, singular: string, plural: string): string {
-  return `${value} ${value === 1 ? singular : plural}`;
 }

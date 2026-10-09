@@ -1301,6 +1301,7 @@ export type Database = {
           court_count: number
           created_at: string
           day_count: number
+          ends_on: string
           format: string
           group_rest_gap_minutes: number
           group_slot_minutes: number
@@ -1323,6 +1324,7 @@ export type Database = {
           registration_closes_at: string | null
           registration_opens_at: string | null
           rest_gap_minutes: number
+          starts_on: string
           status: string
           venue_address: string | null
           venue_name: string | null
@@ -1332,6 +1334,7 @@ export type Database = {
           court_count?: number
           created_at?: string
           day_count?: number
+          ends_on: string
           format?: string
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
@@ -1354,6 +1357,7 @@ export type Database = {
           registration_closes_at?: string | null
           registration_opens_at?: string | null
           rest_gap_minutes?: number
+          starts_on: string
           status?: string
           venue_address?: string | null
           venue_name?: string | null
@@ -1363,6 +1367,7 @@ export type Database = {
           court_count?: number
           created_at?: string
           day_count?: number
+          ends_on?: string
           format?: string
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
@@ -1385,6 +1390,7 @@ export type Database = {
           registration_closes_at?: string | null
           registration_opens_at?: string | null
           rest_gap_minutes?: number
+          starts_on?: string
           status?: string
           venue_address?: string | null
           venue_name?: string | null
@@ -1436,6 +1442,10 @@ export type Database = {
       }
       add_tournament_editor: {
         Args: { p_email: string; p_tournament_id: string }
+        Returns: string
+      }
+      add_walk_in_player: {
+        Args: { p_email?: string; p_gender?: string; p_name: string; p_phone?: string }
         Returns: string
       }
       advance_draw_locked: { Args: { p_draw_id: string }; Returns: undefined }
@@ -1546,6 +1556,43 @@ export type Database = {
       discard_tournament: {
         Args: { p_tournament_id: string }
         Returns: undefined
+      }
+      explore_tournament_counts: {
+        Args: {
+          p_query?: string
+          p_range?: string
+          p_registration_open?: boolean
+        }
+        Returns: {
+          status: string
+          total: number
+        }[]
+      }
+      explore_tournaments: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_range?: string
+          p_registration_open?: boolean
+          p_sort?: string
+          p_status?: string
+        }
+        Returns: {
+          access_level: string
+          category_count: number
+          ends_at: string
+          entry_count: number
+          id: string
+          name: string
+          play_ends_at: string | null
+          play_starts_at: string | null
+          registration_state: string
+          starts_at: string
+          status: string
+          total_count: number
+          venue_name: string
+        }[]
       }
       is_platform_admin: { Args: never; Returns: boolean }
       is_tournament_editor: {
@@ -1729,6 +1776,22 @@ export type Database = {
         Args: { p_days: Json; p_tournament_id: string }
         Returns: undefined
       }
+      schedule_conflicts: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          conflict_kind: string
+          court_id: string | null
+          detail: string
+          ended_at: string | null
+          match_id: string
+          match_table: string
+          scheduled_time: string | null
+        }[]
+      }
+      search_players: {
+        Args: { p_limit?: number; p_query: string; p_tournament_id: string }
+        Returns: { gender: string; id: string; name: string }[]
+      }
       set_current_tournament: {
         Args: { p_tournament_id: string }
         Returns: undefined
@@ -1758,16 +1821,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_registration_window: {
+        Args: { p_closes: string; p_opens: string; p_tournament_id: string }
+        Returns: undefined
+      }
       start_placement_match: {
         Args: { p_court_id?: string; p_match_id: string }
         Returns: undefined
       }
       start_tier_draw_match: {
         Args: { p_court_id?: string; p_match_id: string }
-        Returns: undefined
-      }
-      start_tournament: {
-        Args: { p_tournament_id: string }
         Returns: undefined
       }
       submit_tournament_registration: {
@@ -1779,6 +1842,10 @@ export type Database = {
         Returns: number
       }
       tournament_access: { Args: { p_tournament_id: string }; Returns: Json }
+      tournament_completion_check: {
+        Args: { p_tournament_id: string }
+        Returns: Json
+      }
       tournament_ends_at: { Args: { p_tournament_id: string }; Returns: string }
       tournament_is_ready: {
         Args: { p_tournament_id: string }
@@ -1803,6 +1870,10 @@ export type Database = {
       tournament_of_tier_draw_match: {
         Args: { p_match_id: string }
         Returns: string
+      }
+      tournament_players: {
+        Args: { p_tournament_id: string }
+        Returns: { gender: string; id: string; name: string }[]
       }
       tournament_readiness: { Args: { p_tournament_id: string }; Returns: Json }
       tournament_readiness_checks: {
@@ -1832,11 +1903,21 @@ export type Database = {
           entry_count: number
           id: string
           name: string
+          play_ends_at: string | null
+          play_starts_at: string | null
           registration_state: string
           starts_at: string
           status: string
           venue_name: string
         }[]
+      }
+      update_tournament_details: {
+        Args: { p_payload: Json; p_tournament_id: string }
+        Returns: undefined
+      }
+      update_tournament_window: {
+        Args: { p_ends_on: string; p_starts_on: string; p_tournament_id: string }
+        Returns: undefined
       }
       withdraw_tournament_registration: {
         Args: { p_registration_id: string }

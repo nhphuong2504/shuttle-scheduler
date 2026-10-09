@@ -1894,7 +1894,9 @@ The Playwright suite is hermetic — it intercepts transport — so it cannot se
 authentication, platform-role resolution, RLS and RPC authorization for owner, editor, unrelated
 user and platform admin, realtime delivery, and the tournament lifecycle from creation through a
 fully reported pool. It needs a **dedicated test project** and refuses to run against production;
-see `vitest.integration.config.ts`.
+see `vitest.integration.config.ts`. A machine without a container runtime can run the same suite
+on GitHub Actions instead: `.github/workflows/integration.yml` starts the local stack and runs it
+by hand, or on a pull request that touches the migrations.
 
 ## Applying `20260927000000_tournova_role_redesign.sql`
 
@@ -2471,3 +2473,510 @@ drop function public.can_add_walk_in_player();
 
 A rollback through the repository's own history is the restore path, as usual — see
 [`docs/recovery-runbook.md`](../../docs/recovery-runbook.md).
+
+## Applying `20261007000000_explore_tournaments.sql`
+
+Adds the two reads behind the paged, filtered Explore page. It is **purely additive**: two new
+functions, no table or column touched, and `tournament_summary` is left exactly as it was, so
+My Tournaments and the create flow are unaffected.
+
+**Apply this before deploying the page that calls it.** Explore reads these functions; a
+build that ships first shows "Couldn't load tournaments" until the migration is on the project.
+
+### What it adds
+
+| Function | Purpose |
+| --- | --- |
+| `explore_tournaments(p_query, p_status, p_registration_open, p_range, p_sort, p_limit, p_offset)` | One page of cards, with `total_count`, the size of the whole result, taken in the same statement. |
+| `explore_tournament_counts(p_query, p_registration_open, p_range)` | How many match per status, always all three, for the filter buttons. |
+
+Both are granted to `anon` and `authenticated`, and the implicit `PUBLIC` grant is closed.
+`p_status`, `p_range` (`week` | `month` | `quarter`) and `p_sort` (`soonest` | `newest` |
+`entries` | `name`) are checked against that list and raise on anything else. The page size is
+clamped to 50, and every ordering ends in the tournament id so a page boundary never repeats or
+skips a row.
+
+### Verify after applying
+
+```sql
+-- the grants: both callable by anon, neither by PUBLIC
+SELECT p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can
+FROM pg_proc p WHERE p.proname IN ('explore_tournaments', 'explore_tournament_counts');
+
+-- a page, and the size of the whole result
+SELECT name, status, total_count FROM public.explore_tournaments(p_limit => 3);
+
+-- the counts, always three rows
+SELECT * FROM public.explore_tournament_counts();
+
+-- an unknown word is refused rather than answered
+SELECT * FROM public.explore_tournaments(p_sort => 'random');  -- Unknown sort: random
+```
+
+Then regenerate `src/integrations/supabase/types.ts` (the two entries in this change were
+written by hand to match) and run `npm run test:integration` against the local stack.
+
+### Rolling back
+
+`DROP FUNCTION public.explore_tournaments(text, text, boolean, text, text, int, int);` and
+`DROP FUNCTION public.explore_tournament_counts(text, boolean, text);`. Nothing else depends on
+them but the Explore page.
+
+
+---
+
+## Applying `20261008000000_tournament_window.sql`
+
+First of four files that make one change (the window, start-on-first-match, the registration rules, the details writer); apply them in order.
+Do not apply the app build that calls the new `create_tournament` before this is in place, and do
+not apply this before the build that stops calling `start_tournament` and `save_tournament_days`
+for a new tournament: the two sides move together.
+
+### What it adds
+
+- `tournaments.starts_on` and `ends_on`, the tournament **window**: the dates the tournament
+  promises, chosen when it is created. Backfilled from the span of each tournament's existing days
+  (a tournament with no days gets the date it was created on, in UTC), then `NOT NULL` with
+  `CHECK (starts_on <= ends_on)`. They are not in the editor UPDATE grant: only `create_tournament`
+  and `update_tournament_window` write them.
+- `tournament_starts_at` / `tournament_ends_at` now read the window, not the earliest and latest
+  playing day. The start is 00:00 of `starts_on` in the venue timezone, and the end is 00:00 of the
+  day after `ends_on`.
+- Playing days (`tournament_days`) are chosen later and must lie inside the window. A trigger
+  enforces it for every writer, because an editor can write the table directly. They need not be
+  consecutive.
+- The seven-day ceiling is gone: `tournaments_day_count_check` and
+  `tournament_days_day_number_check` keep only their floor of one, and `add_tournament_day` /
+  `save_tournament_days` no longer count. `remove_tournament_day` no longer insists on one day left,
+  because a tournament may have none until the schedule is built; it still refuses a day with a
+  match on it.
+- `create_tournament(p_payload)` is the single, atomic way to create a tournament: name, window,
+  timezone and at least one event in one transaction, with an optional registration window. There is
+  no draft row.
+- `update_tournament_window(id, starts_on, ends_on)`: the last date may move later until completion;
+  the first date is locked once the tournament is in progress; refused if a playing day would fall
+  outside, or the first date would pass the registration deadline.
+- `tournament_has_schedule(id)`, and a trigger that refuses a timezone change once any match has a
+  time.
+- `tournament_readiness_checks` no longer asks about days (`days`, `day_dates` are gone), and the
+  `basics` check asks for a name only. A venue is optional.
+- `save_tournament_days` refuses once anything is scheduled.
+
+### Check before applying
+
+```sql
+-- tournaments that will get a window from their created date because they have no days:
+SELECT id, name, status, created_at FROM public.tournaments t
+WHERE NOT EXISTS (SELECT 1 FROM public.tournament_days d WHERE d.tournament_id = t.id);
+
+-- registration windows that close between 00:00 and the first day's opening on day 1: they
+-- were valid before and will be refused the next time anything rewrites them.
+SELECT t.id, t.name, t.registration_closes_at, min(d.date + d.start_time) AS first_opening
+FROM public.tournaments t JOIN public.tournament_days d ON d.tournament_id = t.id
+WHERE t.registration_closes_at IS NOT NULL
+GROUP BY t.id HAVING t.registration_closes_at::date >= min(d.date);
+```
+
+### Verify after applying
+
+```sql
+SELECT count(*) FROM public.tournaments WHERE starts_on IS NULL OR ends_on IS NULL;       -- 0
+SELECT count(*) FROM public.tournament_days d JOIN public.tournaments t ON t.id = d.tournament_id
+WHERE d.date NOT BETWEEN t.starts_on AND t.ends_on;                                        -- 0
+
+-- a day outside the window is refused for the table, not just the RPC
+INSERT INTO public.tournament_days (tournament_id, day_number, date, start_time, end_time)
+SELECT id, 99, ends_on + 1, '09:00', '18:00' FROM public.tournaments LIMIT 1;  -- is outside the tournament window
+```
+
+### Rolling back
+
+Not mechanical: dropping the window columns discards the dates tournaments were created with. If it
+must be undone, restore `tournament_starts_at` / `tournament_ends_at` from
+`20260927000000_tournova_role_redesign.sql` first, then drop the two triggers, then the columns.
+
+---
+
+## Applying `20261008010000_start_on_first_match.sql`
+
+### What it changes
+
+- `start_tournament` is dropped. A tournament becomes `in_progress` when its first match is started:
+  `start_placement_match`, `start_tier_draw_match` and `start_match_safe` accept an `upcoming`
+  tournament (from 00:00 of the window's first date in the venue timezone, never a `completed` one,
+  admin or not) and flip it in the same transaction with `mark_tournament_started`, which only ever
+  moves an `upcoming` row forward.
+- Scoring, resetting and rescheduling still require `in_progress` (`assert_tournament_live` is
+  unchanged), so the closed list of 13 callers is the list of 16 minus these three.
+- `complete_tournament` is refused while any match is on court. A shared advisory lock
+  (`lifecycle:<id>`) is taken by every match start and the exclusive lock by Complete, so a Complete
+  that saw nothing on court cannot commit after a match has started. Row locks would deadlock two
+  concurrent first matches, which is why it is an advisory lock.
+- `tournament_completion_check(id)` returns `{on_court, unplayed, total}` to an editor for the
+  Complete dialog. A read, never a gate.
+
+### Verify after applying
+
+```sql
+SELECT to_regprocedure('public.start_tournament(uuid)');   -- NULL
+SELECT has_function_privilege('authenticated', 'public.mark_tournament_started(uuid)', 'execute');  -- false
+```
+
+Then, as an editor of an upcoming tournament whose window has opened, start a scheduled match and
+confirm `status` became `in_progress`; start a second and confirm nothing else changed; complete it
+with that match still on court and confirm it is refused.
+
+### Rolling back
+
+Re-create `start_tournament` and the three start functions from
+`20260927000000_tournova_role_redesign.sql`, and `complete_tournament` without the match check.
+
+---
+
+## Applying `20261008020000_registration_window_rules.sql`
+
+### What it changes
+
+- `assert_registration_window`: the deadline must be at or before 00:00 of the window's first date,
+  so registering and playing never overlap. (The bound already read `tournament_starts_at`, which now
+  means the window; the message is the change.)
+- A trigger on the two registration columns applies to every writer, including the editor UPDATE grant
+  and `save_tournament_config`: they cannot change once the tournament has started; the opening time
+  cannot change once it has passed; and the deadline cannot be extended - or registration switched on -
+  once a schedule exists.
+- `set_registration_window(id, opens, closes)`: the one call that changes the window on its own.
+  Extending, closing early (`closes = now()`) and switching it off are all this.
+- `tournament_play_starts_at` / `tournament_play_ends_at`: the first and last playing day, which are what
+  `tournament_starts_at` / `tournament_ends_at` used to return. `tournament_summary` and
+  `explore_tournaments` gain `play_starts_at` and `play_ends_at` (NULL until playing days are chosen) so
+  the app can say "not started" and "past its last day" about the plan rather than the window. Both are
+  dropped and re-created because their return type changes; their grants to `anon` are restored.
+
+### Verify after applying
+
+```sql
+SELECT name, starts_at, play_starts_at FROM public.explore_tournaments(p_limit => 3);
+SELECT has_function_privilege('anon', 'public.explore_tournaments(text, text, boolean, text, text, int, int)', 'execute');  -- true
+SELECT has_function_privilege('anon', 'public.set_registration_window(uuid, timestamptz, timestamptz)', 'execute');         -- false
+```
+
+Then regenerate `src/integrations/supabase/types.ts` (the entries in this change were written by hand to
+match) and run `npm run test:integration` against the local stack.
+
+### Rolling back
+
+Drop the trigger and `set_registration_window`, restore `assert_registration_window` from
+`20260927000000_tournova_role_redesign.sql`, and re-create the two reads from
+`20260929001000_tournament_summary.sql` and `20261007000000_explore_tournaments.sql`.
+
+
+---
+
+## Applying `20261008030000_update_tournament_details.sql`
+
+The fourth file of the same change, and the smallest. It belongs to the first three: they make
+the tournament's configuration fixed from its first match, and this is the narrow door that stays
+open.
+
+### What it adds
+
+`update_tournament_details(p_tournament_id, p_payload)`: name, note, venue, address and the
+organiser's contact, for an owner, an editor or a platform admin, until the tournament is
+completed (`assert_tournament_writable`). It reads those seven keys and nothing else. The events,
+format and rules have `save_tournament_config` / `save_tournament_categories`, which are
+upcoming-only; the window has `update_tournament_window`; the timezone is left to
+`save_tournament_config` and its guard under a schedule.
+
+### Verify after applying
+
+```sql
+SELECT has_function_privilege('anon', 'public.update_tournament_details(uuid, jsonb)', 'execute');           -- false
+SELECT has_function_privilege('authenticated', 'public.update_tournament_details(uuid, jsonb)', 'execute'); -- true
+```
+
+Then, as an editor of an in-progress tournament, change its venue and confirm it saves; change a
+completed one as the same editor and confirm it is refused.
+
+### Rolling back
+
+`DROP FUNCTION public.update_tournament_details(uuid, jsonb);` Only the Setup page of a started
+tournament calls it.
+
+
+---
+
+## Applying `20261008040000_result_correction_guards.sql`
+
+Reporting or correcting a result: what it may change downstream, and what the live reflow may do.
+
+### What it changes
+
+- **Correction guards.** Four `AFTER UPDATE` triggers, one per match table. Each fires only on a
+  *correction*: an already-reported row whose winner changes to another non-null value (pools: whose
+  winner or score changes). A first report and a reset (`winner_id` becomes NULL) are untouched, and the
+  four `report_*_result` functions are not edited.
+  - `tier_draw_matches_correction`: the next-round match is repaired in place while it is `scheduled`;
+    refused once it has started.
+  - `draw_matches_correction` (legacy knockout): same, through `parent_a_id` / `parent_b_id`.
+    `advance_draw_locked` only looks at the newest round, so it never repaired an older one.
+  - `placement_matches_correction`: a round-one winner cannot change once round two exists.
+  - `pool_matches_correction`: a group result cannot change once draws exist for the category.
+- **Break-aware reflow.** `shift_live_schedule_after_match` is now a wrapper. The original ~350-line
+  function was renamed to `shift_live_schedule_core` (untouched), and the wrapper calls it and then
+  `clear_breaks_after_reflow(tournament_id)`, which moves any still-`scheduled` match that overlaps a
+  `tournament_day_breaks` row to the break's end and slides the matches behind it on that court. Every
+  caller keeps the old name and signature. Known limits: the pass keeps each court's order but does not
+  re-check a player's rest window for the matches it pushes, and it does not enforce the day's closing
+  time.
+- **Access.** `shift_live_schedule_after_match` was granted to `authenticated` by `20260916010000` with no
+  tournament check, so any signed-in account could reflow any tournament by match id. It is now revoked,
+  along with the core, the break pass and the four guard functions: they are called only from
+  `SECURITY DEFINER` functions.
+
+### Verify after applying
+
+```sql
+SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname IN
+  ('shift_live_schedule_core', 'clear_breaks_after_reflow', 'guard_tier_draw_correction',
+   'guard_draw_correction', 'guard_placement_correction', 'guard_pool_correction');                    -- 6
+SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname IN
+  ('tier_draw_matches_correction', 'draw_matches_correction',
+   'placement_matches_correction', 'pool_matches_correction');                                         -- 4
+SELECT has_function_privilege('authenticated', 'public.shift_live_schedule_after_match(text, uuid)', 'execute'); -- false
+```
+
+Those prove the objects exist, not that they behave. Run `npm run test:integration` against the local
+stack, in particular `integration/simulation.test.ts`: its second test asserts that changing a round-one
+winner after round two exists is refused, that a score-only correction is accepted, and that changing a
+knockout winner after the next round was played is refused. A break overlap after a late finish is checked
+at every step of its first test.
+
+### Rolling back
+
+```sql
+DROP TRIGGER pool_matches_correction ON public.pool_matches;
+DROP TRIGGER placement_matches_correction ON public.placement_matches;
+DROP TRIGGER draw_matches_correction ON public.draw_matches;
+DROP TRIGGER tier_draw_matches_correction ON public.tier_draw_matches;
+DROP FUNCTION public.guard_pool_correction(), public.guard_placement_correction(),
+  public.guard_draw_correction(), public.guard_tier_draw_correction();
+DROP FUNCTION public.shift_live_schedule_after_match(text, uuid);
+DROP FUNCTION public.clear_breaks_after_reflow(uuid);
+ALTER FUNCTION public.shift_live_schedule_core(text, uuid) RENAME TO shift_live_schedule_after_match;
+```
+
+Rolling back the rename restores the old behaviour, including the old grant being absent: re-grant
+`EXECUTE` to `authenticated` only if a caller outside the `SECURITY DEFINER` functions needs it, and
+none does today.
+
+
+---
+
+## Applying `20261009000000_scoped_player_reads.sql`
+
+The player roster stops being readable as a whole.
+
+### What it changes
+
+`players` is the one global table, and `public_players` (a definer view over it) was granted to `anon`
+and `authenticated`. The app read all of it on every page: the Entries screen showed the platform's
+roster as "Players" (384, for a tournament of fifty), and anyone could list everybody who had ever played
+anywhere. Three calls replace the read, and the view's grant is withdrawn.
+
+- `tournament_players(p_tournament_id)` - id, name and gender of everyone with a team row in the
+  tournament. Granted to `anon` and `authenticated`: the entries are public and so are the names on them.
+- `search_players(p_tournament_id, p_query, p_limit)` - a name search over the whole roster for the desk
+  entering someone. `can_edit_tournament` of that tournament only; two characters or more; at most 50 rows;
+  `%` and `_` are literal. Not callable by `anon`.
+- `add_walk_in_player(name, email, phone, gender)` - creates an unlinked person and returns the id, which a
+  table insert cannot (`RETURNING` is checked against the read policy). `can_add_walk_in_player()`; no
+  `profile_id` parameter, so the link is still made only by approving a registration.
+- `REVOKE SELECT ON public.public_players FROM anon, authenticated`. The view stays, for definer
+  functions. Nothing is changed on `players` itself.
+
+Application: `usePlayers()` now reads `tournament_players` for the current tournament (so the cache is keyed
+per tournament); `searchPlayers()` feeds the new `PlayerPicker`; `createPlayer()` returns the new id. The
+function entries in `src/integrations/supabase/types.ts` were written by hand to match; regenerate them.
+
+### Verify after applying
+
+```sql
+SELECT has_table_privilege('anon', 'public.public_players', 'select');                                  -- false
+SELECT has_table_privilege('authenticated', 'public.public_players', 'select');                         -- false
+SELECT has_function_privilege('anon', 'public.tournament_players(uuid)', 'execute');                    -- true
+SELECT has_function_privilege('anon', 'public.search_players(uuid, text, integer)', 'execute');         -- false
+SELECT has_function_privilege('authenticated', 'public.add_walk_in_player(text, text, text, text)', 'execute'); -- true
+```
+
+The migration also checks these itself (`DO $verify$`) and fails if any is wrong. Then run
+`npm run test:integration` against the local stack: `authorization.test.ts` covers the anonymous refusal,
+the editor-only search, the wildcard and cap rules, and the walk-in id.
+
+### Rolling back
+
+```sql
+GRANT SELECT ON public.public_players TO anon, authenticated;
+DROP FUNCTION public.add_walk_in_player(text, text, text, text);
+DROP FUNCTION public.search_players(uuid, text, integer);
+DROP FUNCTION public.tournament_players(uuid);
+```
+
+The application reads the three functions, so roll it back with the migration; rolling back only the
+grant leaves a build that works but shows the whole roster again.
+
+## Applying `20261009010000_safe_live_schedule_reflow.sql`
+
+### What it does
+
+Rewrites `shift_live_schedule_core`, the algorithm that runs after a result lands and moves the
+rest of the day around it. `shift_live_schedule_after_match` keeps its name and signature as a thin
+wrapper, so `report_placement_result`, `report_tier_draw_result` and the walkover paths are untouched.
+It also adds `tournament_day_at(uuid, timestamptz)` (the database twin of the client's
+`sliceRowsByDay`) and drops `clear_breaks_after_reflow`, whose separate break pass is now part of the
+loop.
+
+Four defects the old core had, and what replaced them:
+
+1. **It pulled matches earlier.** The next start was floored at the previous match's real end, with no
+   floor at the match's own published time, so an early finish dragged the queue forward. Every start
+   is now `GREATEST(its published time, the previous end, the player's rest window, its
+   prerequisites' end)` — later only, never earlier.
+2. **It did not know about days.** The queue is now scoped to the source's own day
+   (`tournament_day_at`), so day two's first match is not dragged back toward the end of day one.
+3. **It did not read `prerequisite_ids`.** The queue is seeded with the source's dependents as well as
+   its own court, and a start is floored at every prerequisite's end.
+4. **The break pass ran afterwards, separately,** without re-checking rest or the closing time.
+   Breaks and the closing time are enforced inside the shifting loop now.
+
+### The held match, and per-chain atomicity
+
+The rewrite is atomic **per chain**, not per run. A match the reflow would move past the day's
+close is **held**: it keeps its published time, and so does every still-movable match after it on the
+same court and day, because that court's order can no longer be preserved. A match the run is *not*
+moving is never held, even when its published time already crosses the close — the reflow did not
+create that spill, and freezing a court over a time it did not set is not its job. A held match pushes
+nothing — no shared player, no dependent on another court — so the rest of the day, and every
+unrelated chain, still reflows and is written in the same transaction. This is the deliberate trade
+the old code refused: it abandoned the whole cascade on a closing-time violation, which meant one
+crashing tail froze every court. A held run is surfaced with `RAISE NOTICE` naming the matches and
+the reason, and never with `RAISE EXCEPTION`, so the caller's saved result is never rolled back.
+
+**The held rows and their predecessors overlap on purpose.** That is what `schedule_conflicts`
+reports; it is not a bug in this migration. The four writes that publish times each carry
+`AND NOT work.held`, and held rows are never marked `dirty`, so they are never written.
+
+### Closing time, and how this differs from the planner
+
+Closing time is enforced on **every** day, including the last. The planner treats its cutoff as a soft
+objective term, so a full schedule that runs long can still win; a reflow may not *create* that spill,
+so a cascade that would do so stops at the held match and warns instead. "Create" is literal: the
+close is consulted only for a match the reflow is moving, so a match already published past the close
+is left as it stands — `schedule_conflicts` reports it as `past_closing` instead. The two rules
+disagree on purpose — see `docs/scheduling-decisions.md` for the planner's side.
+
+### Locking, stated plainly
+
+Three global advisory locks (`live-schedule`, `schedule:1`, `schedule:2`) are taken first, exactly as
+`apply_day_schedule`, `apply_placement_day_schedule`, `start_match_safe` and the schedule resets take
+them. This migration also takes `'live-schedule:' || tournament_id`, but that key is **redundant
+today**: the global keys are already held, so no second tournament can reach it. It is the first half
+of a move to per-tournament locking that cannot happen until those other writers also take a
+per-tournament key — dropping the global keys here alone would break the mutual exclusion, not narrow
+it. The global keys are deliberately kept.
+
+### Timezone
+
+`venue_timezone` is `NOT NULL` on `tournaments` (`20260909233700_tournament_hardening.sql`), so the
+`(date + time) AT TIME ZONE tz` arithmetic here never sees a NULL and needs no fallback branch.
+
+### Verify after applying
+
+```sql
+-- The core holds rather than aborting, floors at the published time, and warns rather than raises.
+SELECT prosrc LIKE '%held = true%'                                        AS holds,
+       prosrc LIKE '%GREATEST(current_match.shifted_time, previous_end)%' AS never_earlier,
+       prosrc LIKE '%would run past closing time%'                        AS warns,
+       prosrc LIKE '%AND next_start IS DISTINCT FROM current_match.shifted_time%'
+                                                                          AS only_moved,
+       prosrc LIKE '%v_violation%'                                        AS still_aborts  -- false
+FROM pg_proc WHERE proname = 'shift_live_schedule_core';
+
+-- The superseded pass is gone.
+SELECT to_regprocedure('public.clear_breaks_after_reflow(uuid)');  -- NULL
+
+-- The wrapper is not a client RPC.
+SELECT has_function_privilege(
+  'authenticated', 'public.shift_live_schedule_after_match(text, uuid)', 'execute');  -- false
+```
+
+The migration asserts the same things itself in `DO $verify$` and fails if any is wrong. Then run
+`npm run test:integration` on a local stack: `integration/live-reflow.test.ts` reports a late head and
+checks that the held tail keeps its time, that an unrelated court still reflows, and that a held match
+pulls nobody.
+
+### Rolling back
+
+There is no data rollback: the rewrite changed no column and no stored value. Restore the previous
+`shift_live_schedule_core` / `clear_breaks_after_reflow` definitions from `20260917030000` (and the
+later replays of them) if you must revert, but note that the old core aborts a whole cascade on a
+closing-time violation — reverting re-introduces that freeze.
+
+## Applying `20261009020000_schedule_conflicts.sql`
+
+### What it returns
+
+`schedule_conflicts(p_tournament_id)` is a computed, editor-only read (`can_edit_tournament`) over the
+rows that exist, not a stored flag. It returns zero or more rows of `(match_table, match_id, court_id,
+scheduled_time, ended_at, conflict_kind, detail)`. The kinds are:
+
+- `court_overlap` — two matches on one court whose windows overlap.
+- `rest_shortfall` — a player back on court before the rest gap.
+- `break` — a match sleeping inside a day break.
+- `past_closing` — a match finishing after its day's closing time.
+- `before_prerequisite` — a match before a match it waits on.
+
+There is deliberately **no lateness kind**. A merely-late match is the desk's own overdue alert
+(`desk-transitions.ts`), which is about the clock rather than about two rows contradicting each other;
+the function does not repeat it. The `DO $verify$` block fails if `overdue` ever reappears in the
+source.
+
+### Only actionable rows
+
+A conflict is a job for the desk, and the desk can only move a match that has not been played. So:
+
+- `court_overlap` is emitted once per still-`scheduled` side of the pair — if both matches are already
+  done, nothing is reported.
+- `rest_shortfall`, `break` and `before_prerequisite` are emitted only for a still-`scheduled` match.
+- `past_closing` is emitted for `scheduled` and `in-progress` (a match still running is still
+  actionable).
+
+The effect: a match already played is never flagged — not even when its rest was short or its span
+overlapped, which the desk saw and accepted at the time.
+
+### Verify after applying
+
+```sql
+-- The retired kind is gone; the still-scheduled gate is present on both overlap sides.
+SELECT prosrc LIKE '%overdue%'      AS still_has_overdue,        -- false
+       prosrc LIKE '%is_scheduled%' AS gates_on_scheduled,       -- true
+       prosrc LIKE '%a_scheduled%'  AS gates_overlap_side_a,     -- true
+       prosrc LIKE '%b_scheduled%'  AS gates_overlap_side_b      -- true
+FROM pg_proc WHERE proname = 'schedule_conflicts';
+
+-- Not callable by anon.
+SELECT has_function_privilege('anon', 'public.schedule_conflicts(uuid)', 'execute');  -- false
+```
+
+The `DO $verify$` block asserts the same on apply. `integration/live-reflow.test.ts` also checks that a
+played match with short rest or a historical overlap produces no row, and that a still-scheduled match
+the clock has overtaken produces none either.
+
+### Rolling back
+
+```sql
+DROP FUNCTION public.schedule_conflicts(uuid);
+```
+
+The read has no client callers yet — `useScheduleConflicts` in `src/lib/tournament/data.ts` is defined
+but not wired to any surface — so dropping it breaks nothing.

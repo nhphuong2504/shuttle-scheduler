@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { localRedirect, signedInDestination, signInSearch } from "./redirect";
+import {
+  SIGN_IN_INTENTS,
+  localRedirect,
+  normalizeSignInIntent,
+  signedInDestination,
+  signInIntentText,
+  signInSearch,
+} from "./redirect";
 
 /**
  * The return address is a query parameter, so these are the rules that stand between a
@@ -63,6 +70,53 @@ describe("signInSearch writes only what the route would accept", () => {
     // somebody else composed": the second is dropped, and the caller lands on Home.
     expect(signInSearch("//evil.example")).toEqual({});
     expect(signInSearch("/auth")).toEqual({});
+  });
+});
+
+/**
+ * The intent is the second thing a sign-in link can carry, and it is the first thing on this
+ * page that decides *copy* rather than destination - so it is held to a closed vocabulary
+ * rather than to the redirect's path rules.
+ */
+describe("the sign-in intent", () => {
+  it("travels beside a return address, and the pair is dropped together", () => {
+    expect(signInSearch("/tournaments/abc", "register")).toEqual({
+      redirect: "/tournaments/abc",
+      intent: "register",
+    });
+
+    // The sentence an intent produces names where the caller is going, so there is nothing
+    // to say when there is nowhere to go. A message promising a destination the link cannot
+    // carry is the same lie the dropped address is dropped to avoid.
+    expect(signInSearch("/", "register")).toEqual({});
+    expect(signInSearch("//evil.example", "register")).toEqual({});
+    expect(signInSearch("/auth", "register")).toEqual({});
+  });
+
+  it("takes no intent at all as no intent, rather than as an unfilled slot", () => {
+    // The key is absent rather than present-and-undefined, so a link with no errand is the
+    // address it has always been and there is no third spelling of "no filter".
+    expect(signInSearch("/explore")).toEqual({ redirect: "/explore" });
+  });
+
+  it("is a closed vocabulary, so an address cannot write the page's own copy", () => {
+    expect(normalizeSignInIntent("register")).toBe("register");
+    // The rejected shapes are the argument: a word this app never wrote, markup, and
+    // anything that is not a string at all.
+    expect(normalizeSignInIntent("Sign in to win a prize")).toBeUndefined();
+    expect(normalizeSignInIntent("<b>hi</b>")).toBeUndefined();
+    expect(normalizeSignInIntent("")).toBeUndefined();
+    expect(normalizeSignInIntent(42)).toBeUndefined();
+    expect(normalizeSignInIntent(null)).toBeUndefined();
+    expect(normalizeSignInIntent(["register"])).toBeUndefined();
+  });
+
+  it("has a sentence for every member, so a new errand cannot ship wordless", () => {
+    // The switch has no default, so a member added without a case is already a compile
+    // error; this is the cheap runtime half, and it is what makes the pairing explicit.
+    for (const intent of SIGN_IN_INTENTS) {
+      expect(signInIntentText(intent).length).toBeGreaterThan(0);
+    }
   });
 });
 

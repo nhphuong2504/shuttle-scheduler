@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Page, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { MatchFormatCard } from "@/components/match-format";
+import { PlayingDayPicker } from "@/components/schedule/playing-day-picker";
 import { ScheduledFinish } from "@/components/schedule-status";
 import { Button } from "@/components/ui/button";
 import {
@@ -167,6 +168,11 @@ export function PlacementScheduler() {
   const [showAllChanges, setShowAllChanges] = useState(false);
   /** Day windows, courts, breaks, timings and scoring are setup, not day-to-day desk work. */
   const [showSettings, setShowSettings] = useState(false);
+  /** The one playing day whose own hours, courts and breaks are open for editing. */
+  const [openDayId, setOpenDayId] = useState<string | null>(null);
+  /** The "every day" hours form, folded away until asked for. */
+  const [sharedOpen, setSharedOpen] = useState(false);
+  const [sharedDraft, setSharedDraft] = useState<{ start: string; end: string } | null>(null);
   /**
    * The reset action collapsed on first paint.
    *
@@ -182,8 +188,6 @@ export function PlacementScheduler() {
   const [breakDrafts, setBreakDrafts] = useState<Record<string, DayBreakRow[]>>({});
   /** Day windows whose edits are still in flight, so their card can say "saving". */
   const [savingDayId, setSavingDayId] = useState<string | null>(null);
-  /** The date typed into "Add a day", or null while it still shows the suggested one. */
-  const [newDayDate, setNewDayDate] = useState<string | null>(null);
   const tournamentDays = useMemo(() => days ?? [], [days]);
   const dayCount = tournament?.day_count ?? tournamentDays.length;
   /** The venue's court pool, read once so the settings sections cannot disagree. */
@@ -284,11 +288,15 @@ export function PlacementScheduler() {
    */
   const settingsOpenedForFirstBuild = useRef(false);
   useEffect(() => {
+    // Settings is the editor's panel. A read-only reader is never shown it, so the
+    // auto-open below must not fire for them either — the ref would otherwise mark
+    // the first build as "opened" and the panel would render anyway.
+    if (!canEdit) return;
     if (settingsOpenedForFirstBuild.current) return;
     if (!planInputsReady) return;
     settingsOpenedForFirstBuild.current = true;
     if (!hasSchedule) setShowSettings(true);
-  }, [planInputsReady, hasSchedule]);
+  }, [canEdit, planInputsReady, hasSchedule]);
 
   /** Which courts each day plays on, as ids. Empty means "no restriction". */
   const dayCourtIds = useMemo(() => {
@@ -785,20 +793,57 @@ export function PlacementScheduler() {
   );
 
   /**
-   * The date offered for a new day: the one after the last, which is the overrun case.
+   * The playing days as dates, and the ones that cannot be switched off.
    *
-   * Built from the day's own `YYYY-MM-DD` rather than a UTC parse, so it cannot land
-   * a day early west of Greenwich the way `new Date(dateString)` would.
+   * The picker offers only the tournament window's own dates, so a day outside it cannot be
+   * chosen by typing; the database refuses one for every writer too. A day with matches on it
+   * stays on, and the reason travels with the date.
    */
-  const suggestedNewDayDate = useMemo(() => {
-    const last = tournamentDays[tournamentDays.length - 1];
-    if (!last) return "";
-    const date = new Date(`${last.date}T00:00:00`);
-    date.setDate(date.getDate() + 1);
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${date.getFullYear()}-${month}-${day}`;
+  const chosenDates = useMemo(
+    () => new Set(tournamentDays.map((day) => day.date.slice(0, 10))),
+    [tournamentDays],
+  );
+  /**
+   * What stands between the host and the Build button, in a sentence.
+   *
+   * The button is off until there is a court to place a match on and a day to place it on, and
+   * a button that is merely grey tells nobody which. Courts come first because a new tournament
+   * has none: creating one writes no court rows.
+   */
+  const buildBlocker =
+    !(courts ?? []).length && !tournamentDays.length
+      ? "Set the courts and choose at least one playing day first."
+      : !(courts ?? []).length
+        ? "Set how many courts the venue has first."
+        : !tournamentDays.length
+          ? "Choose at least one playing day first."
+          : null;
+
+  /** The hours most playing days share, which is what the "every day" line says. */
+  const commonHours = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const day of tournamentDays) {
+      const key = `${day.start_time.slice(0, 5)}|${day.end_time.slice(0, 5)}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    let best: string | null = null;
+    for (const [key, count] of counts) {
+      if (best === null || count > (counts.get(best) ?? 0)) best = key;
+    }
+    if (!best) return null;
+    const [start = "", end = ""] = best.split("|");
+    return { start, end };
   }, [tournamentDays]);
+
+  const lockedDates = useMemo(() => {
+    const locked = new Map<string, string>();
+    for (const day of tournamentDays) {
+      if (daysWithMatches.has(day.id)) {
+        locked.set(day.date.slice(0, 10), "This day has matches on it. Clear or move them first.");
+      }
+    }
+    return locked;
+  }, [tournamentDays, daysWithMatches]);
 
   /**
    * Which day's running order is on screen.
@@ -936,11 +981,47 @@ export function PlacementScheduler() {
     setBusy(true);
     try {
       await addTournamentDay(tournamentId, date);
-      setNewDayDate("");
       await qc.invalidateQueries();
-      toast.success(`Day added for ${date}. Rebuild to place matches on it.`);
+      toast.success(
+        hasSchedule
+          ? `${dayDateLabel(date)} is a playing day. Update the schedule to place matches on it.`
+          : `${dayDateLabel(date)} is a playing day.`,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add the day");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Sets the same opening and closing time on every playing day.
+   *
+   * Hours are stored per day and stay that way; this is the one edit that most tournaments
+   * want, made once. A day that needs different hours is opened and changed on its own.
+   */
+  const applyHoursToAll = async (start: string, end: string) => {
+    if (busy || !tournamentDays.length) return;
+    if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || end <= start) {
+      toast.error("Courts have to close after they open.");
+      return;
+    }
+    setBusy(true);
+    try {
+      for (const day of tournamentDays) {
+        if (day.start_time.slice(0, 5) === start && day.end_time.slice(0, 5) === end) continue;
+        await updateTournamentDay(day.id, {
+          date: day.date,
+          start_time: normalizeTime(start),
+          end_time: normalizeTime(end),
+        });
+      }
+      await qc.invalidateQueries();
+      setSharedOpen(false);
+      setSharedDraft(null);
+      toast.success("Hours set for every day.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not set the hours");
     } finally {
       setBusy(false);
     }
@@ -1107,6 +1188,10 @@ export function PlacementScheduler() {
   };
 
   const build = async () => {
+    if (!tournamentDays.length) {
+      toast.error("Choose the days you play first.");
+      return;
+    }
     if (!validateAllWindows()) return;
     if (!planInputsReady) {
       toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
@@ -1133,6 +1218,10 @@ export function PlacementScheduler() {
   };
 
   const previewRebuild = async () => {
+    if (!tournamentDays.length) {
+      toast.error("Choose the days you play first.");
+      return;
+    }
     if (!validateAllWindows()) return;
     if (!planInputsReady) {
       toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
@@ -1208,63 +1297,53 @@ export function PlacementScheduler() {
     }
   };
 
-  if (!loading && !tournamentDays.length) {
-    return (
-      <Page title="Court schedule">
-        <Panel title="No tournament configured">
-          <EmptyState
-            title="Set up a tournament first"
-            hint="A tournament defines its days, courts and the durations each stage is scheduled with."
-            action={
-              tournamentId ? (
-                <Link
-                  to="/tournaments/$tournamentId/settings"
-                  params={{ tournamentId }}
-                  className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
-                >
-                  Open tournament setup
-                </Link>
-              ) : null
-            }
-          />
-        </Panel>
-      </Page>
-    );
-  }
+  const buildButton = (
+    <Button
+      disabled={busy || !planInputsReady || !tournament || Boolean(buildBlocker)}
+      aria-describedby={buildBlocker ? "build-blocker" : undefined}
+      onClick={() => void (hasSchedule ? previewRebuild() : build())}
+    >
+      {!planInputsReady
+        ? "Loading…"
+        : busy
+          ? "Planning…"
+          : hasSchedule
+            ? "Update schedule"
+            : "Build schedule"}
+    </Button>
+  );
 
   return (
     <Page
       title="Court schedule"
       subtitle="One running order for the whole tournament. Matches already played or on court never move."
       actions={
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSettings((value) => !value)}
-            aria-expanded={showSettings}
-          >
-            {showSettings ? "Hide settings" : "Tournament settings"}
-          </Button>
-          <Button
-            disabled={
-              !canEdit || busy || !planInputsReady || !tournament || !(courts ?? []).length
-            }
-            onClick={() => void (hasSchedule ? previewRebuild() : build())}
-          >
-            {!planInputsReady
-              ? "Loading…"
-              : busy
-                ? "Planning…"
-                : hasSchedule
-                  ? "Update schedule"
-                  : "Build schedule"}
-          </Button>
-        </div>
+        canEdit ? (
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettings((value) => !value)}
+                aria-expanded={showSettings}
+              >
+                {showSettings ? "Hide settings" : "Tournament settings"}
+              </Button>
+              {/* With the settings open the build lives in the bar at the foot of the page,
+                  beside what it builds from; one button, in one place at a time. */}
+              {showSettings ? null : buildButton}
+            </div>
+            {showSettings || !buildBlocker ? null : (
+              <span id="build-blocker" className="text-sm text-muted-foreground">
+                {buildBlocker}
+              </span>
+            )}
+          </div>
+        ) : null
       }
     >
       <div className="space-y-5">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm text-muted-foreground">
           <span className="font-score font-semibold text-foreground">
             {rows.length} match{rows.length === 1 ? "" : "es"} scheduled
           </span>
@@ -1283,19 +1362,8 @@ export function PlacementScheduler() {
           </span>
         </div>
 
-        {!(courts ?? []).length ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-danger-surface px-3 py-2 text-xs text-danger-foreground">
-            <span>
-              No courts yet — set how many courts the venue has before building the schedule.
-            </span>
-            <Button size="sm" variant="outline" onClick={() => setShowSettings(true)}>
-              Set courts
-            </Button>
-          </div>
-        ) : null}
-
         {result && result.skipped.length > 0 ? (
-          <div className="rounded-lg bg-warn-surface px-3 py-2 text-xs text-warn-foreground">
+          <div className="rounded-lg bg-warn-surface px-3 py-2 text-sm text-warn-foreground">
             <p className="font-semibold">Left alone</p>
             <ul className="mt-0.5 space-y-0.5">
               {result.skipped.map((entry) => (
@@ -1307,7 +1375,7 @@ export function PlacementScheduler() {
           </div>
         ) : null}
 
-        {showSettings ? (
+        {canEdit && showSettings ? (
           <Panel
             title="Tournament settings"
             bodyClassName="p-0"
@@ -1361,16 +1429,134 @@ export function PlacementScheduler() {
 
               <SettingsSection
                 title="Playing days"
-                summary={`${tournamentDays.length} day${tournamentDays.length === 1 ? "" : "s"}${
-                  tournamentDays.length >= 7 ? " · 7 is the maximum" : ""
-                }`}
+                summary={`${tournamentDays.length} day${tournamentDays.length === 1 ? "" : "s"}`}
               >
+                {tournament ? (
+                  <PlayingDayPicker
+                    startsOn={String(tournament.starts_on).slice(0, 10)}
+                    endsOn={String(tournament.ends_on).slice(0, 10)}
+                    chosen={chosenDates}
+                    locked={lockedDates}
+                    disabled={!canEdit || busy}
+                    onAdd={(date) => void addDay(date)}
+                    onRemove={(date) => {
+                      const day = tournamentDays.find((entry) => entry.date.slice(0, 10) === date);
+                      if (day) void removeDay(day);
+                    }}
+                  />
+                ) : null}
+                {tournamentDays.length > 0 && commonHours ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/50 px-3 py-2.5">
+                      <p className="text-sm">
+                        <span className="font-semibold">Every day:</span> courts open{" "}
+                        <span className="font-score">{commonHours.start}</span> –{" "}
+                        <span className="font-score">{commonHours.end}</span>
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto text-primary-ink"
+                        disabled={!canEdit || busy}
+                        aria-expanded={sharedOpen}
+                        onClick={() => {
+                          setSharedOpen((value) => !value);
+                          setSharedDraft({ start: commonHours.start, end: commonHours.end });
+                        }}
+                      >
+                        Change for all days
+                      </Button>
+                    </div>
+                    {sharedOpen && sharedDraft ? (
+                      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-hairline px-3 py-3">
+                        <div>
+                          <Label htmlFor="all-days-start" className="text-t4 text-muted-foreground">
+                            Courts open
+                          </Label>
+                          <PickerInput
+                            id="all-days-start"
+                            type="time"
+                            pickerLabel="Open the start time picker for every day"
+                            className="mt-1 w-33 md:w-32"
+                            value={sharedDraft.start}
+                            disabled={!canEdit || busy}
+                            onChange={(event) =>
+                              setSharedDraft({ ...sharedDraft, start: event.target.value })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="all-days-end" className="text-t4 text-muted-foreground">
+                            Courts close
+                          </Label>
+                          <PickerInput
+                            id="all-days-end"
+                            type="time"
+                            pickerLabel="Open the end time picker for every day"
+                            className="mt-1 w-33 md:w-32"
+                            value={sharedDraft.end}
+                            disabled={!canEdit || busy}
+                            onChange={(event) =>
+                              setSharedDraft({ ...sharedDraft, end: event.target.value })
+                            }
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          disabled={!canEdit || busy}
+                          onClick={() => void applyHoursToAll(sharedDraft.start, sharedDraft.end)}
+                        >
+                          Apply to every day
+                        </Button>
+                      </div>
+                    ) : null}
+                    <p className="text-t4 text-muted-foreground">
+                      Each chosen day follows the line above. Open a day only to make it different.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="divide-y divide-hairline rounded-lg border border-hairline">
                   {tournamentDays.map((day) => {
                     const window = windowFor(day);
                     const breakCount = breakRows(day).length;
+                    const dayOpen = openDayId === day.id;
+                    const differs =
+                      (commonHours !== null &&
+                        (day.start_time.slice(0, 5) !== commonHours.start ||
+                          day.end_time.slice(0, 5) !== commonHours.end)) ||
+                      courtsFor(day).length !== courtCount;
                     return (
-                      <div key={day.id} className="px-3 py-3">
+                      <div key={day.id}>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                          <h4 className="min-w-[8.5rem] font-display text-sm font-semibold">
+                            Day {day.day_number} · {dayDateLabel(day.date.slice(0, 10))}
+                          </h4>
+                          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                            <span className="font-score">
+                              {day.start_time.slice(0, 5)} – {day.end_time.slice(0, 5)}
+                            </span>{" "}
+                            · {courtsFor(day).length} of {courtCount} court
+                            {courtCount === 1 ? "" : "s"} · {breakCount} break
+                            {breakCount === 1 ? "" : "s"}
+                          </p>
+                          {differs ? (
+                            <span className="rounded-full bg-warn-surface px-2.5 py-0.5 text-t4 font-semibold text-warn-foreground">
+                              Different
+                            </span>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-primary-ink"
+                            aria-expanded={dayOpen}
+                            aria-label={`${dayOpen ? "Close" : "Edit"} day ${day.day_number}`}
+                            onClick={() => setOpenDayId(dayOpen ? null : day.id)}
+                          >
+                            {dayOpen ? "Done" : "Edit"}
+                          </Button>
+                        </div>
+                        {dayOpen ? (
+                      <div className="px-3 pb-3 pt-1">
                         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                           <h4 className="font-display text-sm font-semibold">
                             Day {day.day_number}
@@ -1386,18 +1572,11 @@ export function PlacementScheduler() {
                               variant="ghost"
                               className="h-7 px-2 text-t4"
                               aria-label={`Remove day ${day.day_number}`}
-                              disabled={
-                                !canEdit ||
-                                busy ||
-                                tournamentDays.length <= 1 ||
-                                daysWithMatches.has(day.id)
-                              }
+                              disabled={!canEdit || busy || daysWithMatches.has(day.id)}
                               title={
-                                tournamentDays.length <= 1
-                                  ? "A tournament needs at least one day."
-                                  : daysWithMatches.has(day.id)
-                                    ? "This day has matches on it. Clear or move them first."
-                                    : undefined
+                                daysWithMatches.has(day.id)
+                                  ? "This day has matches on it. Clear or move them first."
+                                  : undefined
                               }
                               onClick={() => void removeDay(day)}
                             >
@@ -1627,35 +1806,11 @@ export function PlacementScheduler() {
                           </div>
                         ) : null}
                       </div>
+                        ) : null}
+                      </div>
                     );
                   })}
                 </div>
-                {tournamentDays.length < 7 ? (
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div>
-                      <Label htmlFor="new-day-date" className="text-t4 text-muted-foreground">
-                        New day
-                      </Label>
-                      <PickerInput
-                        id="new-day-date"
-                        type="date"
-                        pickerLabel="Open the calendar for the new day"
-                        className="mt-1 w-38 md:w-36"
-                        disabled={!canEdit || busy}
-                        value={newDayDate ?? suggestedNewDayDate}
-                        onChange={(event) => setNewDayDate(event.target.value)}
-                      />
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!canEdit || busy}
-                      onClick={() => void addDay(newDayDate ?? suggestedNewDayDate)}
-                    >
-                      Add day
-                    </Button>
-                  </div>
-                ) : null}
               </SettingsSection>
 
               <SettingsSection title="Match format" summary="2 stages">
@@ -1712,16 +1867,18 @@ export function PlacementScheduler() {
           </Panel>
         ) : null}
 
-        <Panel
-          title="Stage progress"
-          right={
-            <span className="text-t4 text-muted-foreground">
-              matches completed / total · next step
-            </span>
-          }
-        >
-          <StageProgressList rows={stageProgress} />
-        </Panel>
+        {canEdit ? (
+          <Panel
+            title="Stage progress"
+            right={
+              <span className="text-t4 text-muted-foreground">
+                matches completed / total · next step
+              </span>
+            }
+          >
+            <StageProgressList rows={stageProgress} />
+          </Panel>
+        ) : null}
 
         <Panel
           title="Running order"
@@ -1798,7 +1955,7 @@ export function PlacementScheduler() {
                         <tbody>
                           {slice.rows.map((row) => (
                             <tr key={row.id}>
-                              <td className="font-score text-xs font-semibold">
+                              <td className="font-score text-sm font-semibold">
                                 {timeLabel(row.start)}
                               </td>
                               <td>
@@ -1806,8 +1963,8 @@ export function PlacementScheduler() {
                                   C{row.courtNumber || "—"}
                                 </span>
                               </td>
-                              <td className="font-score text-xs">{row.categoryCode}</td>
-                              <td className="text-xs text-muted-foreground">{row.stage}</td>
+                              <td className="font-score text-sm">{row.categoryCode}</td>
+                              <td className="text-sm text-muted-foreground">{row.stage}</td>
                               <td>
                                 <StatusPill status={row.status} />
                               </td>
@@ -1841,7 +1998,7 @@ export function PlacementScheduler() {
           >
             {showDanger ? (
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <p className="max-w-lg text-xs text-muted-foreground">
+                <p className="max-w-lg text-sm text-muted-foreground">
                   Clears every placement and knockout match, every reported result and every
                   scheduled time, returning the stage to the start of round one. The seed order
                   and any waivers are kept, so the schedule can be rebuilt on the same seeding.
@@ -1857,11 +2014,23 @@ export function PlacementScheduler() {
                 </Button>
               </div>
             ) : (
-              <p className="p-4 text-xs text-muted-foreground">
+              <p className="p-4 text-sm text-muted-foreground">
                 Clear results and schedule, keeping the seed order.
               </p>
             )}
           </Panel>
+        ) : null}
+
+        {canEdit && showSettings ? (
+          <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline bg-surface px-4 py-3 sm:mx-0 sm:rounded-2xl sm:border">
+            {buildButton}
+            <span id="build-blocker" className="text-sm text-muted-foreground">
+              {buildBlocker ??
+                (hasSchedule
+                  ? "Matches already played or on court never move."
+                  : `${tournamentDays.length} day${tournamentDays.length === 1 ? "" : "s"}. Places every match; nothing already played is ever moved.`)}
+            </span>
+          </div>
         ) : null}
       </div>
 
@@ -1883,7 +2052,7 @@ export function PlacementScheduler() {
                     {preview.plan.summary.anchorCount} anchors kept · {preview.plan.summary.placed}{" "}
                     matches replanned · {preview.plan.diff.movedCount} moving
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     The table below shows how each day's finish changes.
                   </p>
                 </div>
@@ -1906,17 +2075,17 @@ export function PlacementScheduler() {
                             <td className="text-sm">
                               {dayDateLabel(row.date)}
                               {row.overrunMinutes > 0 ? (
-                                <span className="ml-2 text-xs text-warn-foreground">
+                                <span className="ml-2 text-sm text-warn-foreground">
                                   {row.overrunMinutes} min past close
                                 </span>
                               ) : null}
                             </td>
-                            <td className="font-score text-xs">{row.placed}</td>
-                            <td className="font-score text-xs">
+                            <td className="font-score text-sm">{row.placed}</td>
+                            <td className="font-score text-sm">
                               {row.lastFinish ? timeLabel(row.lastFinish) : "—"}
                             </td>
-                            <td className="font-score text-xs">{row.moving}</td>
-                            <td className="font-score text-xs">
+                            <td className="font-score text-sm">{row.moving}</td>
+                            <td className="font-score text-sm">
                               {row.largestShift ? `${row.largestShift} min` : "—"}
                             </td>
                           </tr>
@@ -1933,13 +2102,13 @@ export function PlacementScheduler() {
                       {preview.plan.blocked.length === 1 ? "" : "es"} could not be placed.
                     </p>
                     {preview.plan.blockedReason ? (
-                      <p className="mt-1 text-xs">{preview.plan.blockedReason}</p>
+                      <p className="mt-1 text-sm">{preview.plan.blockedReason}</p>
                     ) : preview.plan.summary.diagnostics?.deadlockReason ? (
-                      <p className="mt-1 text-xs">
+                      <p className="mt-1 text-sm">
                         {preview.plan.summary.diagnostics.deadlockReason}
                       </p>
                     ) : null}
-                    <ul className="mt-2 space-y-1 text-xs">
+                    <ul className="mt-2 space-y-1 text-sm">
                       {preview.plan.blocked.map((matchId) => (
                         <li key={matchId}>{matchLabel(matchId)}</li>
                       ))}
@@ -1948,7 +2117,7 @@ export function PlacementScheduler() {
                 ) : null}
 
                 {preview.plan.awaitingTeams.length > 0 ? (
-                  <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
                     {preview.plan.awaitingTeams.length} match
                     {preview.plan.awaitingTeams.length === 1 ? "" : "es"} waiting on a bracket and
                     will stay unscheduled.
@@ -1983,17 +2152,17 @@ export function PlacementScheduler() {
                           {visibleChanges.map((change) => (
                             <tr key={change.matchId}>
                               <td className="text-sm">{matchLabel(change.matchId)}</td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
                                 {timeLabel(change.toStart)}
                               </td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.fromCourtNumber != null
                                   ? `C${change.fromCourtNumber}`
                                   : "—"}{" "}
                                 → C{change.toCourtNumber}
                               </td>
-                              <td className="font-score text-xs">
+                              <td className="font-score text-sm">
                                 {change.shiftMinutes > 0 ? "+" : ""}
                                 {change.shiftMinutes || "—"}
                               </td>

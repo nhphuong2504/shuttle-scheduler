@@ -61,3 +61,24 @@ export function dateRangeText(startsAt: string | null, endsAt: string | null): s
 export function countText(value: number, singular: string, plural: string): string {
   return `${value} ${value === 1 ? singular : plural}`;
 }
+
+/**
+ * The days a tournament covers, without the clock: "Oct 4", or "Oct 4 – 5", or "Oct 30 – Nov 2".
+ *
+ * The line under a tournament's name wants *when*, not the hour it opens, and the zone
+ * abbreviation that `dateRangeText` prints beside every time is noise on a line that has no
+ * times. Both ends are read in the reader's own zone, as every other date on the page is.
+ */
+export function shortDays(startsAt: string | null, endsAt: string | null): string | null {
+  if (!startsAt) return null;
+  const month = new Intl.DateTimeFormat(undefined, { month: "short" });
+  const start = new Date(startsAt);
+  const end = endsAt ? new Date(endsAt) : start;
+  const from = `${month.format(start)} ${start.getDate()}`;
+  if (end.toDateString() === start.toDateString()) return from;
+  const to =
+    month.format(end) === month.format(start)
+      ? String(end.getDate())
+      : `${month.format(end)} ${end.getDate()}`;
+  return `${from} – ${to}`;
+}

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { PlayerPicker } from "@/components/player-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +24,9 @@ import {
   useCategories,
   usePlayers,
   useTeams,
+  type Player,
 } from "@/lib/tournament/data";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/entries")({
   head: () => ({
@@ -139,8 +142,10 @@ function EntriesPage() {
   const [gender, setGender] = useState<string>("");
 
   const [categoryId, setCategoryId] = useState<string>("");
-  const [p1, setP1] = useState<string>("");
-  const [p2, setP2] = useState<string>("");
+  // The people chosen for the entry. They are held as rows, not ids: a person found by search
+  // is not on this tournament yet, so `players` cannot give their name back.
+  const [p1, setP1] = useState<Player | null>(null);
+  const [p2, setP2] = useState<Player | null>(null);
 
   const playerMap = useMemo(() => indexBy(players), [players]);
   const category = (categories ?? []).find((c) => c.id === categoryId);
@@ -207,7 +212,12 @@ function EntriesPage() {
 
   const addPlayer = async () => {
     try {
-      await createPlayer({ name, email, phone, gender });
+      const created = await createPlayer({ name, email, phone, gender });
+      // Put the new person straight into the entry being built: the next thing anyone does
+      // with a walk-in is enter them.
+      const person: Player = { id: created, name: name.trim(), gender: gender || null };
+      if (!p1) setP1(person);
+      else if (isPair && !p2) setP2(person);
       setName("");
       setEmail("");
       setPhone("");
@@ -223,18 +233,16 @@ function EntriesPage() {
     try {
       if (!categoryId || !p1) return;
       if (isPair && !p2) throw new Error("This category needs a pair — pick both players.");
-      if (isPair && p1 === p2) throw new Error("A pair needs two different players.");
-      await createTeam({ categoryId, player1: p1, player2: isPair ? p2 : null });
-      setP1("");
-      setP2("");
+      if (isPair && p1.id === p2?.id) throw new Error("A pair needs two different players.");
+      await createTeam({ categoryId, player1: p1.id, player2: isPair && p2 ? p2.id : null });
+      setP1(null);
+      setP2(null);
       toast.success("Entry added");
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add entry");
     }
   };
-
-  const eligible = (players ?? []).filter((p) => !atCap(p.id));
 
   const stats = useMemo(() => {
     const all = teams ?? [];
@@ -248,34 +256,45 @@ function EntriesPage() {
       entered.add(pid);
       byCount.set(set.size, (byCount.get(set.size) ?? 0) + 1);
     }
-    const totalPlayers = (players ?? []).length;
     return {
-      totalPlayers,
+      /** The people with an entry in *this* tournament, which is the count a reader means. */
+      entered: entered.size,
       entries: all.length,
       active: active.length,
       withdrawn,
-      unassigned: Math.max(0, totalPlayers - entered.size),
       byCount,
     };
-  }, [teams, players, categoryCount]);
+  }, [teams, categoryCount]);
 
   return (
-    <Page title="Entries" subtitle={capSubtitle(categoryCap)}>
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatTile
-          label="Players"
-          value={stats.totalPlayers}
-          hint={`${stats.unassigned} with no entry`}
-        />
+    <Page
+      title="Entries"
+      subtitle={canEdit ? capSubtitle(categoryCap) : "Who is playing in each event."}
+    >
+      {/*
+        What a reader needs is how big the field is. The roster-wide player count, the players
+        with no entry and the two cap tiles are the desk's bookkeeping - they describe the
+        whole player list and the entry limit, which only somebody adding entries acts on - so
+        they are drawn for an editor and not for a reader.
+      */}
+      <div
+        className={cn(
+          "mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2",
+          canEdit ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-4",
+        )}
+      >
+        <StatTile label="Players" value={stats.entered} hint="Taking part" />
         <StatTile label="Entries" value={stats.entries} hint="Across all categories" />
         <StatTile label="Active" value={stats.active} tone="good" hint="Still in the draw" />
-        <StatTile
-          label="Withdrawn"
-          value={stats.withdrawn}
-          tone={stats.withdrawn > 0 ? "warn" : "normal"}
-          hint="Pulled out"
-        />
-        {CAP_LEVELS.map((level) => {
+        {canEdit || stats.withdrawn > 0 ? (
+          <StatTile
+            label="Withdrawn"
+            value={stats.withdrawn}
+            tone={stats.withdrawn > 0 ? "warn" : "normal"}
+            hint="Pulled out"
+          />
+        ) : null}
+        {(canEdit ? CAP_LEVELS : []).map((level) => {
           const count = stats.byCount.get(level) ?? 0;
           // At or past the configured cap this level cannot enter again; below
           // it, the entry is still open, so the tiles say different things.
@@ -292,7 +311,8 @@ function EntriesPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
+      <div className={cn("grid grid-cols-1 gap-4", canEdit && "lg:grid-cols-[340px_1fr]")}>
+        {canEdit ? (
         <div className="space-y-4">
           <Panel title="Add player">
             <div className="space-y-3">
@@ -350,28 +370,37 @@ function EntriesPage() {
                   </SelectContent>
                 </Select>
                 {!openCategories.length ? (
-                  <p className="text-xs text-warn-foreground">
+                  <p className="text-sm text-warn-foreground">
                     Every category this tournament runs is either full or switched off.
                   </p>
                 ) : null}
                 {selectedIsFull ? (
-                  <p className="text-xs text-danger-foreground">
+                  <p className="text-sm text-danger-foreground">
                     That category is full — withdraw an entry to make room.
                   </p>
                 ) : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="p1">{isPair ? "Player 1" : "Player"}</Label>
-                <PlayerSelect id="p1" value={p1} onChange={setP1} options={eligible} />
+                <PlayerPicker
+                  id="p1"
+                  tournamentId={tournament?.id ?? null}
+                  selected={p1}
+                  onChange={setP1}
+                  exclude={new Set(p2 ? [p2.id] : [])}
+                  hidden={atCap}
+                />
               </div>
               {isPair ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="p2">Player 2</Label>
-                  <PlayerSelect
+                  <PlayerPicker
                     id="p2"
-                    value={p2}
+                    tournamentId={tournament?.id ?? null}
+                    selected={p2}
                     onChange={setP2}
-                    options={eligible.filter((p) => p.id !== p1)}
+                    exclude={new Set(p1 ? [p1.id] : [])}
+                    hidden={atCap}
                   />
                 </div>
               ) : null}
@@ -382,10 +411,11 @@ function EntriesPage() {
               >
                 Add entry
               </Button>
-              <p className="text-xs text-muted-foreground">{capPickerNote(categoryCap)}</p>
+              <p className="text-sm text-muted-foreground">{capPickerNote(categoryCap)}</p>
             </div>
           </Panel>
         </div>
+        ) : null}
 
         <div className="space-y-4">
           {listedCategories.map((c) => {
@@ -399,15 +429,15 @@ function EntriesPage() {
                 right={
                   <span className="flex items-center gap-2">
                     {!c.active ? (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                         Closed
                       </span>
                     ) : full ? (
-                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-t4 font-semibold uppercase tracking-wider text-danger-foreground">
+                      <span className="rounded-full bg-danger-surface px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-danger-foreground">
                         Full
                       </span>
                     ) : null}
-                    <span className="font-score text-xs text-muted-foreground">
+                    <span className="font-score text-sm text-muted-foreground">
                       {activeCount}
                       {c.max_entries != null ? ` / ${c.max_entries}` : ""} entries
                     </span>
@@ -417,7 +447,11 @@ function EntriesPage() {
                 {list.length === 0 ? (
                   <EmptyState
                     title="No entries yet"
-                    hint="Add players on the left, then create an entry."
+                    hint={
+                      canEdit
+                        ? "Add players on the left, then create an entry."
+                        : "Nobody has entered this category yet."
+                    }
                   />
                 ) : (
                   <ul className="divide-y divide-hairline">
@@ -432,34 +466,38 @@ function EntriesPage() {
                           {teamLabel(t, playerMap)}
                         </span>
                         <span className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!canEdit}
-                            onClick={async () => {
-                              await setTeamWithdrawn(t.id, !t.withdrawn);
-                              refresh();
-                            }}
-                          >
-                            {t.withdrawn ? "Reinstate" : "Withdraw"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={!canEdit}
-                            onClick={async () => {
-                              try {
-                                await deleteTeam(t.id);
-                                refresh();
-                              } catch (error) {
-                                toast.error(
-                                  error instanceof Error ? error.message : "Could not remove entry",
-                                );
-                              }
-                            }}
-                          >
-                            Remove
-                          </Button>
+                          {canEdit ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={async () => {
+                                  await setTeamWithdrawn(t.id, !t.withdrawn);
+                                  refresh();
+                                }}
+                              >
+                                {t.withdrawn ? "Reinstate" : "Withdraw"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={async () => {
+                                  try {
+                                    await deleteTeam(t.id);
+                                    refresh();
+                                  } catch (error) {
+                                    toast.error(
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Could not remove entry",
+                                    );
+                                  }
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </>
+                          ) : null}
                         </span>
                       </li>
                     ))}
@@ -471,34 +509,5 @@ function EntriesPage() {
         </div>
       </div>
     </Page>
-  );
-}
-
-function PlayerSelect({
-  value,
-  onChange,
-  options,
-  id,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { id: string; name: string }[];
-  // Required, not optional: a combobox with no accessible name is the defect this
-  // prop exists to prevent, so making it optional would let the next caller omit it.
-  id: string;
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger id={id}>
-        <SelectValue placeholder="Choose player" />
-      </SelectTrigger>
-      <SelectContent className="max-h-72">
-        {options.map((p) => (
-          <SelectItem key={p.id} value={p.id}>
-            {p.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }

@@ -103,7 +103,7 @@ test.describe("the bare domain", () => {
     // are "it rendered" and "it stayed". The path is asserted first: a surviving redirect
     // would pass a heading check by landing somewhere else entirely.
     expect(new URL(page.url()).pathname).toBe("/");
-    await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back", level: 1 })).toBeVisible();
   });
 
   test("is Landing for a visitor, which is the other reading of one address", async ({ page }) => {
@@ -117,10 +117,19 @@ test.describe("the bare domain", () => {
     // The session decides which reading renders, in the page rather than in a guard: a
     // `beforeLoad` would decide during server rendering, where there is never a session, and
     // would show every signed-in caller the visitor's page on their first paint.
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      /run a badminton tournament from one console/i,
+    //
+    // The visitor reading is a placeholder and its copy is expected to change, so this asserts
+    // the *shape* it owes - a title, and two working ways forward - rather than the wording
+    // somebody will one day replace.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/tournova/i);
+    // Scoped to `main`, because the nav carries the same label: the assertion is that the
+    // page offers a way forward, not that the bar does.
+    const main = page.getByRole("main");
+    await expect(main.getByRole("link", { name: "Browse tournaments" })).toHaveAttribute(
+      "href",
+      routes.explore,
     );
-    await expect(page.getByRole("link", { name: "Explore tournaments" })).toBeVisible();
+    await expect(main.getByRole("link", { name: /sign in/i })).toBeVisible();
   });
 });
 
@@ -131,14 +140,14 @@ test.describe("the sign-in return address", () => {
     await page.goto(`${routes.explore}?q=Forker`, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    await page.getByRole("main").getByRole("link", { name: /sign in/i }).first().click();
+    await page.getByRole("banner").getByRole("button", { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/auth/);
 
     // The search is part of the page's address, and the point of a return address is that it
     // is the address you left: somebody who signs in from a filtered list has to come back to
     // the list they were reading, not to an unfiltered one they then have to repeat.
     expect(new URL(page.url()).searchParams.get("redirect")).toBe(`${routes.explore}?q=Forker`);
-    await expect(page.getByRole("heading", { name: /control desk sign in/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /sign in to tournova/i })).toBeVisible();
   });
 
   test("writes nothing when a bare sign-in would land there anyway", async ({ page }) => {
@@ -160,7 +169,7 @@ test.describe("the sign-in return address", () => {
     // a link to it that bounces on to another origin is a credible-looking phishing trip. The
     // rules live in `src/lib/routing/redirect.ts` and are unit-tested there; this is the route
     // actually applying them, and dropping the value rather than merely ignoring it.
-    await expect(page.getByRole("heading", { name: /control desk sign in/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /sign in to tournova/i })).toBeVisible();
     expect(new URL(page.url()).searchParams.get("redirect")).toBeNull();
   });
 });

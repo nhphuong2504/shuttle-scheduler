@@ -2,7 +2,7 @@ import { type ConsoleMessage, type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
 
-import { cellLabel, MATRIX_CELLS, openCell, ROUTES, seedAppearance } from "./fixtures/matrix";
+import { cellLabel, MATRIX_CELLS, openCell, ROUTES } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 
 /**
@@ -16,18 +16,14 @@ import { routes } from "./fixtures/routes";
  * event discards its server render, flickers, and repeats the work the server already did.
  *
  * Nothing caught it. Axe does not look at hydration. The token and component tests never
- * run a second renderer. And the one existing mismatch test only checked `/` in dark mode on
+ * run a second renderer. And the one existing mismatch test only checked a single route on
  * a fast local server, where the load reliably completes inside a single minute - so it
  * passed *because the clock rarely ticks mid-load*, which is the definition of a latent bug.
  *
- * Two design points make this check able to see what the old one could not:
- *
- *   1. Every route is checked, not just the Desk. The defect happened to be on the Desk, but
- *      the next one need not be.
- *   2. Every route is checked in both cells, because the appearance is applied by an
- *      inline script before React runs, and that script writes to the same `<html>` element
- *      React is hydrating. Any future mistake there surfaces here rather than as an
- *      unexplained test flake.
+ * What makes this check able to see what the old one could not is that every route is
+ * checked, not just the Desk. The defect happened to be on the Desk, but the next one need
+ * not be - so the sweep walks `ROUTES` through the shared `openCell` helper rather than
+ * naming the pages it remembers.
  */
 
 type Mismatch = { route: string; cell: string; message: string };
@@ -96,7 +92,6 @@ test.describe("the desk clock is client-owned", () => {
   test("the server render carries no wall-clock time", async ({ page }) => {
     // Blocking the bundle is the honest way to see the server HTML: with scripting live,
     // React has already replaced the tree by the time any assertion could read it.
-    await seedAppearance(page, { theme: "light" });
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
     await page.goto(routes.desk, { waitUntil: "domcontentloaded" });
 
@@ -109,7 +104,7 @@ test.describe("the desk clock is client-owned", () => {
   });
 
   test("the clock appears once React has taken over", async ({ page }) => {
-    await openCell(page, routes.desk, { theme: "light" });
+    await openCell(page, routes.desk, MATRIX_CELLS[0]!);
     const panel = page.locator("text=updates every 30s").first();
     await expect(panel).toHaveText(/\d{1,2}:\d{2}/);
   });

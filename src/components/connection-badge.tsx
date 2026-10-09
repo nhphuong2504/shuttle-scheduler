@@ -59,7 +59,7 @@ export function ConnectionBadge({
   return (
     <span
       role="status"
-      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+      className={`rounded-full px-2.5 py-1 text-sm font-semibold ${
         status === "live"
           ? "bg-state-live-chip text-state-live-ink"
           : status === "offline" || status === "error"

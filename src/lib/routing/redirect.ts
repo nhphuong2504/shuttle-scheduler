@@ -62,13 +62,66 @@ export function localRedirect(value: unknown): string | undefined {
  * The search a sign-in link carries, so the caller comes back to the page they left.
  *
  * The shape is the auth route's own search schema - the route builds its `validateSearch`
- * result into this type - and it is one optional key: with a usable return address the link
- * carries it, and without one the link carries nothing. That is why this returns an object
- * to spread into `search` rather than a string: the caller cannot accidentally pass an
- * unvalidated address, because it never sees the parameter name.
+ * result into this type - and it is two optional keys: with a usable return address the
+ * link carries it, and without one the link carries nothing. That is why this returns an
+ * object to spread into `search` rather than a string: the caller cannot accidentally pass
+ * an unvalidated address, because it never sees the parameter name.
  */
 export interface SignInSearch {
   redirect?: string;
+  /** Why the trip was made, so the sign-in page can say what is being continued. */
+  intent?: SignInIntent;
+}
+
+/**
+ * Why a caller was sent to the sign-in page.
+ *
+ * A closed vocabulary rather than a sentence, and that is the security property rather
+ * than a matter of taste: this value selects copy the sign-in page prints. Free text from
+ * a query parameter would let a hand-edited link put somebody else's words on a page this
+ * app owns - the same class of mistake as the open redirect above, because the address is
+ * trusted and what it carries therefore has to be limited to what this app wrote.
+ *
+ * An unrecognised word is dropped, on the same reasoning as `localRedirect`: the honest
+ * answer to "somebody composed this" is the page's own default rather than a guess.
+ *
+ * There is one member today. The vocabulary is a list rather than a boolean because the
+ * next entry - "sign in to create a tournament", say - is a word beside it and not a new
+ * parameter, and because a boolean cannot be read at a call site that does not already
+ * know which errand it is on.
+ */
+export const SIGN_IN_INTENTS = ["register"] as const;
+
+export type SignInIntent = (typeof SIGN_IN_INTENTS)[number];
+
+/** Narrows a received value to the vocabulary, or nothing. */
+export function normalizeSignInIntent(value: unknown): SignInIntent | undefined {
+  return typeof value === "string" && (SIGN_IN_INTENTS as readonly string[]).includes(value)
+    ? (value as SignInIntent)
+    : undefined;
+}
+
+/**
+ * The sentence the sign-in page prints for an intent, and the only place these strings live.
+ *
+ * A switch with no default, like every other vocabulary in this app: a member added to
+ * `SIGN_IN_INTENTS` without a sentence makes this function return `undefined`, which is a
+ * type error at the call site rather than a blank callout in production.
+ *
+ * These are *destinations*, not instructions. The page already says what to do - its heading
+ * is "Sign in to Tournova" and its own copy names the two doors - so repeating "sign in or
+ * create an account" here would be the page telling somebody the thing they are looking at.
+ * What the visitor cannot know is what happens *next*: whether signing in loses the thing
+ * they clicked, or takes them to it. That is the whole reason the intent travels, and it is
+ * why each sentence below names where the caller ends up.
+ *
+ * It is only ever shown beside a return address; see `signInSearch`.
+ */
+export function signInIntentText(intent: SignInIntent): string {
+  switch (intent) {
+    case "register":
+      return "You'll go straight to that tournament's registration form.";
+  }
 }
 
 /**
@@ -95,11 +148,16 @@ export const SIGNED_IN_HOME = "/" as const;
  * and in the public nav to say what the default already says. The two are kept in step by
  * `SIGNED_IN_HOME` rather than by a literal here, so this cannot drift from the fallback it
  * is comparing against.
+ *
+ * `intent` is written *only* beside a return address, and the two are dropped together.
+ * The sentence it produces names where the caller is going ("you will go straight to the
+ * registration form"), so carrying it with no destination would promise something the link
+ * cannot deliver - which is the same lie the parameter is dropped to avoid, one line up.
  */
-export function signInSearch(returnTo: string): SignInSearch {
+export function signInSearch(returnTo: string, intent?: SignInIntent): SignInSearch {
   const redirect = localRedirect(returnTo);
   if (redirect === undefined || redirect === SIGNED_IN_HOME) return {};
-  return { redirect };
+  return intent === undefined ? { redirect } : { redirect, intent };
 }
 
 /**

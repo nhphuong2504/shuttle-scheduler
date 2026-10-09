@@ -24,7 +24,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { PickerInput } from "@/components/ui/picker-input";
 import {
+  assertMatchUnchanged,
   reportDrawMatch,
   reportPoolMatch,
   rescheduleMatch,
@@ -535,7 +537,12 @@ function Desk() {
       actions={
         <>
           <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
-          <Button size="sm" variant="outline" onClick={() => void qc.invalidateQueries()}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-11 px-4 text-sm"
+            onClick={() => void qc.invalidateQueries()}
+          >
             Refresh
           </Button>
         </>
@@ -554,7 +561,7 @@ function Desk() {
                   type="button"
                   onClick={() => setPickedDayId(day.id)}
                   aria-pressed={day.id === selectedDayId}
-                  className={`rounded-md px-2 py-1 font-score text-t2 transition-colors ${
+                  className={`min-h-11 rounded-md px-4 font-score text-sm font-semibold tabular-nums transition-colors ${
                     day.id === selectedDayId
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground hover:bg-muted/70"
@@ -580,7 +587,7 @@ function Desk() {
         <Panel
           title="Act now"
           right={
-            <span className="text-t4 text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {clockAdopted
                 ? `${timeLabel(new Date(now))} · updates every 30s`
                 : "updates every 30s"}
@@ -592,14 +599,14 @@ function Desk() {
             overCap.length ||
             readyUnassigned.length ||
             courtStates.some(({ state }) => state.state === "free-ready") ? (
-              <ul className="space-y-1.5 text-sm">
+              <ul className="space-y-2 text-base">
                 {courtStates
                   .filter(({ state }) => state.state === "free-ready" && state.next)
                   .map(({ court, state }) => (
                     <li key={`ready-${court.id}`}>
                       <button
                         type="button"
-                        className="w-full rounded-md bg-primary/15 px-2.5 py-2 text-left font-medium hover:bg-primary/25"
+                        className="min-h-11 w-full rounded-md bg-primary/15 px-3 py-2.5 text-left font-semibold hover:bg-primary/25"
                         onClick={() => {
                           setOperationCourtId(court.id);
                           setOpenMatch(state.next);
@@ -654,7 +661,7 @@ function Desk() {
                   <li key={m.id}>
                     <button
                       type="button"
-                      className="w-full rounded-md bg-warn-surface px-2.5 py-2 text-left text-warn-foreground hover:brightness-95"
+                      className="min-h-11 w-full rounded-md bg-warn-surface px-3 py-2.5 text-left font-semibold text-warn-foreground hover:brightness-95"
                       onClick={() => {
                         setOperationCourtId(m.courtId);
                         setOpenMatch(m);
@@ -676,7 +683,7 @@ function Desk() {
           title="Court board"
           right={
             selectedDay ? (
-              <span className="text-t4 text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {dayDateLabel(selectedDay.date)} · {courtsOnSelectedDay.length} court
                 {courtsOnSelectedDay.length === 1 ? "" : "s"}
               </span>
@@ -697,31 +704,32 @@ function Desk() {
                     setOperationCourtId(court.id);
                     setOpenMatch(target);
                   }}
-                  className={`rounded-xl border p-3.5 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default disabled:opacity-80 ${COURT_STATE_TILE[state.state]}`}
+                  className={`rounded-xl border p-4 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default disabled:opacity-80 ${COURT_STATE_TILE[state.state]}`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 font-display text-sm font-bold">
+                    <span className="flex items-center gap-2 font-display text-lg font-bold">
                       {/*
                         The badge is `foreground`-tinted rather than `primary`-tinted, and
                         that is a correctness fix rather than a style preference.
 
                         `--primary-ink` is solved against `bg-primary/10` over a *surface*.
                         This badge sits on a court tile, whose background is not a surface -
-                        it is `COURT_STATE_TILE[state]`, so it is a green live chip, a danger
-                        tint, a primary wash or a plain surface depending on the state. On
-                        the dark live chip the pair measured 4.53:1 against the 4.5:1 that
-                        14px needs: technically passing, with no headroom at all, and only
-                        visible at all once the fixture put a real match on a court.
+                        it is `COURT_STATE_TILE[state]`, so it is a lime live chip, a danger
+                        tint, a primary wash or a plain surface depending on the state. An
+                        ink solved against a *surface* therefore has no fixed pair to clear
+                        here: the same badge sits on five different fills, so whether it
+                        passes or not is decided by the tile underneath it - a fact that was
+                        only visible at all once the fixture put a real match on a court.
 
                         An ink is only valid against the fill it was solved for, so an
                         element that can sit on five different backgrounds cannot use one.
                         `foreground` on a `foreground/10` wash is backdrop-agnostic and
-                        clears the requirement on every tile in both themes, and it also
+                        clears the requirement on every tile, and it also
                         respects the system's own rule that hue is reserved for state -
-                        a brand-blue chip inside a state-coloured tile was already the one
+                        a violet chip inside a state-coloured tile was already the one
                         place that broke it.
                       */}
-                      <span className="grid size-6 place-items-center rounded-md bg-foreground/10 font-score text-t2 text-foreground">
+                      <span className="grid size-9 place-items-center rounded-lg bg-foreground/10 font-score text-lg font-bold text-foreground">
                         {court.number}
                       </span>
                       Court {court.number}
@@ -733,17 +741,17 @@ function Desk() {
                       content, so they take the read tier. The tag above is a
                       reference code and the timer below is the value that needs to
                       be comparable across courts. */}
-                  <p className="mt-2 text-t3">
+                  <p className="mt-3 text-base font-semibold leading-snug">
                     {state.playing ? (
                       <>
-                        <span className="font-score text-t4 text-muted-foreground">
+                        <span className="font-score text-sm font-medium text-muted-foreground">
                           {state.playing.tag}
                         </span>
                         <br />
                         {label(state.playing.teams[0])} vs {label(state.playing.teams[1])}
                         <br />
                         <span
-                          className={`font-score text-t2 ${
+                          className={`font-score text-base tabular-nums ${
                             state.state === "overrun"
                               ? "font-semibold text-danger-foreground"
                               : "text-muted-foreground"
@@ -792,10 +800,10 @@ function Desk() {
                           : ""}
                       </p>
                     ) : (
-                      <p className="text-t4">nothing queued</p>
+                      <p className="text-sm">nothing queued</p>
                     )}
                   </div>
-                  <p className="mt-2 text-t4 uppercase tracking-widest text-muted-foreground">
+                  <p className="mt-3 text-sm font-semibold text-primary-ink">
                     {state.playing ? "Open score desk" : target ? "Open next match" : ""}
                   </p>
                 </button>
@@ -828,7 +836,7 @@ function Desk() {
              */
             right={
               overdueTransitions >= 2 ? (
-                <span className="shrink-0 rounded-md bg-warn-surface px-1.5 py-0.5 font-score text-t4 font-semibold text-warn-foreground">
+                <span className="shrink-0 rounded-md bg-warn-surface px-1.5 py-0.5 font-score text-sm font-semibold tabular-nums text-warn-foreground">
                   {overdueTransitions} overdue
                 </span>
               ) : null
@@ -847,7 +855,7 @@ function Desk() {
           <Panel
             title="Court progress"
             right={
-              <span className="text-t4 text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {courtProgress.reduce((sum, row) => sum + row.done, 0)}/
                 {courtProgress.reduce((sum, row) => sum + row.total, 0)} matches done
               </span>
@@ -858,21 +866,21 @@ function Desk() {
                 {courtProgress.map((row) => (
                   <li
                     key={row.court.id}
-                    className="flex min-h-[var(--row-height)] items-center gap-3 py-1 text-t3"
+                    className="flex min-h-[var(--row-height)] items-center gap-3 py-1 text-base"
                   >
-                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 font-score text-t2 text-primary-ink">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary/10 font-score text-sm font-bold text-primary-ink">
                       {row.court.number}
                     </span>
-                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
                       <span
                         className="block h-full rounded-full bg-primary"
                         style={{ width: `${row.percent}%` }}
                       />
                     </span>
-                    <span className="w-16 text-right font-score text-xs text-muted-foreground">
+                    <span className="w-20 text-right font-score text-sm tabular-nums text-muted-foreground">
                       {row.done}/{row.total}
                     </span>
-                    <span className="w-20 text-right font-score text-t2 text-muted-foreground">
+                    <span className="w-24 text-right font-score text-sm tabular-nums text-muted-foreground">
                       {row.remaining ? `${row.remaining} left` : "complete"}
                     </span>
                   </li>
@@ -1037,6 +1045,7 @@ export function MatchOperationsDialog({
     }
     setBusy(true);
     try {
+      await assertMatchUnchanged(table, match.id, match.status);
       if (match.kind === "placement" || match.kind === "tier") {
         if (!tournamentId) throw new Error("No active tournament.");
         const report = match.kind === "placement" ? reportPlacementMatch : reportTierDrawMatch;
@@ -1165,10 +1174,10 @@ export function MatchOperationsDialog({
   return (
     <>
       <DialogHeader className="space-y-1 border-b border-hairline pb-3 text-left">
-        <DialogTitle className="pr-8 font-display text-lg leading-tight">
+        <DialogTitle className="pr-8 font-display text-2xl leading-tight">
           {nameA} <span className="text-muted-foreground">vs</span> {nameB}
         </DialogTitle>
-        <DialogDescription className="text-xs uppercase tracking-wide">
+        <DialogDescription className="text-sm">
           {match.tag} · {scoringRuleLabel(scoringRule)}
           {courtNumber ? ` · Court ${courtNumber}` : ""} ·{" "}
           {match.status === "in-progress"
@@ -1182,7 +1191,7 @@ export function MatchOperationsDialog({
       <div className="space-y-4">
         <div className="flex justify-center pt-1">
           <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold uppercase tracking-wide ${
               isReported
                 ? "text-state-completed-ink"
                 : notStarted
@@ -1196,15 +1205,15 @@ export function MatchOperationsDialog({
 
         <div className="rounded-xl border border-hairline bg-muted/30 px-4 py-4">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center">
-            <span className="truncate text-sm font-medium">{nameA}</span>
+            <span className="truncate text-base font-semibold">{nameA}</span>
             <span aria-hidden className="w-6" />
-            <span className="truncate text-sm font-medium">{nameB}</span>
+            <span className="truncate text-base font-semibold">{nameB}</span>
           </div>
           <div className="mt-2 space-y-2">
             {Array.from({ length: rows }).map((_, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <Input
-                  className="h-12 w-full text-center font-score text-t1"
+                  className="h-14 w-full text-center font-score text-3xl font-bold tabular-nums"
                   inputMode="numeric"
                   placeholder="—"
                   autoFocus={i === 0 && canEditScores}
@@ -1213,9 +1222,9 @@ export function MatchOperationsDialog({
                   onChange={(e) => set(i, 0, e.target.value)}
                   aria-label={`Game ${i + 1} ${nameA}`}
                 />
-                <span className="w-6 text-center font-score text-lg text-muted-foreground">:</span>
+                <span className="w-6 text-center font-score text-2xl text-muted-foreground">:</span>
                 <Input
-                  className="h-12 w-full text-center font-score text-t1"
+                  className="h-14 w-full text-center font-score text-3xl font-bold tabular-nums"
                   inputMode="numeric"
                   placeholder="—"
                   value={values[i]?.[1] ?? ""}
@@ -1227,7 +1236,7 @@ export function MatchOperationsDialog({
             ))}
           </div>
           {rows > 1 ? (
-            <p className="mt-2 text-center text-t4 text-muted-foreground">
+            <p className="mt-2 text-center text-sm text-muted-foreground">
               Games 1–{rows}, top to bottom. {gamesNeededToWin(scoringRule)} wins take the match.
             </p>
           ) : null}
@@ -1235,11 +1244,11 @@ export function MatchOperationsDialog({
         {!isReported &&
         match.status !== "in-progress" &&
         (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
-          <ul className="space-y-1 text-xs">
+          <ul className="space-y-1.5 text-sm">
             {(startCheck?.conflicts ?? []).map((c, i) => (
               <li
                 key={`conflict-${i}`}
-                className="rounded-md bg-danger-surface px-2 py-1 text-danger-foreground"
+                className="rounded-md bg-danger-surface px-3 py-1.5 text-danger-foreground"
               >
                 {playerMap.get(c.playerId)?.name ?? "A player"} is currently playing
                 {c.courtNumber ? ` on Court ${c.courtNumber}` : " another match"} — this match can't
@@ -1249,7 +1258,7 @@ export function MatchOperationsDialog({
             {(startCheck?.warnings ?? []).map((w, i) => (
               <li
                 key={`warning-${i}`}
-                className="rounded-md bg-warn-surface px-2 py-1 text-warn-foreground"
+                className="rounded-md bg-warn-surface px-3 py-1.5 text-warn-foreground"
               >
                 {playerMap.get(w.playerId)?.name ?? "A player"} has only rested {w.restMinutes} of{" "}
                 {w.requiredMinutes} min since their last match.
@@ -1260,7 +1269,7 @@ export function MatchOperationsDialog({
         <div className="flex gap-2">
           {isReported ? (
             <Button
-              className="h-11 flex-1 text-base font-semibold shadow-md"
+              className="h-12 flex-1 text-lg font-semibold shadow-md"
               disabled={!canEdit || busy || !canSubmit}
               onClick={submit}
             >
@@ -1268,7 +1277,7 @@ export function MatchOperationsDialog({
             </Button>
           ) : notStarted ? (
             <Button
-              className="h-11 flex-1 text-base font-semibold shadow-md"
+              className="h-12 flex-1 text-lg font-semibold shadow-md"
               disabled={!canEdit || busy || !!startCheck?.conflicts.length}
               onClick={() => {
                 if ((startCheck?.warnings ?? []).length) {
@@ -1282,7 +1291,7 @@ export function MatchOperationsDialog({
             </Button>
           ) : (
             <Button
-              className="h-11 flex-1 text-base font-semibold shadow-md"
+              className="h-12 flex-1 text-lg font-semibold shadow-md"
               disabled={!canEdit || busy || !canSubmit}
               onClick={submit}
             >
@@ -1333,7 +1342,7 @@ export function MatchOperationsDialog({
         </AlertDialog>
         {!isReported && canEdit ? (
           <div className="border-t border-hairline pt-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="mb-2 text-sm font-semibold text-muted-foreground">
               More actions
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -1342,7 +1351,7 @@ export function MatchOperationsDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full"
+                    className="h-11 w-full text-sm"
                     disabled={busy}
                     onClick={() =>
                       setExceptionMode(exceptionMode === "walkover" ? null : "walkover")
@@ -1353,7 +1362,7 @@ export function MatchOperationsDialog({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full"
+                    className="h-11 w-full text-sm"
                     disabled={busy}
                     onClick={() => setExceptionMode(exceptionMode === "void" ? null : "void")}
                   >
@@ -1365,7 +1374,7 @@ export function MatchOperationsDialog({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="w-full"
+                  className="h-11 w-full text-sm"
                   disabled={busy}
                   onClick={() => setExceptionMode(exceptionMode === "move" ? null : "move")}
                 >
@@ -1377,10 +1386,10 @@ export function MatchOperationsDialog({
             {exceptionMode === "walkover" || exceptionMode === "void" ? (
               <div className="mt-3 space-y-2 rounded-lg bg-muted/50 p-3">
                 {exceptionMode === "walkover" ? (
-                  <label className="block text-xs font-medium">
+                  <label className="block text-sm font-medium">
                     Winner
                     <select
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-base"
                       value={winnerId}
                       onChange={(event) => setWinnerId(event.target.value)}
                     >
@@ -1389,10 +1398,10 @@ export function MatchOperationsDialog({
                     </select>
                   </label>
                 ) : null}
-                <label className="block text-xs font-medium">
+                <label className="block text-sm font-medium">
                   Operator note
                   <Input
-                    className="mt-1"
+                    className="mt-1 h-11 text-base"
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
                     placeholder={
@@ -1402,7 +1411,7 @@ export function MatchOperationsDialog({
                     }
                   />
                 </label>
-                <Button size="sm" disabled={busy || !note.trim()} onClick={resolveException}>
+                <Button size="sm" className="h-11 text-sm" disabled={busy || !note.trim()} onClick={resolveException}>
                   Confirm {exceptionMode}
                 </Button>
               </div>
@@ -1410,10 +1419,10 @@ export function MatchOperationsDialog({
 
             {exceptionMode === "move" ? (
               <div className="mt-3 grid gap-2 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
-                <label className="block text-xs font-medium">
+                <label className="block text-sm font-medium">
                   Court
                   <select
-                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-base"
                     value={moveCourtId}
                     onChange={(event) => setMoveCourtId(event.target.value)}
                   >
@@ -1425,17 +1434,22 @@ export function MatchOperationsDialog({
                     ))}
                   </select>
                 </label>
-                <label className="block text-xs font-medium">
-                  Start time
-                  <Input
-                    className="mt-1"
+                <div className="block text-sm font-medium">
+                  {/* Not wrapped around the field: the picker button inside would become
+                      part of the label's text. */}
+                  <label htmlFor="desk-move-time">Start time</label>
+                  <PickerInput
+                    id="desk-move-time"
+                    className="mt-1 h-11"
+                    inputClassName="text-base"
                     type="datetime-local"
+                    pickerLabel="Open the calendar and time picker for the start time"
                     value={moveTime}
                     onChange={(event) => setMoveTime(event.target.value)}
                   />
-                </label>
+                </div>
                 <Button
-                  className="sm:col-span-2"
+                  className="h-11 text-sm sm:col-span-2"
                   size="sm"
                   disabled={busy || !moveCourtId || !moveTime}
                   onClick={moveMatch}
@@ -1451,13 +1465,13 @@ export function MatchOperationsDialog({
             <Button
               size="sm"
               variant="outline"
-              className="w-full"
+              className="h-11 w-full text-sm"
               disabled={busy}
               onClick={() => setClearOpen(true)}
             >
               Clear result
             </Button>
-            <p className="mt-1.5 text-t4 text-muted-foreground">
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Sends this match back to unplayed so the score can be entered again. A round-one
               result cannot be cleared once round two was built from it — regenerate round two
               instead.
@@ -1502,7 +1516,7 @@ function CourtStatePill({ state }: { state: CourtState }) {
   // `e2e/states.spec.ts` and this component read one vocabulary rather than two.
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 font-score text-t2 uppercase tracking-wider ${COURT_STATE_CHIP[state]}`}
+      className={`inline-flex rounded-full px-2.5 py-1 font-score text-sm font-semibold uppercase tracking-wide ${COURT_STATE_CHIP[state]}`}
     >
       {COURT_STATE_LABEL[state]}
     </span>
@@ -1596,13 +1610,13 @@ function TransitionRow({
     <tr data-transition-row className="h-[var(--row-height)]">
       <td
         data-transition-cell="court"
-        className="py-1 pr-3 align-middle font-score text-t3 font-semibold text-foreground"
+        className="py-1 pr-3 align-middle font-score tabular-nums text-base font-semibold text-foreground"
       >
         C{courtNumber ?? "?"}
       </td>
       <td
         data-transition-cell="match"
-        className="py-1 pr-3 align-middle text-t3 font-semibold text-foreground"
+        className="py-1 pr-3 align-middle text-base font-semibold text-foreground"
       >
         {transition.match.tag || "Match"}
       </td>
@@ -1611,13 +1625,13 @@ function TransitionRow({
           match and to its status. */}
       <td
         data-transition-cell="kind"
-        className="hidden py-1 pr-3 align-middle text-t4 text-muted-foreground sm:table-cell"
+        className="hidden py-1 pr-3 align-middle text-sm text-muted-foreground sm:table-cell"
       >
         {COURT_TRANSITION_LABEL[kind]}
       </td>
       <td
         data-transition-cell="due"
-        className="hidden whitespace-nowrap py-1 pr-3 text-right align-middle font-score text-t4 text-muted-foreground sm:table-cell"
+        className="hidden whitespace-nowrap py-1 pr-3 text-right align-middle font-score tabular-nums text-sm text-muted-foreground sm:table-cell"
       >
         {/* The leading "~" is the marker for a projected value. It carries this cell alone -
             there is no footnote under the table explaining it, so the Kind column's own words
@@ -1626,7 +1640,7 @@ function TransitionRow({
       </td>
       <td
         data-transition-cell="status"
-        className="whitespace-nowrap py-1 pl-3 text-right align-middle font-score text-t3 font-semibold"
+        className="whitespace-nowrap py-1 pl-3 text-right align-middle font-score tabular-nums text-base font-semibold"
       >
         {overdue ? (
           <span className="text-warn-foreground">
@@ -1641,7 +1655,7 @@ function TransitionRow({
 }
 
 /** The column headers, one weight and one case, so the row of them reads as a rail. */
-const TRANSITION_HEAD = "py-1 pr-3 font-medium text-t4 uppercase tracking-wider text-muted-foreground";
+const TRANSITION_HEAD = "py-2 pr-3 text-sm font-semibold text-muted-foreground";
 
 /**
  * The panel's contents as one table.
@@ -1669,7 +1683,7 @@ function TransitionTable({
 }) {
   return (
     <>
-      <table className="w-full border-collapse text-left text-t3">
+      <table className="w-full border-collapse text-left text-base">
         <thead>
           <tr className="border-b border-hairline">
             <th scope="col" className={TRANSITION_HEAD}>
@@ -1715,7 +1729,7 @@ function ReadinessText({
 }) {
   if (!readiness) return null;
   if (readiness.state === "ready")
-    return <span className="font-medium text-primary">Ready now</span>;
+    return <span className="text-base font-semibold text-primary-ink">Ready now</span>;
   if (readiness.state === "resting") {
     return (
       <span className="text-warn-foreground">

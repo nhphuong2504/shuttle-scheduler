@@ -22,8 +22,8 @@ import {
  *
  * ## Why the whole suite, and not just the two specs that already mocked
  *
- * Before this, only `states.spec.ts` and `desk-layout.spec.ts` intercepted the network.
- * The other eight reached the hosted project. That was wrong for three separate reasons,
+ * Before this, only two specs intercepted the network.
+ * The others reached the hosted project. That was wrong for three separate reasons,
  * and each one alone would have justified the change:
  *
  *   1. A test run could read production data. Nothing was writing, but a suite whose
@@ -133,12 +133,19 @@ export interface AppMockOptions {
   registrationQueue?: readonly MockRegistrationRow[];
 
   /**
-   * What `tournament_registration_state` answers, as the database's own word.
+   * The registration window, as the database's own word, for *both* reads that carry it.
    *
    * `null` is the un-migrated/absent answer, which reads as `not_offered` - the honest
    * default, and the reason the Register panel is not drawn in any spec that does not ask
    * for a window. A spec about the participant surface arrives with `"open"`, because the
    * whole point of that surface is the form the window opens.
+   *
+   * One option rather than two because the database has one value: `tournament_summary`
+   * selects `tournament_registration_state(t.id)` for its own `registration_state` column, so
+   * the card on Explore and the panel on the participant page are the same answer and a
+   * fixture that varied them independently could pass a spec against a state no tournament
+   * can be in. Set it and both reads move; leave it out and the word is derived from the
+   * lifecycle, which is what every spec that is not about registration wants.
    */
   registrationState?: string | null;
 
@@ -455,7 +462,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     : access.is_editor
       ? "editor"
       : "viewer";
-  const fixture = deskFixture(preset, role ?? "user", status, membership, format);
+  const fixture = deskFixture(preset, role ?? "user", status, membership, format, registrationState);
 
   /**
    * REST, which is every table read and every RPC in this app.
@@ -516,6 +523,57 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
       return;
     }
     /**
+     * Explore's paged read and its counts.
+     *
+     * Built on the same derived summary the card read serves, so the two cannot describe a
+     * tournament differently. The fixture holds one tournament, so what these can show is
+     * the *filtering* - search, status, registration, date window - and the shape of the
+     * answer (`total_count` beside the rows, a count for every status); the ordering of many
+     * rows and the refusal of an unknown word belong to the integration suite, where the real
+     * function answers.
+     */
+    if (target === "rpc/explore_tournaments" || target === "rpc/explore_tournament_counts") {
+      type ExploreArgs = MockSummaryArgs & {
+        p_registration_open?: boolean | null;
+        p_range?: string | null;
+        p_limit?: number | null;
+        p_offset?: number | null;
+      };
+      const args = (route.request().postDataJSON() ?? {}) as ExploreArgs;
+      const counting = target === "rpc/explore_tournament_counts";
+      let rows = fixture.tournamentSummaries({
+        p_query: args.p_query ?? null,
+        p_status: counting ? null : (args.p_status ?? null),
+      });
+      if (args.p_registration_open) rows = rows.filter((row) => row.registration_state === "open");
+      const days: Record<string, number> = { week: 7, month: 31, quarter: 92 };
+      const span = args.p_range ? days[args.p_range] : undefined;
+      if (span !== undefined) {
+        const now = Date.now();
+        rows = rows.filter(
+          (row) =>
+            row.starts_at !== null &&
+            Date.parse(row.starts_at) <= now + span * 86_400_000 &&
+            Date.parse(row.ends_at ?? row.starts_at) >= now,
+        );
+      }
+      if (counting) {
+        await rpc(
+          ["in_progress", "upcoming", "completed"].map((status) => ({
+            status,
+            total: rows.filter((row) => row.status === status).length,
+          })),
+        );
+        return;
+      }
+      const offset = Math.max(args.p_offset ?? 0, 0);
+      const limit = Math.min(Math.max(args.p_limit ?? 12, 1), 50);
+      await rpc(
+        rows.slice(offset, offset + limit).map((row) => ({ ...row, total_count: rows.length })),
+      );
+      return;
+    }
+    /**
      * Who may edit the fixture tournament, projected the way the RPC projects it.
      *
      * It used to answer `[]` unconditionally, and that was not a neutral default: the
@@ -569,6 +627,26 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
      */
     if (target === "rpc/review_tournament_registrations") {
       await rpc(registrationQueue);
+      return;
+    }
+    /**
+     * The roster, as the app now reads it: the people on this tournament, and a search over the
+     * rest. The roster as a whole is no longer readable, so there is no table to serve - the
+     * fixture's `players` stand in for "everyone", which is enough to exercise the picker.
+     */
+    if (target === "rpc/tournament_players") {
+      await rpc(fixture.tables["players"] ?? []);
+      return;
+    }
+    if (target === "rpc/search_players") {
+      const args = (route.request().postDataJSON() ?? {}) as { p_query?: string };
+      const needle = (args.p_query ?? "").trim().toLowerCase();
+      const rows = (fixture.tables["players"] ?? []) as { name?: string }[];
+      await rpc(needle.length < 2 ? [] : rows.filter((p) => (p.name ?? "").toLowerCase().includes(needle)));
+      return;
+    }
+    if (target === "rpc/add_walk_in_player") {
+      await rpc("00000000-0000-4000-8000-0000000000aa");
       return;
     }
     if (target.startsWith("rpc/tournament_readiness")) {

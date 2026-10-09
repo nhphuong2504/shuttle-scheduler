@@ -9,22 +9,11 @@
  *
  * It therefore carries its own copy of the palette, under the same `--color-*`
  * names, so a reader moving between this file and the stylesheet is not
- * re-learning the vocabulary. Three properties make that copy safe rather than a
- * second source of truth:
+ * re-learning the vocabulary. Nothing keeps the copy in sync automatically, so a
+ * palette change in `styles.css` should be mirrored here by hand.
  *
- *  - it is a *copy of the palette*, not a fresh set of colours, and
- *    `tokens.test.ts` asserts every value here is byte-identical to the
- *    corresponding token in `styles.css` for the theme it belongs to;
- *  - it declares no colour the palette does not, so it cannot introduce a hue the
- *    design system has not solved;
- *  - it follows the **operating system** rather than a stored choice, because the
- *    stored choice is unreachable from here - which is exactly the fallback the
- *    design system documents for a caller that has nothing stored.
- *
- * Type is on the shipped tiers (T3 for prose, T1 for the heading) rather than the
- * ad-hoc sizes this document used to carry, and the font stack is `system-ui`
- * rather than the app's webfonts: a crash page must not wait on a network font to
- * decide whether it has a layout.
+ * The font stack is `system-ui` rather than the app's webfonts: a crash page must
+ * not wait on a network font to decide whether it has a layout.
  */
 export function renderErrorPage(): string {
   return `<!doctype html>
@@ -35,25 +24,14 @@ export function renderErrorPage(): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root {
-        color-scheme: light dark;
-        --color-background: oklch(0.975 0.004 250);
-        --color-foreground: oklch(0.255 0.010 255);
-        --color-surface: oklch(1 0 0);
-        --color-muted-foreground: oklch(0.505 0.009 252);
-        --color-border-control: oklch(0.643 0.008 250);
-        --color-primary: oklch(0.52 0.16 255);
-        --color-primary-foreground: oklch(1 0 0);
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --color-background: oklch(0.17 0.008 260);
-          --color-foreground: oklch(0.95 0.005 255);
-          --color-surface: oklch(0.215 0.008 262);
-          --color-muted-foreground: oklch(0.633 0.009 252);
-          --color-border-control: oklch(0.513 0.008 250);
-          --color-primary: oklch(0.635 0.16 255);
-          --color-primary-foreground: oklch(0.17 0.02 255);
-        }
+        color-scheme: light;
+        --color-background: #F4F5F4;
+        --color-foreground: #171A1D;
+        --color-surface: #FFFFFF;
+        --color-muted-foreground: #5B656C;
+        --color-border-control: #7F8A91;
+        --color-primary: #5B4FC7;
+        --color-primary-foreground: #FFFFFF;
       }
       body {
         font-family: system-ui, -apple-system, sans-serif;
