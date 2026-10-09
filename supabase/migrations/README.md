@@ -2851,9 +2851,11 @@ Four defects the old core had, and what replaced them:
 
 ### The held match, and per-chain atomicity
 
-The rewrite is atomic **per chain**, not per run. A match that cannot be made to fit before the day's
+The rewrite is atomic **per chain**, not per run. A match the reflow would move past the day's
 close is **held**: it keeps its published time, and so does every still-movable match after it on the
-same court and day, because that court's order can no longer be preserved. A held match pushes
+same court and day, because that court's order can no longer be preserved. A match the run is *not*
+moving is never held, even when its published time already crosses the close — the reflow did not
+create that spill, and freezing a court over a time it did not set is not its job. A held match pushes
 nothing — no shared player, no dependent on another court — so the rest of the day, and every
 unrelated chain, still reflows and is written in the same transaction. This is the deliberate trade
 the old code refused: it abandoned the whole cascade on a closing-time violation, which meant one
@@ -2868,8 +2870,10 @@ reports; it is not a bug in this migration. The four writes that publish times e
 
 Closing time is enforced on **every** day, including the last. The planner treats its cutoff as a soft
 objective term, so a full schedule that runs long can still win; a reflow may not *create* that spill,
-so a cascade that would do so stops at the held match and warns instead. The two rules disagree on
-purpose — see `docs/scheduling-decisions.md` for the planner's side.
+so a cascade that would do so stops at the held match and warns instead. "Create" is literal: the
+close is consulted only for a match the reflow is moving, so a match already published past the close
+is left as it stands — `schedule_conflicts` reports it as `past_closing` instead. The two rules
+disagree on purpose — see `docs/scheduling-decisions.md` for the planner's side.
 
 ### Locking, stated plainly
 
@@ -2893,6 +2897,8 @@ it. The global keys are deliberately kept.
 SELECT prosrc LIKE '%held = true%'                                        AS holds,
        prosrc LIKE '%GREATEST(current_match.shifted_time, previous_end)%' AS never_earlier,
        prosrc LIKE '%would run past closing time%'                        AS warns,
+       prosrc LIKE '%AND next_start IS DISTINCT FROM current_match.shifted_time%'
+                                                                          AS only_moved,
        prosrc LIKE '%v_violation%'                                        AS still_aborts  -- false
 FROM pg_proc WHERE proname = 'shift_live_schedule_core';
 

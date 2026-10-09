@@ -48,10 +48,13 @@
 --     so a match can only ever move later, never earlier;
 --   * a break is a wall the loop moves a match wholly past, and the day's closing
 --     time is enforced inside the same loop;
---   * atomicity is *per chain*, not per run. A match that cannot be made to fit
---     before the day's close is **held**: it keeps its published time, and so does
+--   * atomicity is *per chain*, not per run. A match that the reflow would move
+--     past the day's close is **held**: it keeps its published time, and so does
 --     every still-movable match after it on the same court and day, because that
---     court's order cannot be preserved any further. A held match pushes nothing -
+--     court's order cannot be preserved any further. A match that is *not* being
+--     moved is never held, even when its published time already crosses the close -
+--     the reflow did not create that spill, and freezing a court over a time it did
+--     not set is not its job. A held match pushes nothing -
 --     no shared player, no dependent on another court - so the rest of the day, and
 --     every unrelated chain, still reflows and is written in the same transaction.
 --     The held rows and their predecessors end up overlapping on purpose, and
@@ -66,7 +69,10 @@
 -- Closing time is enforced on *every* day, including the tournament's last. The
 -- planner treats its cutoff as a soft objective term, so a complete schedule that
 -- runs long can still win; a reflow may not *create* that spill, so a cascade that
--- would do so stops at the held match and warns instead. The two rules disagree on
+-- would do so stops at the held match and warns instead. "Create" is literal: the
+-- close is only consulted for a match the reflow is moving, so a match that was
+-- already published past the close is left as it stands and reported by
+-- `schedule_conflicts` as `past_closing` instead. The two rules disagree on
 -- purpose; see `docs/scheduling-decisions.md` for the planner's side.
 --
 -- `clear_breaks_after_reflow` is superseded by the loop and dropped: keeping it
@@ -632,14 +638,25 @@ BEGIN
     END IF;
 
     -- Closing time, exercised on every day including the tournament's last. A match
-    -- that cannot fit before the close is *held*: it keeps its published time, and so
-    -- does every still-movable match after it on the same court and day, because that
-    -- court's order can no longer be preserved. Held rows are never marked dirty, so
-    -- the write below leaves them alone, and they push nothing - the loop continues
-    -- with the rest of the day. The conflict this creates (a held match left
-    -- overlapping its shifted predecessor) is intentional and is what
+    -- the reflow would move past the close is *held*: it keeps its published time,
+    -- and so does every still-movable match after it on the same court and day,
+    -- because that court's order can no longer be preserved. Held rows are never
+    -- marked dirty, so the write below leaves them alone, and they push nothing - the
+    -- loop continues with the rest of the day. The conflict this creates (a held
+    -- match left overlapping its shifted predecessor) is intentional and is what
     -- `schedule_conflicts` reports.
-    IF v_day_end IS NOT NULL AND next_start + current_match.duration > v_day_end THEN
+    --
+    -- `next_start IS DISTINCT FROM current_match.shifted_time` is what makes this the
+    -- reflow's spill and not one it merely found. When the two are equal the match
+    -- was not moved - its published time already crosses the close - so there is
+    -- nothing to hold: it is left exactly as it was, not dirty, and its own court's
+    -- tail still reflows behind whatever the other floors decided. Holding it would
+    -- freeze a court over a time this run did not set. That a published time crosses
+    -- the close is reported by `schedule_conflicts` as `past_closing`, which reads the
+    -- rows rather than this cascade.
+    IF v_day_end IS NOT NULL
+      AND next_start IS DISTINCT FROM current_match.shifted_time
+      AND next_start + current_match.duration > v_day_end THEN
       UPDATE live_schedule_work
       SET held = true
       WHERE NOT held
@@ -832,6 +849,14 @@ BEGIN
       AND p.prosrc LIKE '%would run past closing time%'
   ) THEN
     RAISE EXCEPTION 'M3: the reflow core does not hold a match that would run past closing time';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'shift_live_schedule_core'
+      AND p.prosrc LIKE '%AND next_start IS DISTINCT FROM current_match.shifted_time%'
+  ) THEN
+    RAISE EXCEPTION 'M3: the reflow holds a match it did not move';
   END IF;
 
   IF NOT EXISTS (
