@@ -2134,3 +2134,61 @@ describe("frozenMatchIdsFor", () => {
     expect(frozenMatchIdsFor({ committed: [], now: 0 })).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// applyFreeze — current behaviour, revisited in Step 4
+// ---------------------------------------------------------------------------
+
+/**
+ * `applyFreeze` pins the next committed match on each court *as it stands*. It never asks
+ * whether that time is still sensible: a row whose time has already passed, or one that
+ * now sits inside a day break, is frozen exactly the same way. The pin is "do not move the
+ * match the desk is about to call", not "is this time legal", so it is deliberately blind
+ * to the clock and to the break list.
+ *
+ * This is recorded as the CURRENT behaviour, on purpose, because Step 4 changes the freeze
+ * to reconsider a row the day has overtaken. When that lands these two expectations will
+ * have to be rewritten; the test sits here so the change is made knowingly rather than
+ * noticed later. It does not touch `applyFreeze`.
+ */
+describe("applyFreeze — current behaviour (Step 4 will change this)", () => {
+  /** Still `scheduled`, but already on a court at a time, which is what the freeze reads. */
+  const committed = (id: string, entrantA: string, entrantB: string, courtId: string, time: string) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "scheduled",
+      court_id: courtId,
+      scheduled_time: new Date(time).toISOString(),
+    });
+
+  it("still pins a committed match whose time is already in the past", () => {
+    // 08:00 is an hour before the day opens and before the planner's `now`, and it is
+    // pinned anyway: the freeze does not compare against `now`.
+    const result = plan({
+      placementMatches: [
+        committed("past", "e1", "e2", "c1", "2026-09-17T08:00:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["past"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "past");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T08:00:00").toISOString());
+  });
+
+  it("still pins a committed match that now sits inside a day break", () => {
+    // The row is committed at 10:15, which the 10:00-11:00 break now covers. The freeze
+    // does not consult the break list, so it is pinned inside the break rather than
+    // stepped past it, and it stays there in the plan.
+    const result = plan({
+      breaks: [dayBreak("10:00:00", "11:00:00")],
+      placementMatches: [
+        committed("inbreak", "e1", "e2", "c1", "2026-09-17T10:15:00"),
+        placementMatch("free", "round1", "e3", "e4"),
+      ],
+    });
+
+    expect(result.frozenMatchIds).toEqual(["inbreak"]);
+    const pinned = result.slots.find((slot) => slot.matchId === "inbreak");
+    expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T10:15:00").toISOString());
+  });
+});

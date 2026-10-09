@@ -1,0 +1,408 @@
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+
+import { supabase } from "@/integrations/supabase/client";
+import { createPlayer, createTeam } from "@/lib/tournament/actions";
+import { fetchCourts, fetchPlacementEntrants, fetchScheduleConflicts } from "@/lib/tournament/data";
+import { reportPlacementMatch, syncPlacementEntrants } from "@/lib/tournament/placement-actions";
+
+import {
+  createIdentity,
+  createOwnedTournament,
+  destroyIdentity,
+  destroyTournaments,
+  serviceClient,
+  type DayFixture,
+  type TestIdentity,
+} from "./env";
+
+/**
+ * The live reflow, driven through the real RPCs against a real backend.
+ *
+ * WHAT THIS PROVES
+ *
+ * `shift_live_schedule_core` is the code that moves the rest of a court's day when a result
+ * lands. It is arithmetic over the rows, so `simulation.test.ts` already plays a whole event
+ * through it - but a simulation checks that the eventual answer is playable, not that each
+ * specific rule (never earlier, never into a break, never off this day, held at the close)
+ * is what the code does. These cases pin those rules one at a time, on hand-placed matches,
+ * because the rules are the whole point of the migration and a simulation is happy to be
+ * right for the wrong reason.
+ *
+ * THE VIRTUAL CLOCK
+ *
+ * The days are dated in 2020 so the first-match gate is open, and `report_placement_result`
+ * stamps `ended_at = COALESCE(ended_at, now())`. Each case writes the source's `ended_at`
+ * (service role, a fixture and never an assertion) BEFORE reporting, so the reflow reads the
+ * virtual finish instead of the wall clock. Every other match is left `scheduled`, so the
+ * only instant the reflow can read from the clock is the source's own - which the fixture
+ * already set - and the run is deterministic.
+ *
+ * A COURT AND A DAY ARE NOT THE SAME THING
+ *
+ * Each case builds its own tournament with two days and three courts, and places matches by
+ * direct insert rather than through the planner. That is deliberate: the planner would only
+ * produce schedules it already believes are safe, and the reflow is exactly the code that has
+ * to cope when a result makes one unsafe.
+ *
+ * LIMITS
+ *
+ * Runs against the LOCAL stack only (AGENTS.md): `npx supabase start`, then
+ * `npm run integration:target -- local`. It needs a container runtime, so it does not run in
+ * the editor by default - `npm run test:integration`.
+ */
+
+const TZ = "UTC";
+const DAY1 = "2020-01-04";
+const DAY2 = "2020-01-05";
+const COURT_NUMBERS = [1, 2, 3];
+
+const iso = (day: string, time: string) => `${day}T${time}:00Z`;
+
+interface Seeded {
+  tournamentId: string;
+  categoryId: string;
+  courtIdByNumber: Map<number, string>;
+  entrants: string[];
+}
+
+/** Fixtures this suite owns, torn down together so a failure cannot leak them. */
+const created: { tournaments: string[]; players: string[] } = { tournaments: [], players: [] };
+
+let admin: TestIdentity;
+
+beforeAll(async () => {
+  admin = await createIdentity("admin", "live-reflow");
+  const { error } = await supabase.auth.signInWithPassword({
+    email: admin.email,
+    password: admin.password,
+  });
+  if (error) throw new Error(`signing in the application client failed: ${error.message}`);
+}, 120_000);
+
+afterEach(async () => {
+  await destroyTournaments(...created.tournaments);
+  if (created.players.length > 0) {
+    await serviceClient().from("players").delete().in("id", created.players);
+  }
+  created.tournaments = [];
+  created.players = [];
+}, 120_000);
+
+afterAll(async () => {
+  await supabase.auth.signOut();
+  await destroyIdentity(admin);
+}, 120_000);
+
+/**
+ * A tournament with hand-placed matches ready to report.
+ *
+ * `entrants` are singles entries whose players share nobody, so a match never constrains
+ * another through a rest gap unless a case deliberately pairs two entrants twice.
+ */
+async function seed(options: {
+  label: string;
+  entrants: number;
+  day1End?: string;
+  day2?: boolean;
+  break?: { start: string; end: string };
+}): Promise<Seeded> {
+  const days: DayFixture[] = [
+    {
+      date: DAY1,
+      startTime: "09:00",
+      endTime: options.day1End ?? "17:00",
+      courts: COURT_NUMBERS,
+    },
+  ];
+  if (options.day2) {
+    days.push({ date: DAY2, startTime: "09:00", endTime: "17:00", courts: COURT_NUMBERS });
+  }
+
+  const tournamentId = await createOwnedTournament(admin, {
+    name: `itest-reflow-${options.label}-${Date.now().toString(36)}`,
+    timezone: TZ,
+    days,
+    status: "in_progress",
+  });
+  created.tournaments.push(tournamentId);
+
+  const { data: category, error: categoryError } = await serviceClient()
+    .from("categories")
+    .select("id")
+    .eq("tournament_id", tournamentId)
+    .eq("code", "MS")
+    .single();
+  if (categoryError) throw new Error(`reading the event failed: ${categoryError.message}`);
+
+  const { data: dayRows, error: dayError } = await serviceClient()
+    .from("tournament_days")
+    .select("id, day_number")
+    .eq("tournament_id", tournamentId)
+    .eq("day_number", 1)
+    .single();
+  if (dayError) throw new Error(`reading the day failed: ${dayError.message}`);
+
+  if (options.break) {
+    const { error } = await serviceClient().from("tournament_day_breaks").insert({
+      tournament_id: tournamentId,
+      day_id: dayRows.id,
+      label: "Test break",
+      start_time: options.break.start,
+      end_time: options.break.end,
+    });
+    if (error) throw new Error(`writing the break failed: ${error.message}`);
+  }
+
+  const players: string[] = [];
+  for (let index = 0; index < options.entrants; index += 1) {
+    players.push(await createPlayer({ name: `reflow ${options.label} p${index}`, gender: "M" }));
+  }
+  created.players.push(...players);
+  for (const playerId of players) {
+    await createTeam({ categoryId: category.id, player1: playerId, player2: null });
+  }
+  await syncPlacementEntrants(category.id);
+
+  const entrants = (await fetchPlacementEntrants(tournamentId)).map((row) => row.id);
+  const courts = await fetchCourts(tournamentId);
+  const courtIdByNumber = new Map(courts.map((court) => [court.number, court.id]));
+
+  return { tournamentId, categoryId: category.id, courtIdByNumber, entrants };
+}
+
+/** Places one round-one match by direct insert, which the planner would never produce. */
+async function placeMatch(
+  seeded: Seeded,
+  spec: {
+    key: string;
+    a: number;
+    b: number;
+    court: number;
+    at: string;
+    prerequisites?: string[];
+  },
+): Promise<string> {
+  const courtId = seeded.courtIdByNumber.get(spec.court);
+  if (!courtId) throw new Error(`no court ${spec.court}`);
+  const { data, error } = await serviceClient()
+    .from("placement_matches")
+    .insert({
+      tournament_id: seeded.tournamentId,
+      category_id: seeded.categoryId,
+      stage: "round1",
+      generation_key: spec.key,
+      entrant_a_id: seeded.entrants[spec.a] as string,
+      entrant_b_id: seeded.entrants[spec.b] as string,
+      court_id: courtId,
+      scheduled_time: spec.at,
+      status: "scheduled",
+      prerequisite_ids: spec.prerequisites ?? [],
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`placing ${spec.key} failed: ${error.message}`);
+  return data.id;
+}
+
+/**
+ * Reports a match at a virtual finish and lets the reflow run.
+ *
+ * The service role writes `ended_at` first, because `report_placement_result` preserves it
+ * with `COALESCE(ended_at, now())`; without it the reflow would read the wall clock.
+ */
+async function reportAt(matchId: string, endedAt: string, tournamentId: string): Promise<void> {
+  const { error } = await serviceClient()
+    .from("placement_matches")
+    .update({ ended_at: endedAt })
+    .eq("id", matchId);
+  if (error) throw new Error(`setting the virtual finish failed: ${error.message}`);
+  await reportPlacementMatch(matchId, [{ a: 21, b: 10 }], tournamentId);
+}
+
+/** The published times of the given matches, read back after a reflow. */
+async function timesOf(ids: string[]): Promise<Map<string, string>> {
+  const { data, error } = await serviceClient()
+    .from("placement_matches")
+    .select("id, scheduled_time")
+    .in("id", ids);
+  if (error) throw new Error(`reading times failed: ${error.message}`);
+  return new Map(data.map((row) => [row.id, new Date(row.scheduled_time as string).toISOString()]));
+}
+
+describe("live reflow", () => {
+  it("(a) leaves the rest of the court alone, and never pulls it earlier", async () => {
+    // A match that finishes EARLY is the sharper case: the old core floored the next start at
+    // the previous match's real end, so an early finish dragged the whole queue forward. The
+    // reflow may push a match later and never earlier.
+    const seeded = await seed({ label: "a", entrants: 4 });
+    const m1 = await placeMatch(seeded, { key: "a-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const m2 = await placeMatch(seeded, { key: "a-2", a: 2, b: 3, court: 1, at: iso(DAY1, "10:00") });
+
+    // Finishes at 09:05, fifty-five minutes before the next match is due.
+    await reportAt(m1, iso(DAY1, "09:05"), seeded.tournamentId);
+
+    const times = await timesOf([m2]);
+    expect(times.get(m2)).toBe(iso(DAY1, "10:00"));
+  });
+
+  it("(b) keeps a day-two match on day two after a day-one overrun", async () => {
+    // The day filter is defect 2's fix: the first match of day two on a court must not be
+    // dragged back toward the end of day one.
+    const seeded = await seed({ label: "b", entrants: 4, day2: true });
+    const m1 = await placeMatch(seeded, { key: "b-1", a: 0, b: 1, court: 1, at: iso(DAY1, "16:40") });
+    const m2 = await placeMatch(seeded, { key: "b-2", a: 2, b: 3, court: 1, at: iso(DAY2, "09:00") });
+
+    // Runs twenty minutes past day one's close; nothing on day one follows it.
+    await reportAt(m1, iso(DAY1, "17:20"), seeded.tournamentId);
+
+    const times = await timesOf([m2]);
+    expect(times.get(m2)).toBe(iso(DAY2, "09:00"));
+  });
+
+  it("(c) pushes a dependent on another court behind its prerequisite", async () => {
+    // A match that waits on another is part of the cascade even across courts: the queue is
+    // seeded with the source's dependents, not only the source's own court.
+    const seeded = await seed({ label: "c", entrants: 4 });
+    const prereq = await placeMatch(seeded, {
+      key: "c-prereq",
+      a: 0,
+      b: 1,
+      court: 1,
+      at: iso(DAY1, "09:00"),
+    });
+    const dependent = await placeMatch(seeded, {
+      key: "c-dependent",
+      a: 2,
+      b: 3,
+      court: 2,
+      at: iso(DAY1, "09:00"),
+      prerequisites: [prereq],
+    });
+
+    // The prerequisite runs to 09:50, so the dependent cannot start at 09:00.
+    await reportAt(prereq, iso(DAY1, "09:50"), seeded.tournamentId);
+
+    const times = await timesOf([dependent]);
+    expect(times.get(dependent)).toBe(iso(DAY1, "09:50"));
+  });
+
+  it("(d) holds the match that would run past closing time, and its court's tail with it", async () => {
+    // Day one closes at 11:00. A late result shifts the head of the court forward, which is
+    // safe, and then the tail would spill past the close. The spill is held: the head is
+    // still written, the tail keeps its published time, and schedule_conflicts reports it.
+    const seeded = await seed({ label: "d", entrants: 10, day1End: "11:00" });
+    const m1 = await placeMatch(seeded, { key: "d-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const m2 = await placeMatch(seeded, { key: "d-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:30") });
+    const m3 = await placeMatch(seeded, { key: "d-3", a: 4, b: 5, court: 1, at: iso(DAY1, "10:00") });
+    const m4 = await placeMatch(seeded, { key: "d-4", a: 6, b: 7, court: 1, at: iso(DAY1, "10:50") });
+    const m5 = await placeMatch(seeded, { key: "d-5", a: 8, b: 9, court: 1, at: iso(DAY1, "10:55") });
+
+    // The source runs to 09:50, thirty minutes past its slot.
+    await reportAt(m1, iso(DAY1, "09:50"), seeded.tournamentId);
+
+    const times = await timesOf([m2, m3, m4, m5]);
+    // Before the held point: shifted and written. m3 rides directly behind the overrun m2.
+    expect(times.get(m2)).toBe(iso(DAY1, "09:50"));
+    expect(times.get(m3)).toBe(iso(DAY1, "10:10"));
+    // The spill and its court's tail: held, so unchanged at their published times.
+    expect(times.get(m4)).toBe(iso(DAY1, "10:50"));
+    expect(times.get(m5)).toBe(iso(DAY1, "10:55"));
+
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    const held = conflicts.filter((row) => row.match_id === m4);
+    expect(held.length).toBeGreaterThan(0);
+    expect(held.map((row) => row.conflict_kind)).toContain("past_closing");
+  });
+
+  it("(e) never pushes a match into a day break", async () => {
+    // The break pass is part of the loop now: a cascade that would land inside a break is
+    // stepped wholly past it, after the player windows and before closing time.
+    const seeded = await seed({
+      label: "e",
+      entrants: 4,
+      break: { start: "10:00", end: "11:00" },
+    });
+    const m1 = await placeMatch(seeded, { key: "e-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const m2 = await placeMatch(seeded, { key: "e-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:40") });
+
+    // m2 would be reflowed to 09:50-10:10, straddling the 10:00 break, so it moves to 11:00.
+    await reportAt(m1, iso(DAY1, "09:50"), seeded.tournamentId);
+
+    const times = await timesOf([m2]);
+    expect(times.get(m2)).toBe(iso(DAY1, "11:00"));
+  });
+
+  it("(f) still reflows an unrelated chain while another is held, and the held match pulls nobody", async () => {
+    // Court one's tail is held at the close, but court two's chain is pulled by a match that
+    // DID move (a shared player on court one). The held match shares a player with a match on
+    // court three, and that match must stay put: a held match never propagates.
+    const seeded = await seed({ label: "f", entrants: 10, day1End: "11:00" });
+    const a1 = await placeMatch(seeded, { key: "f-a1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const a2 = await placeMatch(seeded, { key: "f-a2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:30") });
+    const a3 = await placeMatch(seeded, { key: "f-a3", a: 4, b: 5, court: 1, at: iso(DAY1, "10:50") });
+    // Shares entrant 2 (a player) with a2, so a2's move pulls it.
+    const b1 = await placeMatch(seeded, { key: "f-b1", a: 2, b: 6, court: 2, at: iso(DAY1, "09:35") });
+    const b2 = await placeMatch(seeded, { key: "f-b2", a: 6, b: 7, court: 2, at: iso(DAY1, "10:00") });
+    // Shares entrant 4 with the held a3, on its own court: it must not move.
+    const c1 = await placeMatch(seeded, { key: "f-c1", a: 4, b: 8, court: 3, at: iso(DAY1, "10:30") });
+
+    await reportAt(a1, iso(DAY1, "09:50"), seeded.tournamentId);
+
+    const times = await timesOf([a2, a3, b1, b2, c1]);
+    expect(times.get(a2)).toBe(iso(DAY1, "09:50"));
+    // Held: kept its published time rather than spilling past the 11:00 close.
+    expect(times.get(a3)).toBe(iso(DAY1, "10:50"));
+    // Court two reflowed anyway: a2 ended at 09:50, and b1 shares a player with it.
+    expect(times.get(b1)).toBe(iso(DAY1, "10:20"));
+    expect(times.get(b2)).toBe(iso(DAY1, "10:40"));
+    // Court three untouched: a held match drags nobody.
+    expect(times.get(c1)).toBe(iso(DAY1, "10:30"));
+  });
+
+  it("(g) never flags a match that has already been played", async () => {
+    // A played match with short rest, or one that overlapped on the court at the time, is
+    // history the desk already accepted. Only a still-scheduled match is actionable.
+    const seeded = await seed({ label: "g", entrants: 10 });
+    const played = await placeMatch(seeded, { key: "g-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    // Shares entrant 0 with `played`, and starts before its rest window allows.
+    const shortRest = await placeMatch(seeded, {
+      key: "g-2",
+      a: 0,
+      b: 2,
+      court: 2,
+      at: iso(DAY1, "09:10"),
+    });
+    // Overlaps `played` on the same court.
+    const overlapped = await placeMatch(seeded, {
+      key: "g-3",
+      a: 3,
+      b: 4,
+      court: 1,
+      at: iso(DAY1, "09:00"),
+    });
+    // A genuinely still-scheduled overlap, so the read is known to return rows.
+    const liveA = await placeMatch(seeded, { key: "g-4", a: 5, b: 6, court: 1, at: iso(DAY1, "12:00") });
+    const liveB = await placeMatch(seeded, { key: "g-5", a: 7, b: 8, court: 1, at: iso(DAY1, "12:10") });
+
+    await reportAt(played, iso(DAY1, "09:20"), seeded.tournamentId);
+    await reportAt(shortRest, iso(DAY1, "09:30"), seeded.tournamentId);
+    await reportAt(overlapped, iso(DAY1, "09:20"), seeded.tournamentId);
+
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    const playedIds = new Set([played, shortRest, overlapped]);
+    expect(conflicts.some((row) => playedIds.has(row.match_id))).toBe(false);
+    // And the read still works: the scheduled pair is reported.
+    const liveIds = new Set(conflicts.map((row) => row.match_id));
+    expect(liveIds.has(liveA) || liveIds.has(liveB)).toBe(true);
+  });
+
+  it("(h) does not flag a scheduled match just because its time has passed", async () => {
+    // Lateness is not a conflict - the desk has its own overdue alert - so a scheduled match
+    // the clock has overtaken, with nothing else wrong, produces no row at all.
+    const seeded = await seed({ label: "h", entrants: 2 });
+    const m1 = await placeMatch(seeded, { key: "h-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    expect(conflicts.filter((row) => row.match_id === m1)).toEqual([]);
+  });
+});
