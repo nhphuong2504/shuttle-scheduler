@@ -71,7 +71,15 @@ const COURT_NUMBERS = [1, 2, 3];
  * before their finish so their window is real rather than inverted. */
 const SLOT_MINUTES = 20;
 
-const iso = (day: string, time: string) => `${day}T${time}:00Z`;
+/**
+ * A scripted wall-clock time, in the one form the read-back uses.
+ *
+ * Postgres returns a `timestamptz` with milliseconds, and `timesOf` canonicalises with
+ * `toISOString()`, so it gives `2020-01-04T10:00:00.000Z`. Building the expectation by string
+ * concatenation instead would give `2020-01-04T10:00:00Z` and fail on `.000` alone. Going
+ * through `Date` keeps both sides identical and hides nothing about the value.
+ */
+const iso = (day: string, time: string) => new Date(`${day}T${time}:00Z`).toISOString();
 
 interface Seeded {
   tournamentId: string;
