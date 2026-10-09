@@ -2192,3 +2192,80 @@ describe("applyFreeze — current behaviour (Step 4 will change this)", () => {
     expect(pinned?.start.toISOString()).toBe(new Date("2026-09-17T10:15:00").toISOString());
   });
 });
+
+// ---------------------------------------------------------------------------
+// A fixed knockout on another event's court
+// ---------------------------------------------------------------------------
+
+/**
+ * Two events share one day and one court pool. `cat1` has already reached its knockouts, so one of
+ * its rows is a committed `scheduled` knockout that the freeze pins on court 1; `cat2` still has
+ * placement work to place. Pass A (placement) and pass B (knockout) are separate solver runs, and
+ * the placement pass did not see the other stage's fixed work, so it was free to hand court 1 at
+ * 09:00 to `cat2`'s placement match. Pass B then held both as fixed on that same court, which the
+ * problem validator refuses as a double booking — the whole plan was rejected before a single match
+ * was placed.
+ */
+describe("planPlacementSchedule — a fixed knockout on another event's court", () => {
+  /** cat1's knockout (optional) plus cat2's still-pending placement match, on two events. */
+  function twoEvents(knockout?: { courtId: string; time: string }) {
+    const teams = [
+      team("team-a1", "p1", "p2"),
+      team("team-a2", "p3", "p4"),
+      { ...team("team-b1", "p5", "p6"), category_id: "cat2" },
+      { ...team("team-b2", "p7", "p8"), category_id: "cat2" },
+    ];
+    const entrants = [
+      entrant("ea1", "team-a1", 1),
+      entrant("ea2", "team-a2", 2),
+      { ...entrant("eb1", "team-b1", 1), category_id: "cat2" },
+      { ...entrant("eb2", "team-b2", 2), category_id: "cat2" },
+    ];
+    return plan({
+      teams,
+      entrants,
+      categoryOrder: new Map([
+        ["cat1", 1],
+        ["cat2", 2],
+      ]),
+      draws: [tierDraw("A")],
+      placementMatches: [placementMatch("b1", "round1", "eb1", "eb2", { category_id: "cat2" })],
+      tierMatches: knockout
+        ? [
+            tierMatch("k-1", 1, 1, "ea1", "ea2", {
+              status: "scheduled",
+              court_id: knockout.courtId,
+              // Stored as an instant, the way a row comes back from the database.
+              scheduled_time: new Date(knockout.time).toISOString(),
+            }),
+          ]
+        : [],
+    });
+  }
+
+  it("places the pending placement match without colliding with the pinned knockout", () => {
+    const result = twoEvents({ courtId: "c1", time: "2026-09-17T09:00:00" });
+
+    expect(result.blocked).toEqual([]);
+    const placement = result.slots.find((slot) => slot.matchId === "b1");
+    const knockout = result.slots.find((slot) => slot.matchId === "k-1");
+    expect(placement).toBeDefined();
+    expect(knockout).toBeDefined();
+    // The knockout holds court 1 from 09:00, so nothing may be laid on top of it there.
+    const collides =
+      placement!.courtNumber === knockout!.courtNumber &&
+      placement!.start < knockout!.end &&
+      knockout!.start < placement!.end;
+    expect(collides).toBe(false);
+  });
+
+  it("control: with no fixed knockout the plan is exactly as before", () => {
+    const result = twoEvents();
+
+    expect(result.blocked).toEqual([]);
+    const placement = result.slots.find((slot) => slot.matchId === "b1");
+    // Nothing is holding a court, so the placement match keeps the earliest slot it always had.
+    expect(placement?.courtNumber).toBe(1);
+    expect(placement?.start.toISOString()).toBe(new Date("2026-09-17T09:00:00").toISOString());
+  });
+});

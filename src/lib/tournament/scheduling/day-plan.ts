@@ -328,16 +328,6 @@ export interface PlanDaysInput {
    * exactly right for a first build and for a day that has nothing on it yet.
    */
   baselineByMatchId?: ReadonlyMap<string, BaselineSlot> | undefined;
-  /**
-   * Treat the other stage's fixed items as anchors in this stage too.
-   *
-   * Production leaves this off: it schedules forward from an empty day, so a knockout
-   * can never already sit on a court before the placement work it would block. The
-   * forecast turns it on, because it replays a partially placed tournament in which a
-   * pinned knockout can share a day with work that has no row yet, and the two must
-   * not be double-booked.
-   */
-  sharedAnchors?: boolean | undefined;
 }
 
 export interface PlanDaysResult {
@@ -385,7 +375,6 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     nextWholeMinute,
     options,
     baselineByMatchId,
-    sharedAnchors,
   } = input;
 
   const everything = [...placementAll, ...knockoutAll];
@@ -564,12 +553,20 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     }
 
     // Pass A — the placement stage.
+    //
+    // The other stage's fixed work is included even though this is the placement pass. The two
+    // stages normally run as one queue, so a knockout could not reach a court before the placement
+    // work it would block — but that only holds when every event finishes placement together. The
+    // events run independently: one event can already be through its knockouts, and those rows are
+    // pinned, while another still has placement to place. A placement pass that did not see them
+    // was free to hand their court and time to a placement match, and the knockout pass then held
+    // both as fixed on one resource — a double booking the problem validator refuses, rejecting the
+    // whole plan. Anchoring the other stage's decided rows here keeps the court and the players out
+    // of the placement pass's reach, which is also what stops the two stages being double-booked.
     if (placementTodo.size || frozenOn(placementAll, dayKey).length) {
       const items = [
         ...anchorsOn(placementAll, dayKey),
-        // The other stage's fixed work, when the caller is forecasting a partly
-        // placed tournament: a pinned knockout already holds its court and players.
-        ...(sharedAnchors ? anchorsOn(knockoutAll, dayKey) : []),
+        ...anchorsOn(knockoutAll, dayKey),
         ...carriedAnchors,
         ...placementAll.filter((item) => placementTodo.has(item.id)),
       ];
@@ -593,9 +590,8 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
         dayPlaced++;
       }
       // An earlier day's slots come back out of the run as echoes of their own
-      // anchors. They are already recorded, so only this day's work joins the day. A
-      // fixed item handed in from the other stage (the forecast does this) echoes too,
-      // and must not be recorded as a placement.
+      // anchors. They are already recorded, so only this day's work joins the day. The
+      // other stage's fixed items echo too, and must not be recorded as a placement.
       daySlots.push(
         ...run.slots.filter(
           (slot) => !carriedIds.has(slot.matchId) && placementIds.has(slot.matchId),
