@@ -11,12 +11,15 @@ import {
   fetchCourts,
   fetchPlacementEntrants,
   fetchPlacementMatches,
+  fetchScheduleConflicts,
   fetchTierDrawMatches,
   fetchTierDraws,
   type Category,
   type Court,
   type PlacementEntrant,
   type PlacementMatch,
+  type ScheduleConflict,
+  type ScheduleConflictKind,
   type Team,
   type TierDraw,
   type TierDrawMatch,
@@ -59,6 +62,9 @@ import {
  * and repeat until a champion exists - and checks the invariants a real event depends on after
  * EVERY step rather than only at the end. A reflow bug does not show up as a wrong final
  * answer; it shows up as two matches on one court at 11:20, and only a per-step check sees it.
+ * The one overlap that is *not* a bug - a match the reflow held at the day's close - is checked
+ * against `schedule_conflicts` rather than waved through, and is required to be gone after every
+ * Update schedule; see `assertInvariants`.
  *
  * It drives the application's own action layer (`generateMissingStages`, `planPlacementSchedule`,
  * `applyPlacementSchedulePlan`, `report*Match`) for the same reason `lifecycle.test.ts` does: a
@@ -85,6 +91,9 @@ import {
  *     each match before starting the next, so no match is in progress while a reflow runs.
  *   - Player rest gaps are reported as warnings, not failures: the reflow keeps them, but a
  *     simulated overrun can legitimately consume them.
+ *   - A held overlap (a match the reflow kept at the day's close, then reported through
+ *     `schedule_conflicts`) is tolerated and logged after a result, and required to be gone after
+ *     every Update schedule. See `assertInvariants`.
  *   - Runs against the LOCAL stack only (AGENTS.md): `npx supabase start`,
  *     `npm run integration:target -- local`.
  */
@@ -199,6 +208,8 @@ let dayRows: TournamentDay[] = [];
 const playerIds: string[] = [];
 const random: RandomFn = mulberry32(SEED);
 const warnings: string[] = [];
+/** Held overlaps tolerated so far, so the final log shows the held mechanism ran. */
+let heldOverlaps = 0;
 /** Set once the full run finishes, so the later steps can refuse to run on a broken one. */
 let played = false;
 /** Virtual "now", advanced as matches finish. */
@@ -304,6 +315,17 @@ async function snapshot(): Promise<Snapshot> {
     tier,
     draws,
   };
+}
+
+/**
+ * The conflicts `schedule_conflicts` reports right now.
+ *
+ * Fetched by the caller and handed to `assertInvariants`, which is synchronous: the held-overlap
+ * tolerance needs the database's own view of which still-`scheduled` matches are actionable, and the
+ * RPC is the only thing that computes it.
+ */
+async function conflictsNow(): Promise<ScheduleConflict[]> {
+  return fetchScheduleConflicts(tournamentId as string);
 }
 
 // --- Scheduling ------------------------------------------------------------------
@@ -453,6 +475,8 @@ async function playMatch(slot: Slot, snap: Snapshot): Promise<{ overran: number 
 
 interface Block {
   label: string;
+  /** The row's own id, so an overlap can be matched against `schedule_conflicts`. */
+  id: string;
   court: string;
   start: number;
   end: number;
@@ -485,6 +509,7 @@ function blocksOf(snap: Snapshot): Block[] {
         : start + slotMinutes(snap.tournament, kind) * MINUTE;
     out.push({
       label: `${kind}:${r.id.slice(0, 8)} (${r.status})`,
+      id: r.id,
       court: r.court_id,
       start,
       end,
@@ -504,14 +529,94 @@ function fmt(ms: number): string {
   return new Date(ms).toLocaleString("en-US", { timeZone: TIMEZONE, hour12: false });
 }
 
+interface InvariantOptions {
+  /**
+   * The conflicts `schedule_conflicts` currently reports, so a held overlap can be recognised.
+   * Fetched by the caller because this check is synchronous and the RPC is not.
+   */
+  conflicts?: readonly ScheduleConflict[] | undefined;
+  /**
+   * Refuse every overlap between two still-`scheduled` matches. Set after Update schedule, when the
+   * reflow's held overlaps must have been resolved; left false after a bare result, when the reflow
+   * may legitimately have left one. See `assertInvariants`.
+   */
+  strict?: boolean | undefined;
+}
+
+/** The conflict kinds that mark a held, still-movable overlap of each shape. */
+const HELD_OVERLAP_KINDS: Record<"court" | "player", readonly ScheduleConflictKind[]> = {
+  court: ["court_overlap"],
+  player: ["rest_shortfall", "court_overlap"],
+};
+
+/** The closing instant of the day `at` falls in, or null when no configured day contains it. */
+function dayCloseFor(snap: Snapshot, at: number): number | null {
+  const key = localDate(at);
+  const day = snap.days.find((d) => d.date === key);
+  return day ? Date.parse(localToIso(day.date, day.end_time)) : null;
+}
+
+/**
+ * Whether an overlap between two still-`scheduled` matches is the reflow's held behaviour rather
+ * than a bug.
+ *
+ * When a result pushes the rest of a day past its close, the reflow may not move the whole day into
+ * the next one, so it holds the match it cannot fit: it keeps the published time, and so does the
+ * tail behind it. The held match then overlaps the match pushed in front of it - on the same court,
+ * and often for the same player. That overlap is deliberate and is surfaced by `schedule_conflicts`;
+ * Update schedule is what clears it. So it is tolerated only while BOTH hold:
+ *
+ *   (a) it genuinely could not be avoided inside the day. Pushed to start when the earlier match
+ *       ends, the later one would still finish past its day's closing time. This is the half that
+ *       keeps a real reflow bug out: a push that WOULD have fitted must have been made.
+ *   (b) the database names the later match as an actionable conflict of the matching kind
+ *       (`court_overlap` for a court, `rest_shortfall`/`court_overlap` for a player). An overlap no
+ *       conflict row names is one the desk cannot see, so it can never be a tolerated held overlap.
+ *
+ * Either half failing keeps the overlap a violation. Only two `scheduled` matches qualify at all: a
+ * match that is done or on court is history the desk cannot move, and an overlap with one is still a
+ * double booking.
+ */
+function isHeldOverlap(args: {
+  prev: Block;
+  cur: Block;
+  kind: "court" | "player";
+  snap: Snapshot;
+  conflicts: readonly ScheduleConflict[];
+}): boolean {
+  const { prev, cur, kind, snap, conflicts } = args;
+  if (!prev.scheduled || !cur.scheduled) return false;
+  const dayClose = dayCloseFor(snap, cur.start);
+  if (dayClose == null) return false;
+  const duration = cur.end - cur.start;
+  if (prev.end + duration <= dayClose) return false;
+  return conflicts.some(
+    (conflict) =>
+      conflict.match_id === cur.id && HELD_OVERLAP_KINDS[kind].includes(conflict.conflict_kind),
+  );
+}
+
 /**
  * The invariants a live event depends on. Throws with the step that broke them.
  *
  *   1. one court never holds two matches at once
  *   2. one player is never in two matches at once
  *   3. a still-scheduled match never overlaps a break (the reflow's job since the break fix)
+ *
+ * INVARIANTS 1 AND 2 HAVE ONE SANCTIONED EXCEPTION, AND ONLY ONE. A result can make the rest of a day
+ * run past its close; the reflow will not move the day into the next one and will not refuse the
+ * result, so it holds the match it cannot fit. The held match keeps its published time, and so does
+ * the tail behind it, so it overlaps the match pushed in front of it - and the desk is told through
+ * `schedule_conflicts` rather than the overlap being hidden. `isHeldOverlap` accepts exactly that
+ * overlap and nothing else. Every other overlap - including any overlap with a match that is no
+ * longer `scheduled` - is still a failure.
+ *
+ * After Update schedule the exception is withdrawn entirely (`strict`): the rebuild exists to resolve
+ * those held overlaps, so a still-`scheduled` match overlapping another after a build is a planner
+ * bug waiting for the desk, not a held match.
  */
-function assertInvariants(snap: Snapshot, step: string): void {
+function assertInvariants(snap: Snapshot, step: string, options: InvariantOptions = {}): void {
+  const { conflicts = [], strict = false } = options;
   const blocks = blocksOf(snap);
   const problems: string[] = [];
 
@@ -523,7 +628,12 @@ function assertInvariants(snap: Snapshot, step: string): void {
       const prev = list[i - 1] as Block;
       const cur = list[i] as Block;
       if (cur.start < prev.end) {
-        problems.push(`court overlap: ${prev.label} ends ${fmt(prev.end)}, ${cur.label} starts ${fmt(cur.start)}`);
+        if (!strict && isHeldOverlap({ prev, cur, kind: "court", snap, conflicts })) {
+          heldOverlaps += 1;
+          warnings.push(`${step}: court overlap tolerated, held at the close: ${prev.label} / ${cur.label}`);
+        } else {
+          problems.push(`court overlap: ${prev.label} ends ${fmt(prev.end)}, ${cur.label} starts ${fmt(cur.start)}`);
+        }
       }
     }
   }
@@ -536,7 +646,14 @@ function assertInvariants(snap: Snapshot, step: string): void {
       const prev = list[i - 1] as Block;
       const cur = list[i] as Block;
       if (cur.start < prev.end) {
-        problems.push(`player ${player.slice(0, 8)} double-booked: ${prev.label} / ${cur.label}`);
+        if (!strict && isHeldOverlap({ prev, cur, kind: "player", snap, conflicts })) {
+          heldOverlaps += 1;
+          warnings.push(
+            `${step}: player ${player.slice(0, 8)} overlap tolerated, held at the close: ${prev.label} / ${cur.label}`,
+          );
+        } else {
+          problems.push(`player ${player.slice(0, 8)} double-booked: ${prev.label} / ${cur.label}`);
+        }
       } else if (cur.start < prev.end + snap.tournament.group_rest_gap_minutes * MINUTE) {
         warnings.push(`${step}: player ${player.slice(0, 8)} rests under the gap: ${prev.label} / ${cur.label}`);
       }
@@ -706,7 +823,10 @@ describe("a two-day placement tournament, played end to end", () => {
     const completed = new Set<string>();
     const updates: string[] = [];
     await buildSchedule();
-    assertInvariants(await snapshot(), "initial build");
+    assertInvariants(await snapshot(), "initial build", {
+      conflicts: await conflictsNow(),
+      strict: true,
+    });
 
     for (let steps = 1; ; steps += 1) {
       expect(steps, "the tournament did not converge").toBeLessThan(MAX_STEPS);
@@ -726,14 +846,18 @@ describe("a two-day placement tournament, played end to end", () => {
       if (overran > 0) overruns += 1;
       matchesPlayed += 1;
       const after = await snapshot();
-      assertInvariants(after, `match ${matchesPlayed}`);
+      assertInvariants(after, `match ${matchesPlayed}`, { conflicts: await conflictsNow() });
 
       const round = roundOf(next, after);
       if (round.done && !completed.has(round.key)) {
         completed.add(round.key);
         updates.push(round.label);
         await buildSchedule();
-        assertInvariants(await snapshot(), `update schedule after ${round.label}`);
+        // Update schedule must have resolved every held overlap the reflow left.
+        assertInvariants(await snapshot(), `update schedule after ${round.label}`, {
+          conflicts: await conflictsNow(),
+          strict: true,
+        });
       }
     }
 
@@ -777,7 +901,7 @@ describe("a two-day placement tournament, played end to end", () => {
     played = true;
     console.info(
       `[seed ${SEED}] ${matchesPlayed} matches, ${overruns} overran, ${updates.length} schedule updates, ${done.draws.length} knockout draws, ` +
-        `${warnings.length} rest warnings`,
+        `${heldOverlaps} held overlaps tolerated, ${warnings.length} warnings`,
     );
     for (const w of warnings.slice(0, 10)) console.info(`  warn: ${w}`);
   }, 900_000);
@@ -828,7 +952,7 @@ describe("a two-day placement tournament, played end to end", () => {
     ).rejects.toThrow(/already started/i);
 
     // And the schedule is still coherent after the refused and accepted corrections.
-    assertInvariants(await snapshot(), "corrections");
+    assertInvariants(await snapshot(), "corrections", { conflicts: await conflictsNow() });
   }, 300_000);
 
   it("completes once nothing is on court", async () => {
