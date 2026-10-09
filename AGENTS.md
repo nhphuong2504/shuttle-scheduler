@@ -147,6 +147,14 @@ npm run build
   stack is not streaming yet, which is why `realtime.test.ts` warms the tenant before it
   asserts: without that, the first test to run fails on a cold stack and passes on every
   later run.
+- **There is a CI workflow for the same suite.** [`.github/workflows/integration.yml`](.github/workflows/integration.yml)
+  starts its own local stack on `ubuntu-latest` and runs `npm run test:integration` there,
+  by hand (`workflow_dispatch`) or on a pull request that touches `supabase/migrations/**`,
+  `integration/**`, `scripts/integration-target.mjs` or `vitest.integration.config.ts`. It
+  exists for a machine without a container runtime - the reason the reflow and conflict
+  migrations were first written without ever being parsed by Postgres - and it holds no
+  credentials, because the stack's keys are the CLI's demo values. It is **not a required
+  check** and does not replace running the suite locally when you can.
 - **`npm run lint` is not a gate.** It reports a large pre-existing Prettier backlog
   that predates the current design work. Do not run a repo-wide format as part of an
   unrelated change; it buries the real diff.

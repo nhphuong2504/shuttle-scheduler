@@ -748,6 +748,9 @@ npm run test:integration
 npm run integration:target -- use staging
 ```
 
+Without a container runtime, `.github/workflows/integration.yml` runs the same suite on GitHub
+Actions - by hand, or on a pull request that touches the migrations. It is not a required check.
+
 The integration suite writes rows and flips the working-tournament pointer, and the guard
 refuses any project a root environment file names. That is why it targets the local stack
 rather than staging, and why a dedicated cloud project is not an option on the free plan's

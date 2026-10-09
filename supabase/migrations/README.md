@@ -1894,7 +1894,9 @@ The Playwright suite is hermetic — it intercepts transport — so it cannot se
 authentication, platform-role resolution, RLS and RPC authorization for owner, editor, unrelated
 user and platform admin, realtime delivery, and the tournament lifecycle from creation through a
 fully reported pool. It needs a **dedicated test project** and refuses to run against production;
-see `vitest.integration.config.ts`.
+see `vitest.integration.config.ts`. A machine without a container runtime can run the same suite
+on GitHub Actions instead: `.github/workflows/integration.yml` starts the local stack and runs it
+by hand, or on a pull request that touches the migrations.
 
 ## Applying `20260927000000_tournova_role_redesign.sql`
 
