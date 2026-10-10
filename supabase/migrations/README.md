@@ -3118,3 +3118,102 @@ Rolling back re-introduces the client-only check: a start on a busy court, or by
 court, would again be a desk-side warning rather than a server refusal, and a late start would again
 leave the rest of the day where it was.
 
+## Applying `20261011000000_report_ended_minutes_ago.sql`
+
+The desk can say how long ago a match actually finished, so a result entered after the fact no longer
+reflows the day as though the match ran long.
+
+### What it changes
+
+`report_placement_result` and `report_tier_draw_result` take an optional
+`p_ended_minutes_ago integer DEFAULT 0`:
+
+- **`> 0`** — the finish is `statement_timestamp() - make_interval(mins => N)`, and it **overwrites**
+  whatever `ended_at` already held. This is the late-entry correction; `shift_live_schedule_after_match`
+  then reads that resolved finish and reflows.
+- **`= 0` (the default)** — the old `COALESCE(ended_at, statement_timestamp())` is kept exactly, so a
+  caller that does not pass the parameter behaves as before and a fixture that pre-wrote a virtual
+  `ended_at` is still respected rather than replaced with the wall clock.
+
+It is a relative offset and never an absolute instant: a browser's clock drifts from the server's, but
+"N minutes ago" is arithmetic on `statement_timestamp()`, so it is server-authoritative by construction.
+
+The server validates the offset and the resolved window with `RAISE EXCEPTION`:
+
+- `p_ended_minutes_ago >= 0` — an absolute finish is not accepted, so a negative offset is the only way
+  to reach the future and is refused as such.
+- `p_ended_minutes_ago <= 720` (the named `c_max_minutes_ago`) — twelve hours covers an honest late
+  entry and refuses a typo like `7000`, whose resolved finish would land before the fixture's day.
+- the resolved `ended_at` may not precede the match's `started_at`, when the match has one. A match
+  reported without ever starting has no window and is not checked.
+
+### The overload, and why the old signatures are dropped
+
+Adding a defaulted parameter with `CREATE OR REPLACE` does not replace the old function — it creates a
+second one, `(uuid, jsonb, integer)` beside `(uuid, jsonb)`. PostgREST resolves a two-key body against
+the best candidate and refuses to choose between the two, so a request that only sends `p_match_id` and
+`p_games` would fail as ambiguous. Both two-argument signatures are therefore dropped first, in the same
+transaction, and the three-argument forms are created fresh. `DROP FUNCTION` takes the old grants with
+it, so the `REVOKE`/`GRANT` pair is re-issued: `authenticated` only, `anon` and `PUBLIC` denied.
+
+### Scope: what this deliberately does not change
+
+Only the two current-format reporters. The legacy round-robin pair (`report_pool_result`,
+`report_draw_result`) and the walkover/void path (`resolve_match_exception`) stamp their finish the same
+`COALESCE` way and are **not** changed here — a late entry on those formats still records the entry
+time. `shift_live_schedule_after_match` is untouched; it already reads whatever `ended_at` the report
+wrote.
+
+Application: `reportPlacementMatch` / `reportTierDrawMatch` gained an optional `endedMinutesAgo` and send
+`p_ended_minutes_ago` only when it is greater than zero, so existing callers and mocks are unchanged. The
+desk's score dialog draws a labelled "Finished (minutes ago)" field, default 0, only for the placement
+and knockout tables, and mirrors the 720 ceiling as `MAX_ENDED_MINUTES_AGO` so it refuses a typo before
+the round trip. The two function entries in `src/integrations/supabase/types.ts` were written by hand to
+match; regenerate them.
+
+### Verify after applying
+
+```sql
+-- The overload is gone: each name resolves to exactly one function.
+SELECT proname, count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN ('report_placement_result', 'report_tier_draw_result')
+GROUP BY proname;                                                                  -- 1 row each
+
+-- The parameter, its default and the three behaviours are present.
+SELECT proname,
+       'p_ended_minutes_ago' = ANY(proargnames)                      AS has_param,
+       pronargdefaults >= 1                                          AS has_default,
+       prosrc LIKE '%make_interval(mins => p_ended_minutes_ago)%'    AS offset,
+       prosrc LIKE '%COALESCE(ended_at, statement_timestamp())%'     AS keeps_old_default,
+       prosrc LIKE '%cannot be in the future%'                       AS rejects_negative,
+       prosrc LIKE '%is before the match started%'                   AS rejects_inverted
+FROM pg_proc
+WHERE proname IN ('report_placement_result', 'report_tier_draw_result');            -- all true
+
+-- Access is unchanged.
+SELECT has_function_privilege('authenticated', 'public.report_placement_result(uuid, jsonb, integer)', 'execute'); -- true
+SELECT has_function_privilege('anon', 'public.report_placement_result(uuid, jsonb, integer)', 'execute');          -- false
+```
+
+The `DO $verify$` block asserts the same on apply and fails if any is wrong. Then run
+`npm run test:integration` against the local stack: `integration/report-ended-ago.test.ts` covers the
+zero default, the preserved fixture, the two refusals, the inverted window, and a backdated finish the
+reflow reads. `integration/live-reflow.test.ts`, `start-match-checks.test.ts` and `simulation.test.ts`
+must stay green — they pre-write a virtual `ended_at` and report with the default.
+
+### Rolling back
+
+There is no data rollback. Restore the two-argument bodies from
+`20260927000000_tournova_role_redesign.sql`, then:
+
+```sql
+DROP FUNCTION public.report_placement_result(uuid, jsonb, integer);
+DROP FUNCTION public.report_tier_draw_result(uuid, jsonb, integer);
+```
+
+Rolling back re-introduces the late-entry problem: a result entered fifteen minutes after the match
+finished would again be recorded as a fifteen-minute overrun, and the reflow would push the rest of the
+court with it.
+
+
