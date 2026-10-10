@@ -62,6 +62,7 @@ import {
   usePoolMatches,
   usePools,
   useRealtimeRefresh,
+  useScheduleConflicts,
   useTeams,
   useTierDrawMatches,
   useTierDraws,
@@ -70,6 +71,7 @@ import {
   type Court,
   type PlacementMatch,
   type Player,
+  type ScheduleConflict,
   type TournamentDay,
 } from "@/lib/tournament/data";
 import {
@@ -114,6 +116,12 @@ import {
 } from "@/lib/tournament/court-state";
 import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
+import {
+  conflictedMatchCount,
+  conflictKindLabels,
+  groupConflictsByMatch,
+  summarizeConflicts,
+} from "@/lib/tournament/schedule-conflicts";
 import {
   COURT_TRANSITION_LABEL,
   nextCourtTransitions,
@@ -206,6 +214,19 @@ function Desk() {
    */
   const access = useScopedAccess();
   const canEdit = access.can_edit;
+  /**
+   * The conflicts the schedule itself reports, as a read-only overlay.
+   *
+   * Deliberately *not* folded into `getMatchReadiness`: that function answers "can this
+   * match physically start", and it stays the one answer for a player on court or a court
+   * in use. These are planning discrepancies the organiser resolves by rebuilding, which
+   * the desk only surfaces and can acknowledge. The hook is editor-gated and reads an
+   * error as "nothing known", so a viewer never asks and a failed read never breaks the
+   * board.
+   */
+  const conflictsQuery = useScheduleConflicts();
+  const conflicts = conflictsQuery.data ?? [];
+  const conflictsByMatch = useMemo(() => groupConflictsByMatch(conflicts), [conflicts]);
   // Every alert below links to another page of *this* tournament, so the desk takes the
   // id from the route rather than from a global - the same id the layout resolved.
   const { tournamentId } = Route.useParams();
@@ -397,6 +418,21 @@ function Desk() {
     () => (selectedDayId ? (attribution.byDayId.get(selectedDayId) ?? []) : []),
     [attribution, selectedDayId],
   );
+
+  /** The matches on screen, so a conflict count stays scoped to the day the desk shows. */
+  const dayMatchIdSet = useMemo(() => new Set(dayMatches.map((match) => match.id)), [dayMatches]);
+
+  /**
+   * Re-reads the conflicts after a result and counts those still on this day.
+   *
+   * The reflow runs server-side, so the number is asked for rather than predicted. Scoped
+   * to the day on screen so the toast and the chips cannot disagree about how many matches
+   * are in trouble.
+   */
+  const conflictsAfterReportInDay = async () => {
+    const { data } = await conflictsQuery.refetch();
+    return conflictedMatchCount(data ?? [], dayMatchIdSet);
+  };
 
   /** The courts this day plays on. An empty set means every court, as the planner reads it. */
   const dayCourtIdSet = useMemo(() => {
@@ -694,12 +730,31 @@ function Desk() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {courtStates.map(({ court, state }) => {
               const target = state.playing ?? state.next ?? readyUnassigned[0];
+              /**
+               * The schedule's conflicts for the match this tile is showing.
+               *
+               * Checked on both sides of the tile - the match playing and the match queued
+               * behind it - because a conflict is a property of one match, not of the
+               * court. The reasons are folded into the tile's accessible name as well as
+               * drawn, since the tile's `aria-label` would otherwise hide the chip from a
+               * screen reader.
+               */
+              const playingConflicts = state.playing
+                ? conflictsByMatch.get(state.playing.id)
+                : undefined;
+              const nextConflicts = state.next
+                ? conflictsByMatch.get(state.next.id)
+                : undefined;
+              const attention = [...(playingConflicts ?? []), ...(nextConflicts ?? [])];
+              const attentionNote = attention.length ? summarizeConflicts(attention).text : null;
               return (
                 <button
                   key={court.id}
                   type="button"
                   disabled={!target}
-                  aria-label={`Court ${court.number}: ${state.state.replace("-", " ")}`}
+                  aria-label={`Court ${court.number}: ${state.state.replace("-", " ")}${
+                    attentionNote ? ` — Needs attention: ${attentionNote}` : ""
+                  }`}
                   onClick={() => {
                     if (!target) return;
                     setOperationCourtId(court.id);
@@ -776,6 +831,7 @@ function Desk() {
                       </span>
                     )}
                   </p>
+                  {playingConflicts ? <AttentionChip conflicts={playingConflicts} /> : null}
                   {/* The queued pairing is a name, so it takes the identify tier;
                       the readiness detail under it is reference text. They were one
                       12px line before, which put the next players' names below the
@@ -792,6 +848,7 @@ function Desk() {
                           courts={courtMap}
                           players={playerMap}
                         />
+                        {nextConflicts ? <AttentionChip conflicts={nextConflicts} /> : null}
                       </>
                     ) : nextReadyLabel ? (
                       <p className="text-t2">
@@ -914,6 +971,8 @@ function Desk() {
               courts={courts ?? []}
               canEdit={canEdit}
               startCheck={startCheck}
+              conflicts={conflictsByMatch.get(current.id) ?? []}
+              onConflictsAfterReport={conflictsAfterReportInDay}
               playerMap={playerMap}
               scoringRule={ruleFor(current.kind)}
               tournamentId={tournament?.id ?? null}
@@ -939,6 +998,8 @@ export function MatchOperationsDialog({
   courts,
   canEdit,
   startCheck,
+  conflicts,
+  onConflictsAfterReport,
   playerMap,
   scoringRule,
   tournamentId,
@@ -959,6 +1020,16 @@ export function MatchOperationsDialog({
    */
   canEdit: boolean;
   startCheck: StartConstraints | null;
+  /**
+   * The schedule's own conflicts for this match, from `schedule_conflicts`.
+   *
+   * Not part of `startCheck`: that check owns the physical (a player on court, a court in
+   * use) and this is the planning overlay. They are shown in the same confirmation dialog
+   * but they are distinct facts, and only the physical ones disable the Start button.
+   */
+  conflicts: ScheduleConflict[];
+  /** Re-reads the conflicts after a reported result and returns how many remain, day-scoped. */
+  onConflictsAfterReport: () => Promise<number>;
   playerMap: Map<string, Player>;
   /** The tournament's rule for this match's stage, so scoring follows config. */
   scoringRule: ScoringRule;
@@ -1007,6 +1078,39 @@ export function MatchOperationsDialog({
    * than letting the desk find out from a failure.
    */
   const canClearResult = isReported && isPlacement && canEdit;
+
+  /**
+   * The schedule's conflicts for this match, reduced to their distinct reasons.
+   *
+   * A soft gate, unlike `startCheck.conflicts`: it opens the confirmation dialog rather
+   * than disabling Start, because the desk can still put the match on court and the
+   * organiser resolves the schedule afterwards. `allReasons` is what the dialog lists;
+   * the chip caps itself at two separately.
+   */
+  const conflictSummary = summarizeConflicts(conflicts);
+  const hasScheduleConflict = conflictSummary.reasons.length > 0;
+  const allConflictReasons = conflictKindLabels(conflicts);
+  const restWarningCount = startCheck?.warnings.length ?? 0;
+
+  /**
+   * The confirmation dialog's heading, which names the reason it opened.
+   *
+   * A dialog titled "Short rest between matches" when the only reason is a break would be
+   * lying about why it is asking, so the title and the body follow whichever reasons are
+   * actually present.
+   */
+  const confirmTitle =
+    hasScheduleConflict && restWarningCount === 0
+      ? "This match can't run as published"
+      : hasScheduleConflict
+        ? "Start this match anyway?"
+        : "Short rest between matches";
+  const confirmDescription =
+    hasScheduleConflict && restWarningCount > 0
+      ? "The published schedule has conflicts and these players are short of rest. You can still start the match — update the schedule afterwards."
+      : hasScheduleConflict
+        ? "The schedule says this match cannot run where it is. You can still start it on court; update the schedule to fix the plan."
+        : "These players haven't had their full rest yet. You can still start the match.";
 
   const runStart = async () => {
     const restWarnings = startCheck?.warnings ?? [];
@@ -1069,8 +1173,18 @@ export function MatchOperationsDialog({
         // The placement path reports its ripple in minutes rather than as a plan
         // diff, so it gets its own note rather than `impactMessage`.
         const note = scheduleImpactNote(impact);
+        // The reflow can leave matches contradicting each other; the number is asked for
+        // rather than predicted, because it is written server-side. Only added when there
+        // is one, so an ordinary score entry reads exactly as it did before.
+        const needingAttention = await onConflictsAfterReport();
+        const attentionNote =
+          needingAttention > 0
+            ? `${needingAttention} match${needingAttention === 1 ? " needs" : "es need"} attention`
+            : null;
         toast.success(
-          [isReported ? "Result corrected" : "Result recorded", note].filter(Boolean).join(" — "),
+          [isReported ? "Result corrected" : "Result recorded", note, attentionNote]
+            .filter(Boolean)
+            .join(" — "),
         );
       } else if (match.kind === "pool") {
         const g = games[0];
@@ -1324,7 +1438,11 @@ export function MatchOperationsDialog({
               className="h-12 flex-1 text-lg font-semibold shadow-md"
               disabled={!canEdit || busy || !!startCheck?.conflicts.length}
               onClick={() => {
-                if ((startCheck?.warnings ?? []).length) {
+                // Both are acknowledgement gates, not blocks: a hard physical conflict
+                // has already disabled this button above, and the server still refuses
+                // one. The rest warning and the schedule conflict are asked about in one
+                // dialog rather than two, so the desk stays one click deep.
+                if (restWarningCount > 0 || hasScheduleConflict) {
                   setConfirmRestOpen(true);
                   return;
                 }
@@ -1349,26 +1467,38 @@ export function MatchOperationsDialog({
               <div className="flex size-11 items-center justify-center rounded-full bg-warn-surface text-warn-foreground">
                 <span className="text-lg font-semibold">!</span>
               </div>
-              <AlertDialogTitle>Short rest between matches</AlertDialogTitle>
-              <AlertDialogDescription>
-                These players haven&apos;t had their full rest yet. You can still start the match.
-              </AlertDialogDescription>
+              <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+              <AlertDialogDescription>{confirmDescription}</AlertDialogDescription>
             </AlertDialogHeader>
-            <ul className="space-y-2">
-              {(startCheck?.warnings ?? []).map((w, i) => (
-                <li
-                  key={`confirm-warning-${i}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-warn-surface/60 px-3 py-2"
-                >
-                  <span className="text-sm font-medium">
-                    {playerMap.get(w.playerId)?.name ?? "A player"}
-                  </span>
-                  <span className="font-score text-sm text-warn-foreground">
-                    {w.restMinutes} / {w.requiredMinutes} min
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {hasScheduleConflict ? (
+              <ul className="space-y-2">
+                {allConflictReasons.map((reason) => (
+                  <li
+                    key={reason}
+                    className="rounded-lg border border-warn-border bg-warn-surface/60 px-3 py-2 text-sm font-medium text-warn-foreground"
+                  >
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {restWarningCount > 0 ? (
+              <ul className="space-y-2">
+                {(startCheck?.warnings ?? []).map((w, i) => (
+                  <li
+                    key={`confirm-warning-${i}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-warn-surface/60 px-3 py-2"
+                  >
+                    <span className="text-sm font-medium">
+                      {playerMap.get(w.playerId)?.name ?? "A player"}
+                    </span>
+                    <span className="font-score text-sm text-warn-foreground">
+                      {w.restMinutes} / {w.requiredMinutes} min
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <AlertDialogFooter>
               <AlertDialogCancel disabled={busy}>Keep waiting</AlertDialogCancel>
               <AlertDialogAction
@@ -1552,6 +1682,32 @@ export function MatchOperationsDialog({
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * The amber "this match needs attention" chip the desk draws over a court tile.
+ *
+ * One chip for the schedule's own conflicts, and it is deliberately separate from the
+ * court-state pill beside it: the state answers "is this court busy", the chip answers "is
+ * the match the schedule put here still playable where it is". A court can be free and
+ * ready while the match it is about to host sleeps inside a break, and collapsing the two
+ * into one treatment would hide one behind the other.
+ *
+ * It carries a word and a glyph, never colour alone, and the tile folds the same text into
+ * its accessible name - the tile's own `aria-label` would otherwise replace the chip's
+ * text for a screen reader.
+ */
+function AttentionChip({ conflicts }: { conflicts: readonly ScheduleConflict[] }) {
+  const { text } = summarizeConflicts(conflicts);
+  if (!text) return null;
+  return (
+    <span className="mt-2 inline-flex max-w-full items-start gap-1.5 rounded-md bg-warn-surface px-2 py-1 text-sm font-semibold text-warn-foreground ring-1 ring-inset ring-warn-border">
+      <span aria-hidden="true" className="font-extrabold">
+        !
+      </span>
+      <span className="min-w-0">Needs attention — {text}</span>
+    </span>
   );
 }
 

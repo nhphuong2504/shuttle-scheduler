@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { AlertTriangle, ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -49,6 +50,7 @@ import {
   usePlacementMatches,
   usePlayers,
   useRealtimeRefresh,
+  useScheduleConflicts,
   useTeams,
   useTierDrawMatches,
   useTierDraws,
@@ -61,11 +63,17 @@ import {
   type TournamentDay,
 } from "@/lib/tournament/data";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
+import {
+  conflictedMatchCount,
+  groupConflictsByKind,
+  type ConflictKindGroup,
+} from "@/lib/tournament/schedule-conflicts";
 import { dayIdForTime } from "@/lib/tournament/day-scope";
 import { projectedFinishFromRemainingMatches } from "@/lib/tournament/schedule-diff";
 import { roundName } from "@/lib/tournament/draws";
 import { ruleForStage, type ScoringRule } from "@/lib/tournament/scoring";
 import { buildStageProgress } from "@/lib/tournament/stage-progress";
+import { cn } from "@/lib/utils";
 import { StageProgressList } from "@/components/stage-progress";
 import {
   applyPlacementSchedulePlan,
@@ -123,6 +131,114 @@ interface DayBreakRow {
 function normalizeTime(value: string) {
   if (!value) return value;
   return value.length === 5 ? `${value}:00` : value;
+}
+
+/**
+ * The organiser's block: every match that cannot run as published, and the one way to fix it.
+ *
+ * Read-only, and deliberately so. It names the matches, groups them by reason, and points at
+ * the existing "Update schedule" control rather than offering a second button - the page has
+ * one way to replan, and a block that re-applied a plan itself would be a second, hidden one.
+ * It says plainly that nothing has changed yet, because a warning that looks like an action
+ * already taken is the reading that costs a host a round.
+ *
+ * Hidden entirely when the schedule is clean: it is rendered only when the count is above
+ * zero, so seeing it at all means there is work to do rather than "no conflicts today".
+ *
+ * It folds away rather than printing a long list over the running order. The headline is the
+ * count and the reasons are one keystroke behind it, so a host who has read it once is not
+ * made to scroll past it on every later visit.
+ */
+function ConflictOverview({
+  count,
+  groups,
+  matchLabel,
+  courtNumberLabel,
+}: {
+  count: number;
+  groups: ConflictKindGroup[];
+  matchLabel: (matchId: string) => string;
+  courtNumberLabel: (courtId: string | null) => string | null;
+}) {
+  const [open, setOpen] = useState(false);
+
+  /**
+   * Move to the existing control, and put focus on it.
+   *
+   * `scrollIntoView` alone leaves a keyboard user where they were; focusing the button means
+   * the next Tab or Enter lands on the thing this block just told them to use. Nothing is
+   * clicked - the host still decides whether to replan.
+   */
+  const goToBuild = () => {
+    const target = document.getElementById("build-schedule");
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      target.focus();
+    }
+  };
+
+  return (
+    <Panel className="border-warn-border bg-warn-surface" bodyClassName="py-3">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <span className="flex items-center gap-2">
+          <AlertTriangle aria-hidden="true" className="size-4 shrink-0 text-warn-foreground" />
+          <span className="font-display text-base font-bold text-warn-foreground">
+            {count === 1
+              ? "1 match can't run as published"
+              : `${count} matches can't run as published`}
+          </span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            "size-4 shrink-0 text-warn-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open ? (
+        <div className="mt-3 border-t border-warn-border pt-3">
+          <ul className="space-y-3">
+            {groups.map((group) => (
+              <li key={group.kind}>
+                <p className="text-t4 font-semibold uppercase tracking-wide text-warn-foreground">
+                  {group.label}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {group.conflicts.map((conflict) => {
+                    const court = courtNumberLabel(conflict.court_id);
+                    return (
+                      <li
+                        key={`${conflict.match_table}:${conflict.match_id}:${conflict.conflict_kind}:${conflict.detail}`}
+                        className="text-sm text-warn-foreground"
+                      >
+                        <span className="font-medium">{matchLabel(conflict.match_id)}</span>
+                        {court ? <span> · {court}</span> : null}
+                        {conflict.scheduled_time ? (
+                          <span> · {timeLabel(conflict.scheduled_time)}</span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-sm text-warn-foreground">
+            Update schedule will replan these matches. Nothing changes until you run it.
+          </p>
+          <Button type="button" variant="outline" size="sm" className="mt-2" onClick={goToBuild}>
+            Go to Update schedule
+          </Button>
+        </div>
+      ) : null}
+    </Panel>
+  );
 }
 
 export function PlacementScheduler() {
@@ -196,6 +312,20 @@ export function PlacementScheduler() {
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
   const courtMap = useMemo(() => indexBy(courts), [courts]);
+  /**
+   * The published schedule's conflicts, as the organiser's overlay on the running order.
+   *
+   * This is the same read the desk makes, but the desk sees a chip on one match while the
+   * whole set belongs here, beside the single control that can resolve it. Nothing is
+   * stored: a conflict is recomputed from the rows on every render and refetch, so a
+   * rebuild - or a desk result that clears one - takes it back out of the block with no
+   * flag to reset. The query is editor-gated in `useScheduleConflicts`, so a viewer makes
+   * no request and this renders an empty overlay rather than an error.
+   */
+  const scheduleConflicts = useScheduleConflicts();
+  const conflicts = scheduleConflicts.data ?? [];
+  const conflictMatchCount = conflictedMatchCount(conflicts);
+  const conflictGroups = groupConflictsByKind(conflicts);
   const categoryMap = useMemo(() => indexBy(categories), [categories]);
   const entrantTeam = useMemo(
     () => new Map((entrants ?? []).map((entrant) => [entrant.id, entrant.team_id])),
@@ -881,6 +1011,13 @@ export function PlacementScheduler() {
   const matchLabel = (matchId: string) =>
     placementMatchLabel(matchId, placementMatches ?? [], tierMatches ?? [], labelEntrant);
 
+  /** The venue court's number, for the conflict block's lines; a row may name no court. */
+  const courtNumberLabel = (courtId: string | null): string | null => {
+    if (!courtId) return null;
+    const court = courtMap.get(courtId);
+    return court ? `Court ${court.number}` : null;
+  };
+
   const validateWindow = (dayNumber: number, window: DayWindow) => {
     const validDate = /^\d{4}-\d{2}-\d{2}$/.test(window.date);
     const validTimes = /^\d{2}:\d{2}$/.test(window.start) && /^\d{2}:\d{2}$/.test(window.end);
@@ -1299,6 +1436,7 @@ export function PlacementScheduler() {
 
   const buildButton = (
     <Button
+      id="build-schedule"
       disabled={busy || !planInputsReady || !tournament || Boolean(buildBlocker)}
       aria-describedby={buildBlocker ? "build-blocker" : undefined}
       onClick={() => void (hasSchedule ? previewRebuild() : build())}
@@ -1343,6 +1481,22 @@ export function PlacementScheduler() {
       }
     >
       <div className="space-y-5">
+        {/*
+          What the published schedule cannot run, and where to fix it.
+
+          At the top because it is a caveat on everything below it: the running order the
+          page is about to show has matches that contradict each other. It renders only for
+          an editor - a viewer makes no conflict request at all (see `useScheduleConflicts`)
+          - and only when there is something to say, so its presence is itself the signal.
+        */}
+        {canEdit && conflictMatchCount > 0 ? (
+          <ConflictOverview
+            count={conflictMatchCount}
+            groups={conflictGroups}
+            matchLabel={matchLabel}
+            courtNumberLabel={courtNumberLabel}
+          />
+        ) : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm text-muted-foreground">
           <span className="font-score font-semibold text-foreground">
             {rows.length} match{rows.length === 1 ? "" : "es"} scheduled

@@ -1515,8 +1515,16 @@ export function useTierDrawMatches() {
  * refetch window the desk's other schedule reads use: a conflict appears the moment the
  * rows that contradict each other exist, and disappears the moment the desk fixes it.
  *
- * The result is deliberately not surfaced anywhere yet. It exists so a caller can ask
- * "is this schedule still playable" without re-deriving the rules in TypeScript.
+ * **Editor-gated at the database, so gated here too.** The RPC raises `Not authorized`
+ * for anyone without `can_edit_tournament`, and a viewer has no business reconstructing
+ * the running order from its conflicts. Both the desk and the Schedule page read the same
+ * scoped access answer the shell already resolved, so this fails closed for a viewer
+ * instead of asking and being refused.
+ *
+ * **A failure reads as "no conflict data", never as a page error.** A conflict list that
+ * is missing is a warning not shown; a page that breaks because it could not read one is
+ * worse than either. `retry: false` keeps a transient refusal from being asked three
+ * times, and a caller reads `data ?? []` rather than throwing the error into the tree.
  */
 export async function fetchScheduleConflicts(tournamentId: string): Promise<ScheduleConflict[]> {
   const { data, error } = await supabase.rpc("schedule_conflicts", {
@@ -1528,10 +1536,12 @@ export async function fetchScheduleConflicts(tournamentId: string): Promise<Sche
 
 export function useScheduleConflicts() {
   const tournamentId = useTournamentId();
+  const access = useScopedAccess();
   return useQuery({
     queryKey: scopedKey(keys.scheduleConflicts, tournamentId),
-    enabled: !!tournamentId,
+    enabled: access.can_edit && !!tournamentId,
     refetchInterval: 20_000,
+    retry: false,
     queryFn: () => fetchScheduleConflicts(tournamentId as string),
   });
 }

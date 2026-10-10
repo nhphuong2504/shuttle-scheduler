@@ -151,6 +151,18 @@ const drawA = uid(700);
 const drawC = uid(701);
 
 /**
+ * The ids a spec names when it has to point at a fixture row.
+ *
+ * Exported rather than reconstructed: the id helpers above build UUID-shaped strings from a
+ * positional number, and a spec that pasted the same arithmetic would be a second copy of the
+ * fixture's own convention - the copy that silently stops matching the day the fixture moves
+ * a row. `matchId(n)` is the `tier_draw_matches` row whose spec was `match(n, ...)`;
+ * `courtId(n)` is court number `n`.
+ */
+export const fixtureMatchId = matchId;
+export const fixtureCourtId = courtId;
+
+/**
  * Twenty-four names, chosen to be plausible rather than absurd, but long enough that a
  * pairing is roughly 60-70 characters. `teamLabel` joins them with " / ".
  */
