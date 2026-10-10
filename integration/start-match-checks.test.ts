@@ -10,6 +10,7 @@ import {
   createOwnedTournament,
   destroyIdentity,
   destroyTournaments,
+  forceStatus,
   serviceClient,
   type DayFixture,
   type TestIdentity,
@@ -121,9 +122,6 @@ async function seed(options: { label: string; entrants: number }): Promise<Seede
     name: `itest-start-${options.label}-${Date.now().toString(36)}`,
     timezone: TZ,
     days,
-    // Past the gate: the window is 2099, so `assert_tournament_can_start_match` would refuse an
-    // upcoming tournament. A fixture move, not the transition under test.
-    status: "in_progress",
   });
   created.tournaments.push(tournamentId);
 
@@ -144,6 +142,11 @@ async function seed(options: { label: string; entrants: number }): Promise<Seede
     await createTeam({ categoryId: category.id, player1: playerId, player2: null });
   }
   await syncPlacementEntrants(category.id);
+
+  // Configuring a tournament is upcoming-only, so it is moved to `in_progress` only now. The
+  // window is 2099, so `assert_tournament_can_start_match` would refuse a start on an upcoming
+  // tournament: this is a fixture move past the gate, not the transition under test.
+  await forceStatus(tournamentId, "in_progress");
 
   const entrants = (await fetchPlacementEntrants(tournamentId)).map((row) => row.id);
   const courts = await fetchCourts(tournamentId);
