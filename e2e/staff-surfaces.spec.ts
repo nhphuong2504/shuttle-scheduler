@@ -427,6 +427,38 @@ test.describe("staff surfaces", () => {
     expect(violationIds(await scan(page))).toEqual([]);
   });
 
+  test("the score dialog offers the late-entry finish offset", async ({ page }) => {
+    /**
+     * A result entered after the fact has to be able to say how long ago the match
+     * finished; without it the reflow treats a late entry as a long match and pushes the
+     * rest of the court back. The control is asserted here rather than in jsdom because
+     * it is the *wiring* - the label association and the default - that only the real
+     * dialog can be measured for. The payload (that a zero sends no offset at all) is
+     * pinned in `placement-report.test.ts`.
+     */
+    await openStaffShell(page);
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The placement tables are the ones whose RPCs accept the offset; on this fixture
+    // they live behind the knockout tab.
+    await page.getByRole("tab", { name: /knockout/i }).click();
+    const opener = page.getByRole("button", { name: /^open$/i }).first();
+    expectPresent(
+      (await opener.count()) > 0,
+      "A match row with an Open control on /matches with fixture data present",
+    );
+    await opener.click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    const field = dialog.getByLabel("Finished (minutes ago)");
+    expectPresent((await field.count()) > 0, "The finish-offset field in the score dialog");
+    // Defaults to 0, which reads as "report live" and sends nothing to the RPC.
+    await expect(field).toHaveValue("0");
+  });
+
   test("the score filters are a named group of pressed buttons", async ({ page }) => {
     /**
      * The two filter rows on the score desk were a flat set of buttons whose selected one was

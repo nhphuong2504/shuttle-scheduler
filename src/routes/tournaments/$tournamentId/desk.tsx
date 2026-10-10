@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel } from "@/components/app-shell";
@@ -35,6 +35,7 @@ import {
   type ScheduleImpact,
 } from "@/lib/tournament/actions";
 import {
+  MAX_ENDED_MINUTES_AGO,
   reportPlacementMatch,
   reportTierDrawMatch,
   reschedulePlacementMatch,
@@ -977,6 +978,14 @@ export function MatchOperationsDialog({
   const [note, setNote] = useState("");
   const [winnerId, setWinnerId] = useState(match.teams[0] ?? "");
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
+  /**
+   * How long ago the match finished, as text, so an empty field is expressible.
+   *
+   * Only meaningful for the placement and knockout tables, whose RPCs accept the
+   * offset; it stays "0" and is never sent for the round-robin ones.
+   */
+  const [endedMinutesAgo, setEndedMinutesAgo] = useState("0");
+  const endedMinutesFieldId = useId();
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
   const table = deskKindTable(match.kind) as
     "pool_matches" | "draw_matches" | "placement_matches" | "tier_draw_matches";
@@ -1036,6 +1045,13 @@ export function MatchOperationsDialog({
       : !!gamesWinnerFor(games, scoringRule);
 
   const submit = async () => {
+    // The offset only exists on the placement and knockout paths. A blank field reads
+    // as 0, which is "reported live" and is exactly the old behaviour.
+    const endedMinutes = isPlacement ? Number(endedMinutesAgo || "0") : 0;
+    if (endedMinutes > MAX_ENDED_MINUTES_AGO) {
+      toast.error(`Enter ${MAX_ENDED_MINUTES_AGO} minutes or fewer.`);
+      return;
+    }
     if (
       !isReported &&
       match.status !== "in-progress" &&
@@ -1049,7 +1065,7 @@ export function MatchOperationsDialog({
       if (match.kind === "placement" || match.kind === "tier") {
         if (!tournamentId) throw new Error("No active tournament.");
         const report = match.kind === "placement" ? reportPlacementMatch : reportTierDrawMatch;
-        const impact = await report(match.id, games, tournamentId);
+        const impact = await report(match.id, games, tournamentId, endedMinutes);
         // The placement path reports its ripple in minutes rather than as a plan
         // diff, so it gets its own note rather than `impactMessage`.
         const note = scheduleImpactNote(impact);
@@ -1241,6 +1257,34 @@ export function MatchOperationsDialog({
             </p>
           ) : null}
         </div>
+        {/*
+          The late-entry correction, kept to one quiet row under the score box so it
+          never competes with entering the score itself. Only the placement and
+          knockout tables accept the offset, so it is not drawn for the rest.
+        */}
+        {canEditScores && isPlacement ? (
+          <div className="rounded-lg border border-hairline bg-muted/20 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor={endedMinutesFieldId} className="text-sm text-muted-foreground">
+                Finished (minutes ago)
+              </label>
+              <Input
+                id={endedMinutesFieldId}
+                className="h-9 w-20 text-center tabular-nums"
+                inputMode="numeric"
+                value={endedMinutesAgo}
+                disabled={!canEdit || busy}
+                onChange={(e) =>
+                  setEndedMinutesAgo(e.target.value.replace(/\D/g, "").slice(0, 4))
+                }
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Leave at 0 if you are entering the result now. Otherwise say how long ago the match
+              actually finished, so a late entry does not push the rest of the day back.
+            </p>
+          </div>
+        ) : null}
         {!isReported &&
         match.status !== "in-progress" &&
         (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
