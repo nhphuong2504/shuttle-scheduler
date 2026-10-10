@@ -2980,3 +2980,141 @@ DROP FUNCTION public.schedule_conflicts(uuid);
 
 The read has no client callers yet — `useScheduleConflicts` in `src/lib/tournament/data.ts` is defined
 but not wired to any surface — so dropping it breaks nothing.
+
+## Applying `20261010000000_start_match_checks_and_reflow.sql`
+
+Two hard physical checks move onto the start path, and starting a match late — or on another court
+— starts reflowing the rest of the day the way a reported result already did.
+
+### What it changes
+
+1. **`tournaments.block_start_on_short_rest boolean NOT NULL DEFAULT false`.** Short rest stays a
+   desk *warning* by default; a tournament that wants it enforced sets this to true. No RPC and no
+   UI writes it yet (see "The setting" below); it is a data switch the check reads.
+2. **`assert_can_start_match(p_table, p_match_id)`** — one internal function, shared by the three
+   start RPCs, that raises when:
+   - a player in this match is already on court in another match of the same tournament, or
+   - the target court already has a match in progress, or
+   - (only when the tournament has opted in) the player's previous match finished inside their
+     stage's rest gap.
+   It resolves players across all four match tables (`pool_matches`, `draw_matches`,
+   `placement_matches`, `tier_draw_matches`), using the same entrant → team → player hop
+   `shift_live_schedule_core` already uses, and reads the candidate's court back from the row. The
+   two physical checks exclude the candidate by `(match_table, match_id)`, so it never sees itself.
+3. **`start_placement_match`, `start_tier_draw_match` and `start_match_safe`** each take the global
+   schedule keys, mark the row `in-progress`, run the shared check, and then run the reflow. This
+   is the same order for the locks every schedule writer uses — lifecycle first, then
+   `live-schedule`, `schedule:1`, `schedule:2` — which is what lets two concurrent starts not both
+   pass the check on a stale read. `start_match_safe` keeps its own `assert_match_eligible` call for
+   the published-time window and the desk's rest override; the new check owns "is the room actually
+   free".
+4. **`shift_live_schedule_core` now accepts an `in-progress` source.** `status IN ('reported',
+   'walkover', 'in-progress')` in the four source reads, and the early return distinguishes a
+   finished match with no end (nothing to reflow from) from an in-progress match, whose expected
+   finish is derived in the loop.
+
+### The in-progress source, and `source_time`
+
+A finished source reflows from its published time and the loop reads its real span from
+`started_at` / `ended_at`. An in-progress source has no end, so its expected finish is
+`GREATEST(COALESCE(started_at, scheduled_time) + duration, statement_timestamp())` — the same
+expectation `assert_match_eligible` uses. For that expectation to matter, every place the loop asked
+"when did this match actually finish?" for an in-progress row now reads the actual start:
+`COALESCE(actual_start, shifted_time) + duration` in the `previous`, `prereq` and `fixed` branches.
+Without it, a match that began twenty minutes late reflowed as though it began on time.
+
+The **queue boundary is the harder half.** The queue is seeded on `(original_time, match_table,
+match_id) > (source_time, ...)`, and `original_time` is always the *published* time, so `source_time`
+is set to `LEAST(scheduled_time, started_at)` — the earlier of the two, never the actual start alone.
+Each half of that minimum fixes a case the other cannot:
+
+- **Same court, late start.** A match published at 09:00 that starts at 09:15, with its successor
+  published at 09:10. The successor sits after the source's published time but *before* it went on
+  court; keyed on the actual start alone it falls behind the cut and is left overlapping the match in
+  front of it. The published time reaches it, and the loop's own floor keeps it from being pulled
+  earlier than it needs.
+- **Change of court.** A match published on court one at 10:00 that actually starts on court two at
+  10:20. Court two's 10:05 match is the one it now physically sits on; only the source's published
+  time (10:00) reaches it, since the actual start (10:20) is after it. The court the match *left* is
+  out of scope — the queue is keyed on the court it is on now.
+
+The minimum is safe on both sides because every write is floored at the match's own published time:
+a row the boundary reaches but nothing pushes keeps its time untouched, and a row the source now sits
+on top of is caught by the loop's time-overlap window, which does not depend on the ordering.
+
+The reflow is called at the end of the start RPCs and never raises on that path: a held chain is a
+`RAISE NOTICE`, so a start that is otherwise valid is never rolled back by the reflow.
+
+### The setting
+
+`block_start_on_short_rest` is read only by `assert_can_start_match`. It is deliberately **not** in
+`update_tournament_details`, whose contract is "a detail that changes nothing about a game" and whose
+seven-column list is pinned by `db-invariants.test.ts`; a writer for it belongs with the rest gaps.
+Until then it is set directly (service role), which is how the integration fixture flips it.
+
+### Locking
+
+The start RPCs now take `live-schedule`, `schedule:1` and `schedule:2` before the physical check, in
+addition to the per-tournament lifecycle lock they already held. Two desks starting at once now
+serialise on one global key rather than racing, which is the point. There is no new deadlock: every
+writer takes the lifecycle key (shared for a start, exclusive only in `complete_tournament`) *before*
+the global keys, and `complete_tournament` never takes a global key, so no cycle exists. The advisory
+locks are held for the transaction, so the reflow called at the end of the same RPC re-acquires them
+re-entrantly rather than waiting on itself.
+
+### Verify after applying
+
+```sql
+-- The switch exists, is a NOT NULL boolean defaulting to false.
+SELECT data_type, is_nullable, column_default FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'tournaments'
+  AND column_name = 'block_start_on_short_rest';                                   -- boolean | NO | false
+
+-- One shared check, off the client surface, scanning all four tables and both arms.
+SELECT has_function_privilege('authenticated', 'public.assert_can_start_match(text, uuid)', 'execute'); -- false
+SELECT prosrc LIKE '%pool_matches%'      AS pools,
+       prosrc LIKE '%draw_matches%'      AS draws,
+       prosrc LIKE '%placement_matches%' AS placement,
+       prosrc LIKE '%tier_draw_matches%' AS tiers,
+       prosrc LIKE '%already has a match in progress%'      AS court_check,
+       prosrc LIKE '%is already playing in another match%'  AS player_check,
+       prosrc LIKE '%block_start_on_short_rest%'            AS rest_switch
+FROM pg_proc WHERE proname = 'assert_can_start_match';                             -- all true
+
+-- Each start RPC runs the check and then the reflow.
+SELECT proname FROM pg_proc
+WHERE proname IN ('start_placement_match', 'start_tier_draw_match', 'start_match_safe')
+  AND prosrc LIKE '%assert_can_start_match(%'
+  AND prosrc LIKE '%shift_live_schedule_after_match(%';                            -- 3 rows
+
+-- The reflow accepts an in-progress source and reads the actual start.
+SELECT prosrc LIKE '%''in-progress''%'                                   AS from_in_progress,
+       prosrc LIKE '%COALESCE(previous.actual_start, previous.shifted_time)%' AS previous_actual,
+       prosrc LIKE '%COALESCE(prereq.actual_start, prereq.shifted_time)%'     AS prereq_actual,
+       prosrc LIKE '%COALESCE(fixed.actual_start, fixed.shifted_time)%'       AS fixed_actual,
+       prosrc LIKE '%source_status = ''in-progress''%'                       AS source_time_min
+FROM pg_proc WHERE proname = 'shift_live_schedule_core';                           -- all true
+```
+
+The `DO $verify$` block asserts the same on apply and fails if any is wrong. Then run
+`npm run test:integration` against the local stack. `integration/start-match-checks.test.ts` covers
+the two physical refusals, the short-rest switch both ways, and a late start, an early start and a
+court change through the reflow; `integration/live-reflow.test.ts` (cases (a)–(j)) and
+`integration/simulation.test.ts` must stay green — the simulation reports each match before starting
+the next, so it never presents the new check with a match already on court.
+
+### Rolling back
+
+There is no data rollback: no column is dropped and no match time is rewritten by the migration
+itself. Restore the previous bodies from `20261008010000_start_on_first_match.sql` (the three start
+RPCs) and `20261009010000_safe_live_schedule_reflow.sql` (`shift_live_schedule_core`), then:
+
+```sql
+DROP FUNCTION public.assert_can_start_match(text, uuid);
+ALTER TABLE public.tournaments DROP COLUMN block_start_on_short_rest;
+```
+
+Rolling back re-introduces the client-only check: a start on a busy court, or by a player already on
+court, would again be a desk-side warning rather than a server refusal, and a late start would again
+leave the rest of the day where it was.
+

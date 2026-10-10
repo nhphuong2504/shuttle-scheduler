@@ -36,6 +36,7 @@ function tournament(overrides: Partial<Tournament> = {}): Tournament {
   return {
     id: TOURNAMENT_ID,
     name: "Test Open",
+    block_start_on_short_rest: false,
     court_count: 2,
     created_at: "2026-09-17T00:00:00Z",
     day_count: 1,

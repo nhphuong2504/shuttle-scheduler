@@ -1298,6 +1298,7 @@ export type Database = {
       }
       tournaments: {
         Row: {
+          block_start_on_short_rest: boolean
           court_count: number
           created_at: string
           day_count: number
@@ -1331,6 +1332,7 @@ export type Database = {
           venue_timezone: string
         }
         Insert: {
+          block_start_on_short_rest?: boolean
           court_count?: number
           created_at?: string
           day_count?: number
@@ -1364,6 +1366,7 @@ export type Database = {
           venue_timezone?: string
         }
         Update: {
+          block_start_on_short_rest?: boolean
           court_count?: number
           created_at?: string
           day_count?: number
