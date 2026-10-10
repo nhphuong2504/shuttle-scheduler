@@ -702,6 +702,15 @@ function MatchesPage() {
       <Dialog open={!!selectedMatch && canEdit} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent className="sm:max-w-md">
           {selectedMatch && canEdit ? (
+            /*
+             * The score desk deliberately shows no schedule conflicts.
+             *
+             * The conflict overlay belongs to the control desk, where the board is read
+             * as a running order; this page is a list of results to enter. An empty list
+             * keeps this dialog's behaviour exactly as it was - the Start button here
+             * neither opens the conflict confirmation nor adds the toast clause - while
+             * the shared component still owns the flow for the desk that does.
+             */
             <MatchOperationsDialog
               key={selectedMatch.id}
               match={selectedMatch}
@@ -714,6 +723,8 @@ function MatchesPage() {
               courts={courts ?? []}
               canEdit={canEdit}
               startCheck={null}
+              conflicts={[]}
+              onConflictsAfterReport={async () => 0}
               playerMap={playerMap}
               scoringRule={
                 selectedMatch.kind === "pool"

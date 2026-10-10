@@ -1,7 +1,11 @@
 import { test as base, expect } from "@playwright/test";
 
 import { installAppMock, mockEscapes, type MockRole, type MockTournamentAccess } from "./app-mock";
-import type { MockMyRegistrationRow, MockRegistrationRow } from "./app-mock";
+import type {
+  MockMyRegistrationRow,
+  MockRegistrationRow,
+  MockScheduleConflictRow,
+} from "./app-mock";
 import type { DeskMockPreset } from "./desk-mock";
 
 /**
@@ -38,6 +42,8 @@ export interface AppMockOptions {
   registrationState?: string | null;
   /** What `my_tournament_registration` answers. Empty by default. */
   myRegistration?: readonly MockMyRegistrationRow[];
+  /** What `schedule_conflicts` answers. Empty (a clean schedule) by default. */
+  scheduleConflicts?: readonly MockScheduleConflictRow[];
 }
 
 export const test = base.extend<{ appMock: AppMockOptions }>({

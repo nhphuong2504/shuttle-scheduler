@@ -156,6 +156,38 @@ export interface AppMockOptions {
    * is the state of somebody who has not asked to enter yet.
    */
   myRegistration?: readonly MockMyRegistrationRow[];
+
+  /**
+   * What `schedule_conflicts` answers, in the RPC's row-per-conflict shape.
+   *
+   * Empty by default, which is the honest answer for every spec that is not about
+   * conflicts: a clean schedule is what most surfaces assume, so the desk chip and the
+   * organiser's block are simply absent rather than wrong. A spec about them supplies the
+   * rows it wants and the app folds them exactly as it folds the real answer.
+   *
+   * The handler answers regardless of access on purpose. The RPC is editor-gated, and the
+   * viewer spec proves the *app* makes no request by counting requests itself - a mock that
+   * also refused a viewer would hide the very call that spec is checking for.
+   */
+  scheduleConflicts?: readonly MockScheduleConflictRow[];
+}
+
+/**
+ * One `schedule_conflicts` row, in the wire shape the RPC returns.
+ *
+ * Declared here rather than imported from the app, for the same reason as the registration
+ * rows: the fixture is the other side of the contract, and the column names are what the
+ * app has to match. `detail` is carried because the RPC sends it, and the surfaces are
+ * asserted *not* to render it - the shortened id it holds is not for a person to read.
+ */
+export interface MockScheduleConflictRow {
+  match_table: string;
+  match_id: string;
+  court_id: string | null;
+  scheduled_time: string | null;
+  ended_at: string | null;
+  conflict_kind: string;
+  detail: string;
 }
 
 /**
@@ -348,6 +380,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     registrationQueue = [],
     registrationState = null,
     myRegistration = [],
+    scheduleConflicts = [],
   } = options;
 
   if (!INSTALLED.has(page)) {
@@ -615,6 +648,17 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
      */
     if (target === "rpc/tournament_registration_state") {
       await rpc(registrationState);
+      return;
+    }
+    /**
+     * The published schedule's conflicts.
+     *
+     * A clean schedule by default, which is the answer every spec that is not about
+     * conflicts needs. The desk and the Schedule page both read it, so an unmodelled
+     * request here would fail closed on two pages rather than one.
+     */
+    if (target === "rpc/schedule_conflicts") {
+      await rpc(scheduleConflicts);
       return;
     }
     if (target === "rpc/my_tournament_registration") {
