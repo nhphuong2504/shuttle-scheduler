@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { Page } from "@/components/app-shell";
+import { StartPolicySection } from "@/components/tournament-setup/StartPolicySection";
 import { TournamentWizard } from "@/components/tournament-setup/TournamentWizard";
 import {
   SETUP_STEPS,
@@ -97,6 +98,15 @@ function SettingsPage() {
       }
     >
       <TournamentWizard tournamentId={tournamentId} step={step} onStepChange={setStep} />
+      {/*
+        The on-the-day start policy, deliberately outside the wizard. The wizard's steps are the
+        configuration, which the database freezes from the first match; this switch has to stay
+        usable while the tournament plays, so it is its own writer beside the wizard rather than
+        a fifth step or part of the wizard's save. It renders nothing unless the caller may edit.
+      */}
+      <div className="mx-auto mt-6 w-full max-w-[64rem]">
+        <StartPolicySection />
+      </div>
     </Page>
   );
 }

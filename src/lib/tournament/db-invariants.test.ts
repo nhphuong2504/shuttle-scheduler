@@ -2205,6 +2205,64 @@ describe("update tournament details migration", () => {
 });
 
 /**
+ * The start-policy switch.
+ *
+ * The one on-the-day writer that sits beside the wizard rather than inside it: the wizard's
+ * configuration is frozen from the first match, but whether short rest blocks a start has to stay
+ * changeable while the tournament plays. Asserted against the migration source for the same reason
+ * the details block is: the guard and the one-column scoping are visible only in the SQL, and a
+ * widened writer would compile and run.
+ *
+ * The seven columns of `update_tournament_details` are pinned by the block above and are not touched
+ * here — this is a separate function on purpose.
+ */
+describe("start policy migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261012000000_tournament_start_policy.sql"), "utf8");
+  const executable = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  const withoutVerify = executable.replace(/DO \$verify\$[\s\S]*?\$verify\$;/, "");
+  const body = functionSource(withoutVerify, "set_tournament_start_policy");
+
+  it("is open until completion, for the people who may edit the tournament", () => {
+    expect(body).toMatch(/can_edit_tournament/);
+    expect(body).toMatch(/PERFORM public\.assert_tournament_writable\(p_tournament_id\)/);
+    expect(body).not.toMatch(/assert_tournament_configurable/);
+  });
+
+  it("writes the one start-policy column and nothing else", () => {
+    const set = body.match(/UPDATE public\.tournaments SET([\s\S]*?)WHERE id = p_tournament_id/);
+    expect(set, "the update statement").toBeTruthy();
+    const columns = [...(set?.[1] ?? "").matchAll(/^\s*([a-z_]+) =/gm)].map((match) => match[1]);
+    expect(columns).toEqual(["block_start_on_short_rest"]);
+  });
+
+  it("refuses a missing value rather than reading it as off", () => {
+    expect(body).toMatch(/p_block_start_on_short_rest IS NULL/);
+  });
+
+  it("raises for an unknown tournament", () => {
+    expect(body).toMatch(/RAISE EXCEPTION 'Unknown tournament'/);
+  });
+
+  it("is a client RPC for signed-in callers only", () => {
+    expect(withoutVerify).toMatch(
+      /REVOKE ALL ON FUNCTION public\.set_tournament_start_policy\(uuid, boolean\) FROM public, anon/,
+    );
+    expect(withoutVerify).toMatch(
+      /GRANT EXECUTE ON FUNCTION public\.set_tournament_start_policy\(uuid, boolean\) TO authenticated/,
+    );
+  });
+
+  it("verifies its own result", () => {
+    expect(sql).toMatch(/DO \$verify\$/);
+    expect(sql).toMatch(/RAISE EXCEPTION 'M7:/);
+  });
+});
+
+/**
  * The roster is read one tournament at a time.
  *
  * Asserted against the migration source because the failure is invisible at runtime until

@@ -310,7 +310,7 @@ not consult the platform role, and `db-invariants.test.ts` pins that.
   `apply_placement_day_schedule`, legacy `apply_day_schedule`
 - Incremental configuration a running event legitimately needs: `add_tournament_day`,
   `remove_tournament_day`, `set_tournament_courts`, `update_tournament_window`,
-  `update_tournament_details`
+  `update_tournament_details`, `set_tournament_start_policy`
 - The registration decision: `decide_tournament_registration` (Section 6)
 
 These are the repair and support paths, and each already carries a stronger, data-based gate

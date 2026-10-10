@@ -240,12 +240,12 @@ async function rowOf(id: string) {
   return data;
 }
 
-/** Turns the tournament's short-rest block on, the switch no RPC writes yet. */
+/** Turns the tournament's short-rest block on, through the same RPC the Setup page uses. */
 async function blockOnShortRest(tournamentId: string): Promise<void> {
-  const { error } = await serviceClient()
-    .from("tournaments")
-    .update({ block_start_on_short_rest: true })
-    .eq("id", tournamentId);
+  const { error } = await admin.client.rpc("set_tournament_start_policy", {
+    p_tournament_id: tournamentId,
+    p_block_start_on_short_rest: true,
+  });
   if (error) throw new Error(`enabling the short-rest block failed: ${error.message}`);
 }
 

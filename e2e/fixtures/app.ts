@@ -44,6 +44,8 @@ export interface AppMockOptions {
   myRegistration?: readonly MockMyRegistrationRow[];
   /** What `schedule_conflicts` answers. Empty (a clean schedule) by default. */
   scheduleConflicts?: readonly MockScheduleConflictRow[];
+  /** The fixture tournament's `block_start_on_short_rest`. `false` (the column's default) by default. */
+  startPolicy?: boolean;
 }
 
 export const test = base.extend<{ appMock: AppMockOptions }>({

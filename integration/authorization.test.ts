@@ -868,3 +868,93 @@ describe("player identity and the contact read", () => {
     expect(mine.map((row) => row.registration_id)).toEqual(expect.arrayContaining([firstId, secondId]));
   }, 120_000);
 });
+
+/**
+ * The start-policy switch, and the window it stays open in.
+ *
+ * It is a writer of its own (`set_tournament_start_policy`) rather than a key in
+ * `update_tournament_details`, so the two things a client cannot see are asserted here: who may
+ * flip it, and that it stays open while the tournament plays but closes when it is completed for
+ * everyone except a platform admin.
+ *
+ * Both directions throughout, as everywhere in this file: a matrix that only proved the permitted
+ * call succeeds would pass on a database where every caller can write the column.
+ *
+ * It reuses the shared `tournamentId` for the permitted and refused callers, and owns one
+ * completed tournament of its own for the window — a completed fixture cannot be made by clicking,
+ * and `forceStatus` is the fixture helper for exactly that.
+ */
+describe("the start policy switch", () => {
+  /** Calls the RPC and reports whether the guard let it through. */
+  const setPolicy = (identity: TestIdentity, id: string, value: boolean | null) =>
+    identity.client.rpc("set_tournament_start_policy", {
+      p_tournament_id: id,
+      p_block_start_on_short_rest: value,
+    } as never);
+
+  /** Reads the one column back, as the owner, to prove the write landed where the check reads. */
+  async function readPolicy(identity: TestIdentity, id: string): Promise<boolean | null> {
+    const { data, error } = await identity.client
+      .from("tournaments")
+      .select("block_start_on_short_rest")
+      .eq("id", id)
+      .single();
+    if (error) throw new Error(`reading the start policy failed: ${error.message}`);
+    return data.block_start_on_short_rest;
+  }
+
+  let completedId = "";
+
+  beforeAll(async () => {
+    completedId = await createOwnedTournament(owner, { status: "completed" });
+    tournamentIds.push(completedId);
+  }, 180_000);
+
+  it("lets the owner turn it on, and records the column the start check reads", async () => {
+    const on = await setPolicy(owner, tournamentId, true);
+    expect(on.error).toBeNull();
+    expect(await readPolicy(owner, tournamentId)).toBe(true);
+  });
+
+  it("lets an editor of the tournament turn it off again", async () => {
+    const off = await setPolicy(editor, tournamentId, false);
+    expect(off.error).toBeNull();
+    expect(await readPolicy(editor, tournamentId)).toBe(false);
+  });
+
+  it("refuses a signed-in caller with no access", async () => {
+    const outcome = await guardOutcome(viewer, "set_tournament_start_policy", {
+      p_tournament_id: tournamentId,
+      p_block_start_on_short_rest: true,
+    });
+    expect(outcome.refused).toBe(true);
+    // And nothing was written: the refusal is at the guard, not after a partial update.
+    expect(await readPolicy(owner, tournamentId)).toBe(false);
+  });
+
+  it("refuses an anonymous caller at the privilege layer", async () => {
+    const { error } = await anonClient().rpc("set_tournament_start_policy", {
+      p_tournament_id: tournamentId,
+      p_block_start_on_short_rest: true,
+    } as never);
+    expect(error).not.toBeNull();
+    expect(error?.message.toLowerCase()).toContain("permission denied");
+  });
+
+  it("refuses a missing value rather than reading it as off", async () => {
+    const missing = await setPolicy(owner, tournamentId, null);
+    expect(missing.error?.message ?? "").toMatch(/needs a value/i);
+    expect(await readPolicy(owner, tournamentId)).toBe(false);
+  });
+
+  it("refuses an ordinary owner once the tournament is completed", async () => {
+    const refused = await setPolicy(owner, completedId, true);
+    expect(refused.error?.message ?? "").toMatch(/completed/i);
+  });
+
+  it("keeps the platform-admin override every late edit has", async () => {
+    const overridden = await setPolicy(admin, completedId, true);
+    expect(overridden.error).toBeNull();
+    expect(await readPolicy(admin, completedId)).toBe(true);
+  });
+});

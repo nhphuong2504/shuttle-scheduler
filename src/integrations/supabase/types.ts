@@ -1811,6 +1811,10 @@ export type Database = {
         Args: { p_count: number; p_tournament_id: string }
         Returns: undefined
       }
+      set_tournament_start_policy: {
+        Args: { p_block_start_on_short_rest: boolean; p_tournament_id: string }
+        Returns: undefined
+      }
       shift_live_schedule_after_match: {
         Args: { p_match_id: string; p_table: string }
         Returns: undefined

@@ -304,6 +304,9 @@ const tournament = {
   starts_on: DAY_DATE,
   ends_on: DAY_DATE,
   status: "in_progress",
+  // The on-the-day switch the Setup page writes. Off is the column's own default, and the
+  // fixture serves that unless a spec asks for the enforcing state.
+  block_start_on_short_rest: false,
   format: "two_round_placement",
   max_categories_per_player: 3,
   placement_games_to: 21,
@@ -672,16 +675,18 @@ const buildFixture = (
   membership: MockMembership,
   format: MockTournamentFormat | undefined,
   registrationState: string | null | undefined,
+  startPolicy: boolean | undefined,
 ): DeskFixture => {
   // The lifecycle word is the one thing a spec needs to vary and cannot click its way
   // to: the fixture is a running event, and `Upcoming` and `Completed` are the other two
   // states the vocabulary has.
   const served: Record<string, unknown> =
-    status || membership !== "owner" || format
+    status || membership !== "owner" || format || startPolicy !== undefined
       ? {
           ...tournament,
           ...(status ? { status } : {}),
           ...(format ? { format } : {}),
+          ...(startPolicy !== undefined ? { block_start_on_short_rest: startPolicy } : {}),
           ...(membership === "owner" ? {} : { owner_profile_id: OTHER_OWNER_PROFILE_ID }),
         }
       : tournament;
@@ -845,6 +850,7 @@ export function deskFixture(
   membership: MockMembership = "owner",
   format?: MockTournamentFormat,
   registrationState?: string | null,
+  startPolicy?: boolean,
 ): DeskFixture {
   const chosen = PRESETS[preset];
   return buildFixture(
@@ -858,5 +864,6 @@ export function deskFixture(
     membership,
     format,
     registrationState,
+    startPolicy,
   );
 }

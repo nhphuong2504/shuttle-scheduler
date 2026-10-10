@@ -3049,8 +3049,8 @@ The reflow is called at the end of the start RPCs and never raises on that path:
 
 `block_start_on_short_rest` is read only by `assert_can_start_match`. It is deliberately **not** in
 `update_tournament_details`, whose contract is "a detail that changes nothing about a game" and whose
-seven-column list is pinned by `db-invariants.test.ts`; a writer for it belongs with the rest gaps.
-Until then it is set directly (service role), which is how the integration fixture flips it.
+seven-column list is pinned by `db-invariants.test.ts`; a writer for it belongs with the rest gaps, and
+`20261012000000_tournament_start_policy.sql` adds it as its own narrow RPC.
 
 ### Locking
 
@@ -3215,5 +3215,62 @@ DROP FUNCTION public.report_tier_draw_result(uuid, jsonb, integer);
 Rolling back re-introduces the late-entry problem: a result entered fifteen minutes after the match
 finished would again be recorded as a fifteen-minute overrun, and the reflow would push the rest of the
 court with it.
+
+## Applying `20261012000000_tournament_start_policy.sql`
+
+The switch that makes short rest block a start gets a writer, so a host can turn it on from the Setup
+page while the tournament is playing.
+
+### What it adds
+
+`set_tournament_start_policy(p_tournament_id, p_block_start_on_short_rest)`: writes exactly
+`tournaments.block_start_on_short_rest`, for an owner, an editor or a platform admin, until the
+tournament is completed (`assert_tournament_writable`). It is `SECURITY DEFINER` with a fixed
+`search_path`, refuses a NULL value, and raises `'Unknown tournament'` when the id names no row — the
+same shape as the other narrow writers.
+
+It is deliberately **not** bundled into `update_tournament_details`. That RPC's contract is "a detail
+that changes nothing about a game", its seven-column list is pinned by `db-invariants.test.ts`, and its
+form is the setup wizard's, which is frozen from the first match. The start policy is an on-the-day
+decision that changes how a match may start, so it is its own writer and its own UI block — usable
+while the tournament runs, and disabled once it is completed.
+
+Application: `setTournamentStartPolicy` in `src/lib/tournament/actions.ts` calls it, and
+`StartPolicySection` on `/tournaments/$tournamentId/settings` renders the switch below the wizard for
+callers with `can_edit`. The one function entry in `src/integrations/supabase/types.ts` was written by
+hand to match; regenerate it.
+
+### Verify after applying
+
+```sql
+-- Exactly one signature, guarded by both functions, off the anon surface.
+SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = 'set_tournament_start_policy';                         -- 1
+SELECT prosrc LIKE '%can_edit_tournament%'         AS edits,
+       prosrc LIKE '%assert_tournament_writable(%' AS writable,
+       prosrc LIKE '%block_start_on_short_rest%'   AS writes_the_column,
+       prosrc LIKE '%IS NULL%'                     AS refuses_a_missing_value
+FROM pg_proc WHERE proname = 'set_tournament_start_policy';                                        -- all true
+SELECT has_function_privilege('anon', 'public.set_tournament_start_policy(uuid, boolean)', 'execute');          -- false
+SELECT has_function_privilege('authenticated', 'public.set_tournament_start_policy(uuid, boolean)', 'execute'); -- true
+```
+
+The `DO $verify$` block asserts the same on apply. Then run `npm run test:integration` against the
+local stack: `integration/authorization.test.ts` covers the owner and editor flipping it, a caller with
+no access and an anonymous one being refused, a NULL value, and a completed tournament being refused for
+an ordinary owner but writable by a platform admin. `integration/start-match-checks.test.ts` now flips
+the switch through this RPC, so its short-rest refusal case also proves the writer reaches
+`assert_can_start_match`.
+
+### Rolling back
+
+```sql
+DROP FUNCTION public.set_tournament_start_policy(uuid, boolean);
+```
+
+The switch stays set if it was turned on; only the writer is removed. The Setup page's block calls it, so
+without the function the toggle's request fails — remove `StartPolicySection` and the
+`setTournamentStartPolicy` action too, or the page renders a control that cannot save.
+
 
 

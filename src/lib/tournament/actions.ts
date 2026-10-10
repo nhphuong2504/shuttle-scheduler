@@ -1233,6 +1233,26 @@ export async function updateTournamentDetails(
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Whether the server refuses to start a match when a player has not had their full rest.
+ *
+ * An on-the-day policy rather than a detail of the event: it is its own narrow writer
+ * (`set_tournament_start_policy`), so it stays editable while the tournament plays even
+ * though the setup wizard's configuration is frozen, and it is not part of the wizard's save.
+ * The database guards it with `can_edit_tournament` and `assert_tournament_writable`, and
+ * writes the single `block_start_on_short_rest` column and nothing else.
+ */
+export async function setTournamentStartPolicy(
+  tournamentId: string,
+  blockStartOnShortRest: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc("set_tournament_start_policy", {
+    p_tournament_id: tournamentId,
+    p_block_start_on_short_rest: blockStartOnShortRest,
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** What is left to play, for the Complete dialog. */
 export interface CompletionCheck {
   /** Matches on court right now. Completing is refused while this is above zero. */
