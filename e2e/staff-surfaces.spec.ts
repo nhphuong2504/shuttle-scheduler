@@ -3,7 +3,7 @@ import { type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
 import type { MockRegistrationRow } from "./fixtures/app-mock";
-import { CATEGORY_MD, CATEGORY_XD } from "./fixtures/desk-mock";
+import { CATEGORY_MD, CATEGORY_XD, TOURNAMENT_ID } from "./fixtures/desk-mock";
 import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
 
@@ -947,5 +947,160 @@ test.describe("the registration queue", () => {
     await settleAnimations(page, "main");
 
     expect(violationIds(await scan(page))).toEqual([]);
+  });
+});
+
+/**
+ * The on-the-day start policy on the Setup page.
+ *
+ * `block_start_on_short_rest` decides whether the server *refuses* to start a match on short
+ * rest or merely lets the desk warn. Its surface is a block beside the setup wizard rather than
+ * one of the wizard's steps, because the wizard's configuration is frozen from the first match
+ * and this switch has to stay usable while the tournament plays - which is the state every case
+ * below runs in (the fixture is `in_progress`).
+ *
+ * The write is asserted as the *request* the app sends, not by a second read of the mock's own
+ * state: the fixture row does not move when the RPC is answered, so a spec that read it back
+ * would be asserting the fixture rather than the app. The "on" wording is checked in its own
+ * describe, where the fixture is served with the switch already on.
+ */
+test.describe("the on-the-day start policy", () => {
+  test.describe("a running tournament", () => {
+    test.use({ appMock: { preset: "layout", role: "admin" } });
+
+    test("shows the switch off, and sends the flip with the value that turns it on", async ({
+      page,
+    }) => {
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+      await settleAnimations(page, "main");
+
+      const toggle = page.getByRole("switch", { name: /block starting a match/i });
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toBeEnabled();
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
+      // The off state says what actually happens, so the switch is not read as decoration.
+      await expect(page.getByText(/the desk warns, and the moderator can start anyway/i)).toBeVisible();
+
+      // The block is outside the wizard: it is on the page even though the wizard's
+      // configuration steps are gone, which is exactly why the control cannot be one of them.
+      await expect(page.getByRole("heading", { name: "On the day" })).toBeVisible();
+
+      const [request] = await Promise.all([
+        page.waitForRequest(
+          (r) => r.url().includes("/rpc/set_tournament_start_policy") && r.method() === "POST",
+        ),
+        toggle.click(),
+      ]);
+      expect(request.postDataJSON()).toEqual({
+        p_tournament_id: TOURNAMENT_ID,
+        p_block_start_on_short_rest: true,
+      });
+      await expect(page.getByText("Short rest will block a start")).toBeVisible();
+    });
+  });
+
+  test.describe("a viewer", () => {
+    test.use({
+      appMock: {
+        preset: "layout",
+        role: "user",
+        access: { can_edit: false, is_owner: false, is_editor: false, can_manage_access: false },
+      },
+    });
+
+    test("sees no block and makes no request", async ({ page }) => {
+      const calls: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("set_tournament_start_policy")) calls.push(request.url());
+      });
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+
+      await expect(page.getByRole("heading", { name: "On the day" })).toHaveCount(0);
+      await expect(page.getByRole("switch", { name: /block starting a match/i })).toHaveCount(0);
+      expect(calls).toEqual([]);
+    });
+  });
+
+  test.describe("the switch already on", () => {
+    test.use({ appMock: { preset: "layout", role: "admin", startPolicy: true } });
+
+    test("reads as on, describes the refusal, and can be turned off", async ({ page }) => {
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+
+      const toggle = page.getByRole("switch", { name: /block starting a match/i });
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
+      await expect(page.getByText(/the system refuses to start the match/i)).toBeVisible();
+
+      const [request] = await Promise.all([
+        page.waitForRequest(
+          (r) => r.url().includes("/rpc/set_tournament_start_policy") && r.method() === "POST",
+        ),
+        toggle.click(),
+      ]);
+      expect(request.postDataJSON()).toEqual({
+        p_tournament_id: TOURNAMENT_ID,
+        p_block_start_on_short_rest: false,
+      });
+    });
+  });
+
+  test.describe("a completed tournament", () => {
+    test.use({ appMock: { preset: "layout", role: "admin", status: "completed" } });
+
+    test("shows the switch disabled, with the reason", async ({ page }) => {
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+      await settleAnimations(page, "main");
+
+      const toggle = page.getByRole("switch", { name: /block starting a match/i });
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toBeDisabled();
+      await expect(
+        page.getByText(/this tournament is completed, so the start policy cannot change/i),
+      ).toBeVisible();
+    });
+  });
+
+  test.describe("a refused write", () => {
+    test.use({ appMock: { preset: "layout", role: "admin" } });
+
+    test("shows the server's own message and leaves the switch where it was", async ({ page }) => {
+      // The RPC answers as the database would for a completed tournament: a 400 whose body is a
+      // PostgREST error. This is the one case the fixture cannot express by serving a row, because
+      // the refusal is the response rather than the data. Only the write is failed; anything else
+      // on that address (the browser's own preflight) falls through to the mock.
+      await page.route("**/rpc/set_tournament_start_policy", async (route) => {
+        if (route.request().method() !== "POST") {
+          await route.fallback();
+          return;
+        }
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "This tournament is completed and can no longer be changed" }),
+        });
+      });
+
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+
+      const toggle = page.getByRole("switch", { name: /block starting a match/i });
+      await toggle.click();
+      await expect(
+        page.getByText("This tournament is completed and can no longer be changed"),
+      ).toBeVisible();
+      // The value did not move: the switch reflects the row, not the click.
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
+    });
+
+    test("introduces no accessibility violation with the block present", async ({ page }) => {
+      await page.goto(routes.settings, { waitUntil: "load" });
+      await page.waitForLoadState("networkidle");
+      await settleAnimations(page, "main");
+      expect(violationIds(await scan(page))).toEqual([]);
+    });
   });
 });

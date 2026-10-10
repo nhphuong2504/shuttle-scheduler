@@ -170,6 +170,15 @@ export interface AppMockOptions {
    * also refused a viewer would hide the very call that spec is checking for.
    */
   scheduleConflicts?: readonly MockScheduleConflictRow[];
+
+  /**
+   * The fixture tournament's `block_start_on_short_rest`, the on-the-day switch on the Setup page.
+   *
+   * `false` is the column's own default and what every spec that is not about the switch wants, so
+   * that is the served value unless this asks for the enforcing state. The spec about turning it on
+   * starts here and asserts the request the app sends; the RPC handler below answers the write.
+   */
+  startPolicy?: boolean;
 }
 
 /**
@@ -381,6 +390,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     registrationState = null,
     myRegistration = [],
     scheduleConflicts = [],
+    startPolicy,
   } = options;
 
   if (!INSTALLED.has(page)) {
@@ -495,7 +505,15 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     : access.is_editor
       ? "editor"
       : "viewer";
-  const fixture = deskFixture(preset, role ?? "user", status, membership, format, registrationState);
+  const fixture = deskFixture(
+    preset,
+    role ?? "user",
+    status,
+    membership,
+    format,
+    registrationState,
+    startPolicy,
+  );
 
   /**
    * REST, which is every table read and every RPC in this app.
@@ -539,6 +557,18 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
      * rather than an unmodelled request that happens to look like an empty table.
      */
     if (target === "rpc/set_current_tournament") {
+      await rpc(null);
+      return;
+    }
+    /**
+     * The on-the-day start policy, written.
+     *
+     * A void write, like the pointer above: the fixture row already serves the value the spec
+     * asked for, and the spec that cares about the payload asserts the *request* it saw rather
+     * than a second read of the mock's own state. Answering it explicitly is what keeps a flip
+     * from being an unmodelled request that happens to look like an empty table.
+     */
+    if (target === "rpc/set_tournament_start_policy") {
       await rpc(null);
       return;
     }
