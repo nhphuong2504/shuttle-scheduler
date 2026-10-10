@@ -270,9 +270,15 @@ describe("reporting a result that finished N minutes ago", () => {
       at: iso(todayUtc(), "10:00"),
     });
 
-    await expect(reportPlacementMatch(match, GAMES, seeded.tournamentId, -5)).rejects.toThrow(
-      /cannot be in the future/i,
-    );
+    // The client never sends a non-positive offset (`reportArgs` drops it, so a report with
+    // 0 or less is the ordinary request), which means the server's refusal of a negative one is
+    // only reachable by calling the RPC directly - as any other client could.
+    const negative = await supabase.rpc("report_placement_result", {
+      p_match_id: match,
+      p_games: GAMES as never,
+      p_ended_minutes_ago: -5,
+    });
+    expect(negative.error?.message ?? "").toMatch(/cannot be in the future/i);
     await expect(reportPlacementMatch(match, GAMES, seeded.tournamentId, 721)).rejects.toThrow(
       /more than 720 minutes/i,
     );
