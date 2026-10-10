@@ -30,6 +30,7 @@ import { computeStandings, poolIsComplete } from "./standings";
  * config is the reference point for "no behavior change".
  */
 const DEFAULT_CONFIG = {
+  block_start_on_short_rest: false,
   court_count: 8,
   created_at: "2026-09-01T00:00:00.000Z",
   day_count: 2,
