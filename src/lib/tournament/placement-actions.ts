@@ -624,19 +624,50 @@ export function stageGenerationChanged(outcome: StageGenerationOutcome): boolean
 // ---------------------------------------------------------------------------
 
 /**
+ * The most a finish may be backdated, in minutes.
+ *
+ * Mirrors `c_max_minutes_ago` in `20261011000000_report_ended_minutes_ago.sql`, which
+ * is the authority — this copy only lets the desk refuse an out-of-range number before
+ * it makes the round trip. Twelve hours covers an honest late entry; the point is to
+ * catch a typo, whose resolved finish would land before the day began.
+ */
+export const MAX_ENDED_MINUTES_AGO = 720;
+
+/**
+ * The argument for a report, omitting the offset when it is zero.
+ *
+ * The database default is 0 and means "keep the old COALESCE(ended_at, now())", so
+ * sending nothing keeps every existing caller and every test fixture on the old path.
+ * A zero sent explicitly would be the same value, but omitting it keeps the request
+ * shape — and the mocks that assert it — unchanged.
+ */
+function reportArgs(matchId: string, games: unknown, endedMinutesAgo: number) {
+  return {
+    p_match_id: matchId,
+    p_games: games,
+    ...(endedMinutesAgo > 0 ? { p_ended_minutes_ago: endedMinutesAgo } : {}),
+  };
+}
+
+/**
  * Reports a placement result. The database applies the tournament's placement rule.
  *
  * Returns the ripple the result caused. Reporting now reflows the rest of the day,
  * so a match that finished late pushes everything after it on that court — and the
  * desk should be told that happened rather than having to notice.
+ *
+ * `endedMinutesAgo` is for a result entered after the fact: the database backdates the
+ * finish by that many minutes, measured on its own clock, so a late entry no longer
+ * reflows the day as though the match ran long. Leave it at 0 when reporting live.
  */
 export async function reportPlacementMatch(
   matchId: string,
   games: unknown,
   tournamentId: string,
+  endedMinutesAgo = 0,
 ): Promise<PlacementScheduleImpact> {
   const { impact } = await withPlacementScheduleImpact(tournamentId, () =>
-    rpc("report_placement_result", { p_match_id: matchId, p_games: games }),
+    rpc("report_placement_result", reportArgs(matchId, games, endedMinutesAgo)),
   );
   return impact;
 }
@@ -645,14 +676,17 @@ export async function reportPlacementMatch(
  * Reports a knockout result. The database applies the knockout rule, advances the
  * bracket and then reflows the day, so the next round may already exist and may
  * already have moved by the time this resolves.
+ *
+ * `endedMinutesAgo` behaves as it does for a placement result.
  */
 export async function reportTierDrawMatch(
   matchId: string,
   games: unknown,
   tournamentId: string,
+  endedMinutesAgo = 0,
 ): Promise<PlacementScheduleImpact> {
   const { impact } = await withPlacementScheduleImpact(tournamentId, () =>
-    rpc("report_tier_draw_result", { p_match_id: matchId, p_games: games }),
+    rpc("report_tier_draw_result", reportArgs(matchId, games, endedMinutesAgo)),
   );
   return impact;
 }
