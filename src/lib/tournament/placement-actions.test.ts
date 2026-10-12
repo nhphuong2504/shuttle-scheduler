@@ -476,10 +476,10 @@ describe("scheduleImpactNote", () => {
   it("names the direction and the largest shift when a result did move matches", () => {
     expect(
       scheduleImpactNote({ shiftedMatches: 3, largestShiftMinutes: 15, direction: "later" }),
-    ).toBe("3 downstream matches moved later, by up to 15 min");
+    ).toBe("3 later matches delayed by up to 15 min");
     expect(
       scheduleImpactNote({ shiftedMatches: 1, largestShiftMinutes: 5, direction: "earlier" }),
-    ).toBe("1 downstream match moved earlier, by up to 5 min");
+    ).toBe("1 later match moved earlier by up to 5 min");
   });
 
   it("does not claim a direction when matches moved both ways", () => {
@@ -487,7 +487,7 @@ describe("scheduleImpactNote", () => {
     // earlier, so neither direction is the truth.
     expect(
       scheduleImpactNote({ shiftedMatches: 2, largestShiftMinutes: 10, direction: "mixed" }),
-    ).toBe("2 downstream matches moved, by up to 10 min");
+    ).toBe("2 later matches rescheduled by up to 10 min");
   });
 });
 
