@@ -18,7 +18,8 @@
  *   strip beside "13 matches scheduled", where a bare "Live" can be read as a match being
  *   live - which is a meaning this design system reserves for `--state-live-*`, the very
  *   token pair the badge draws in. The wording below disambiguates both non-live states
- *   ("changes unavailable", "Connection error") so the word never stands alone.
+ *   ("live updates paused") so the word never stands alone. The age of the last change is
+ *   kept out of the chip: a connected screen with nothing new to report is healthy.
  *
  * The clock is owned here rather than passed in. It was a prop because the Desk already
  * ticks a `now` for overdue detection and court state, so the badge could borrow it; but
@@ -48,26 +49,33 @@ export function ConnectionBadge({
   const ageMinutes = Math.max(0, Math.floor((now - lastUpdatedAt) / 60_000));
   const label =
     status === "live"
-      ? ageMinutes > 1
-        ? `Live · last change ${ageMinutes}m ago`
-        : "Live"
+      ? "Live"
       : status === "offline"
-        ? "Offline · changes unavailable"
+        ? "Offline · live updates paused"
         : status === "error"
-          ? "Connection error"
+          ? "Connection problem · live updates paused"
           : "Connecting";
+  // The age is a second, quiet fact: a connected screen with nothing new to report is healthy,
+  // so it is kept out of the chip and never recolours it. Only a healthy connection shows it.
+  const quiet = status === "live" && ageMinutes > 1;
   return (
-    <span
-      role="status"
-      className={`rounded-full px-2.5 py-1 text-sm font-semibold ${
-        status === "live"
-          ? "bg-state-live-chip text-state-live-ink"
-          : status === "offline" || status === "error"
-            ? "bg-danger-surface text-danger-foreground"
-            : "bg-warn-surface text-warn-foreground"
-      }`}
-    >
-      {label}
+    <span role="status" className="inline-flex items-center gap-2">
+      <span
+        className={`rounded-full px-2.5 py-1 text-sm font-semibold ${
+          status === "live"
+            ? "bg-state-live-chip text-state-live-ink"
+            : status === "offline" || status === "error"
+              ? "bg-danger-surface text-danger-foreground"
+              : "bg-warn-surface text-warn-foreground"
+        }`}
+      >
+        {label}
+      </span>
+      {quiet ? (
+        <span className="text-sm text-muted-foreground">
+          <span aria-hidden="true">· </span>last change {ageMinutes} min ago
+        </span>
+      ) : null}
     </span>
   );
 }
