@@ -48,7 +48,7 @@ mounts `WorkspaceShell` around the child page.
 
 | Address | Surface | Audience |
 | --- | --- | --- |
-| `…/desk` | The Desk: one day, one court at a time, live | Operator |
+| `…/desk` | The Desk: one day, one court at a time, live. Read-only board for a caller without `can_edit` | Operator (full), anyone (read-only) |
 | `…/entries` | Who is in the tournament, and the walk-in roster | Operator |
 | `…/registrations` | The queue of requests awaiting a decision, with a nav badge when work is waiting | Editor |
 | `…/placement` | Seeding and the placement stage | Operator |
@@ -116,14 +116,15 @@ three editor entries (`registrations`, `settings`, `access`). The editor entries
 `can_edit`, because a nav entry that leads to a page saying no is a worse answer than not
 offering the trip; the pages themselves still refuse, since the nav is presentation.
 
-A read-only reader — a signed-in viewer or an anonymous visitor — gets five of them: the
-operational sections **without the Desk**. The Desk is a live console for one court rather than
-a page about the tournament, so it is the one operational entry that is not part of reading an
-event. The list is derived from the operational one minus the Desk rather than restated, so a
-section added later is offered to everyone reading the tournament by default. A read-only
-workspace therefore opens on `entries` (the logo points at the first offered section, not at
-the Desk), and the tournament's participant page at `/tournaments/$tournamentId/` is not part of
-that experience.
+A read-only reader — a signed-in viewer or an anonymous visitor — gets the six operational
+sections, **the Desk included, in a read-only form**. For a caller without `can_edit` the Desk
+shows the day picker and the court board, and withholds the operator's "Needs action",
+"Next transitions" and "Court progress" panels and every control that starts, scores or moves a
+match; a court tile opens the match to read, not to run. The list is the operational one itself
+rather than a restated copy, so a section added later is offered to everyone reading the
+tournament by default. A read-only workspace still opens on `entries` (the logo points at
+Entries for a reader and at the Desk for an operator), and the tournament's participant page at
+`/tournaments/$tournamentId/` is not part of that experience.
 
 The header's own line — brand, then the tournament's name and status — carries one more entry
 for a reader, and it follows the same split as the section nav. An operator gets the workspace

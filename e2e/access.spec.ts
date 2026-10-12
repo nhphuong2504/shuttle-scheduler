@@ -186,18 +186,16 @@ test.describe("a viewer", () => {
     await page.waitForLoadState("networkidle");
 
     const nav = page.getByRole("navigation", { name: /tournament sections/i });
-    // The five sections reading a tournament is made of: who is in, the draws, when it
-    // plays, and the results. Entries is the first of them, and the read-only workspace
-    // opens on it.
-    for (const label of ["Entries", "Placement", "Knockout", "Schedule", "Scores"]) {
+    // The sections reading a tournament is made of: the Desk's read-only board, who is in,
+    // the draws, when it plays, and the results. The read-only workspace still opens on
+    // Entries.
+    for (const label of ["Desk", "Entries", "Placement", "Knockout", "Schedule", "Scores"]) {
       await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
     }
-    // What is withheld is the two kinds of act on the tournament. The Desk is a live console
-    // for one court rather than a page about the event, so it is not part of reading one; and
-    // Setup and Access are about configuring this tournament and deciding who else may
-    // operate it. A nav entry that leads to a page saying no is a worse answer than not
-    // offering the trip, so the entries are absent rather than disabled.
-    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
+    // What is withheld is the kind of act on the tournament: Setup and Access are about
+    // configuring this tournament and deciding who else may operate it. A nav entry that
+    // leads to a page saying no is a worse answer than not offering the trip, so the entries
+    // are absent rather than disabled.
     await expect(nav.getByRole("link", { name: "Setup", exact: true })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Access", exact: true })).toHaveCount(0);
   });
@@ -220,7 +218,7 @@ test.describe("a viewer", () => {
     await expect(header.getByRole("link", { name: /create tournament/i })).toHaveCount(0);
   });
 
-  test("sends the brand to its own first section, not to a Desk it is not offered", async ({
+  test("sends the brand to Entries, the roster a reader came for", async ({
     page,
   }) => {
     await page.goto(routes.scores, { waitUntil: "load" });
@@ -374,9 +372,16 @@ test.describe("a signed-out visitor", () => {
     await expect(page.getByRole("button", { name: /add entry/i })).toHaveCount(0);
     await expect(page.locator("main input")).toHaveCount(0);
 
-    // And the Desk stays out of the nav, so nothing offers a console they cannot use.
+    // And the Desk is offered, as a board: no operator alerts, nothing that starts a match.
     const nav = page.getByRole("navigation", { name: /tournament sections/i });
-    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toBeVisible();
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Court board" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Needs action" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Next transitions" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Court progress" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^start$/i })).toHaveCount(0);
   });
 
   test("can tell which tournament the page is about without signing in", async ({ page }) => {

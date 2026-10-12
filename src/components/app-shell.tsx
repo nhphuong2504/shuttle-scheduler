@@ -109,19 +109,19 @@ const SECTIONS = [
 ] as const;
 
 /**
- * What a reader without the edit right is offered: the operational sections, minus the Desk.
+ * What a reader without the edit right is offered: every operational section, the Desk included.
  *
- * The Desk is a live console for one court rather than a page about the tournament: it is
- * where a moderator works in real time, with the day's board in front of them. Reading a
- * tournament is a different job - who is in, the draws, when it plays and what the results
- * were - so the read-only workspace opens on Entries and carries these five, and the Desk is
- * not one of them.
- *
- * Derived from `SECTIONS` rather than restated, so a section added to the operational list
- * later is offered to *everyone* reading the tournament rather than to editors alone by
- * accident. The Desk is the deliberate exception, not the shape of the list.
+ * The Desk used to be withheld because it is where a moderator works in real time. It now has a
+ * read-only variant for readers - the day's court board and progress, with none of the acts and
+ * none of the operator's alerts - so the nav no longer needs to hide it. Derived from `SECTIONS`
+ * rather than restated, so a section added later is offered to everyone reading the tournament
+ * by default. The read-only workspace still *opens* on Entries (`READER_HOME_PATH`), because a
+ * card in Explore is a trip to read the event, not to watch a court.
  */
-const READ_ONLY_SECTIONS = SECTIONS.filter((section) => section.scoped !== DESK_PATH);
+const READ_ONLY_SECTIONS = SECTIONS;
+
+/** Where the logo takes a reader: the roster, not the live board. */
+const READER_HOME_PATH = "/tournaments/$tournamentId/entries" as const;
 
 /**
  * The entries that belong to the people who run the tournament.
@@ -685,19 +685,15 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
    * The row, split by the edit right rather than by a session.
    *
    * Someone who may edit gets the operational sections and the three that change the
-   * tournament. Everyone else gets the read-only five: the operations without the Desk, and
-   * none of the editor acts. See `READ_ONLY_SECTIONS` for why the Desk is the odd one out.
+   * tournament. Everyone else gets the six operational sections, with the Desk in its
+   * read-only form, and none of the editor acts.
    */
   const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : READ_ONLY_SECTIONS;
   /**
-   * Where the logo goes: the first section this caller is offered.
-   *
-   * For an editor that is the Desk, which is where the work is. For anyone else it is
-   * Entries, because the Desk is not one of their sections - a logo that led somewhere the
-   * nav does not offer would be the one link on the page contradicting the row under the
-   * tournament's name.
+   * Where the logo goes. For an editor that is the Desk, which is where the work is. For
+   * anyone else it is Entries: they came to read the event, and both are in their nav.
    */
-  const homeSection = sections[0]?.scoped ?? DESK_PATH;
+  const homeSection = access.can_edit ? DESK_PATH : READER_HOME_PATH;
   const readOnly = !accessLoading && !access.can_edit;
   /**
    * How much is waiting on the Registrations queue.

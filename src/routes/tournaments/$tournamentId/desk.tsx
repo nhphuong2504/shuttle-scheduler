@@ -571,7 +571,11 @@ function Desk() {
   return (
     <Page
       title="Control desk"
-      subtitle="Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing."
+      subtitle={
+        canEdit
+          ? "Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing."
+          : "A live view of one tournament day: what is on each court."
+      }
       actions={
         <>
           <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
@@ -622,6 +626,14 @@ function Desk() {
           </p>
         ) : null}
 
+        {/*
+          The operator's alerts and the next-transition table are for whoever runs the day.
+          A reader gets the board and the progress, which answer "what is on court" without
+          asking them to chase anything they cannot act on. Hidden rather than disabled,
+          and hidden while the access read is still in flight, so nothing that can start a
+          match is ever drawn for someone who may not.
+        */}
+        {canEdit ? (
         <Panel
           title="Needs action"
           right={
@@ -728,6 +740,7 @@ function Desk() {
             )}
           </div>
         </Panel>
+        ) : null}
 
         <Panel
           title="Court board"
@@ -880,7 +893,15 @@ function Desk() {
                     )}
                   </div>
                   <p className="mt-3 text-sm font-semibold text-primary-ink">
-                    {state.playing ? "Open score desk" : target ? "Open next match" : ""}
+                    {state.playing
+                      ? canEdit
+                        ? "Open score desk"
+                        : "View match"
+                      : target
+                        ? canEdit
+                          ? "Open next match"
+                          : "View next match"
+                        : ""}
                   </p>
                 </button>
               );
@@ -902,6 +923,7 @@ function Desk() {
           court count spent the panel's height on nothing while the rows to fill it were
           already derived.
         */}
+        {canEdit ? (
         <div className="grid items-stretch gap-4 lg:grid-cols-2">
           <Panel
             title="Next transitions"
@@ -970,6 +992,7 @@ function Desk() {
             )}
           </Panel>
         </div>
+        ) : null}
       </div>
 
       <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>
@@ -1505,7 +1528,8 @@ export function MatchOperationsDialog({
             ))}
           </ul>
         ) : null}
-        <div className="flex gap-2">
+        {/* A reader sees the match and its score, not buttons they cannot press. */}
+        <div className={canEdit ? "flex gap-2" : "hidden"}>
           {isReported ? (
             <Button
               className="h-12 flex-1 text-lg font-semibold shadow-md"
@@ -1758,7 +1782,7 @@ export function MatchOperationsDialog({
         </AlertDialog>
         {!canEdit ? (
           <p className="text-xs text-muted-foreground">
-            You can read this match but not change it. Ask the tournament owner for edit access.
+            You can read this match but not change it.
           </p>
         ) : null}
       </div>
