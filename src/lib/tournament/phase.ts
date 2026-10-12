@@ -96,7 +96,7 @@ export function isReminderPhase(phase: TournamentPhase): boolean {
 export function phaseReminder(phase: TournamentPhase, name: string): string | null {
   switch (phase) {
     case "not_started":
-      return `${name} should have started. No match has been started.`;
+      return `${name} was due to start, but no match has been started yet.`;
     case "past_last_day":
       return `${name} has finished its last day. Complete it to publish the results.`;
     default:

@@ -112,7 +112,7 @@ describe("the words", () => {
   });
 
   it("asks something of the host only for a reminder", () => {
-    expect(phaseReminder("not_started", "City Open")).toMatch(/City Open should have started/);
+    expect(phaseReminder("not_started", "City Open")).toMatch(/City Open was due to start/);
     expect(phaseReminder("past_last_day", "City Open")).toMatch(/Complete it/);
     expect(phaseReminder("live", "City Open")).toBeNull();
   });
