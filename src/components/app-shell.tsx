@@ -253,8 +253,9 @@ function BrandMark() {
  * The presence dot is its own token, not the live ink: it is a 6px solid mark, the same
  * shape the live status pill draws its glyph from, but `--presence-ink` is a separate
  * value so the mark reads as "someone is signed in" rather than "a match is live", and so
- * tuning it cannot move the state palette (`--state-live-ink` is read by the court-state
- * vocabulary and the status pills). Decorative — the email beside it carries the
+ * tuning it cannot move the state palette (`--state-live-ink` is read by the status pills
+ * and the ConnectionBadge; the court-state vocabulary uses its own `--play-*` family).
+ * Decorative — the email beside it carries the
  * meaning — so it stays out of the accessibility tree.
  *
  * The chip names its own tier (`text-t4`) rather than inheriting: the shell sets no size
