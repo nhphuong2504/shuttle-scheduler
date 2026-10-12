@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 
+import { TournovaMark } from "@/components/brand/tournova-mark";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
@@ -236,12 +237,7 @@ function SiteFooter() {
 function BrandMark() {
   return (
     <>
-      <span
-        aria-hidden="true"
-        className="grid size-8 place-items-center rounded-[10px] bg-primary font-display text-lg font-bold leading-none text-primary-foreground"
-      >
-        T
-      </span>
+      <TournovaMark className="h-8 w-auto shrink-0 text-primary" />
       <span className="font-display text-lg font-bold tracking-tight text-foreground">Tournova</span>
     </>
   );
