@@ -35,8 +35,8 @@ appears only when it carries meaning, and one colour carries one meaning.
 | Hairline | `--border` | `#D9DDDF` | Decorative edges only |
 | Control edge | `--border-control` | `#7F8A91` | Anything the user must locate: inputs, selects |
 | Interaction | `--primary` | `#5B4FC7` | Buttons, links, active nav, selected tab |
-| Live | `--state-live-chip` | `#DDF4D2` | A live match: its status chip, and the connection badge |
-| Playing | `--play`, `--play-surface` | `#3E9B2F`, `#DDF4D2` | A court with a match on it right now |
+| Live | `--state-live-chip` | `#D6F1E3` | A live match: its status chip, and the connection badge |
+| Playing | `--play`, `--play-surface` | `#16865C`, `#D6F1E3` | A court with a match on it right now |
 | Success | `--success` | `#16865C` | Fill only. Healthy, completed |
 | Warning | `--warn-*` | amber | Delayed, needs attention |
 | Danger | `--destructive`, `--danger-*` | red | Overrun, error, destructive action |
@@ -48,7 +48,7 @@ Rules:
 - **Green is for live, and it never stands alone.** Green is the colour a reader already
   associates with "live", and it carries three roles: a court that is playing, a match that is
   live, and the connection being up. Every one of them also has a word and a glyph, so the hue is
-  never the only signal. The chip values (`#DDF4D2` on `#245A12`) clear 7.1:1, so the rule that
+  never the only signal. The chip values (`#D6F1E3` on `#0E5A3A`) clear 6.9:1, so the rule that
   mattered when live was lime still holds: a live chip carries ink text, and the hue is never used
   as text, a border or an icon on a light surface.
 - **The court state and the match status are separate tokens even where they agree.** `--play*` is

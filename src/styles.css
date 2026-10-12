@@ -215,13 +215,13 @@
      edge, `--play-surface` its fill - the chip at full strength and the tile as a wash of
      it - and `--play-foreground` the ink on it. Green is the colour a reader already
      associates with "live", which is what the state means. */
-  --play: #3E9B2F;
-  --play-surface: #DDF4D2;
-  --play-foreground: #245A12;
+  --play: #16865C;
+  --play-surface: #D6F1E3;
+  --play-foreground: #0E5A3A;
 
   /* Match states. Live is a green chip with ink text and a ring; scheduled, completed and void are neutral. Hue is reserved for live, warning and danger. */
-  --state-live-chip: #DDF4D2;
-  --state-live-ink: #245A12;
+  --state-live-chip: #D6F1E3;
+  --state-live-ink: #0E5A3A;
   --state-scheduled-chip: #ECEEED;
   --state-scheduled-ink: #4F5A61;
   --state-completed-ink: #4F5A61;
