@@ -42,10 +42,12 @@ accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
 `states.spec.ts`) still run. Current colour, type and size guidance is in
 [`docs/design-principles.md`](docs/design-principles.md); it is guidance, not a gate.
 
-**The landing page is a placeholder.** What a signed-out visitor sees at `/` (the Landing
-branch of [`src/routes/index.tsx`](src/routes/index.tsx)) has not been designed yet. Its
-current copy and layout are stand-ins, not decisions, so don't treat them as a reference
-for other pages and don't polish them. Redesign it from scratch when it is picked up.
+**The landing page shows the real product.** What a signed-out visitor sees at `/` lives in
+[`src/components/landing/`](src/components/landing). Its pictures of the Desk and the read-only
+board are drawn from the app's own vocabulary (`court-state.ts`, the Desk's wording), and its
+scheduling demo follows the live reflow's rules, which `schedule-demo-data.test.ts` pins. When
+the Desk's wording or the reflow changes, change the landing with it: it must never promise
+something the app does not do.
 
 ## Security rules
 

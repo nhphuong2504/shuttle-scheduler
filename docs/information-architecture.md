@@ -25,7 +25,7 @@ Three audiences, and the address says which one it belongs to:
 
 | Address | Surface |
 | --- | --- |
-| `/` | **Placeholder** Landing for a visitor (a bare "browse or sign in", not yet designed); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
+| `/` | Landing for a visitor (the Desk, the schedule behind it, and the ways in: run a tournament, browse, sign in); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
 | `/explore` | Every tournament, searchable over name, venue and event, with a status filter |
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me** |
 | `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call |
