@@ -486,7 +486,9 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("the four urgency treatments all render and separate", async ({ page }) => {
-      await installAppMock(page, { preset: "states" });
+      // "Needs action" is the operator's panel: the Desk withholds it from a caller without
+      // `can_edit`, so the four treatments are only reachable in an editor session.
+      await installAppMock(page, { preset: "states", role: "user" });
       await openCell(page, routes.desk, cell);
 
       const report = await page.evaluate(() => {
