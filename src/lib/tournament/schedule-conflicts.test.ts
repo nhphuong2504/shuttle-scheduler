@@ -39,11 +39,11 @@ describe("conflict kind labels", () => {
       "before_prerequisite",
     ]);
     expect(CONFLICT_KIND_LABEL).toEqual({
-      court_overlap: "Overlaps another match on this court",
-      rest_shortfall: "A player is short of rest",
-      break: "Falls in a break",
-      past_closing: "Runs past closing time",
-      before_prerequisite: "Starts before the match it waits on",
+      court_overlap: "Same court and time as another match",
+      rest_shortfall: "A player won't have had full rest",
+      break: "Scheduled during a break",
+      past_closing: "Ends after the courts close",
+      before_prerequisite: "Scheduled before a match it depends on",
     });
   });
 
@@ -55,8 +55,8 @@ describe("conflict kind labels", () => {
       conflict("m1", "court_overlap"),
     ]);
     expect(labels).toEqual([
-      "Overlaps another match on this court",
-      "Runs past closing time",
+      "Same court and time as another match",
+      "Ends after the courts close",
     ]);
     expect(labels.join(" ")).not.toContain("m1");
   });
@@ -111,12 +111,12 @@ describe("summarizeConflicts", () => {
       conflict("m1", "court_overlap"),
     ]);
     expect(summary.reasons).toEqual([
-      "Overlaps another match on this court",
-      "A player is short of rest",
+      "Same court and time as another match",
+      "A player won't have had full rest",
     ]);
     expect(summary.more).toBe(2);
     expect(summary.text).toBe(
-      "Overlaps another match on this court · A player is short of rest +2",
+      "Same court and time as another match · A player won't have had full rest +2",
     );
   });
 
@@ -136,7 +136,7 @@ describe("groupConflictsByKind", () => {
       conflict("m1", "court_overlap"),
     ]);
     expect(groups.map((group) => group.kind)).toEqual(["court_overlap", "past_closing"]);
-    expect(groups[0]?.label).toBe("Overlaps another match on this court");
+    expect(groups[0]?.label).toBe("Same court and time as another match");
     expect(groups[0]?.conflicts.map((row) => row.match_id)).toEqual(["m2", "m1"]);
     expect(groups[1]?.conflicts).toHaveLength(1);
   });

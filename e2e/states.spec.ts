@@ -508,16 +508,16 @@ for (const cell of MATRIX_CELLS) {
         return {
           allClear: text.includes("All clear"),
           // The primary dispatch prompt: the one action the desk wants taken.
-          dispatch: text.includes("is free — start"),
-          dispatchSurface: surfaceOf("is free — start"),
+          dispatch: text.includes("is ready"),
+          dispatchSurface: surfaceOf("is ready"),
           // Two attention alerts, from different causes.
-          unplaced: text.includes("ready with no court"),
-          unplacedSurface: surfaceOf("ready with no court"),
-          overrun: text.includes("has been on court"),
-          overrunSurface: surfaceOf("has been on court"),
+          unplaced: text.includes("a court"),
+          unplacedSurface: surfaceOf("a court"),
+          overrun: text.includes("min on court"),
+          overrunSurface: surfaceOf("min on court"),
           // The destructive one: a result that is overdue.
-          overdue: text.includes("past its scheduled finish"),
-          overdueSurface: surfaceOf("past its scheduled finish"),
+          overdue: text.includes("past scheduled finish"),
+          overdueSurface: surfaceOf("past scheduled finish"),
         };
       });
 
@@ -532,38 +532,36 @@ for (const cell of MATRIX_CELLS) {
         expect(present, `${what} did not render`).toBe(true);
       }
 
-      // The surfaces must separate. A destructive alert that resolved to the same tint
-      // as an advisory one would be a real operational defect.
+      // The surfaces must separate, and the severity scale is what they separate by.
       //
-      // Four treatments, but three surfaces, and that is deliberate rather than a
-      // collapse: both the unplaced-pairing alert and the over-cap alert are warnings,
-      // and the design gives every warning one surface. What must not happen is a
-      // warning looking like the primary action, or either looking like the destructive
-      // overdue result. So the assertion is that exactly the expected set of surfaces
-      // appears, stated as the relationship rather than as a count of distinct tints -
-      // a count alone would pass if two warnings became two arbitrary new colours.
+      // Four treatments, three surfaces, and that is deliberate: the overrun and the overdue
+      // result are both warnings (a delay and an omission, neither a danger), so they share the
+      // warning surface. The primary action must not look like a warning, and the plan note the
+      // desk cannot fix itself (a match with no court) is neutral information, so it must not
+      // look like either. Stated as relationships rather than a count of tints - a count alone
+      // would pass if two warnings became two arbitrary new colours.
       for (const [what, surface] of [
         ["the primary dispatch prompt", report.dispatchSurface],
-        ["the unplaced-pairing alert", report.unplacedSurface],
+        ["the unplaced-pairing note", report.unplacedSurface],
         ["the over-cap alert", report.overrunSurface],
         ["the overdue-results alert", report.overdueSurface],
       ] as const) {
         expect(surface, `${what} carries no measurable surface`).not.toBeNull();
       }
       expect(
-        report.unplacedSurface,
-        "a warning stopped sharing the warning surface with the other warning",
+        report.overdueSurface,
+        "the overdue result stopped sharing the warning surface with the overrun",
       ).toBe(report.overrunSurface);
       expect(report.dispatchSurface, "the primary action resolved to the warning surface").not.toBe(
         report.overrunSurface,
       );
       expect(
-        report.overdueSurface,
-        "the destructive overdue result resolved to the warning surface",
+        report.unplacedSurface,
+        "the neutral plan note resolved to the warning surface",
       ).not.toBe(report.overrunSurface);
       expect(
-        report.overdueSurface,
-        "the destructive overdue result resolved to the primary action's surface",
+        report.unplacedSurface,
+        "the neutral plan note resolved to the primary action's surface",
       ).not.toBe(report.dispatchSurface);
     });
 

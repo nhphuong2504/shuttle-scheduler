@@ -40,15 +40,17 @@ export const COURT_STATE_LABEL: Record<CourtState, string> = {
 /**
  * The pill's fill and ink.
  *
- * `playing` reuses the match `live` tokens (lime chip, ink text, ring) rather than minting a
- * second lime. The two encode the same fact from different vantage points - a
- * match is live, therefore its court is playing - and they never co-render, so a
- * separate lime would be a distinction the reader can see but cannot use. The
- * state is not a match status, but the colour can be shared.
+ * The court's own green, under its own token rather than the match `live` one. A court
+ * state and a match status are different vocabularies, and `--state-live-*` also paints
+ * the "Live" match chip, the Desk's status badge and the ConnectionBadge - so sharing it
+ * would move all four together. The two greens hold the same value today, so they agree
+ * on screen; the separation is about the names, and it is what lets one be retuned
+ * without silently re-tinting the other.
  */
 export const COURT_STATE_CHIP: Record<CourtState, string> = {
-  playing: "bg-state-live-chip text-state-live-ink ring-1 ring-inset ring-state-live-ink/60",
-  overrun: "bg-danger-surface text-danger-foreground",
+  playing: "bg-play-surface text-play-foreground ring-1 ring-inset ring-play-foreground/60",
+  // A delay, not a danger: amber, with a ring so it stays a surface next to the neutral Waiting.
+  overrun: "bg-warn-surface text-warn-foreground ring-1 ring-inset ring-warn-border",
   // `/10`, not the `/12` this started as, because `/12` is a tint no ink was solved
   // against. `--primary-ink` was solved against `bg-primary/10` in phase 3; carrying a
   // slightly darker tint here put the pair at 4.41:1, under the 4.5:1
@@ -57,7 +59,9 @@ export const COURT_STATE_CHIP: Record<CourtState, string> = {
   // Reusing the validated tint is the principled fix - a second tint would mean a
   // second ink, and the design's rule is one ink pair per fill.
   "free-ready": "bg-primary/10 text-primary-ink",
-  "free-blocked": "bg-warn-surface text-warn-foreground",
+  // Waiting asks nothing of the moderator; the reason beneath it explains. Neutral, but a
+  // deeper grey than `idle` so the two chips stay distinct fills.
+  "free-blocked": "bg-foreground/15 text-foreground",
   idle: "bg-muted text-muted-foreground",
 };
 
@@ -77,14 +81,19 @@ export const COURT_STATE_CHIP: Record<CourtState, string> = {
  * now sweeps every pill against its own tile, and `court-state.test.ts` asserts the
  * two fills differ at the vocabulary level so the collision cannot return.
  *
+ * `playing` takes the green for the *whole tile*, the way `overrun` takes amber and
+ * `free-ready` takes primary: the family's edge over a wash of its own fill, with the chip
+ * that same fill at full strength on top. Its edge is a third distinct border, which the
+ * sweep in `states.spec.ts` requires of every actionable state.
+ *
  * `free-blocked` and `idle` share the resting hairline on purpose. Neither asks for
  * anything, and giving the blocked state its own edge would put two amber surfaces
  * on one tile - the pill already carries that signal, and doubling it would make a
  * waiting court look more urgent than an overrun one.
  */
 export const COURT_STATE_TILE: Record<CourtState, string> = {
-  playing: "border-state-live-ink/50 bg-surface",
-  overrun: "border-danger-border bg-danger-surface/40",
+  playing: "border-play bg-play-surface/40",
+  overrun: "border-warn-border bg-warn-surface/40",
   "free-ready": "border-primary/40 bg-primary/5",
   "free-blocked": "border-hairline bg-surface",
   idle: "border-hairline bg-surface",
