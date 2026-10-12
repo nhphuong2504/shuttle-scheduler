@@ -84,6 +84,7 @@ import {
   timeLabel,
   type GameScore,
 } from "@/lib/tournament/format";
+import { clockFromMinutesAgo, minutesAgoFromClock } from "@/lib/tournament/finish-time";
 import {
   DEFAULT_KNOCKOUT_RULE,
   DEFAULT_PLACEMENT_RULE,
@@ -570,7 +571,11 @@ function Desk() {
   return (
     <Page
       title="Control desk"
-      subtitle="Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing."
+      subtitle={
+        canEdit
+          ? "Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing."
+          : "A live view of one tournament day: what is on each court."
+      }
       actions={
         <>
           <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
@@ -621,8 +626,16 @@ function Desk() {
           </p>
         ) : null}
 
+        {/*
+          The operator's alerts and the next-transition table are for whoever runs the day.
+          A reader gets the board and the progress, which answer "what is on court" without
+          asking them to chase anything they cannot act on. Hidden rather than disabled,
+          and hidden while the access read is still in flight, so nothing that can start a
+          match is ever drawn for someone who may not.
+        */}
+        {canEdit ? (
         <Panel
-          title="Act now"
+          title="Needs action"
           right={
             <span className="text-sm text-muted-foreground">
               {clockAdopted
@@ -640,81 +653,94 @@ function Desk() {
                 {courtStates
                   .filter(({ state }) => state.state === "free-ready" && state.next)
                   .map(({ court, state }) => (
-                    <li key={`ready-${court.id}`}>
-                      <button
-                        type="button"
-                        className="min-h-11 w-full rounded-md bg-primary/15 px-3 py-2.5 text-left font-semibold hover:bg-primary/25"
+                    <ActionRow
+                      key={`ready-${court.id}`}
+                      tone="go"
+                      title={`Court ${court.number} is ready`}
+                      detail={
+                        state.next
+                          ? `${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`
+                          : "Next match is ready"
+                      }
+                      action={
+                        <Button
+                          size="sm"
+                          className="h-11 px-4 text-sm"
+                          onClick={() => {
+                            setOperationCourtId(court.id);
+                            setOpenMatch(state.next);
+                          }}
+                        >
+                          Start
+                        </Button>
+                      }
+                    />
+                  ))}
+                {overCap.map((m) => (
+                  <ActionRow
+                    key={m.id}
+                    tone="warn"
+                    title={`${label(m.teams[0])} vs ${label(m.teams[1])} · ${minutesSince(m.startedAt, now)} min on court`}
+                    detail={`Court ${courtMap.get(m.courtId ?? "")?.number ?? "?"} · past the expected finish`}
+                    action={
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-11 px-4 text-sm"
                         onClick={() => {
-                          setOperationCourtId(court.id);
-                          setOpenMatch(state.next);
+                          setOperationCourtId(m.courtId);
+                          setOpenMatch(m);
                         }}
                       >
-                        Court {court.number} is free — start{" "}
-                        {state.next
-                          ? `${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`
-                          : "the next match"}
-                      </button>
-                    </li>
-                  ))}
-                {readyUnassigned.length ? (
-                  <li className="rounded-md bg-warn-surface px-2.5 py-2 text-warn-foreground">
-                    {readyUnassigned.length} match
-                    {readyUnassigned.length === 1 ? " is" : "es are"} ready with no court yet —
-                    build or rebuild the schedule to lay them across the days.{" "}
-                    {/*
-                      One link, not two. The old pair pointed at `/placement-schedule` and
-                      `/schedule` because those were two routes; they are one route now, and
-                      it reads the format itself. Asking the desk to choose would be the desk
-                      re-deciding something the route already knows.
-                    */}
-                    <Link
-                      to="/tournaments/$tournamentId/schedule"
-                      params={{ tournamentId }}
-                      className="font-semibold underline"
-                    >
-                      open the schedule
-                    </Link>
-                    .
-                  </li>
-                ) : null}
+                        Open score desk
+                      </Button>
+                    }
+                  />
+                ))}
                 {latePools.map((p) => (
-                  <li
+                  <ActionRow
                     key={p.id}
-                    className="rounded-md bg-danger-surface px-2.5 py-1.5 text-danger-foreground"
-                  >
-                    {p.name} ({catMap.get(p.category_id)?.code}) is more than 15 minutes past its
-                    scheduled finish with results still missing —{" "}
-                    <Link
-                      to="/tournaments/$tournamentId/scores"
-                      params={{ tournamentId }}
-                      className="font-semibold underline"
-                    >
-                      enter results
-                    </Link>
-                    .
-                  </li>
+                    tone="warn"
+                    title={`${p.name} · ${catMap.get(p.category_id)?.code} — results incomplete`}
+                    detail="Over 15 min past scheduled finish"
+                    action={
+                      <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
+                        <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
+                          Enter results
+                        </Link>
+                      </Button>
+                    }
+                  />
                 ))}
-                {overCap.map((m) => (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      className="min-h-11 w-full rounded-md bg-warn-surface px-3 py-2.5 text-left font-semibold text-warn-foreground hover:brightness-95"
-                      onClick={() => {
-                        setOperationCourtId(m.courtId);
-                        setOpenMatch(m);
-                      }}
-                    >
-                      {label(m.teams[0])} vs {label(m.teams[1])} has been on court{" "}
-                      {minutesSince(m.startedAt, now)} minutes — open the score desk.
-                    </button>
-                  </li>
-                ))}
+                {readyUnassigned.length ? (
+                  <ActionRow
+                    tone="info"
+                    title={`${readyUnassigned.length} match${
+                      readyUnassigned.length === 1 ? " needs" : "es need"
+                    } a court`}
+                    detail="Not placed on the schedule yet"
+                    action={
+                      /*
+                        One link, not two. The old pair pointed at `/placement-schedule` and
+                        `/schedule` because those were two routes; they are one route now, and
+                        it reads the format itself. Asking the desk to choose would be the desk
+                        re-deciding something the route already knows.
+                      */
+                      <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
+                        <Link to="/tournaments/$tournamentId/schedule" params={{ tournamentId }}>
+                          Open Schedule
+                        </Link>
+                      </Button>
+                    }
+                  />
+                ) : null}
               </ul>
             ) : (
-              <EmptyState title="All clear" hint="No urgent desk actions right now." />
+              <EmptyState title="All clear" hint="Nothing needs action right now." />
             )}
           </div>
         </Panel>
+        ) : null}
 
         <Panel
           title="Court board"
@@ -753,7 +779,7 @@ function Desk() {
                   type="button"
                   disabled={!target}
                   aria-label={`Court ${court.number}: ${state.state.replace("-", " ")}${
-                    attentionNote ? ` — Needs attention: ${attentionNote}` : ""
+                    attentionNote ? ` — Schedule review: ${attentionNote}` : ""
                   }`}
                   onClick={() => {
                     if (!target) return;
@@ -770,8 +796,8 @@ function Desk() {
 
                         `--primary-ink` is solved against `bg-primary/10` over a *surface*.
                         This badge sits on a court tile, whose background is not a surface -
-                        it is `COURT_STATE_TILE[state]`, so it is a lime live chip, a danger
-                        tint, a primary wash or a plain surface depending on the state. An
+                        it is `COURT_STATE_TILE[state]`, so it is a green live wash, an
+                        amber tint, a primary wash or a plain surface depending on the state. An
                         ink solved against a *surface* therefore has no fixed pair to clear
                         here: the same badge sits on five different fills, so whether it
                         passes or not is decided by the tile underneath it - a fact that was
@@ -809,11 +835,16 @@ function Desk() {
                         <span
                           className={`font-score text-base tabular-nums ${
                             state.state === "overrun"
-                              ? "font-semibold text-danger-foreground"
+                              ? "font-semibold text-warn-foreground"
                               : "text-muted-foreground"
                           }`}
                         >
                           {state.elapsedMinutes}′ on court
+                          {state.state === "overrun" &&
+                          state.elapsedMinutes != null &&
+                          state.elapsedMinutes > slotMinutesFor(state.playing)
+                            ? ` · +${state.elapsedMinutes - slotMinutesFor(state.playing)} over slot`
+                            : ""}
                           {state.varianceMinutes
                             ? ` · started ${Math.abs(state.varianceMinutes)} min ${
                                 state.varianceMinutes > 0 ? "late" : "early"
@@ -824,9 +855,9 @@ function Desk() {
                     ) : (
                       <span className="font-medium">
                         {state.state === "free-ready"
-                          ? "Free — next match ready"
+                          ? "Free · next match ready"
                           : state.state === "free-blocked"
-                            ? "Free — waiting for players"
+                            ? "Free · next match not ready"
                             : "Idle"}
                       </span>
                     )}
@@ -858,11 +889,19 @@ function Desk() {
                           : ""}
                       </p>
                     ) : (
-                      <p className="text-sm">nothing queued</p>
+                      <p className="text-sm">Nothing queued</p>
                     )}
                   </div>
                   <p className="mt-3 text-sm font-semibold text-primary-ink">
-                    {state.playing ? "Open score desk" : target ? "Open next match" : ""}
+                    {state.playing
+                      ? canEdit
+                        ? "Open score desk"
+                        : "View match"
+                      : target
+                        ? canEdit
+                          ? "Open next match"
+                          : "View next match"
+                        : ""}
                   </p>
                 </button>
               );
@@ -884,6 +923,7 @@ function Desk() {
           court count spent the panel's height on nothing while the rows to fill it were
           already derived.
         */}
+        {canEdit ? (
         <div className="grid items-stretch gap-4 lg:grid-cols-2">
           <Panel
             title="Next transitions"
@@ -952,6 +992,7 @@ function Desk() {
             )}
           </Panel>
         </div>
+        ) : null}
       </div>
 
       <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>
@@ -971,6 +1012,7 @@ function Desk() {
               courts={courts ?? []}
               canEdit={canEdit}
               startCheck={startCheck}
+              blockStartOnShortRest={tournament?.block_start_on_short_rest ?? false}
               conflicts={conflictsByMatch.get(current.id) ?? []}
               onConflictsAfterReport={conflictsAfterReportInDay}
               playerMap={playerMap}
@@ -998,6 +1040,7 @@ export function MatchOperationsDialog({
   courts,
   canEdit,
   startCheck,
+  blockStartOnShortRest = false,
   conflicts,
   onConflictsAfterReport,
   playerMap,
@@ -1020,6 +1063,8 @@ export function MatchOperationsDialog({
    */
   canEdit: boolean;
   startCheck: StartConstraints | null;
+  /** The tournament's start policy: when on, the server refuses a start on short rest. */
+  blockStartOnShortRest?: boolean;
   /**
    * The schedule's own conflicts for this match, from `schedule_conflicts`.
    *
@@ -1050,13 +1095,15 @@ export function MatchOperationsDialog({
   const [winnerId, setWinnerId] = useState(match.teams[0] ?? "");
   const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
   /**
-   * How long ago the match finished, as text, so an empty field is expressible.
+   * When the match finished: just now, a fixed number of minutes ago, or a clock time.
    *
-   * Only meaningful for the placement and knockout tables, whose RPCs accept the
-   * offset; it stays "0" and is never sent for the round-robin ones.
+   * Only meaningful for the placement and knockout tables, whose RPCs accept the offset;
+   * it stays "now" and is never sent for the round-robin ones. The RPCs still take minutes,
+   * so a clock time is converted on the way out (`minutesAgoFromClock`).
    */
-  const [endedMinutesAgo, setEndedMinutesAgo] = useState("0");
-  const endedMinutesFieldId = useId();
+  const [finishChoice, setFinishChoice] = useState<"now" | "5" | "10" | "other">("now");
+  const [finishClock, setFinishClock] = useState("");
+  const finishClockFieldId = useId();
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
   const table = deskKindTable(match.kind) as
     "pool_matches" | "draw_matches" | "placement_matches" | "tier_draw_matches";
@@ -1091,26 +1138,36 @@ export function MatchOperationsDialog({
   const hasScheduleConflict = conflictSummary.reasons.length > 0;
   const allConflictReasons = conflictKindLabels(conflicts);
   const restWarningCount = startCheck?.warnings.length ?? 0;
+  /**
+   * Short rest the server will refuse, as opposed to short rest it will allow.
+   *
+   * When the tournament turns the refusal on, `assert_can_start_match` rejects the start
+   * whatever `p_ignore_rest` says, so offering "Start anyway" would invite a click that can
+   * only fail. The rest warning is then a block, drawn and disabled like a player on court.
+   */
+  const restBlocked = blockStartOnShortRest && restWarningCount > 0;
+  /** Whether this start needs an acknowledgement; a block never reaches the dialog. */
+  const needsConfirm = !restBlocked && (restWarningCount > 0 || hasScheduleConflict);
 
   /**
    * The confirmation dialog's heading, which names the reason it opened.
    *
-   * A dialog titled "Short rest between matches" when the only reason is a break would be
-   * lying about why it is asking, so the title and the body follow whichever reasons are
-   * actually present.
+   * It only opens for things the desk may override: a schedule conflict, or short rest in a
+   * tournament that allows it. A physical impossibility never gets here - Start is disabled -
+   * so the wording says what can be overridden rather than that the match "can't run".
    */
   const confirmTitle =
     hasScheduleConflict && restWarningCount === 0
-      ? "This match can't run as published"
+      ? "Schedule conflict"
       : hasScheduleConflict
         ? "Start this match anyway?"
-        : "Short rest between matches";
+        : "Players haven't had full rest";
   const confirmDescription =
     hasScheduleConflict && restWarningCount > 0
-      ? "The published schedule has conflicts and these players are short of rest. You can still start the match — update the schedule afterwards."
+      ? "The schedule flags this match and some players haven't had full rest. You can start it now; the schedule stays flagged until it is fixed."
       : hasScheduleConflict
-        ? "The schedule says this match cannot run where it is. You can still start it on court; update the schedule to fix the plan."
-        : "These players haven't had their full rest yet. You can still start the match.";
+        ? "The schedule flags this match, but nothing stops it from starting now. It stays flagged until the schedule is fixed."
+        : "This tournament lets you start before the full rest. Check that the players are ready.";
 
   const runStart = async () => {
     const restWarnings = startCheck?.warnings ?? [];
@@ -1151,15 +1208,27 @@ export function MatchOperationsDialog({
   const submit = async () => {
     // The offset only exists on the placement and knockout paths. A blank field reads
     // as 0, which is "reported live" and is exactly the old behaviour.
-    const endedMinutes = isPlacement ? Number(endedMinutesAgo || "0") : 0;
+    let endedMinutes = 0;
+    if (isPlacement) {
+      if (finishChoice === "other") {
+        const fromClock = minutesAgoFromClock(finishClock, new Date(), timezone);
+        if (fromClock === null) {
+          toast.error("Enter the time the match finished.");
+          return;
+        }
+        endedMinutes = fromClock;
+      } else {
+        endedMinutes = finishChoice === "now" ? 0 : Number(finishChoice);
+      }
+    }
     if (endedMinutes > MAX_ENDED_MINUTES_AGO) {
-      toast.error(`Enter ${MAX_ENDED_MINUTES_AGO} minutes or fewer.`);
+      toast.error(`The match can't have finished more than ${MAX_ENDED_MINUTES_AGO} minutes ago.`);
       return;
     }
     if (
       !isReported &&
       match.status !== "in-progress" &&
-      !window.confirm("This match has not been started. Report the result anyway?")
+      !window.confirm("This match hasn't been started. Record the result anyway?")
     ) {
       return;
     }
@@ -1179,12 +1248,12 @@ export function MatchOperationsDialog({
         const needingAttention = await onConflictsAfterReport();
         const attentionNote =
           needingAttention > 0
-            ? `${needingAttention} match${needingAttention === 1 ? " needs" : "es need"} attention`
+            ? `${needingAttention} match${needingAttention === 1 ? " needs" : "es need"} schedule review`
             : null;
         toast.success(
-          [isReported ? "Result corrected" : "Result recorded", note, attentionNote]
+          `${[isReported ? "Result corrected" : "Result recorded", note, attentionNote]
             .filter(Boolean)
-            .join(" — "),
+            .join(". ")}.`,
         );
       } else if (match.kind === "pool") {
         const g = games[0];
@@ -1377,27 +1446,57 @@ export function MatchOperationsDialog({
           knockout tables accept the offset, so it is not drawn for the rest.
         */}
         {canEditScores && isPlacement ? (
-          <div className="rounded-lg border border-hairline bg-muted/20 px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor={endedMinutesFieldId} className="text-sm text-muted-foreground">
-                Finished (minutes ago)
-              </label>
-              <Input
-                id={endedMinutesFieldId}
-                className="h-9 w-20 text-center tabular-nums"
-                inputMode="numeric"
-                value={endedMinutesAgo}
-                disabled={!canEdit || busy}
-                onChange={(e) =>
-                  setEndedMinutesAgo(e.target.value.replace(/\D/g, "").slice(0, 4))
-                }
-              />
+          <fieldset
+            className="rounded-lg border border-hairline bg-muted/20 px-3 py-2.5"
+            disabled={!canEdit || busy}
+          >
+            <legend className="px-1 text-sm font-semibold">When did it finish?</legend>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["now", "Just now"],
+                  ["5", "5 min ago"],
+                  ["10", "10 min ago"],
+                  ["other", "Other time…"],
+                ] as const
+              ).map(([value, text]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={finishChoice === value}
+                  onClick={() => setFinishChoice(value)}
+                  className={`min-h-11 rounded-full border px-4 text-sm ${
+                    finishChoice === value
+                      ? "border-primary bg-primary font-semibold text-primary-foreground"
+                      : "border-hairline bg-surface"
+                  }`}
+                >
+                  {text}
+                </button>
+              ))}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Leave at 0 if you are entering the result now. Otherwise say how long ago the match
-              actually finished, so a late entry does not push the rest of the day back.
+            {finishChoice === "other" ? (
+              <div className="mt-2 flex items-center gap-2">
+                <label htmlFor={finishClockFieldId} className="text-sm text-muted-foreground">
+                  Finish time
+                </label>
+                <Input
+                  id={finishClockFieldId}
+                  type="time"
+                  className="h-11 w-36"
+                  value={finishClock}
+                  onChange={(e) => setFinishClock(e.target.value)}
+                />
+              </div>
+            ) : null}
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {finishChoice === "now"
+                ? "Choose an earlier time if you are entering the result late, so the rest of the day isn't pushed back."
+                : finishChoice === "other"
+                  ? "Use the venue clock. Later matches shift by what actually happened."
+                  : `Finished at ${clockFromMinutesAgo(Number(finishChoice), new Date(), timezone)}. Later matches shift by what actually happened.`}
             </p>
-          </div>
+          </fieldset>
         ) : null}
         {!isReported &&
         match.status !== "in-progress" &&
@@ -1408,23 +1507,29 @@ export function MatchOperationsDialog({
                 key={`conflict-${i}`}
                 className="rounded-md bg-danger-surface px-3 py-1.5 text-danger-foreground"
               >
-                {playerMap.get(c.playerId)?.name ?? "A player"} is currently playing
-                {c.courtNumber ? ` on Court ${c.courtNumber}` : " another match"} — this match can't
-                start until they finish.
+                {playerMap.get(c.playerId)?.name ?? "A player"} is playing
+                {c.courtNumber ? ` on Court ${c.courtNumber}` : " another match"} right now. This
+                match can start once they finish.
               </li>
             ))}
             {(startCheck?.warnings ?? []).map((w, i) => (
               <li
                 key={`warning-${i}`}
-                className="rounded-md bg-warn-surface px-3 py-1.5 text-warn-foreground"
+                className={`rounded-md px-3 py-1.5 ${
+                  restBlocked
+                    ? "bg-danger-surface text-danger-foreground"
+                    : "bg-warn-surface text-warn-foreground"
+                }`}
               >
-                {playerMap.get(w.playerId)?.name ?? "A player"} has only rested {w.restMinutes} of{" "}
+                {playerMap.get(w.playerId)?.name ?? "A player"} has rested {w.restMinutes} of{" "}
                 {w.requiredMinutes} min since their last match.
+                {restBlocked ? " This tournament doesn't allow starting before the full rest." : ""}
               </li>
             ))}
           </ul>
         ) : null}
-        <div className="flex gap-2">
+        {/* A reader sees the match and its score, not buttons they cannot press. */}
+        <div className={canEdit ? "flex gap-2" : "hidden"}>
           {isReported ? (
             <Button
               className="h-12 flex-1 text-lg font-semibold shadow-md"
@@ -1436,13 +1541,13 @@ export function MatchOperationsDialog({
           ) : notStarted ? (
             <Button
               className="h-12 flex-1 text-lg font-semibold shadow-md"
-              disabled={!canEdit || busy || !!startCheck?.conflicts.length}
+              disabled={!canEdit || busy || !!startCheck?.conflicts.length || restBlocked}
               onClick={() => {
                 // Both are acknowledgement gates, not blocks: a hard physical conflict
                 // has already disabled this button above, and the server still refuses
                 // one. The rest warning and the schedule conflict are asked about in one
                 // dialog rather than two, so the desk stays one click deep.
-                if (restWarningCount > 0 || hasScheduleConflict) {
+                if (needsConfirm) {
                   setConfirmRestOpen(true);
                   return;
                 }
@@ -1500,7 +1605,7 @@ export function MatchOperationsDialog({
               </ul>
             ) : null}
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy}>Keep waiting</AlertDialogCancel>
+              <AlertDialogCancel disabled={busy}>Don't start</AlertDialogCancel>
               <AlertDialogAction
                 disabled={busy}
                 onClick={(e) => {
@@ -1677,11 +1782,59 @@ export function MatchOperationsDialog({
         </AlertDialog>
         {!canEdit ? (
           <p className="text-xs text-muted-foreground">
-            You can read this match but not change it. Ask the tournament owner for edit access.
+            You can read this match but not change it.
           </p>
         ) : null}
       </div>
     </>
+  );
+}
+
+const ACTION_TONE = {
+  // The one thing the desk wants done: the accent, and always a button.
+  go: { row: "bg-primary/10 text-foreground", icon: "bg-primary text-primary-foreground", glyph: "▶" },
+  // Allowed, but someone should look. Amber, never red: a delay is not a danger.
+  warn: {
+    row: "border border-warn-border bg-warn-surface text-warn-foreground",
+    icon: "bg-warn-foreground text-warn-surface",
+    glyph: "!",
+  },
+  // State of the plan that the desk cannot fix itself.
+  info: { row: "bg-muted text-foreground", icon: "bg-muted-foreground text-surface", glyph: "i" },
+} as const;
+
+/**
+ * One row of "Needs action": a short title, one line of detail, and the button that clears it.
+ *
+ * The glyph and the title are the channels besides colour; the button means the row's text
+ * never has to explain how to act. `aria-hidden` on the glyph because the title already says it.
+ */
+function ActionRow({
+  tone,
+  title,
+  detail,
+  action,
+}: {
+  tone: keyof typeof ACTION_TONE;
+  title: string;
+  detail: string;
+  action: React.ReactNode;
+}) {
+  const style = ACTION_TONE[tone];
+  return (
+    <li className={`flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 ${style.row}`}>
+      <span
+        aria-hidden="true"
+        className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-extrabold ${style.icon}`}
+      >
+        {style.glyph}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold leading-snug">{title}</span>
+        <span className="block text-sm">{detail}</span>
+      </span>
+      {action}
+    </li>
   );
 }
 
@@ -1706,7 +1859,7 @@ function AttentionChip({ conflicts }: { conflicts: readonly ScheduleConflict[] }
       <span aria-hidden="true" className="font-extrabold">
         !
       </span>
-      <span className="min-w-0">Needs attention — {text}</span>
+      <span className="min-w-0">Schedule review — {text}</span>
     </span>
   );
 }
@@ -1952,10 +2105,11 @@ function ReadinessText({
 
 function impactMessage(prefix: string, impact: ScheduleImpact): string {
   if (!impact.shiftedMatches) return prefix;
-  const direction = impact.direction === "mixed" ? "in both directions" : `${impact.direction}`;
-  return `${prefix}. ${impact.shiftedMatches} later match${
-    impact.shiftedMatches === 1 ? "" : "es"
-  } shifted ${direction} by up to ${impact.largestShiftMinutes} min.`;
+  const count = `${impact.shiftedMatches} later match${impact.shiftedMatches === 1 ? "" : "es"}`;
+  const distance = `by up to ${impact.largestShiftMinutes} min`;
+  if (impact.direction === "mixed") return `${prefix}. ${count} rescheduled ${distance}.`;
+  if (impact.direction === "later") return `${prefix}. ${count} delayed ${distance}.`;
+  return `${prefix}. ${count} moved ${impact.direction} ${distance}.`;
 }
 
 function localDateTimeValue(value: string | null): string {

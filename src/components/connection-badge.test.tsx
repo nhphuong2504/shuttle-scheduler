@@ -34,29 +34,41 @@ describe("ConnectionBadge gives every connection state its own word", () => {
     const words = (["connecting", "live", "offline", "error"] as const).map(
       (status) => badge(status).textContent,
     );
-    expect(words).toEqual(["Connecting", "Live", "Offline · changes unavailable", "Connection error"]);
+    expect(words).toEqual([
+      "Connecting",
+      "Live",
+      "Offline · live updates paused",
+      "Connection problem · live updates paused",
+    ]);
     expect(new Set(words).size).toBe(words.length);
   });
 
-  it("reports a channel error as an error rather than as being offline", () => {
+  it("reports a channel error as a problem rather than as being offline", () => {
     // The defect this component closes. Both states are failures, but only one is the
     // reader's to fix by waiting, and a shared word would say they are the same problem.
     expect(badge("error").textContent).not.toBe(badge("offline").textContent);
-    expect(badge("error").textContent).toContain("Connection error");
+    expect(badge("error").textContent).toContain("Connection problem");
   });
 
   it("says what an offline screen cannot do, rather than only that it is offline", () => {
     // "Live" alone sat in a stats strip beside "13 matches scheduled", where it could be
     // read as a match being live - the meaning `--state-live-*` is reserved for. Both
     // non-live failure words carry their consequence so the word never stands alone.
-    expect(badge("offline").textContent).toBe("Offline · changes unavailable");
+    expect(badge("offline").textContent).toBe("Offline · live updates paused");
   });
 
-  it("carries the age of the last change once it is worth reporting", () => {
-    // A stale "Live" is the failure this addresses: a screen that stopped receiving and
-    // never said so. Under a minute the age is noise; past it, it is the signal.
+  it("keeps connection health apart from the time of the last change", () => {
+    // A connected screen with nothing new is healthy: the chip stays "Live" and the age is
+    // a separate, quiet note. It is shown only while connected - on a failed connection an
+    // age would read as the cause rather than as a fact.
     expect(badge("live").textContent).toBe("Live");
-    expect(badge("live", Date.now() - 5 * 60_000).textContent).toBe("Live · last change 5m ago");
+    const { container } = render(
+      <ConnectionBadge status="live" lastUpdatedAt={Date.now() - 5 * 60_000} />,
+    );
+    const chip = container.querySelector("span > span")!;
+    expect(chip.textContent).toBe("Live");
+    expect(container.textContent).toContain("last change 5 min ago");
+    expect(badge("offline", Date.now() - 5 * 60_000).textContent).not.toContain("last change");
   });
 });
 

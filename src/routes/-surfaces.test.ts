@@ -671,13 +671,18 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     expect(definers).toEqual([deskFile]);
   });
 
-  it("keeps the desk out of the read-only nav", () => {
-    // The read-only row is the operational sections *minus the Desk*, derived rather than
-    // restated, so the two lists cannot drift. A second literal list is how the Desk would
-    // quietly return to the readers the nav is meant to withhold it from - and the split is
-    // on `can_edit`, not on a session, so a signed-in viewer loses it too.
+  it("offers the desk to readers, in its read-only form", () => {
+    // The read-only row is the operational sections *including the Desk*, derived rather
+    // than restated so the two lists cannot drift. The Desk itself withholds the operator's
+    // panels from a caller without `can_edit`; the nav split stays on `can_edit`, not on a
+    // session, so a signed-in viewer and a visitor meet the same board.
     const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
-    expect(shell).toMatch(/READ_ONLY_SECTIONS = SECTIONS\.filter\([\s\S]{0,80}?DESK_PATH/);
+    expect(shell).toMatch(/READ_ONLY_SECTIONS = SECTIONS;/);
+    expect(shell).toMatch(/homeSection = access\.can_edit \? DESK_PATH : READER_HOME_PATH/);
+    const desk = readFileSync(join(src, deskFile), "utf8");
+    expect(desk).toMatch(/\{canEdit \? \(\s*<Panel\s+title="Needs action"/);
+    // Next transitions and Court progress share one band, withheld together.
+    expect(desk).toMatch(/\{canEdit \? \(\s*<div[^>]*>\s*<Panel\s+title="Next transitions"/);
     expect(shell).toMatch(
       /access\.can_edit \? \[\.\.\.SECTIONS, \.\.\.EDITOR_SECTIONS\][\s\S]{0,40}?READ_ONLY_SECTIONS/,
     );

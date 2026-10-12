@@ -189,8 +189,8 @@ function ConflictOverview({
           <AlertTriangle aria-hidden="true" className="size-4 shrink-0 text-warn-foreground" />
           <span className="font-display text-base font-bold text-warn-foreground">
             {count === 1
-              ? "1 match can't run as published"
-              : `${count} matches can't run as published`}
+              ? "1 match needs schedule review"
+              : `${count} matches need schedule review`}
           </span>
         </span>
         <ChevronDown

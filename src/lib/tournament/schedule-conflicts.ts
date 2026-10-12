@@ -39,11 +39,11 @@ export const CONFLICT_KIND_ORDER = [
  * sixth kind added to the RPC fails this map's type instead of rendering blank.
  */
 export const CONFLICT_KIND_LABEL: Record<ScheduleConflictKind, string> = {
-  court_overlap: "Overlaps another match on this court",
-  rest_shortfall: "A player is short of rest",
-  break: "Falls in a break",
-  past_closing: "Runs past closing time",
-  before_prerequisite: "Starts before the match it waits on",
+  court_overlap: "Same court and time as another match",
+  rest_shortfall: "A player won't have had full rest",
+  break: "Scheduled during a break",
+  past_closing: "Ends after the courts close",
+  before_prerequisite: "Scheduled before a match it depends on",
 };
 
 /** The rank of a kind in `CONFLICT_KIND_ORDER`; unknown kinds sort last, stably. */

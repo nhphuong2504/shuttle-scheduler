@@ -21,6 +21,13 @@ import { routes } from "./fixtures/routes";
  *   3. whether the countdown a moderator reads is a countdown, rather than a number that has
  *      gone negative.
  *
+ * ## The panel is the operator's
+ *
+ * "Next transitions" is one of the panels the Desk withholds from a caller without
+ * `can_edit` - the read-only form shows the day picker and the court board, and nothing that
+ * would ask a reader to chase a match - so every test here installs an editor session. Its
+ * absence for a reader is pinned in `access.spec.ts`.
+ *
  * ## The clock is moved, not the fixture
  *
  * The overdue case is reached by advancing the pinned clock past the fixture's own scheduled
@@ -73,7 +80,7 @@ async function readRows(page: Page) {
 for (const cell of MATRIX_CELLS) {
   test.describe(cellLabel(cell), () => {
     test("the panel lists the venue's next transitions, soonest first", async ({ page }) => {
-      await installAppMock(page, { preset: "states" });
+      await installAppMock(page, { preset: "states", role: "user" });
       await openCell(page, routes.desk, cell);
 
       const rows = await readRows(page);
@@ -119,7 +126,7 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("distinguishes an estimated finish from a scheduled start", async ({ page }) => {
-      await installAppMock(page, { preset: "states" });
+      await installAppMock(page, { preset: "states", role: "user" });
       await openCell(page, routes.desk, cell);
 
       const rows = await readRows(page);
@@ -162,7 +169,7 @@ for (const cell of MATRIX_CELLS) {
     test("the kind is carried by words, and the two kinds are different words", async ({
       page,
     }) => {
-      await installAppMock(page, { preset: "states" });
+      await installAppMock(page, { preset: "states", role: "user" });
       await openCell(page, routes.desk, cell);
 
       /**
@@ -188,7 +195,7 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("the panel is read-only, whatever it is showing", async ({ page }) => {
-      await installAppMock(page, { preset: "states" });
+      await installAppMock(page, { preset: "states", role: "user" });
       await openCell(page, routes.desk, cell);
 
       const rows = await readRows(page);
@@ -209,7 +216,7 @@ for (const cell of MATRIX_CELLS) {
     test("past a scheduled start the countdown turns upward instead of negative", async ({
       page,
     }) => {
-      await installAppMock(page, { preset: "states" });
+      await installAppMock(page, { preset: "states", role: "user" });
       // Twenty-six minutes on from the fixture's reference: the live match on court 2 is now an
       // overrun, and the three matches that were due in twenty are six minutes late.
       await page.clock.setFixedTime(new Date(REFERENCE.getTime() + 26 * 60_000));
@@ -268,7 +275,7 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("an empty board states that nothing is transitioning", async ({ page }) => {
-      await installAppMock(page, { preset: "states" });
+      await installAppMock(page, { preset: "states", role: "user" });
       /**
        * Registered after the mock, so it wins for this table alone: Playwright runs handlers in
        * reverse registration order, and everything else falls back to the mock.

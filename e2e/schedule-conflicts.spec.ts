@@ -73,8 +73,8 @@ test.describe("the organiser's conflict block", () => {
 
     // The fixture answers `schedule_conflicts` with `[]` by default. Nothing about the
     // block - neither its headline nor a count - should be drawn.
-    await expect(page.getByText(/run as published/i)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /can't run as published/i })).toHaveCount(0);
+    await expect(page.getByText(/schedule review/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /need schedule review/i })).toHaveCount(0);
   });
 
   test.describe("with conflicts", () => {
@@ -103,21 +103,21 @@ test.describe("the organiser's conflict block", () => {
       await settleAnimations(page, "main");
 
       // Two matches, two kinds: the headline counts matches rather than rows.
-      const headline = page.getByRole("button", { name: /2 matches can't run as published/i });
+      const headline = page.getByRole("button", { name: /2 matches need schedule review/i });
       await expect(headline).toBeVisible();
       await expect(headline).toHaveAttribute("aria-expanded", "false");
 
       const block = page
         .locator("section")
-        .filter({ has: page.getByRole("button", { name: /can't run as published/i }) })
+        .filter({ has: page.getByRole("button", { name: /need schedule review/i }) })
         .first();
 
       await headline.click();
       await expect(headline).toHaveAttribute("aria-expanded", "true");
 
       // Grouped by kind, each group named and each line naming the match and its court.
-      await expect(block.getByText("Overlaps another match on this court").first()).toBeVisible();
-      await expect(block.getByText("A player is short of rest").first()).toBeVisible();
+      await expect(block.getByText("Same court and time as another match").first()).toBeVisible();
+      await expect(block.getByText("A player won't have had full rest").first()).toBeVisible();
       await expect(block.getByText(/Court 7/).first()).toBeVisible();
       await expect(block.getByText(/Court 8/).first()).toBeVisible();
 
@@ -161,7 +161,7 @@ test.describe("the organiser's conflict block", () => {
        * is a 403 the app would have to swallow; the point is that it is never asked.
        */
       expect(calls, "a viewer must not request schedule_conflicts").toEqual([]);
-      await expect(page.getByText(/run as published/i)).toHaveCount(0);
+      await expect(page.getByText(/schedule review/i)).toHaveCount(0);
     });
   });
 });
@@ -185,18 +185,18 @@ test.describe("the desk's conflict chip and start confirmation", () => {
     await settleAnimations(page, "main");
 
     const conflicted = page.getByRole("button", { name: /^Court 3:/ }).first();
-    await expect(conflicted).toContainText("Needs attention");
-    await expect(conflicted).toContainText("Overlaps another match on this court");
+    await expect(conflicted).toContainText("Schedule review");
+    await expect(conflicted).toContainText("Same court and time as another match");
     // The same reason is in the accessible name, because the tile's `aria-label` would
     // otherwise replace the chip's text for a screen reader.
     await expect(conflicted).toHaveAccessibleName(
-      /Needs attention: Overlaps another match on this court/,
+      /Schedule review: Same court and time as another match/,
     );
 
     // A court whose match has no conflict carries no chip, so the warning stays attached
     // to the match rather than smeared across the board.
     const clean = page.getByRole("button", { name: /^Court 1:/ }).first();
-    await expect(clean).not.toContainText("Needs attention");
+    await expect(clean).not.toContainText("Schedule review");
   });
 
   test("asks before starting a conflicted match, and starts only on Start anyway", async ({
@@ -214,7 +214,7 @@ test.describe("the desk's conflict chip and start confirmation", () => {
     const confirm = page.getByRole("alertdialog");
     await expect(confirm).toBeVisible();
     await settleAnimations(page, '[role="alertdialog"]');
-    await expect(confirm.getByText("Overlaps another match on this court").first()).toBeVisible();
+    await expect(confirm.getByText("Same court and time as another match").first()).toBeVisible();
 
     let starts = 0;
     page.on("request", (request) => {
@@ -222,9 +222,9 @@ test.describe("the desk's conflict chip and start confirmation", () => {
     });
 
     // Keeping waiting is a refusal: the dialog closes and no start is sent.
-    await confirm.getByRole("button", { name: "Keep waiting" }).click();
+    await confirm.getByRole("button", { name: "Don't start" }).click();
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
-    expect(starts, "Keep waiting must not start the match").toBe(0);
+    expect(starts, "Don't start must not start the match").toBe(0);
 
     // Starting anyway is the acknowledgement, and it is the call the desk sends.
     await operations.getByRole("button", { name: /start match/i }).click();

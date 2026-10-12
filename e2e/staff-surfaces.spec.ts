@@ -453,10 +453,15 @@ test.describe("staff surfaces", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    const field = dialog.getByLabel("Finished (minutes ago)");
-    expectPresent((await field.count()) > 0, "The finish-offset field in the score dialog");
-    // Defaults to 0, which reads as "report live" and sends nothing to the RPC.
-    await expect(field).toHaveValue("0");
+    const group = dialog.getByRole("group", { name: "When did it finish?" });
+    expectPresent((await group.count()) > 0, "The finish-time group in the score dialog");
+    // Defaults to "Just now", which reads as "report live" and sends nothing to the RPC.
+    await expect(group.getByRole("button", { name: "Just now" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await group.getByRole("button", { name: "Other time…" }).click();
+    await expect(group.getByLabel("Finish time")).toBeVisible();
   });
 
   test("the score filters are a named group of pressed buttons", async ({ page }) => {

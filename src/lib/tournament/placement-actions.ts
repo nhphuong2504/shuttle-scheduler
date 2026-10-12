@@ -779,13 +779,13 @@ export async function withPlacementScheduleImpact<T>(
  */
 export function scheduleImpactNote(impact: PlacementScheduleImpact): string | null {
   if (impact.shiftedMatches === 0) return null;
-  const count = `${impact.shiftedMatches} downstream match${
-    impact.shiftedMatches === 1 ? "" : "es"
-  }`;
+  const count = `${impact.shiftedMatches} later match${impact.shiftedMatches === 1 ? "" : "es"}`;
   const distance = `by up to ${impact.largestShiftMinutes} min`;
   // A mixed reflow has no single direction, so none is claimed.
-  if (impact.direction === "mixed") return `${count} moved, ${distance}`;
-  return `${count} moved ${impact.direction}, ${distance}`;
+  if (impact.direction === "mixed") return `${count} rescheduled ${distance}`;
+  // "Delayed" is only said of a push later; an earlier move is not a delay.
+  if (impact.direction === "later") return `${count} delayed ${distance}`;
+  return `${count} moved ${impact.direction} ${distance}`;
 }
 
 export async function startPlacementMatch(matchId: string, courtId: string | null): Promise<void> {

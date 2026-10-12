@@ -5,7 +5,7 @@
 /*
  * Tournova design tokens. The principles live in docs/design-principles.md;
  * this file is the implementation. Semantic tokens only: never hardcode a colour in a
- * component. Core palette: ground, surface, ink, violet (interaction), lime (live).
+ * component. Core palette: ground, surface, ink, violet (interaction), green (live).
  */
 
 @theme inline {
@@ -70,6 +70,14 @@
   --color-danger-surface: var(--danger-surface);
   --color-danger-border: var(--danger-border);
   --color-danger-foreground: var(--danger-foreground);
+
+  /* Court "playing". Its own family rather than a reuse of `--state-live-*`, because the
+     court state and the match status are different vocabularies and a change to one must
+     not silently re-tint the other. Three stops, the same shape as `--warn-*`: `--play` is
+     the edge, `--play-surface` the fill, `--play-foreground` the ink. */
+  --color-play: var(--play);
+  --color-play-surface: var(--play-surface);
+  --color-play-foreground: var(--play-foreground);
 
   /* Match states: bg-state-live-chip / text-state-live-ink.
 
@@ -203,9 +211,17 @@
   --danger-border: #EDB9BD;
   --danger-foreground: #B3343D;
 
-  /* Match and court states. Live is a lime chip with ink text and a ring; scheduled, completed and void are neutral. Hue is reserved for live, warning and danger. */
-  --state-live-chip: #D8FF4F;
-  --state-live-ink: #171A1D;
+  /* Court "playing". Three stops, the same shape as `--warn-*`: `--play` is the family's
+     edge, `--play-surface` its fill - the chip at full strength and the tile as a wash of
+     it - and `--play-foreground` the ink on it. Green is the colour a reader already
+     associates with "live", which is what the state means. */
+  --play: #16865C;
+  --play-surface: #D6F1E3;
+  --play-foreground: #0E5A3A;
+
+  /* Match states. Live is a green chip with ink text and a ring; scheduled, completed and void are neutral. Hue is reserved for live, warning and danger. */
+  --state-live-chip: #D6F1E3;
+  --state-live-ink: #0E5A3A;
   --state-scheduled-chip: #ECEEED;
   --state-scheduled-ink: #4F5A61;
   --state-completed-ink: #4F5A61;
@@ -215,7 +231,7 @@
   --state-void-ink: #2A3238;
 
   /* Session presence dot. Decorative; kept separate from the state palette so it cannot be read as a live match. */
-  --presence-ink: #16865C;
+  --presence-ink: #4F8A61;
 
   /* Type scale by importance: T1 glance (score, timer), T2 identify (names, status), T3 read (body), T4 reference (timestamps, captions). 12px is the floor. */
   --type-t1-size: 1.5rem;    /* 24 */

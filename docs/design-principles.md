@@ -35,7 +35,8 @@ appears only when it carries meaning, and one colour carries one meaning.
 | Hairline | `--border` | `#D9DDDF` | Decorative edges only |
 | Control edge | `--border-control` | `#7F8A91` | Anything the user must locate: inputs, selects |
 | Interaction | `--primary` | `#5B4FC7` | Buttons, links, active nav, selected tab |
-| Live | `--state-live-chip` | `#D8FF4F` | A match or court that is playing right now |
+| Live | `--state-live-chip` | `#D6F1E3` | A live match: its status chip, and the connection badge |
+| Playing | `--play`, `--play-surface` | `#16865C`, `#D6F1E3` | A court with a match on it right now |
 | Success | `--success` | `#16865C` | Fill only. Healthy, completed |
 | Warning | `--warn-*` | amber | Delayed, needs attention |
 | Danger | `--destructive`, `--danger-*` | red | Overrun, error, destructive action |
@@ -44,8 +45,18 @@ Rules:
 
 - **Violet is for interaction and nothing else.** If a thing is not clickable and not selected,
   it is not violet. A "ready" court tinted violet is acceptable because it is an action waiting.
-- **Lime is for realtime and never stands alone.** It is 1.15:1 against white, so a lime chip
-  always carries a ring and ink text, and lime is never text, a border or an icon on a light surface.
+- **Green is for live, and it never stands alone.** Green is the colour a reader already
+  associates with "live", and it carries three roles: a court that is playing, a match that is
+  live, and the connection being up. Every one of them also has a word and a glyph, so the hue is
+  never the only signal. The chip values (`#D6F1E3` on `#0E5A3A`) clear 6.9:1, so the rule that
+  mattered when live was lime still holds: a live chip carries ink text, and the hue is never used
+  as text, a border or an icon on a light surface.
+- **The court state and the match status are separate tokens even where they agree.** `--play*` is
+  the court board's own green and `--state-live-*` the match status's; they hold the same value
+  today, and that is deliberate, but they are named apart so retuning one cannot silently re-tint
+  the other. `--play` is the family's edge, `--play-surface` its fill - the chip at full strength
+  and the court tile as a wash of it - and `--play-foreground` the ink on it; `playing` is
+  therefore built exactly like `overrun`, one green where that one is amber.
 - **Success, warning and danger each have two forms.** A saturated fill (a button, a dot, an
   icon) and a darker ink for text. Do not use the fill as text: amber `#C97812` is 3.4:1 on white,
   the text ink `#8F5300` is 5.5:1.
@@ -71,7 +82,7 @@ a colour, so a wall of eight courts can be read without reading any of them.
 
 | State | Reads as | Colour |
 | --- | --- | --- |
-| Playing | A match is on | Lime chip with ring, white tile |
+| Playing | A match is on | Green chip with ring, green wash |
 | Overrun | On court past its slot | Danger |
 | Ready | Free, next match can start | Violet wash |
 | Waiting | Free, waiting for players | Warning |
@@ -110,6 +121,7 @@ Scale in use on the Desk: panel title 16px bold, nav 14px semibold, body and chi
 ## Not decided
 
 - A dark theme. It was removed on purpose; a dark Desk is an open question for dim halls.
-- The Watch screens' final layout (Landing, Explore). A mockup exists but is not built.
+- The Watch screens' final layout (Landing, Explore). Their mockups were deleted once the code
+  became the reference, so there is nothing to build from but the pages themselves.
 - Whether the type scale tokens in `styles.css` (`--type-t1` to `--type-t4`) should move to match
   the sizes above. The Desk currently sets sizes with utility classes.

@@ -1,6 +1,7 @@
 import { type ConsoleMessage, type Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures/app";
+import { installAppMock } from "./fixtures/app-mock";
 
 import { cellLabel, MATRIX_CELLS, openCell, ROUTES } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
@@ -86,24 +87,36 @@ test.describe("no route discards its server render", () => {
  * to tick during the load - which is the only reason the bug went unnoticed for so long.
  *
  * The clock is expected to *appear*, so the test also proves the fix did not simply delete
- * the time from the interface.
+ * the time from the interface. It is read from an editor's Desk, because the panel it lives
+ * on - "Needs action" - is one the read-only Desk withholds.
  */
 test.describe("the desk clock is client-owned", () => {
   test("the server render carries no wall-clock time", async ({ page }) => {
     // Blocking the bundle is the honest way to see the server HTML: with scripting live,
     // React has already replaced the tree by the time any assertion could read it.
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
-    await page.goto(routes.desk, { waitUntil: "domcontentloaded" });
+    const response = await page.goto(routes.desk, { waitUntil: "domcontentloaded" });
 
-    const panel = page.locator("text=updates every 30s").first();
-    await expect(panel).toBeVisible();
-
-    // Without the bundle nothing can have adopted the clock, so no HH:MM may be present.
-    const text = (await panel.textContent()) ?? "";
-    expect(text, `server HTML contains a clock value: "${text}"`).not.toMatch(/\d{1,2}:\d{2}/);
+    // The clock hangs off the operator's "Needs action" panel, which the Desk withholds from
+    // anyone it cannot yet place - and on the server that is everyone: there are no loaders,
+    // so `can_edit` reads false and the panel is not server-rendered at all. Reading the whole
+    // document rather than one locator keeps the assertion true whatever the gating does, since
+    // an HH:MM anywhere in the server HTML still fails.
+    const html = (await response?.text()) ?? "";
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      // Removes every tag, and with it every attribute - including `data-tsd-source`, whose
+      // `file:line:column` values read as clock times.
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&[a-z]+;|&#\d+;/gi, " ");
+    expect(text, "server HTML contains a clock value").not.toMatch(/\d{1,2}:\d{2}/);
   });
 
   test("the clock appears once React has taken over", async ({ page }) => {
+    // The clock is only reachable where its panel is, which is an editor's Desk: a reader
+    // never gets "Needs action", so the session is installed before the navigation.
+    await installAppMock(page, { role: "user" });
     await openCell(page, routes.desk, MATRIX_CELLS[0]!);
     const panel = page.locator("text=updates every 30s").first();
     await expect(panel).toHaveText(/\d{1,2}:\d{2}/);
