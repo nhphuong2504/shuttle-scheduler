@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode } from "react";
 
+import { TournovaMark } from "@/components/brand/tournova-mark";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
@@ -236,12 +237,7 @@ function SiteFooter() {
 function BrandMark() {
   return (
     <>
-      <span
-        aria-hidden="true"
-        className="grid size-8 place-items-center rounded-[10px] bg-primary font-display text-lg font-bold leading-none text-primary-foreground"
-      >
-        T
-      </span>
+      <TournovaMark className="h-8 w-auto shrink-0 text-primary" />
       <span className="font-display text-lg font-bold tracking-tight text-foreground">Tournova</span>
     </>
   );
@@ -857,17 +853,16 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
  * address that needs no id, rather than the flat legacy paths that used to resolve on
  * the caller's pointer. See `PUBLIC_SECTIONS` for why that matters.
  */
-export function PublicShell({
-  title,
-  subtitle,
-  actions,
-  children,
-}: {
-  title: string;
-  subtitle?: string | undefined;
-  actions?: ReactNode;
-  children: ReactNode;
-}) {
+export function PublicShell(
+  props:
+    | { title: string; subtitle?: string | undefined; actions?: ReactNode; children: ReactNode }
+    /**
+     * A page that draws its own full-width sections and its own h1, inside the same header
+     * and footer. Only the visitor's front door uses it: everywhere else the shell owns the
+     * page title so every page reads the same way.
+     */
+    | { bare: true; children: ReactNode },
+) {
   const { signedIn } = useSession();
   return (
     <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
@@ -884,10 +879,14 @@ export function PublicShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
-        <PageHeader title={title} subtitle={subtitle} actions={actions} />
-        {children}
-      </main>
+      {"bare" in props ? (
+        <main className="w-full flex-1">{props.children}</main>
+      ) : (
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
+          <PageHeader title={props.title} subtitle={props.subtitle} actions={props.actions} />
+          {props.children}
+        </main>
+      )}
       <SiteFooter />
     </div>
   );

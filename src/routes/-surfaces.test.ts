@@ -843,6 +843,8 @@ describe("the workspace chrome is mounted once, by the layout", () => {
    * shell, and it is now the front door, which is a page like any other outside a workspace.
    */
   const publicRoutes = [
+    // The visitor's reading of `/`, which `routes/index.tsx` renders for a caller with no session.
+    join("components", "landing", "landing.tsx"),
     join("routes", "auth.tsx"),
     join("routes", "explore.tsx"),
     join("routes", "index.tsx"),

@@ -1,13 +1,12 @@
-import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useMemo } from "react";
 
 import { PublicShell, TournamentStatusPill } from "@/components/app-shell";
+import { Landing } from "@/components/landing/landing";
 import { ExploreCard, RegisterAction } from "@/components/explore-card";
-import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { isConfigurable } from "@/lib/auth/authorization";
-import { signInSearch } from "@/lib/routing/redirect";
 import { phaseReminder, tournamentPhase } from "@/lib/tournament/phase";
 import {
   useExploreTournaments,
@@ -24,13 +23,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Run a badminton tournament from one console: entries, draws, the day's schedule and live scoring at the desk.",
+          "Run a tournament day from one desk: every court, the next match, and a schedule that keeps up when the day runs late.",
       },
       { property: "og:title", content: "Tournova Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Run a badminton tournament from one console: entries, draws, the day's schedule and live scoring at the desk.",
+          "Run a tournament day from one desk: every court, the next match, and a schedule that keeps up when the day runs late.",
       },
       { property: "og:type", content: "website" },
       { property: "twitter:card", content: "summary" },
@@ -45,9 +44,8 @@ export const Route = createFileRoute("/")({
  * `/` serves the two audiences this app has before either of them is inside a
  * tournament, and it decides between them on one fact - whether there is a session:
  *
- *  - **Landing**, for a visitor: what Tournova is, and the two ways in. **Placeholder:**
- *    this page has not been designed yet, and its copy and layout are stand-ins to be
- *    replaced, not decisions to preserve.
+ *  - **Landing**, for a visitor: the Desk, the schedule behind it, and the ways in -
+ *    run a tournament, browse what is on, or sign in. It lives in `components/landing/`.
  *  - **Home**, for somebody signed in: what needs them now, the tournaments they run or
  *    help run, and what is open to enter. This is a *resume* surface, not a catalogue -
  *    Explore is the catalogue, and it is one link away in both the nav and the page.
@@ -81,38 +79,6 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const { signedIn } = useSession();
   return signedIn ? <SignedInHome /> : <Landing />;
-}
-
-/**
- * PLACEHOLDER - the signed-out front door has not been designed.
- *
- * This is a stand-in, not a decision. It exists only so a visitor has somewhere to land
- * and two working ways forward: browse what is on, or sign in. The copy, the layout and
- * the explanatory panels that used to live here are all to be replaced wholesale when the
- * landing page is picked up - do not treat any of it as a pattern to copy, and do not
- * polish it. (The equivalent note is in `AGENTS.md`, under "The landing page is a
- * placeholder".)
- */
-function Landing() {
-  const href = useLocation({ select: (location) => location.href });
-
-  return (
-    <PublicShell
-      title="Tournova"
-      subtitle="A placeholder front door. The real landing page has not been designed yet; for now, browse what is on or sign in to run a tournament."
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <Button asChild>
-          <Link to="/explore">Browse tournaments</Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link to="/auth" search={signInSearch(href)}>
-            Sign in
-          </Link>
-        </Button>
-      </div>
-    </PublicShell>
-  );
 }
 
 /**

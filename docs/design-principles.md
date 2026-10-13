@@ -83,15 +83,21 @@ a colour, so a wall of eight courts can be read without reading any of them.
 | State | Reads as | Colour |
 | --- | --- | --- |
 | Playing | A match is on | Green chip with ring, green wash |
-| Overrun | On court past its slot | Danger |
+| Overrun | On court past its slot | Amber chip with ring, amber wash: a delay, not a danger |
 | Ready | Free, next match can start | Violet wash |
-| Waiting | Free, waiting for players | Warning |
+| Waiting | Free, next match not ready yet | Neutral, a deeper grey than Idle; the line beneath says why |
 | Idle | Free, nothing queued | Neutral |
 
 ## Type
 
 Two families: **Bricolage Grotesque** (`font-display`) for page titles, panel titles and court
 numbers, **Instrument Sans** for everything else.
+
+The visitor's front door adds a third, **JetBrains Mono** (`font-mono`), for its own small labels
+only - clock times and step names around the scheduling demo. Product UI never uses it, including
+the pictures of the Desk on that page. The same page uses violet for "moved later" in its
+scheduling diagram: an exception to "violet is for interaction", kept because it is the
+scheduler's action being shown, and confined to that illustration.
 
 - **Body and controls: 14px minimum, 16px for what is read on the move.** Names on a court tile,
   rows in Act now and match names in dialogs are 16px. 12px is for tertiary detail only

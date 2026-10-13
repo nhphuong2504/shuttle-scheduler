@@ -19,6 +19,8 @@
   --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-score: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  /* Marketing labels on the front door only (times, step names). Product UI never uses it. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --shadow-panel: var(--elev-1);
   --shadow-raise: var(--elev-2);
