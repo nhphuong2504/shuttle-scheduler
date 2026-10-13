@@ -29,7 +29,8 @@
     "db:drift": "node scripts/run-sql.mjs scripts/migration-drift-check.sql",
     "deploy:check": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy --dry-run",
     "deploy:dry": "npm run deploy:check",
-    "deploy": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy"
+    "deploy": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy",
+    "deploy:www-redirect": "wrangler deploy --config workers/www-redirect/wrangler.toml"
   },
   "overrides": {
     "rolldown": "1.2.1"
