@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   DEMO_MATCHES,
   DEMO_REST,
+  DEMO_RESULT_STEP,
   DEMO_SLOT,
   DEMO_SPAN,
   DEMO_STEPS,
   DEMO_TOAST,
+  demoCounts,
+  demoGroup,
   demoPlacement,
 } from "./schedule-demo-data";
 
@@ -49,6 +52,24 @@ describe("schedule demo", () => {
     // Pushed behind its predecessor it would end past the close, so it keeps its time and overlaps.
     expect(before.start + before.length + DEMO_SLOT).toBeGreaterThan(DEMO_SPAN);
     expect(before.start + before.length).toBeGreaterThan(held.start);
+  });
+
+  it("counts nothing as moved or flagged until the result is in, and everything after", () => {
+    expect(demoCounts(0)).toEqual({ auto: 0, locked: 4, review: 0 });
+    expect(demoCounts(1)).toEqual({ auto: 0, locked: 4, review: 0 });
+    // The reflow is one update: every step after the result shows all of it.
+    for (let step = DEMO_RESULT_STEP; step < DEMO_STEPS.length; step += 1) {
+      expect(demoCounts(step)).toEqual({ auto: 6, locked: 4, review: 2 });
+    }
+  });
+
+  it("keeps every locked match out of the moved and review groups", () => {
+    for (const m of DEMO_MATCHES) {
+      if (demoGroup(m) === "locked") {
+        expect(m.movedTo).toBeUndefined();
+        expect(m.review).toBeFalsy();
+      }
+    }
   });
 
   it("says in the toast exactly what the picture shows", () => {

@@ -1,4 +1,5 @@
 import { Panel } from "@/components/app-shell";
+import { TournovaMark } from "@/components/brand/tournova-mark";
 import {
   COURT_STATE_CHIP,
   COURT_STATE_LABEL,
@@ -23,31 +24,35 @@ export function DeskPreview() {
     <div
       role="img"
       aria-label="The Control desk at 14:37: Court 4 is ready to start, Court 2 has run 12 minutes over its slot, and Court 3 is waiting for a player who is still on Court 2."
-      className="overflow-hidden rounded-2xl bg-background shadow-[0_0_0_1px_rgb(23_26_29/0.1),0_48px_96px_-48px_rgb(23_26_29/0.5)]"
+      className="overflow-hidden rounded-[20px] bg-background shadow-[0_0_0_1px_rgb(23_26_29/0.08),0_60px_120px_-40px_var(--info-foreground)]"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-hairline bg-surface px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="size-2.5 rounded-full bg-hairline" />
-          <span className="size-2.5 rounded-full bg-hairline" />
-          <span className="size-2.5 rounded-full bg-hairline" />
-          <span className="ml-2.5 font-display text-base font-bold">Control desk</span>
-          <span className="text-sm text-muted-foreground tabular-nums">· Sat, Oct 18</span>
-        </div>
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-hairline bg-surface px-4 py-3">
+        <span className="size-[11px] rounded-full bg-destructive" />
+        <span className="size-[11px] rounded-full bg-warn-border" />
+        <span className="size-[11px] rounded-full bg-success" />
+        <span className="ml-3 flex min-w-0 items-center gap-2">
+          <TournovaMark className="h-5 w-auto shrink-0 text-primary" />
+          <span className="hidden font-display text-[15px] font-bold sm:inline">Riverside Open</span>
+          <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
+          <span className="font-display text-[17px] font-bold whitespace-nowrap">Control desk</span>
+          <span className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">· Sat, Oct 18</span>
+        </span>
+        <span className="ml-auto flex items-center gap-2.5">
           <span className="rounded-full bg-state-live-chip px-2.5 py-1 text-sm font-semibold text-state-live-ink">
             Live
           </span>
           <span className="inline-flex h-9 items-center rounded-md border border-input bg-surface px-3.5 text-sm font-medium">
             Refresh
           </span>
-        </div>
+        </span>
       </div>
 
-      <div className="flex flex-col gap-4 p-3.5 sm:p-5">
+      <div className="flex flex-col gap-3 p-3.5 sm:p-4">
         <Panel
           title="Needs action"
           right={<span className="text-sm text-muted-foreground tabular-nums">14:37 · updates every 30s</span>}
           className="min-w-0"
+          bodyClassName="p-3"
         >
           <ul className="space-y-2 text-base">
             <PreviewActionRow tone="go" title="Court 4 is ready" detail="Jack Evans vs Liam Murphy" action="Start" />
@@ -64,8 +69,9 @@ export function DeskPreview() {
           title="Court board"
           right={<span className="text-sm text-muted-foreground tabular-nums">Sat, Oct 18 · 4 courts</span>}
           className="min-w-0"
+          bodyClassName="p-3"
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <PreviewTile
               number={1}
               phone={false}
@@ -137,7 +143,7 @@ function PreviewActionRow({
         <span className="block font-semibold leading-snug">{title}</span>
         <span className="block text-sm">{detail}</span>
       </span>
-      <span className={`inline-flex h-11 items-center rounded-md px-4 text-sm font-medium whitespace-nowrap ${style.button}`}>
+      <span className={`inline-flex h-10 items-center rounded-md px-4 text-sm font-medium whitespace-nowrap ${style.button}`}>
         {action}
       </span>
     </li>
@@ -145,7 +151,7 @@ function PreviewActionRow({
 }
 
 const READINESS_TONE = {
-  ready: "text-base font-semibold text-primary-ink",
+  ready: "text-sm font-semibold text-primary-ink",
   busy: "text-danger-foreground",
 } as const;
 
@@ -171,11 +177,11 @@ function PreviewTile({
 }) {
   return (
     <div
-      className={`rounded-xl border p-4 text-left shadow-panel ${phone ? "" : "hidden sm:block"} ${COURT_STATE_TILE[state]}`}
+      className={`rounded-xl border p-3 text-left shadow-panel ${phone ? "" : "hidden sm:block"} ${COURT_STATE_TILE[state]}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 font-display text-lg font-bold whitespace-nowrap">
-          <span className="grid size-9 place-items-center rounded-lg bg-foreground/10 font-score text-lg font-bold">
+        <span className="flex items-center gap-2 font-display text-base font-bold whitespace-nowrap">
+          <span className="grid size-8 place-items-center rounded-lg bg-foreground/10 font-score text-base font-bold">
             {number}
           </span>
           Court {number}
@@ -186,7 +192,7 @@ function PreviewTile({
           {COURT_STATE_LABEL[state]}
         </span>
       </div>
-      <p className="mt-3 text-base font-semibold leading-snug">
+      <p className="mt-2 text-[15px] font-semibold leading-snug">
         {names ? (
           <>
             <span className="font-score text-sm font-medium text-muted-foreground">{tag}</span>
@@ -208,7 +214,7 @@ function PreviewTile({
         )}
       </p>
       <div className="mt-2 border-t border-hairline pt-2 text-muted-foreground">
-        <p className="text-sm tabular-nums">{next}</p>
+        <p className="text-[13px] leading-snug tabular-nums">{next}</p>
         <span className={READINESS_TONE[readiness.tone]}>{readiness.text}</span>
       </div>
     </div>
