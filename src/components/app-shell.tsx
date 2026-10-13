@@ -238,7 +238,9 @@ function BrandMark() {
   return (
     <>
       <TournovaMark className="h-8 w-auto shrink-0 text-primary" />
-      <span className="font-display text-lg font-bold tracking-tight text-foreground">Tournova</span>
+      {/* On a phone the mark alone carries the brand, so the header fits on one row. The
+          links around it are named "Tournova" for that reason. */}
+      <span className="hidden font-display text-lg font-bold tracking-tight text-foreground sm:inline">Tournova</span>
     </>
   );
 }
@@ -744,7 +746,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             does not carry.
           */}
           {tournamentId ? (
-            <Link to={homeSection} params={{ tournamentId }} className="flex items-center gap-2.5">
+            <Link to={homeSection} params={{ tournamentId }} aria-label="Tournova" className="flex items-center gap-2.5">
               <BrandMark />
             </Link>
           ) : (
@@ -868,7 +870,7 @@ export function PublicShell(
     <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
       <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/" aria-label="Tournova" className="flex items-center gap-2.5">
             <BrandMark />
           </Link>
           <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
