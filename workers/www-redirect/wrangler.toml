@@ -1,0 +1,25 @@
+# The `www` alias for the application Worker.
+#
+# Deliberately separate from the main app's deployment: this Worker has no assets, no build
+# step and no environment of its own, and it is deployed on its own because it is not part of
+# the application - it exists only to turn an alias into a redirect. See `worker.js` for why a
+# zone rule and the main Worker were both unavailable.
+#
+# Deploy with:
+#   npm run deploy:www-redirect
+
+name = "tournova-www-redirect"
+main = "worker.js"
+compatibility_date = "2026-10-10"
+
+# The hostname this Worker answers for. Declaring it as a custom domain is what makes
+# Cloudflare create the `www` DNS record and terminate TLS for it - the same mechanism that
+# puts `tournova.app` on the application Worker. `routes` is a property of the deployment, so
+# it is stated here rather than clicked into the dashboard, where nothing in the repository
+# would record it.
+routes = [{ pattern = "www.tournova.app", custom_domain = true }]
+
+# No `*.workers.dev` address. Unlike the application Worker - which keeps its own for the
+# links and bookmarks that already name it - this one has never had a public address, and a
+# second hostname answering would be a third alias to explain.
+workers_dev = false

@@ -81,7 +81,26 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
         cloudflare: {
           nodeCompat: true,
           deployConfig: true,
-          wrangler: { name: "tournova-ops" },
+          wrangler: {
+            name: "tournova-ops",
+            /**
+             * The production address, declared here for the same reason the name above is.
+             *
+             * A custom domain is a property of the deployment, and the dashboard is not a
+             * record of one: attached by hand, it survives every rebuild while nothing in
+             * the repository explains where the address comes from, and a re-created Worker
+             * (or a second environment) comes up without it. Stating it here makes the
+             * address reviewable, reproducible, and impossible to lose by rebuilding.
+             *
+             * `workers_dev: true` is deliberate rather than leftover. Wrangler disables the
+             * `*.workers.dev` address by default as soon as a `routes` entry exists, which
+             * would silently retire the URL the app shipped on - and the URL Supabase's
+             * redirect allow-list named. Both addresses serve the same Worker; the
+             * allow-list names both, so neither is a dead end.
+             */
+            workers_dev: true,
+            routes: [{ pattern: "tournova.app", custom_domain: true }],
+          },
         },
       }),
     );

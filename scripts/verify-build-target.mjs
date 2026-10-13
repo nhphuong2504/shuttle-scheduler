@@ -167,11 +167,53 @@ if (files.length === 0) {
 
 // Nitro writes the Worker name into the generated wrangler.json, so this reads what a
 // `wrangler deploy` would actually target rather than what the config intends.
-let workerName = "";
+let workerConfig = {};
 try {
-  workerName = JSON.parse(readFileSync(join(serverDir, "wrangler.json"), "utf8")).name ?? "";
+  workerConfig = JSON.parse(readFileSync(join(serverDir, "wrangler.json"), "utf8"));
 } catch {
-  workerName = "";
+  workerConfig = {};
+}
+const workerName = workerConfig.name ?? "";
+
+/**
+ * The production address, asserted for the same reason the name above is.
+ *
+ * `routes` is the kind of setting whose absence is silent: a Worker with no route still
+ * deploys, still answers on its `*.workers.dev` address, and looks entirely healthy - it has
+ * simply stopped being served on the domain people use. That already happened once in this
+ * repository's deployment, in the other direction: adding a `routes` entry makes Wrangler
+ * disable `workers_dev` by default, which left the app unreachable on the address it shipped
+ * on. Both halves are therefore asserted, because each is invisible until somebody visits.
+ *
+ * The custom-domain entry is matched structurally rather than by string, so a route added
+ * alongside it (a second hostname, say) does not fail this check while the canonical one is
+ * still present.
+ */
+const customDomains = (workerConfig.routes ?? [])
+  .filter((route) => route && route.custom_domain === true)
+  .map((route) => route.pattern);
+const EXPECTED_DOMAIN = "tournova.app";
+
+if (productionMode && !customDomains.includes(EXPECTED_DOMAIN)) {
+  console.error(
+    `\nThis build would deploy ${workerName || "(unnamed)"} without the address ` +
+      `${EXPECTED_DOMAIN}.\n` +
+      `Custom domains in the generated config: ${customDomains.join(", ") || "(none)"}.\n` +
+      "The route is stated in vite.config.ts; a build that has lost it would deploy a Worker\n" +
+      "that is reachable only on its workers.dev address, with nothing in the output to say so.",
+  );
+  process.exit(1);
+}
+
+if (productionMode && workerConfig.workers_dev !== true) {
+  console.error(
+    `\nThis build would deploy ${workerName || "(unnamed)"} with its workers.dev address ` +
+      "disabled.\n" +
+      "Wrangler disables it by default as soon as any route is declared, which would retire\n" +
+      "the URL the app shipped on - and the one Supabase's redirect allow-list names. It is\n" +
+      "opted back in explicitly in vite.config.ts.",
+  );
+  process.exit(1);
 }
 
 if (workerName !== EXPECTED_WORKER_NAME) {
@@ -205,6 +247,8 @@ console.log(`Build output : ${serverDir}`);
 console.log(`Mode         : ${activeMode}${productionMode ? " (production assertions on)" : ""}`);
 console.log(`Built against: ${expectedUrl}`);
 console.log(`Worker       : ${workerName || "(not found)"}`);
+console.log(`Custom domain: ${customDomains.join(", ") || "(none)"}`);
+console.log(`workers.dev  : ${workerConfig.workers_dev === true ? "enabled" : "disabled"}`);
 console.log(`Modules      : ${files.length}`);
 if (hosts.size > 0) {
   console.log(
