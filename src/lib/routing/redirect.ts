@@ -85,12 +85,12 @@ export interface SignInSearch {
  * An unrecognised word is dropped, on the same reasoning as `localRedirect`: the honest
  * answer to "somebody composed this" is the page's own default rather than a guess.
  *
- * There is one member today. The vocabulary is a list rather than a boolean because the
- * next entry - "sign in to create a tournament", say - is a word beside it and not a new
- * parameter, and because a boolean cannot be read at a call site that does not already
- * know which errand it is on.
+ * There are two members: the trip to a tournament's registration form, and the trip to the
+ * flow that creates one. The vocabulary is a list rather than a boolean because each errand
+ * is a word beside the others rather than a new parameter, and because a call site that does
+ * not already know which errand it is on can still read it.
  */
-export const SIGN_IN_INTENTS = ["register"] as const;
+export const SIGN_IN_INTENTS = ["register", "create"] as const;
 
 export type SignInIntent = (typeof SIGN_IN_INTENTS)[number];
 
@@ -121,6 +121,8 @@ export function signInIntentText(intent: SignInIntent): string {
   switch (intent) {
     case "register":
       return "You'll go straight to that tournament's registration form.";
+    case "create":
+      return "You'll go straight to creating your tournament.";
   }
 }
 

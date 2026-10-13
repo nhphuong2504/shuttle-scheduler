@@ -73,6 +73,13 @@ export const ROUTES = [
    * `/` renders its *visitor* reading here, because this list is swept signed out. The
    * signed-in reading - Home - needs a session, so it is scanned in
    * `public-surfaces.spec.ts` against the same axe tags.
+   *
+   * `/tournaments/new` and `/me/tournaments` are the two entries whose cell is a redirect
+   * rather than a page: both are somebody's own work, so swept signed out a visitor is sent
+   * to `/auth` and what that cell measures is the sign-in form - which `openCell` already
+   * treats as a legitimate response to a navigation. The entries stay because both addresses
+   * are shipped and both are addresses a caller can land on; the surfaces behind them need a
+   * session, and are exercised in `public-surfaces.spec.ts`.
    */
   routes.home,
   routes.explore,

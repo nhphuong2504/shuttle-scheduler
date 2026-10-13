@@ -505,28 +505,48 @@ test.describe("My tournaments", () => {
     expect(message).toMatch(/cannot be undone/i);
   });
 
-  test("is a sentence rather than a form for a signed-out caller", async ({ page }) => {
+  test("sends a signed-out caller to sign in, where what can be read without one is offered", async ({
+    page,
+  }) => {
     await installAppMock(page, { preset: "layout", role: null });
     await page.goto(routes.myTournaments, { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
 
-    // There is nothing to show, because these are somebody's tournaments - so the page says
-    // that, offers the sign-in that changes it, and points at what can be read without one.
-    await expect(page.getByRole("heading", { name: /sign in first/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /explore what is on/i })).toBeVisible();
+    // These are somebody's tournaments, so there is nothing to show a caller with no session.
+    // The page sends them to the way in rather than describing what they are missing - and
+    // the sign-in page carries the reading route, so the move loses nothing.
+    await expect(page).toHaveURL(/\/auth/);
+    const notice = page.getByRole("region", { name: /notifications/i });
+    await expect(notice.getByText(/sign in to see your tournaments/i)).toBeVisible();
+    // The way back is the page they left, and no errand is invented for it: the generic
+    // sentence is what a page with nothing to name beyond returning says.
+    await expect(page).toHaveURL(/redirect=%2Fme%2Ftournaments/);
+    await expect(page).not.toHaveURL(/intent=/);
+    await expect(page.getByText(/no account needed/i)).toBeVisible();
   });
 });
 
 test.describe("Creating a tournament", () => {
   test.use({ appMock: { preset: "layout", role: null } });
 
-  test("asks for a session before it asks for anything else", async ({ page }) => {
+  test("sends a visitor to sign in, and says why", async ({ page }) => {
     await page.goto(routes.newTournament, { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
 
     // The gate is page-level rather than a route guard, because the session lives in the
-    // browser and this app server-renders first - so the check is on what is drawn.
-    await expect(page.getByRole("heading", { name: /sign in first/i })).toBeVisible();
+    // browser and this app server-renders first - so the decision is made once it has
+    // settled, and the visitor meets the way in rather than a form they cannot use.
+    await expect(page).toHaveURL(/\/auth/);
+    // The reason, at the moment of the redirect - once, as a notice rather than as an error.
+    const notice = page.getByRole("region", { name: /notifications/i });
+    await expect(notice.getByText(/sign in to create a tournament/i)).toBeVisible();
+    // And what happens next, which only the errand can say: the sign-in page prints the
+    // sentence for `create`, so the caller knows they land in the wizard rather than Home.
+    await expect(page.getByText(/go straight to creating your tournament/i)).toBeVisible();
+    // Both halves of the trip are in the address, so a reload resumes the errand rather than
+    // dropping the caller on a bare sign-in page.
+    await expect(page).toHaveURL(/redirect=%2Ftournaments%2Fnew/);
+    await expect(page).toHaveURL(/intent=create/);
+
+    // Nothing of the wizard was drawn for them.
     await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
   });
 });

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -7,6 +7,7 @@ import { EmptyState, Panel, PublicShell } from "@/components/app-shell";
 import { TournamentCard } from "@/components/tournament-card";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
+import { useSignInRedirect } from "@/hooks/useSignInRedirect";
 import { isConfigurable } from "@/lib/auth/authorization";
 import { signInSearch } from "@/lib/routing/redirect";
 import { deleteTournament, setCurrentTournament } from "@/lib/tournament/actions";
@@ -73,12 +74,19 @@ function MyTournamentsPage() {
   const qc = useQueryClient();
   const { signedIn, isPlatformAdmin } = useSession();
   /**
-   * This page's address, for the one sign-in link it draws.
+   * A visitor is sent to sign in rather than told what they are missing.
    *
-   * It carries the tab, so a reader who followed "Shared with me" and then signed in comes
-   * back to the group they were reading rather than to the default one.
+   * This page is somebody's own work, so there is nothing here for a caller with no session
+   * in the way there is something to read on Explore or on a tournament's own page. The
+   * sign-in page is where the way in is, and it carries the link to Explore for exactly this
+   * visitor - so the trip loses nothing by replacing the sentence this page used to draw.
+   *
+   * No intent: there is no errand to name beyond coming back here, which the return address
+   * already says, and the sign-in page's generic sentence is written for it. A word of its
+   * own would be a third member of `SIGN_IN_INTENTS` saying what "you'll go back to the page
+   * you were on" says.
    */
-  const href = useLocation({ select: (location) => location.href });
+  useSignInRedirect({ notice: "Sign in to see your tournaments" });
 
   const { summaries, ownedIds, isLoading, isError, error } = useMyTournaments();
   const pointer = useCurrentTournamentPointer().data ?? null;
@@ -144,32 +152,11 @@ function MyTournamentsPage() {
     }
   };
 
-  if (!signedIn) {
-    return (
-      <PublicShell
-        title="My tournaments"
-        subtitle="Sign in to see the tournaments you own and the ones you help run."
-        actions={
-          <Button size="sm" asChild>
-            <Link to="/auth" search={signInSearch(href)}>
-              Sign in
-            </Link>
-          </Button>
-        }
-      >
-        <Panel title="Sign in first">
-          <p className="text-sm text-muted-foreground">
-            Your tournaments belong to your account, so there is nothing to show until you sign
-            in. Anyone with an account can create a tournament and own it.{" "}
-            <Link to="/explore" className="font-semibold text-primary-ink underline">
-              Explore what is on
-            </Link>
-            .
-          </p>
-        </Panel>
-      </PublicShell>
-    );
-  }
+  /**
+   * Nothing while the session is still being read, and nothing once it has been: the hook
+   * above is the redirect, and a placeholder would be a surface built to be thrown away.
+   */
+  if (!signedIn) return null;
 
   return (
     <PublicShell
