@@ -37,7 +37,7 @@ appears only when it carries meaning, and one colour carries one meaning.
 | Interaction | `--primary` | `#5B4FC7` | Buttons, links, active nav, selected tab |
 | Live | `--state-live-chip` | `#D6F1E3` | A live match: its status chip, and the connection badge |
 | Playing | `--play`, `--play-surface` | `#16865C`, `#D6F1E3` | A court with a match on it right now |
-| Success | `--success` | `#16865C` | Fill only. Healthy, completed |
+| Success | `--success`, `--success-surface`, `--success-foreground` | `#16865C`, `#D6F1E3`, `#0E5A3A` | Healthy, completed: the family's fill, surface and ink |
 | Warning | `--warn-*` | amber | Delayed, needs attention |
 | Danger | `--destructive`, `--danger-*` | red | Overrun, error, destructive action |
 
@@ -57,9 +57,16 @@ Rules:
   the other. `--play` is the family's edge, `--play-surface` its fill - the chip at full strength
   and the court tile as a wash of it - and `--play-foreground` the ink on it; `playing` is
   therefore built exactly like `overrun`, one green where that one is amber.
-- **Success, warning and danger each have two forms.** A saturated fill (a button, a dot, an
-  icon) and a darker ink for text. Do not use the fill as text: amber `#C97812` is 3.4:1 on white,
-  the text ink `#8F5300` is 5.5:1.
+- **Success, warning, info and danger each have three stops.** A saturated fill (a button, a dot,
+  an icon), a surface it sits on, and a darker ink for text: `--warn-*`, `--info-*`, `--danger-*`
+  and `--success-*` name all three. Do not use the fill as text: amber `#C97812` is 3.4:1 on
+  white, the text ink `#8F5300` is 5.5:1. A feedback surface — a callout, a badge, a toast — takes
+  all three from one family rather than a tint from one and an ink from another.
+- **The toasts are the one third-party surface this system repaints.** Sonner ships its own
+  version of the success and error pairs, and its error text measured 4.14:1 against its own fill
+  for every error toast the app raised — invisible to any sweep, because a toast only exists after
+  an action. The rule at the foot of [`styles.css`](../src/styles.css) puts both toasts on the
+  tokens above, and `criteria.spec.ts` measures them.
 - **A filled control darkens on hover, and never lightens.** The fill exists to carry white text
   at 4.5:1, and lightening it spends that headroom. `--destructive` is 4.93:1 at rest, so the
   shadcn `hover:bg-destructive/90` default composited to 4.22:1 — under the floor, in the one

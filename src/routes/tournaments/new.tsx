@@ -1,16 +1,11 @@
-import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
-import { Panel, PublicShell } from "@/components/app-shell";
+import { PublicShell } from "@/components/app-shell";
 import { TournamentWizard } from "@/components/tournament-setup/TournamentWizard";
-import {
-  SETUP_STEPS,
-  isSetupStep,
-  setupStepIndex,
-  type SetupStep,
-} from "@/components/tournament-setup/types";
+import { isSetupStep, type SetupStep } from "@/components/tournament-setup/types";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
-import { signInSearch } from "@/lib/routing/redirect";
+import { useSignInRedirect } from "@/hooks/useSignInRedirect";
 
 interface NewTournamentSearch {
   /** Which step of the wizard to show. */
@@ -60,61 +55,38 @@ export const Route = createFileRoute("/tournaments/new")({
  * in one call and sends the caller to its own page. Until then there is no row, no id and no
  * public trace: a tournament is created complete or not at all.
  *
- * ## Signed in, or told why not
+ * ## A visitor is sent to sign in, rather than shown a form they cannot use
  *
  * The database refuses to create a tournament for an anonymous caller, and the sign-up
- * path is open on purpose: anyone may create one and own it. So the gate here is a
- * sentence rather than a form. It is a page-level check rather than a route guard because
- * the session lives in the browser and this app renders on the server first; a
- * `beforeLoad` guard would decide during server rendering, where there is never a session,
- * and would send every signed-in caller to the sign-in page on their first paint.
+ * path is open on purpose: anyone may create one and own it. So the gate here is the
+ * sign-in page rather than a sentence above a dead form - the same trip the Register
+ * button on a tournament makes, carrying this address back and the errand with it, so
+ * what the visitor meets is the way in rather than a notice that one exists.
+ * `useSignInRedirect` carries the whole of that arrangement, including the two details
+ * that are easy to get wrong: it waits for the session to settle, and it makes the trip
+ * once.
  */
 function NewTournamentPage() {
   const { step: stepParam } = Route.useSearch();
   const navigate = useNavigate();
   const { signedIn } = useSession();
-  /**
-   * This page's address, which includes the wizard step.
-   *
-   * So somebody who signs in from the third step of the wizard comes back to the third step
-   * rather than to the first.
-   */
-  const href = useLocation({ select: (location) => location.href });
+
+  useSignInRedirect({ notice: "Sign in to create a tournament", intent: "create" });
 
   const step: SetupStep = stepParam ?? "details";
-  const index = setupStepIndex(step);
+
+  /**
+   * Nothing while the session is still being read, and nothing once it has been.
+   *
+   * Both are the same answer for the same reason `WorkspaceRedirect` gives: this is a
+   * redirect, and a placeholder would be a surface built to be thrown away. Rendering the
+   * wizard's shell here instead is what a caller without a session used to get.
+   */
+  if (!signedIn) return null;
 
   const setStep = (next: SetupStep) => {
     void navigate({ to: "/tournaments/new", search: { step: next }, replace: true });
   };
-
-  if (!signedIn) {
-    return (
-      <PublicShell
-        title="New tournament"
-        subtitle="Sign in to create and run a tournament."
-        actions={
-          <Button size="sm" asChild>
-            <Link to="/auth" search={signInSearch(href)}>
-              Sign in
-            </Link>
-          </Button>
-        }
-      >
-        <Panel title="Sign in first">
-          <p className="mb-3 text-sm text-muted-foreground">
-            Anyone with an account can create a tournament and own it. Sign in, or create an
-            account, to get started.
-          </p>
-          <Button size="sm" asChild>
-            <Link to="/auth" search={signInSearch(href)}>
-              Sign in
-            </Link>
-          </Button>
-        </Panel>
-      </PublicShell>
-    );
-  }
 
   return (
     <PublicShell

@@ -583,3 +583,106 @@ test.describe("2.5.7 dragging movements, new in WCAG 2.2", () => {
     ).toBe(0);
   });
 });
+
+/**
+ * The toasts, which no sweep can reach.
+ *
+ * Axe reads whatever is on the page at the moment it runs, and a toast only exists after an
+ * action - so the palette behind every toast this app raises had never been measured. Sonner's
+ * own error pair sits at 4.38:1, under the floor, and it was found only because a page-load
+ * notice happened to put one in front of the `/tournaments/new` sweep.
+ *
+ * `styles.css` now carries this app's `--danger-*` and `--success-*` pairs for the two types it
+ * raises. Both halves of that are asserted here: the ratio, and the *mechanism* - that what the
+ * toast paints is our token rather than sonner's. A sonner upgrade that renames one of those
+ * variables would drop the override silently and restore the inaccessible colour, and only the
+ * second assertion would catch it.
+ */
+interface MeasuredToast {
+  type: string | null;
+  ratio: number | null;
+  fill: number[];
+  ink: number[] | null;
+  surface: number[] | null;
+  foreground: number[] | null;
+}
+
+const MEASURE_TOAST = `
+  (() => {
+    ${COLOUR_HELPERS}
+    const toast = document.querySelector("[data-sonner-toast]");
+    if (!toast) return null;
+    const type = toast.getAttribute("data-type");
+    const title = toast.querySelector("[data-title]") ?? toast;
+    const own = toRgb(getComputedStyle(toast).backgroundColor);
+    const back = behind(toast);
+    // behind() starts at the parent, so the element's own fill is laid over its result.
+    const fill = own ? over(own, [back[0], back[1], back[2], 1]) : back;
+    const ink = toRgb(getComputedStyle(title).color);
+    const root = getComputedStyle(document.documentElement);
+    const token = (name) => {
+      const c = toRgb(root.getPropertyValue(name).trim());
+      return c ? [c[0], c[1], c[2]] : null;
+    };
+    const family = type === "error" ? "danger" : "success";
+    return {
+      type,
+      ratio: ink ? ratio(ink, fill) : null,
+      fill: [fill[0], fill[1], fill[2]],
+      ink: ink ? [ink[0], ink[1], ink[2]] : null,
+      surface: token("--" + family + "-surface"),
+      foreground: token("--" + family + "-foreground"),
+    };
+  })()
+`;
+
+test.describe("1.4.3 text contrast, on the toasts", () => {
+  // "Work in this one" is offered to a caller whose pointer names something else, so the
+  // fixture has to serve a caller who is working elsewhere.
+  test.use({ appMock: { preset: "layout", role: "user", pointer: null } });
+
+  const measure = async (page: Page): Promise<MeasuredToast> => {
+    await expect(page.locator("li[data-sonner-toast]").last()).toBeVisible();
+    const measured = (await page.evaluate(MEASURE_TOAST)) as MeasuredToast | null;
+    expect(measured, "the toast vanished before it could be measured").not.toBeNull();
+    return measured as MeasuredToast;
+  };
+
+  test("an act that landed says so in the success pair, above 4.5:1", async ({ page }) => {
+    await openCell(page, routes.myTournaments, MATRIX_CELLS[0]!);
+    await page.getByRole("button", { name: /work in this one/i }).first().click();
+
+    const toast = await measure(page);
+    expect(toast.type).toBe("success");
+    expect(toast.fill).toEqual(toast.surface);
+    expect(toast.ink).toEqual(toast.foreground);
+    expect(
+      toast.ratio,
+      `the success toast reads at ${toast.ratio}:1 against its own fill`,
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("a refusal says so in the danger pair, above 4.5:1", async ({ page }) => {
+    // The one write this page makes, refused. Registered after the fixture's own handlers,
+    // which Playwright resolves last-first, so this route wins.
+    await page.route("**/rest/v1/rpc/set_current_tournament", (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "Could not switch tournament" }),
+      }),
+    );
+
+    await openCell(page, routes.myTournaments, MATRIX_CELLS[0]!);
+    await page.getByRole("button", { name: /work in this one/i }).first().click();
+
+    const toast = await measure(page);
+    expect(toast.type).toBe("error");
+    expect(toast.fill).toEqual(toast.surface);
+    expect(toast.ink).toEqual(toast.foreground);
+    expect(
+      toast.ratio,
+      `the error toast reads at ${toast.ratio}:1 against its own fill`,
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+});

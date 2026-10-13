@@ -27,8 +27,8 @@ Three audiences, and the address says which one it belongs to:
 | --- | --- |
 | `/` | Landing for a visitor (the Desk, the schedule behind it, and the ways in: run a tournament, browse, sign in); Home for a signed-in caller (their tournaments, a Continue card for their working pointer, a discover strip) |
 | `/explore` | Every tournament, searchable over name, venue and event, with a status filter |
-| `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me** |
-| `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call |
+| `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me**. A visitor is sent to `/auth` first, as on the create flow |
+| `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call. A visitor is sent to `/auth` first, carrying this address back and the `create` errand, rather than being shown a form whose submit the database would refuse |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
 | `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card on `…/entries` instead, so a visitor who only came to read never sees this page |
 
@@ -36,6 +36,13 @@ These are the only addresses that can be reached without naming a tournament. Ea
 `PublicShell`, because there is no tournament for a header to describe. `/tournaments/new` is a
 sibling of `$tournamentId`, not a child, precisely because creating a tournament happens before
 there is one to be inside.
+
+Two of them are gated before they draw anything, because both are somebody's own work:
+`/me/tournaments`, and the create flow at `/tournaments/new` — which the database refuses outright
+for an anonymous caller. A caller with no session arriving at either is sent to `/auth` with the
+address they came from, rather than shown a sentence about a page they cannot use, and the two are
+one arrangement ([`useSignInRedirect`](../src/hooks/useSignInRedirect.ts)) rather than two that
+agree.
 
 `…/entries` is where reading a tournament begins: a card in `/explore` links there, and it is
 the first of the five sections the read-only workspace offers (see [The shells](#3-the-shells)).
@@ -171,6 +178,17 @@ tournament whole in one call, points the caller's working pointer at it, clears 
 answers and goes to `/tournaments/:id`. There is no draft row, so there is nothing for a
 refresh to resume and no half-made tournament for anyone else to find. There is one wizard with
 two hosts, and neither host owns the steps.
+
+A visitor never sees the wizard. The address is the one operational surface a session is
+required for *before* there is a tournament to hold a right in, so a caller with no session is
+sent to `/auth` on arrival, with the router's `replace` so Back does not bounce through it
+again. The trip carries this address as the return and `create` as the errand, which is what
+lets the sign-in page say where the caller ends up — the same mechanism the Register button
+uses, with a word of its own; see
+[`src/lib/routing/redirect.ts`](../src/lib/routing/redirect.ts). The decision is made in the
+page, once the session has settled, rather than in a `beforeLoad` guard: the session lives in
+the browser and this app renders on the server first, so a load-time guard would read every
+caller as signed out.
 
 ### Working in one
 
