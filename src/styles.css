@@ -54,6 +54,8 @@
   --color-shuttle: var(--shuttle);
   --color-court-tint: var(--court-tint);
   --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-success-foreground: var(--success-foreground);
   --color-surface: var(--surface);
   --color-hairline: var(--hairline);
   /* Three edge weights now: `hairline` separates, `border-control` locates a control,
@@ -141,6 +143,18 @@
 
   /* Success fill. Not text-safe (4.6:1 on white at best): text uses a darker ink. */
   --success: #16865C;
+  /**
+   * The other two stops of the same family, so `success` is shaped like `warn`, `info` and
+   * `danger` - each of which carries a surface and an ink beside its fill - rather than being
+   * a fill with nothing to sit on.
+   *
+   * The values are the green family's own, and they are named apart from `--play-surface` and
+   * `--play-foreground` for the reason those are named apart from `--state-live-*`: retuning
+   * the court board must not silently re-tint a toast, and a toast must not silently re-tint a
+   * court. The pairs agree today on purpose.
+   */
+  --success-surface: #D6F1E3;
+  --success-foreground: #0E5A3A;
 
   /* Chassis: neutral cool grey. Hierarchy comes from lightness and weight; hue is reserved for state and interaction. */
   --background: #F4F5F4;
@@ -455,5 +469,38 @@
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
   box-shadow: var(--elev-1);
+}
+
+/**
+ * The two toasts the app raises, in this app's palette rather than sonner's.
+ *
+ * A toast is a feedback surface, so it belongs to the family the design system already solved
+ * for that meaning: `--danger-*` for a refusal, `--success-*` for an act that landed. Sonner
+ * ships its own version of both, and its error pair measures 4.38:1 - under the floor, for
+ * every error toast the app has ever raised. Nothing caught it, because axe reads whatever is
+ * on the page when it runs and a toast only exists after an action; it surfaced the first time
+ * a page-load notice put one in front of a sweep.
+ *
+ * The rule is unlayered and out-specifies sonner's own, and both halves are load-bearing.
+ * Sonner injects its stylesheet at runtime, and an unlayered rule beats a layered one whatever
+ * the order - this file's `@utility` and `@layer base` rules are layered, which is why sonner
+ * currently wins over a Tailwind class of the same specificity. `html` in front of the two
+ * attribute selectors is what takes it past sonner's `[data-sonner-toaster][data-sonner-theme]`
+ * (0,2,0), so the override does not depend on which stylesheet happens to load last.
+ *
+ * The variables are read from the toaster and inherit down to each toast, which is where
+ * sonner consumes them - so overriding them here restyles the type without touching the
+ * component, and `richColors` stays on for the types this app never raises.
+ */
+html [data-sonner-toaster][data-sonner-theme] {
+  --error-bg: var(--danger-surface);
+  --error-border: var(--danger-border);
+  --error-text: var(--danger-foreground);
+
+  --success-bg: var(--success-surface);
+  /* The family's edge, which is the fill's own value - the same shape as the live chip,
+     where `--play` rings `--play-surface`. */
+  --success-border: var(--success);
+  --success-text: var(--success-foreground);
 }
 
