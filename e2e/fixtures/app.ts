@@ -46,6 +46,15 @@ export interface AppMockOptions {
   scheduleConflicts?: readonly MockScheduleConflictRow[];
   /** The fixture tournament's `block_start_on_short_rest`. `false` (the column's default) by default. */
   startPolicy?: boolean;
+  /**
+   * Serve the fixture tournament as sample data (`tournaments.is_demo`).
+   *
+   * Both reads carry it, because both surfaces name the tournament: the summary card draws
+   * the label on Explore, and the `tournaments` row draws the header and its notice on every
+   * page of the workspace. False by default, which is the state every other spec is in - a
+   * real tournament, with neither the label nor the notice.
+   */
+  demo?: boolean;
 }
 
 export const test = base.extend<{ appMock: AppMockOptions }>({

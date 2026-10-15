@@ -1,6 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router";
 
-import { RegistrationStatePill, TournamentStatusPill } from "@/components/app-shell";
+import { DemoPill, RegistrationStatePill, TournamentStatusPill } from "@/components/app-shell";
 import { signInSearch } from "@/lib/routing/redirect";
 import { tournamentPhase } from "@/lib/tournament/phase";
 import type { TournamentSummary } from "@/lib/tournament/data";
@@ -142,6 +142,16 @@ export function ExploreCard({
           and "completed" repeat it. */}
         {["opens_soon", "open", "closed"].includes(summary.registration_state) ? (
           <RegistrationStatePill state={summary.registration_state} />
+        ) : null}
+        {/*
+          Last in the row, because it qualifies the two pills before it rather than joining
+          them: the status and the window are what this tournament is doing, and this says
+          that the tournament doing it is a stand-in. On the dark live card it takes light ink
+          and a lighter dash, since the neutral grey it uses on a white card is under 3:1
+          against the near-black one.
+        */}
+        {summary.is_demo ? (
+          <DemoPill className={live ? "text-background/80 border-background/40" : undefined} />
         ) : null}
       </div>
 

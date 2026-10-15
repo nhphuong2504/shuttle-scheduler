@@ -2312,3 +2312,227 @@ describe("the scoped player reads migration", () => {
     expect(sql).toMatch(/DO \$verify\$/);
   });
 });
+
+/**
+ * The sample tournaments, and the two calls that make and unmake them.
+ *
+ * Three properties carry the whole mechanism, and every one of them is something a later
+ * edit could quietly reverse: the marker is withheld from every client, the generator is
+ * reachable only by the service role, and the reads that draw a tournament to the public
+ * carry the marker so a label can be drawn from a fact rather than from a guess. The one
+ * assertion that is about a *shape* rather than a privilege is `remove_demo_tournaments`
+ * running first inside `seed_demo_tournaments`: that is what makes a second run idempotent,
+ * and it is the kind of ordering that survives review and then gets moved.
+ */
+describe("demo tournament migrations", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const flagFile = "20261015000000_demo_tournament_flag.sql";
+  const seedFile = "20261015010000_demo_tournament_seed.sql";
+  const flagSql = readFileSync(join(dir, flagFile), "utf8");
+  const flagBody = flagSql.replace(/--.*$/gm, "");
+  const seedSql = readFileSync(join(dir, seedFile), "utf8");
+  const seedBody = seedSql.replace(/--.*$/gm, "");
+
+  it("adds the marker to both tables that need one, non-null with a false default", () => {
+    for (const table of ["tournaments", "players"]) {
+      expect(flagBody).toMatch(
+        new RegExp(
+          `ALTER TABLE public\\.${table}\\s+ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false`,
+        ),
+      );
+    }
+  });
+
+  it("keeps the marker out of every client's hands", () => {
+    // The withholding is an *absence*, not a statement: writes on both tables are granted
+    // as allow-lists (`grant update (...)` in `20260929000000_identity_canon.sql` and
+    // `grant insert/update (...)` in `20260929020000_registration_entries_and_identity.sql`),
+    // and `is_demo` is simply not named in either. That is the house pattern, and it is also
+    // the fragile one - the way this breaks is somebody adding the column to an allow-list
+    // while filling out a grant, so the assertion that matters is over every migration, not
+    // just this one.
+    const migrations = readdirSync(dir).filter((f) => f.endsWith(".sql"));
+    const granted = migrations.filter((f) => {
+      const body = readFileSync(join(dir, f), "utf8").replace(/--.*$/gm, "");
+      // `grant <privileges> ( <columns> )` - an allow-list block. Matching across the
+      // parenthesised list is what distinguishes a column grant from `grant execute on
+      // function ...`, which is a different list entirely.
+      return /grant\s+[a-z,\s]*\([\s\S]*?is_demo[\s\S]*?\)\s+on\s+public\./i.test(body);
+    });
+    expect(granted).toEqual([]);
+
+    // And the database is asked, rather than the file being trusted to have said nothing:
+    // the verify block refuses to apply the column if either role can write it.
+    expect(flagBody).toMatch(/has_column_privilege\('authenticated', 'public\.tournaments', 'is_demo', 'UPDATE'\)/);
+    expect(flagBody).toMatch(/has_column_privilege\('authenticated', 'public\.players', 'is_demo', 'UPDATE'\)/);
+  });
+
+  it("leaves the marker readable, because the label is drawn from it", () => {
+    // Withholding the write must not withhold the read: both reads return the column, and
+    // the app renders the label from the row it was handed rather than from a second query.
+    // A `revoke select` on either table would be a plausible-looking security tightening that
+    // silently greys out every Demo label.
+    const migrations = readdirSync(dir).filter((f) => f.endsWith(".sql"));
+    const revoked = migrations.filter((f) =>
+      /revoke[^;]*\bselect[^;]*\([\s\S]*?is_demo[\s\S]*?\)/i.test(
+        readFileSync(join(dir, f), "utf8").replace(/--.*$/gm, ""),
+      ),
+    );
+    expect(revoked).toEqual([]);
+    expect(flagBody).toMatch(/t\.is_demo\b/);
+    expect(flagBody).toMatch(/f\.t_is_demo\b/);
+  });
+
+  it("carries the marker through the two reads that draw a tournament", () => {
+    // Both are dropped and re-created rather than replaced in place, because
+    // `CREATE OR REPLACE FUNCTION` cannot change a `RETURNS TABLE` shape.
+    for (const signature of [
+      "tournament_summary\\(text, text, uuid\\[\\], int, int\\)",
+      "explore_tournaments\\(text, text, boolean, text, text, int, int\\)",
+    ]) {
+      expect(flagBody).toMatch(new RegExp(`DROP FUNCTION IF EXISTS public\\.${signature}`));
+      expect(flagBody).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${signature}\\s+TO anon, authenticated`));
+    }
+    expect(flagBody.match(/is_demo boolean/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("stops the roster search answering with sample people", () => {
+    // A sample person on a real draw is the leak the marker exists to prevent, and
+    // `search_players` is the one read that spans every tournament on the platform.
+    expect(flagBody).toMatch(/AND NOT p\.is_demo/);
+  });
+
+  it("is a migration that seeds nothing", () => {
+    // The point of the split: pushing to production must leave production with an empty
+    // column and an uncalled function. Seeding is an act, not a deploy.
+    expect(flagBody).not.toMatch(/INSERT INTO public\.(tournaments|players)/);
+    expect(seedBody).toMatch(/^CREATE OR REPLACE FUNCTION public\.seed_demo_tournaments\(\)/m);
+    expect(seedBody).not.toMatch(/^SELECT public\.seed_demo_tournaments\(\)/m);
+  });
+
+  it("makes both calls a service-role act and no client's", () => {
+    for (const fn of ["seed_demo_tournaments\\(\\)", "remove_demo_tournaments\\(\\)", "demo_tournament_owner\\(\\)"]) {
+      expect(seedBody).toMatch(
+        new RegExp(`REVOKE ALL ON FUNCTION public\\.${fn} FROM PUBLIC, anon, authenticated`),
+      );
+      expect(seedBody).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${fn} TO service_role`));
+    }
+  });
+
+  it("removes before it writes, so a second run cannot duplicate a row", () => {
+    const body = seedBody.slice(seedBody.indexOf("FUNCTION public.seed_demo_tournaments"));
+    expect(body.indexOf("PERFORM public.remove_demo_tournaments()")).toBeGreaterThan(-1);
+    expect(body.indexOf("PERFORM public.remove_demo_tournaments()")).toBeLessThan(
+      body.indexOf("INSERT INTO public.tournaments"),
+    );
+  });
+
+  it("deletes only rows it marked, and clears desk activity by match id", () => {
+    // A wrong dataset raises inside one transaction; a wrong *delete* is not recoverable, so
+    // the two removers are asserted to name the flag rather than a name or a date.
+    const remove = seedBody.slice(
+      seedBody.indexOf("FUNCTION public.remove_demo_tournaments"),
+      seedBody.indexOf("FUNCTION public.seed_demo_tournaments"),
+    );
+    expect(remove).toMatch(/DELETE FROM public\.tournaments WHERE is_demo/);
+    expect(remove).toMatch(/DELETE FROM public\.players WHERE is_demo/);
+    expect(remove).toMatch(/DELETE FROM public\.desk_activity da/);
+    // `desk_activity` has no `tournament_id` and no foreign key, so nothing cascades it.
+    expect(remove).toMatch(/da\.match_id IN/);
+    // No bare delete of a table the demonstration does not own.
+    expect(remove).not.toMatch(/DELETE FROM public\.tournaments\s*;/);
+  });
+
+  it("checks its own grants and shape", () => {
+    expect(seedSql).toMatch(/DO \$verify\$/);
+    expect(seedSql).toMatch(/RAISE EXCEPTION 'D2:/);
+    expect(flagSql).toMatch(/DO \$verify\$/);
+    expect(flagSql).toMatch(/RAISE EXCEPTION 'D1:/);
+  });
+});
+
+describe("full knockout bracket migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "20261016000000_full_knockout_bracket.sql"),
+    "utf8",
+  );
+  const body = (name: string) => {
+    const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    expect(start, `${name} is defined`).toBeGreaterThan(-1);
+    const next = sql.indexOf("CREATE OR REPLACE FUNCTION", start + 1);
+    return sql.slice(start, next === -1 ? undefined : next);
+  };
+
+  it("creates every round at the draw and links parents", () => {
+    const fill = body("fill_tier_bracket");
+    expect(fill).toMatch(/generate_series\(1, v_size \/ \(1 << v_round\)\)/);
+    expect(fill).toMatch(/ON CONFLICT \(draw_id, round, slot\) DO NOTHING/);
+    expect(fill).toMatch(/parent_a_id = a\.id/);
+    expect(sql).toMatch(/PERFORM public\.fill_tier_bracket\(v_draw_id\)/);
+  });
+
+  it("advances by filling the child slot and never inserts a round", () => {
+    const advance = body("advance_tier_draw_locked");
+    expect(advance).not.toMatch(/INSERT INTO/);
+    // Odd slots feed side A and even slots side B, the rule the correction trigger uses too.
+    expect(advance).toMatch(/p\.slot % 2 = 1/);
+    expect(advance).toMatch(/p\.slot % 2 = 0/);
+    expect(advance).toMatch(/c\.status = 'scheduled'/);
+    expect(advance).toMatch(/champion_id/);
+  });
+
+  it("refuses to start a match with an empty side, and to reset one whose child began", () => {
+    expect(body("start_tier_draw_match")).toMatch(/entrant_a_id IS NOT NULL/);
+    const reset = body("reset_tier_draw_result");
+    expect(reset).toMatch(/v_child\.status <> 'scheduled'/);
+    expect(reset).toMatch(/champion_id = NULL/);
+  });
+
+  it("ignores undecided slots in the knockout completeness check", () => {
+    const writer = body("apply_placement_day_schedule");
+    expect(writer).toMatch(/AND entrant_a_id IS NOT NULL\s+AND entrant_b_id IS NOT NULL/);
+  });
+
+  it("wraps the sample seed so a reset still yields full brackets, with the same privileges", () => {
+    expect(sql).toMatch(/RENAME TO seed_demo_tournaments_rows/);
+    const wrapper = body("seed_demo_tournaments");
+    expect(wrapper).toMatch(/seed_demo_tournaments_rows\(\)/);
+    expect(wrapper).toMatch(/fill_tier_bracket\(v_draw\)/);
+    expect(wrapper).toMatch(/t\.is_demo/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.seed_demo_tournaments\(\) TO service_role/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.seed_demo_tournaments\(\) FROM PUBLIC, anon, authenticated/);
+  });
+
+  it("keeps the internal helper off the client surface", () => {
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.fill_tier_bracket\(uuid\) FROM anon, authenticated, PUBLIC/);
+    expect(sql).toMatch(/DO \$verify\$/);
+  });
+});
+
+describe("place_ready_matches migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "20261017000000_place_ready_matches.sql"),
+    "utf8",
+  );
+
+  it("is additive: it fills only empty slots and never clears a row", () => {
+    expect(sql).toMatch(/court_id IS NULL AND scheduled_time IS NULL/);
+    expect(sql).not.toMatch(/SET scheduled_time = NULL/);
+    expect(sql).not.toMatch(/DELETE FROM/);
+    expect(sql).toMatch(/'already_placed'/);
+  });
+
+  it("re-checks each slot on the server and skips rather than failing the batch", () => {
+    for (const reason of ["court_busy", "player_busy", "not_ready", "bad_court", "in_the_past"]) {
+      expect(sql).toContain(`'${reason}'`);
+    }
+    expect(sql).toMatch(/placement_occupied_matches\(p_tournament_id\)/);
+  });
+
+  it("is guarded like the other writers and shares their lock", () => {
+    expect(sql).toMatch(/can_edit_tournament\(p_tournament_id\)/);
+    expect(sql).toMatch(/assert_tournament_writable\(p_tournament_id\)/);
+    expect(sql).toMatch(/pg_advisory_xact_lock\(hashtext\('live-schedule'\)\)/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.place_ready_matches\(uuid, text, jsonb\) FROM anon, PUBLIC/);
+  });
+});

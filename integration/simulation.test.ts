@@ -906,6 +906,16 @@ describe("a two-day placement tournament, played end to end", () => {
     );
     expect([...datesUsed].sort()).toEqual(DAYS.map((d) => d.date));
 
+    // The whole bracket was drawn up front: size - 1 slots, one final, and every slot above round
+    // one linked to the two matches that feed it.
+    for (const draw of done.draws.filter((d) => d.bracket_size > 1)) {
+      const matches = done.tier.filter((m) => m.draw_id === draw.id);
+      expect(matches, `tier ${draw.tier} slot count`).toHaveLength(draw.bracket_size - 1);
+      for (const m of matches.filter((x) => x.round > 1)) {
+        expect(m.parent_a_id && m.parent_b_id, `tier ${draw.tier} r${m.round}s${m.slot} parents`).toBeTruthy();
+      }
+    }
+
     // Every knockout entrant is the winner of the match that feeds it.
     for (const draw of done.draws) {
       const matches = done.tier.filter((m) => m.draw_id === draw.id);

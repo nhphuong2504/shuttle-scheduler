@@ -24,7 +24,14 @@ import {
   type SeedableEntrant,
 } from "./placement-seed";
 import { mulberry32 } from "./rng";
-import { buildTierBracket, nextTierRound, tierNeedsNoBracket } from "./tier-draw";
+import {
+  buildTierBracket,
+  childSlot,
+  feederLabel,
+  isTierMatchReady,
+  nextTierRound,
+  tierNeedsNoBracket,
+} from "./tier-draw";
 
 function entrantsFor(n: number): PlacementEntrantRef[] {
   return Array.from({ length: n }, (_, index) => ({ id: `e${index + 1}`, seed: index + 1 }));
@@ -670,11 +677,16 @@ describe("tier knockout brackets", () => {
     expect(plan.bracketSize).toBe(4);
     expect(plan.byes).toBe(0);
     // Standard bracket order for four: 1v4 and 2v3.
-    expect(plan.matches.map((match) => [match.entrantAId, match.entrantBId])).toEqual([
+    const roundOne = plan.matches.filter((match) => match.round === 1);
+    expect(roundOne.map((match) => [match.entrantAId, match.entrantBId])).toEqual([
       ["e1", "e4"],
       ["e2", "e3"],
     ]);
     for (const match of plan.matches) expect(match.isBye).toBe(false);
+    // The whole path to the final exists up front, with nobody decided yet.
+    expect(plan.matches.filter((match) => match.round === 2)).toEqual([
+      { round: 2, slot: 1, entrantAId: null, entrantBId: null, winnerId: null, isBye: false },
+    ]);
   });
 
   it("gives byes to the highest seeds", () => {
@@ -686,11 +698,18 @@ describe("tier knockout brackets", () => {
     expect(plan.byes).toBe(3);
 
     const byes = plan.matches.filter((match) => match.isBye);
+    const roundTwo = plan.matches.filter((match) => match.round === 2);
+    // Byes are advanced at once: seeds 1 and 2/3 already wait in round two.
+    expect(roundTwo.map((m) => [m.slot, m.entrantAId, m.entrantBId])).toEqual([
+      [1, "e1", null],
+      [2, "e2", "e3"],
+    ]);
+    expect(plan.matches.filter((match) => match.round === 3)).toHaveLength(1);
     expect(byes).toHaveLength(3);
     // Seeds 1, 2 and 3 are the ones left without an opponent.
     expect(byes.map((match) => match.winnerId).sort()).toEqual(["e1", "e2", "e3"]);
     // A bye is already decided, so it never needs to be played.
-    expect(plan.matches.filter((match) => !match.isBye)).toHaveLength(1);
+    expect(plan.matches.filter((match) => match.round === 1 && !match.isBye)).toHaveLength(1);
   });
 
   it("orders each tier by the original seed, never a fresh shuffle", () => {
@@ -702,6 +721,7 @@ describe("tier knockout brackets", () => {
     ]);
     expect(plan.matches[0]?.entrantAId).toBe("early");
     expect(plan.matches[0]?.entrantBId).toBe("last");
+    expect(plan.matches).toHaveLength(3);
   });
 
   it("pairs adjacent slots when a round completes", () => {
@@ -719,5 +739,38 @@ describe("tier knockout brackets", () => {
       [2, "w3", "w4"],
     ]);
     expect(next.every((match) => match.isBye === false)).toBe(true);
+  });
+
+  it("routes a winner to the child slot: odd slots feed side A, even side B", () => {
+    expect(childSlot(1)).toEqual({ slot: 1, side: "a" });
+    expect(childSlot(2)).toEqual({ slot: 1, side: "b" });
+    expect(childSlot(3)).toEqual({ slot: 2, side: "a" });
+    expect(childSlot(4)).toEqual({ slot: 2, side: "b" });
+  });
+
+  it("builds every round for every bracket size, ending in one final", () => {
+    for (let n = 2; n <= 32; n++) {
+      const plan = buildTierBracket("A", entrantsFor(n).map((e) => ({ id: e.id, seed: e.seed })));
+      const total = plan.matches.length;
+      // Single elimination over a power-of-two bracket has size - 1 slots.
+      expect(total).toBe(plan.bracketSize - 1);
+      expect(plan.matches.filter((m) => m.round === Math.log2(plan.bracketSize))).toHaveLength(1);
+    }
+  });
+
+  it("only calls a match ready when both sides are known and it is not a bye", () => {
+    expect(isTierMatchReady({ entrantAId: "a", entrantBId: "b" })).toBe(true);
+    expect(isTierMatchReady({ entrantAId: "a", entrantBId: null })).toBe(false);
+    expect(isTierMatchReady({ entrantAId: "a", entrantBId: "b", isBye: true })).toBe(false);
+    expect(isTierMatchReady({ entrantAId: "a", entrantBId: "b", status: "void" })).toBe(false);
+  });
+});
+
+describe("feederLabel", () => {
+  it("names where an undecided side comes from, and leaves round one as TBC", () => {
+    expect(feederLabel(8, 1, 1, "a")).toBe("TBC");
+    expect(feederLabel(8, 2, 1, "a")).toBe("Winner of Quarterfinal 1");
+    expect(feederLabel(8, 2, 2, "b")).toBe("Winner of Quarterfinal 4");
+    expect(feederLabel(8, 3, 1, "b")).toBe("Winner of Semifinal 2");
   });
 });

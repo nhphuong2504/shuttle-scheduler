@@ -49,7 +49,7 @@ import type {
 } from "./data";
 import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
 import { MIN_ENTRANTS_FOR_ROUND_TWO } from "./placement-actions";
-import { bracketRoundCount } from "./tier-draw";
+import { bracketRoundCount, isTierMatchReady } from "./tier-draw";
 import {
   breakWindowsFor,
   courtsAddedToDays,
@@ -231,8 +231,43 @@ export interface PlacementSchedulePlan {
    */
   placementScheduledIds: string[];
   knockoutScheduledIds: string[];
+  /**
+   * The slots for matches that held no court or time before this plan, split by stage. This is
+   * what `place_ready_matches` writes: the additive path, which names only the new placements and
+   * clears nothing. In `place-ready` mode it is the whole payload.
+   */
+  placementNewPayload: PlacementSlotPayload[];
+  knockoutNewPayload: PlacementSlotPayload[];
+  /**
+   * Why each match the plan left without a slot has none, in the host's terms.
+   *
+   * Covers `blocked` and `awaitingTeams` alike. The Schedule page words a notice from these, and
+   * the automatic pass uses them to tell "ask the organiser" from "nothing to ask".
+   */
+  unplaced: UnplacedMatch[];
   /** Why the scheduler could not place something, for the desk-facing error. */
   blockedReason: string | null;
+}
+
+/**
+ * - `no_courts`: no day has a court, so nothing can be placed anywhere.
+ * - `past_closing`: the match would finish after the last day's closing time (automatic placement
+ *   only; a rebuild may overrun and forecasts it instead).
+ * - `held_behind_placement`: a knockout waits because a placement match has no slot yet.
+ * - `data`: a prerequisite the plan never schedules, matches waiting on each other, or an entrant
+ *   with no team. Pressing anything again will not change it.
+ * - `no_slot`: no court and free pair of players coincide (rebuild mode's generic cause).
+ */
+export type UnplacedReason =
+  | "no_courts"
+  | "past_closing"
+  | "held_behind_placement"
+  | "data"
+  | "no_slot";
+
+export interface UnplacedMatch {
+  matchId: string;
+  reason: UnplacedReason;
 }
 
 export interface PlanPlacementScheduleInput {
@@ -262,6 +297,13 @@ export interface PlanPlacementScheduleInput {
    * rather than the starting point.
    */
   freezeHorizonMinutes?: number | undefined;
+  /**
+   * `rebuild` (the default) re-solves every unplayed match. `place-ready` never moves a match that
+   * already holds a court and a time: each one is an immovable anchor, wherever it sits (past, in
+   * a break, over a close), and only matches with no court or time are placed around them. It is
+   * what lets a newly ready match be slotted in without disturbing a published time.
+   */
+  mode?: "rebuild" | "place-ready" | undefined;
 }
 
 /**
@@ -275,9 +317,10 @@ export interface PlanPlacementScheduleInput {
  * The stage barrier is real rather than advisory: the knockouts are only placed on
  * a day once every placement match has a slot. But it is also already guaranteed
  * by the generators, because round two cannot exist until every round one result
- * is in and a knockout round cannot exist until the previous one is decided. That
- * is why this needs no round-ordering logic of its own: scheduling everything that
- * exists is the same thing as scheduling in order.
+ * is in. A knockout bracket exists in full from its draw, but only the matches whose two
+ * sides are known are schedulable (`tierItems` drops the rest), and a child slot is filled
+ * only when its feeders finish. So this still needs no round-ordering logic of its own:
+ * scheduling everything that is ready is the same thing as scheduling in order.
  *
  * A stage's duration and rest gap come from the tournament's group and knockout
  * columns; the placement stage reuses the group columns rather than adding a third
@@ -300,6 +343,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     now = Date.now(),
     freezeHorizonMinutes = 0,
   } = input;
+  const placeReady = input.mode === "place-ready";
 
   if (!days.length) {
     throw new Error("A tournament needs at least one day before a schedule can be built.");
@@ -324,11 +368,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   const isRebuild = existing.some(
     (match) => match.status !== "void" && match.scheduled_time != null,
   );
-
-  // Only used to model an in-progress match's end, because each day applies its own
-  // floor at run time. The earliest plausible start keeps that model conservative.
-  const firstDayStart = new Date(`${orderedDays[0]!.date}T${orderedDays[0]!.start_time}`).getTime();
-  const itemFloor = isRebuild ? Math.max(firstDayStart, nextWholeMinute) : firstDayStart;
 
   /**
    * The stage-closing signal, both halves, from the format's own pipeline knowledge.
@@ -366,7 +405,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     roundTwoCategories,
     slotMinutes: placementSlot,
     restGap: placementRest,
-    floor: itemFloor,
     now,
   });
   const knockoutRaw = tierItems({
@@ -378,7 +416,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     categoryOrder,
     slotMinutes: knockoutSlot,
     restGap: knockoutRest,
-    floor: itemFloor,
     now,
   });
 
@@ -413,7 +450,17 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       resourceId: match.court_id,
     });
   }
-  const freezeIds = new Set(
+  /**
+   * Rows `place-ready` must leave exactly where they are but cannot hold as a pin (an illegal or
+   * colliding one). They are taken out of the problem entirely: never moved, never planned.
+   */
+  const dropIds = new Set<string>();
+  const release = (item: StageItem): void => {
+    if (placeReady) dropIds.add(item.id);
+  };
+  const freezeIds = placeReady
+    ? new Set(committedById.keys())
+    : new Set(
     frozenMatchIdsFor({
       committed: [...committedById.values()].map((slot) => ({
         id: slot.matchId,
@@ -477,31 +524,43 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     const committed = committedById.get(item.id);
     if (!committed) continue;
     const owningDay = orderedDays[dayOwning(committed.start, orderedDays)];
-    if (!owningDay) continue;
+    if (!owningDay) {
+      release(item);
+      continue;
+    }
     const dayCourts = courtsForDay(allCourts, dayCourtIds?.get(owningDay.id) ?? new Set());
-    if (!dayCourts.some((court) => court.id === committed.resourceId)) continue;
+    if (!dayCourts.some((court) => court.id === committed.resourceId)) {
+      release(item);
+      continue;
+    }
 
     const start = committed.start;
     const end = start + item.durationMinutes * MINUTE;
 
-    // A pin is the match the desk is about to call, and one the day has already passed is not that
-    // match any more. Releasing it lets the solver pull it forward to the floor rather than keeping
-    // a stale time the desk can no longer act on.
-    if (start < nextWholeMinute) continue;
-    // A match may not sleep inside a break. The day runner steps movable work over breaks, so a pin
-    // that kept a break-violating time would preserve exactly what the run exists to fix.
-    const breaks = normalizeBreaks(
-      breakWindowsFor(owningDay, breaksByDayId?.get(owningDay.id)),
-      dayWindowBounds(owningDay).end,
-    );
-    if (breaks.some((brk) => start < brk.end && brk.start < end)) continue;
-    // Every day but the last is a wall, and the last day is where a long plan is allowed to overrun.
-    // So a pin crossing a non-final day's close is invalid; the same on the final day is left alone.
-    if (owningDay.id !== lastCourtDayId && end > dayWindowBounds(owningDay).end) continue;
+    if (!placeReady) {
+      // A pin is the match the desk is about to call, and one the day has already passed is not
+      // that match any more. Releasing it lets the solver pull it forward to the floor rather than
+      // keeping a stale time the desk can no longer act on.
+      if (start < nextWholeMinute) continue;
+      // A match may not sleep inside a break. The day runner steps movable work over breaks, so a
+      // pin that kept a break-violating time would preserve exactly what the run exists to fix.
+      const breaks = normalizeBreaks(
+        breakWindowsFor(owningDay, breaksByDayId?.get(owningDay.id)),
+        dayWindowBounds(owningDay).end,
+      );
+      if (breaks.some((brk) => start < brk.end && brk.start < end)) continue;
+      // Every day but the last is a wall, and the last day is where a long plan is allowed to
+      // overrun. So a pin crossing a non-final day's close is invalid; the same on the final day is
+      // left alone.
+      if (owningDay.id !== lastCourtDayId && end > dayWindowBounds(owningDay).end) continue;
+    }
     // The court's decided history, kept exactly as it was: two fixed matches on one resource is a
     // physical impossibility the problem validator rejects.
     const busy = decidedWindowsByCourt.get(item.courtNumber ?? -1) ?? [];
-    if (busy.some((window) => start < window.end && window.start < end)) continue;
+    if (busy.some((window) => start < window.end && window.start < end)) {
+      release(item);
+      continue;
+    }
 
     candidates.push({ item, start, end });
   }
@@ -554,8 +613,13 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   for (const candidate of [...candidates].sort(
     (a, b) => a.start - b.start || compareIds(a.item.id, b.item.id),
   )) {
-    if (decidedOccupancies.some((occupancy) => collidesWith(candidate, occupancy))) continue;
-    if (acceptedPins.some((occupancy) => collidesWith(candidate, occupancy))) continue;
+    if (
+      decidedOccupancies.some((occupancy) => collidesWith(candidate, occupancy)) ||
+      acceptedPins.some((occupancy) => collidesWith(candidate, occupancy))
+    ) {
+      release(candidate.item);
+      continue;
+    }
     acceptedPins.push({
       start: candidate.start,
       end: candidate.end,
@@ -573,8 +637,37 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       : item;
   };
 
-  const placementAll = placementRaw.map(applyFreeze);
-  const knockoutAll = knockoutRaw.map(applyFreeze);
+  /**
+   * An item taken out of the problem must not stay named as somebody's dependency: the problem rejects a
+   * dependency on a match it does not contain, which failed whole plans (a held entrant's second make-up
+   * match depends on the first). The dependency becomes what it meant, a floor: the dependent may not
+   * start before the dropped match is due to end where it stands.
+   */
+  const rawById = new Map([...placementRaw, ...knockoutRaw].map((item) => [item.id, item]));
+  const withoutDropped = (item: StageItem): StageItem => {
+    const dropped = (item.dependencies ?? []).filter((id) => dropIds.has(id));
+    if (!dropped.length) return item;
+    let floor = item.eligibleFrom ?? 0;
+    for (const id of dropped) {
+      const gone = rawById.get(id);
+      const at = committedById.get(id)?.start;
+      if (gone && at != null) floor = Math.max(floor, at + gone.durationMinutes * MINUTE);
+    }
+    return {
+      ...item,
+      dependencies: (item.dependencies ?? []).filter((id) => !dropIds.has(id)),
+      ...(floor ? { eligibleFrom: floor } : {}),
+    };
+  };
+
+  const placementAll = placementRaw
+    .filter((item) => !dropIds.has(item.id))
+    .map(withoutDropped)
+    .map(applyFreeze);
+  const knockoutAll = knockoutRaw
+    .filter((item) => !dropIds.has(item.id))
+    .map(withoutDropped)
+    .map(applyFreeze);
 
   const run = runPlanDays({
     orderedDays,
@@ -589,6 +682,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     knockoutRestGapMinutes: knockoutRest,
     isRebuild,
     nextWholeMinute,
+    strictClose: placeReady,
     ...(options ? { options } : {}),
     ...(committedById.size ? { baselineByMatchId: committedById } : {}),
   });
@@ -620,6 +714,16 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
           run.placementUnscheduled.length > 0 ? new Set(run.knockoutUnscheduled) : new Set(),
       })
     : null;
+
+  const unplaced = classifyUnplaced({
+    blocked,
+    awaitingTeams,
+    items: everything,
+    scheduledIds: new Set(run.allSlots.map((slot) => slot.matchId)),
+    placementUnscheduled: new Set(run.placementUnscheduled),
+    daysWithCourts: run.daysWithCourts,
+    strictClose: placeReady,
+  });
 
   const diff = diffPlan(existing, run.allSlots, fixedSet, courtNumberById);
   diff.unplaceable = blocked;
@@ -657,13 +761,37 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
         court_id: slot.courtId,
       }));
 
+  /** Slots for matches that held no court or time before: the additive writer's whole input. */
+  const newPayloadFor = (stageIds: ReadonlySet<string>): PlacementSlotPayload[] =>
+    run.allSlots
+      .filter(
+        (slot) =>
+          stageIds.has(slot.matchId) && !fixedSet.has(slot.matchId) && !committedById.has(slot.matchId),
+      )
+      .map((slot) => ({
+        match_id: slot.matchId,
+        scheduled_time: slot.start.toISOString(),
+        court_id: slot.courtId,
+      }));
+
   // The rows the writer is about to clear, which the payloads above must therefore
   // cover. Byes and `void` rows are excluded because the RPC excludes them too.
   const placementScheduledIds = placementMatches
     .filter((match) => match.status === "scheduled")
     .map((match) => match.id);
   const knockoutScheduledIds = tierMatches
-    .filter((match) => match.status === "scheduled" && !match.is_bye)
+    .filter(
+      (match) =>
+        match.status === "scheduled" &&
+        // The whole bracket exists from the draw, so a slot still waiting on a feeder is
+        // scheduled in name only: it has no court or time to lose, and the writer's
+        // completeness check (mirrored in SQL) ignores it.
+        isTierMatchReady({
+          entrantAId: match.entrant_a_id,
+          entrantBId: match.entrant_b_id,
+          isBye: match.is_bye,
+        }),
+    )
     .map((match) => match.id);
 
   return {
@@ -678,8 +806,11 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     days: run.days,
     placementSlotPayload: payloadFor(new Set(placementAll.map((item) => item.id))),
     knockoutSlotPayload: payloadFor(new Set(knockoutAll.map((item) => item.id))),
+    placementNewPayload: newPayloadFor(new Set(placementAll.map((item) => item.id))),
+    knockoutNewPayload: newPayloadFor(new Set(knockoutAll.map((item) => item.id))),
     placementScheduledIds,
     knockoutScheduledIds,
+    unplaced,
     blockedReason,
   };
 }
@@ -819,6 +950,56 @@ function explainBlocked(
   return "Each has every prerequisite placed, but no court and a free pair of players come free at the same time.";
 }
 
+/**
+ * Sorts every match the plan left without a slot into a cause the host can act on.
+ *
+ * Pure. The order matters: no courts anywhere explains everything and is checked first; an entrant
+ * with no team and a broken prerequisite chain are data problems no retry can fix; a knockout held
+ * behind placement is named for what it is waiting on rather than for its own symptom; and what is
+ * left is a capacity cause, which for automatic placement means the close.
+ */
+export function classifyUnplaced(input: {
+  blocked: readonly string[];
+  awaitingTeams: readonly string[];
+  items: readonly StageItem[];
+  scheduledIds: ReadonlySet<string>;
+  placementUnscheduled: ReadonlySet<string>;
+  daysWithCourts: number;
+  strictClose: boolean;
+}): UnplacedMatch[] {
+  const byId = new Map(input.items.map((item) => [item.id, item]));
+  const blockedIds = new Set(input.blocked);
+  const out: UnplacedMatch[] = [];
+
+  const noCourts = input.daysWithCourts === 0;
+  for (const matchId of input.awaitingTeams) {
+    out.push({ matchId, reason: noCourts ? "no_courts" : "data" });
+  }
+
+  // A placement match is stuck for itself when it waits on something that will never be placed.
+  const orphaned = (id: string) =>
+    (byId.get(id)?.dependencies ?? []).some(
+      (dependencyId) => !input.scheduledIds.has(dependencyId) && !blockedIds.has(dependencyId),
+    );
+  const placementBlocked = input.blocked.filter((id) => input.placementUnscheduled.has(id));
+  const mutual =
+    placementBlocked.length > 0 &&
+    !placementBlocked.some((id) =>
+      (byId.get(id)?.dependencies ?? []).every((dependencyId) => input.scheduledIds.has(dependencyId)),
+    );
+
+  for (const matchId of input.blocked) {
+    let reason: UnplacedReason;
+    if (noCourts) reason = "no_courts";
+    else if (orphaned(matchId) || (mutual && input.placementUnscheduled.has(matchId))) reason = "data";
+    else if (!input.placementUnscheduled.has(matchId) && input.placementUnscheduled.size > 0) {
+      reason = "held_behind_placement";
+    } else reason = input.strictClose ? "past_closing" : "no_slot";
+    out.push({ matchId, reason });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Persistence
 // ---------------------------------------------------------------------------
@@ -871,6 +1052,83 @@ export async function applyPlacementSchedulePlan(plan: PlacementSchedulePlan): P
     });
     if (error) throw new Error(error.message);
   }
+}
+
+/**
+ * How many matches are ready to play but hold no court or time.
+ *
+ * Ready means the same thing everywhere: still `scheduled`, both sides known, not a bye. The
+ * Schedule page shows this as "N ready matches have no time", the one thing the automatic pass
+ * can leave behind (no room in the day, or the server declined a slot).
+ */
+export function readyUnplacedCount(
+  placementMatches: readonly PlacementMatch[],
+  tierMatches: readonly TierDrawMatch[],
+): number {
+  return readyUnplacedIds(placementMatches, tierMatches).length;
+}
+
+/** The ids behind `readyUnplacedCount`, sorted, so a set of them can be compared by value. */
+export function readyUnplacedIds(
+  placementMatches: readonly PlacementMatch[],
+  tierMatches: readonly TierDrawMatch[],
+): string[] {
+  const unplaced = (match: { court_id: string | null; scheduled_time: string | null }) =>
+    match.court_id == null || match.scheduled_time == null;
+  const placement = placementMatches.filter(
+    (match) =>
+      match.status === "scheduled" &&
+      match.entrant_a_id != null &&
+      match.entrant_b_id != null &&
+      unplaced(match),
+  );
+  const tier = tierMatches.filter(
+    (match) =>
+      match.status === "scheduled" &&
+      isTierMatchReady({
+        entrantAId: match.entrant_a_id,
+        entrantBId: match.entrant_b_id,
+        isBye: match.is_bye,
+      }) &&
+      unplaced(match),
+  );
+  return [...placement, ...tier].map((match) => match.id).sort();
+}
+
+/** What `place_ready_matches` did with a plan, by match id. */
+export interface PlaceReadyResult {
+  placed: string[];
+  skipped: { match_id: string; reason: string }[];
+}
+
+/**
+ * Writes a `place-ready` plan through the additive RPC.
+ *
+ * Unlike `applyPlacementSchedulePlan` this clears nothing, so the coverage guard does not apply:
+ * a match the plan does not name keeps whatever time it has. A match the server declines (the court
+ * or a player got busy since the plan was read, it was placed by someone else, it is no longer
+ * ready) is reported in `skipped` rather than thrown, because a plan computed a moment ago being
+ * slightly stale is expected, not an error. Only a transport or authorization failure throws.
+ */
+export async function applyPlaceReadyPlan(plan: PlacementSchedulePlan): Promise<PlaceReadyResult> {
+  const result: PlaceReadyResult = { placed: [], skipped: [] };
+  const calls: [PlacementStageName, PlacementSlotPayload[]][] = [
+    ["placement", plan.placementNewPayload],
+    ["knockout", plan.knockoutNewPayload],
+  ];
+  for (const [stage, slots] of calls) {
+    if (slots.length === 0) continue;
+    const { data, error } = await supabase.rpc("place_ready_matches", {
+      p_tournament_id: plan.tournamentId,
+      p_stage: stage,
+      p_slots: slots as never,
+    });
+    if (error) throw new Error(error.message);
+    const body = (data ?? {}) as Partial<PlaceReadyResult>;
+    result.placed.push(...(body.placed ?? []));
+    result.skipped.push(...(body.skipped ?? []));
+  }
+  return result;
 }
 
 /** The columns the schedule writer owns, shared by the two match tables. */

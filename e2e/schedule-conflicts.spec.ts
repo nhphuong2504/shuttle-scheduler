@@ -95,7 +95,7 @@ test.describe("the organiser's conflict block", () => {
       },
     });
 
-    test("counts the matches, groups them by reason, and points at Update schedule", async ({
+    test("counts the matches, groups them by reason, and points at Rebuild schedule", async ({
       page,
     }) => {
       await page.goto(routes.schedule, { waitUntil: "load" });
@@ -126,9 +126,9 @@ test.describe("the organiser's conflict block", () => {
 
       // The block names the one control that replans, and takes the reader to it rather
       // than offering a second button that would apply a plan on its own.
-      await block.getByRole("button", { name: /go to update schedule/i }).click();
+      await block.getByRole("button", { name: /go to rebuild schedule/i }).click();
       const focused = await page.evaluate(() => document.activeElement?.id ?? "");
-      expect(focused, "the block should focus the existing Update schedule control").toBe(
+      expect(focused, "the block should focus the existing Rebuild schedule control").toBe(
         "build-schedule",
       );
 

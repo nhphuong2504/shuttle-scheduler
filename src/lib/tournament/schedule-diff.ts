@@ -1,3 +1,4 @@
+import { inProgressEnd } from "./in-progress";
 import type { ScheduledSlot } from "./scheduling/types";
 
 export type PlanChangeKind =
@@ -44,15 +45,19 @@ export function projectedFinishFromRemainingMatches(
   let latest: number | null = null;
   for (const match of matches) {
     if (match.status !== "scheduled" && match.status !== "in-progress") continue;
-    let start: number | null = null;
+    let end: number | null = null;
     if (match.status === "in-progress") {
+      // The same model the planner and the database use: its slot, and no earlier than now once it overruns.
       const anchor = match.started_at ?? match.scheduled_time;
-      start = anchor ? Math.max(new Date(anchor).getTime(), now) : now;
+      end = inProgressEnd({
+        start: anchor ? new Date(anchor).getTime() : now,
+        slotMs: slotMinutes * 60_000,
+        now,
+      });
     } else if (match.scheduled_time) {
-      start = new Date(match.scheduled_time).getTime();
+      end = new Date(match.scheduled_time).getTime() + slotMinutes * 60_000;
     }
-    if (start == null) continue;
-    const end = start + slotMinutes * 60_000;
+    if (end == null) continue;
     latest = latest == null ? end : Math.max(latest, end);
   }
   return latest;

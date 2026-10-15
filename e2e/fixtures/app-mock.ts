@@ -391,6 +391,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     myRegistration = [],
     scheduleConflicts = [],
     startPolicy,
+    demo,
   } = options;
 
   if (!INSTALLED.has(page)) {
@@ -513,6 +514,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     format,
     registrationState,
     startPolicy,
+    demo,
   );
 
   /**

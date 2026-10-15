@@ -178,6 +178,50 @@ test.describe("Explore", () => {
   });
 });
 
+test.describe("Explore, a sample tournament", () => {
+  test.use({ appMock: { preset: "layout", role: null, demo: true } });
+
+  test("is labelled as sample data, and says so in full once opened", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The label, beside the status rather than instead of it: a sample tournament is still an
+    // upcoming, live or finished one, and the two facts are answers to different questions.
+    const card = page.getByRole("article").filter({ hasText: TOURNAMENT_NAME });
+    await expect(card.getByText("Demo", { exact: true })).toBeVisible();
+    // Beside the status, not instead of it: a sample tournament is still a live one.
+    await expect(card.getByText("Live", { exact: true })).toBeVisible();
+
+    // One word is all a card has room for, so the sentence is on the tournament itself - and
+    // it is on the *page*, not the card, because every section beneath it is sample data too.
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const notice = page.getByText(/not a real event/i);
+    await expect(notice).toBeVisible();
+    await expect(page.getByRole("banner").getByText("Demo", { exact: true })).toBeVisible();
+  });
+});
+
+test.describe("Explore, a real tournament", () => {
+  test.use({ appMock: { preset: "layout", role: null } });
+
+  test("carries no sample-data label, and no notice once opened", async ({ page }) => {
+    await page.goto(routes.explore, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The other half of the distinction, and the half that matters more: a real tournament
+    // must never be labelled as sample data. A label that is always on is not a label.
+    await expect(page.getByText(TOURNAMENT_NAME)).toBeVisible();
+    await expect(page.getByText("Demo", { exact: true })).toHaveCount(0);
+
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByText(/not a real event/i)).toHaveCount(0);
+  });
+});
+
 test.describe("Explore, searched", () => {
   test.use({ appMock: { preset: "layout", role: "user" } });
 

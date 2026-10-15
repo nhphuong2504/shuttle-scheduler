@@ -22,7 +22,7 @@
  * no bracket at all.
  */
 
-import { DRAW_TIERS, nextPowerOfTwo, seedOrder, type DrawTier } from "./draws";
+import { DRAW_TIERS, nextPowerOfTwo, roundName, seedOrder, type DrawTier } from "./draws";
 
 export interface TierEntrantRef {
   id: string;
@@ -48,7 +48,11 @@ export interface TierBracketPlan {
   byes: number;
   /** Non-null only for a tier with exactly one entrant. */
   championId: string | null;
-  /** Round one only. Later rounds are created as results come in. */
+  /**
+   * Every round and every slot, round one first. Rounds after the first start with
+   * only the sides a bye already decided; the rest are filled by `advance_tier_draw_locked`
+   * as results come in. A viewer therefore sees the whole path to the final at once.
+   */
   matches: TierBracketMatch[];
 }
 
@@ -132,8 +136,86 @@ export function buildTierBracket(
     bracketSize,
     byes: bracketSize - entrantCount,
     championId: null,
-    matches,
+    matches: [...matches, ...laterRounds(matches, bracketSize)],
   };
+}
+
+/** The slot a match's winner moves into, one round on. Odd slots feed side A, even side B. */
+export function childSlot(slot: number): { slot: number; side: "a" | "b" } {
+  return { slot: Math.ceil(slot / 2), side: slot % 2 === 1 ? "a" : "b" };
+}
+
+/**
+ * Empty slots for rounds two onwards, with byes already advanced.
+ *
+ * Mirrors `apply_tier_draws` and `advance_tier_draw_locked` in SQL: the same
+ * `childSlot` rule places a winner, so a bye is just a winner decided early.
+ */
+function laterRounds(roundOne: readonly TierBracketMatch[], bracketSize: number): TierBracketMatch[] {
+  const rounds = bracketRoundCount(bracketSize);
+  const out: TierBracketMatch[] = [];
+  const byKey = new Map<string, TierBracketMatch>();
+  for (let round = 2; round <= rounds; round++) {
+    const slots = bracketSize / 2 ** round;
+    for (let slot = 1; slot <= slots; slot++) {
+      const match: TierBracketMatch = {
+        round,
+        slot,
+        entrantAId: null,
+        entrantBId: null,
+        winnerId: null,
+        isBye: false,
+      };
+      byKey.set(`${round}:${slot}`, match);
+      out.push(match);
+    }
+  }
+  for (const m of roundOne) {
+    if (m.winnerId == null) continue;
+    const child = childSlot(m.slot);
+    const target = byKey.get(`2:${child.slot}`);
+    if (!target) continue;
+    if (child.side === "a") target.entrantAId = m.winnerId;
+    else target.entrantBId = m.winnerId;
+  }
+  return out;
+}
+
+/**
+ * What to show for a side that has no entrant yet: where the winner will come from.
+ *
+ * The bracket is drawn in full, so a viewer reads "Winner of Semifinal 2" rather than a bare
+ * "TBC" and can follow the path to the final. Round one has no feeder, so it stays "TBC".
+ */
+export function feederLabel(
+  bracketSize: number,
+  round: number,
+  slot: number,
+  side: "a" | "b",
+): string {
+  if (round <= 1) return "TBC";
+  const feeder = side === "a" ? 2 * slot - 1 : 2 * slot;
+  return `Winner of ${roundName(bracketSize, round - 1)} ${feeder}`;
+}
+
+/**
+ * True when a knockout match can be scheduled or played: both sides are known and
+ * it is neither a bye nor void. The one definition every scheduler and desk view uses,
+ * so a half-known semifinal is never treated as ready in one place and not another.
+ */
+export function isTierMatchReady(match: {
+  entrantAId?: string | null;
+  entrantBId?: string | null;
+  isBye?: boolean;
+  status?: string;
+}): boolean {
+  return (
+    !match.isBye &&
+    match.status !== "void" &&
+    match.status !== "bye" &&
+    match.entrantAId != null &&
+    match.entrantBId != null
+  );
 }
 
 export interface DecidedTierMatch {
@@ -144,8 +226,9 @@ export interface DecidedTierMatch {
 /**
  * Pairs adjacent slots of a finished round into the next round.
  *
- * A bye already carries its winner, so a round containing byes can be complete
- * without anyone having played. Mirrored by `advance_tier_draw_locked` in SQL.
+ * No longer how a bracket grows: the draw now creates every round up front and a result fills
+ * the existing child slot (`childSlot`, mirrored by `advance_tier_draw_locked`). Kept as a pure
+ * statement of the pairing rule - adjacent slots meet - for tests and any caller that wants it.
  */
 export function nextTierRound(
   previous: readonly DecidedTierMatch[],
@@ -168,7 +251,7 @@ export function nextTierRound(
   return matches;
 }
 
-/** True once every slot in a round has a decided winner, so the next round is due. */
+/** True once every slot in a round has a decided winner. */
 export function tierRoundComplete(round: readonly DecidedTierMatch[]): boolean {
   return round.length > 1 && round.every((match) => match.winnerId != null);
 }
@@ -179,7 +262,7 @@ export function tierRoundComplete(round: readonly DecidedTierMatch[]): boolean {
  * The depth of a draw is a property of its size alone, so it belongs here beside the
  * bracket builder that produced the size. Progress views need it to tell a final round
  * from an intermediate one; they must not re-derive it, or "is there another round after
- * this one?" would drift from what `nextTierRound` actually produces.
+ * this one?" would drift from what `buildTierBracket` actually produces.
  */
 export function bracketRoundCount(bracketSize: number): number {
   if (bracketSize <= 1) return 0;

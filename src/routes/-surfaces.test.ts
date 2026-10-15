@@ -473,7 +473,9 @@ describe("a build reads its rows from the network, not the query cache", () => {
     expect(snapshot).toMatch(/fetchPlacementEntrants\(/);
     expect(schedule).toMatch(/entrants: before\.entrants/);
     expect(schedule).toMatch(/entrants: fresh\.entrants/);
-    // The stale component value must not reach either the generator or the planner.
+    // The stale component value must not reach either the generator or the planner that a build
+    // writes from. (The page's read-only dry run, which describes what is on screen, names its
+    // input `dryRunEntrants` and writes nothing.)
     expect(schedule).not.toMatch(/entrants: entrants \?\? \[\]/);
   });
 
@@ -544,7 +546,9 @@ describe("byes are drawn as draw conditions, not as statuses", () => {
     // buildDeskMatches filters them, which is why the scores page needs the guard in
     // its draw list only.
     expect(scores).toMatch(/isByeMatch\(m\)[\s\S]{0,80}<ByeMarker \/>/);
-    expect(bracket).toMatch(/bye \? <ByeMarker \/> : <StatusPill/);
+    // A slot still waiting on a feeder gets its own marker between the two, so the bye test is
+    // pinned to the marker preceding the pill, not to their being adjacent.
+    expect(bracket).toMatch(/bye \?\s*\(?\s*<ByeMarker \/>[\s\S]{0,600}<StatusPill/);
   });
 
   it("tests for a bye through one shared predicate", () => {

@@ -21,6 +21,8 @@ import {
   planPlacementSchedule,
   projectSlotsOntoMatches,
   sliceRowsByDay,
+  classifyUnplaced,
+  readyUnplacedCount,
   uncoveredScheduledMatches,
   type PlanPlacementScheduleInput,
 } from "./placement-schedule";
@@ -35,6 +37,7 @@ const TOURNAMENT_ID = "t1";
 function tournament(overrides: Partial<Tournament> = {}): Tournament {
   return {
     id: TOURNAMENT_ID,
+    is_demo: false,
     name: "Test Open",
     block_start_on_short_rest: false,
     court_count: 2,
@@ -1803,10 +1806,21 @@ describe("uncoveredScheduledMatches", () => {
     expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
   });
 
-  it("reports a knockout fixture whose players are not known yet", () => {
-    // Undrawn bracket: no entrants, so no players. This is the legacy reason a row
-    // lands in `awaitingTeams`, and it must still be caught rather than written.
-    const knockout = tierMatch("k1", 1, 1, null, null, { status: "scheduled" });
+  it("ignores a knockout slot still waiting on a feeder", () => {
+    // The whole bracket exists from the draw. A slot with an undecided side has no court or
+    // time to lose, so the writer's completeness check must not count it.
+    const waiting = tierMatch("k1", 2, 1, "e1", null, { status: "scheduled" });
+    const empty = tierMatch("k2", 3, 1, null, null, { status: "scheduled" });
+    const result = withMatches([], { tierMatches: [waiting, empty] });
+
+    expect(result.knockoutScheduledIds).toEqual([]);
+    expect(uncoveredScheduledMatches(result).knockout).toEqual([]);
+  });
+
+  it("reports a knockout fixture with two entrants that the planner could not place", () => {
+    // Entrants named but not resolvable to players: ready on paper, unplaced in practice,
+    // and the writer must refuse rather than strip it of a court it never had.
+    const knockout = tierMatch("k1", 1, 1, "ghost-a", "ghost-b", { status: "scheduled" });
     const result = withMatches([], { tierMatches: [knockout] });
 
     expect(result.knockoutScheduledIds).toEqual(["k1"]);
@@ -2418,5 +2432,341 @@ describe("planPlacementSchedule — a fixed knockout on another event's court", 
     // Nothing is holding a court, so the placement match keeps the earliest slot it always had.
     expect(placement?.courtNumber).toBe(1);
     expect(placement?.start.toISOString()).toBe(new Date("2026-09-17T09:00:00").toISOString());
+  });
+});
+
+describe("place-ready mode", () => {
+  const committed = (id: string, entrantA: string, entrantB: string, courtId: string, time: string) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "scheduled",
+      court_id: courtId,
+      scheduled_time: new Date(time).toISOString(),
+    });
+
+  it("places a new match without touching one that already has a time", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        committed("held", "e1", "e2", "c1", "2026-09-17T14:00:00"),
+        placementMatch("fresh", "round1", "e3", "e4"),
+      ],
+    });
+
+    // Only the new match is written; the held one is neither moved nor listed.
+    expect(result.placementNewPayload.map((slot) => slot.match_id)).toEqual(["fresh"]);
+    expect(result.diff.movedCount).toBe(0);
+    expect(result.blocked).toEqual([]);
+  });
+
+  it("holds a past or stale time exactly as it is, where a rebuild would pull it forward", () => {
+    // Held for 09:00 while the clock says 12:00: a rebuild releases it to "now", place-ready must not.
+    const stale = committed("stale", "e1", "e2", "c1", "2026-09-17T09:00:00");
+    const clock = new Date("2026-09-17T12:00:00").getTime();
+
+    const rebuild = plan({ placementMatches: [stale], now: clock });
+    const placeReady = plan({ mode: "place-ready", placementMatches: [stale], now: clock });
+
+    expect(rebuild.frozenMatchIds).toEqual([]);
+    expect(placeReady.frozenMatchIds).toEqual(["stale"]);
+    expect(placeReady.placementNewPayload).toEqual([]);
+  });
+
+  it("holds every later committed match too, not only the next one on each court", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        committed("first", "e1", "e2", "c1", "2026-09-17T10:00:00"),
+        committed("second", "e3", "e4", "c1", "2026-09-17T11:30:00"),
+      ],
+    });
+    expect(result.frozenMatchIds).toEqual(["first", "second"]);
+    expect(result.placementNewPayload).toEqual([]);
+  });
+
+  it("never plans a held match that collides with decided history", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        placementMatch("played", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T11:00:00",
+        }),
+        committed("clash", "e3", "e4", "c1", "2026-09-17T10:00:00"),
+      ],
+    });
+    // Neither re-placed nor pinned: it keeps whatever time it has, and nothing is written for it.
+    expect(result.placementNewPayload.map((slot) => slot.match_id)).not.toContain("clash");
+    expect(result.frozenMatchIds).not.toContain("clash");
+  });
+
+  it("places a newly ready knockout match and ignores a slot still waiting on a feeder", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [],
+      tierMatches: [
+        tierMatch("ready", 1, 1, "e1", "e2", { status: "scheduled" }),
+        tierMatch("waiting", 2, 1, "e3", null, { status: "scheduled" }),
+      ],
+    });
+    expect(result.knockoutNewPayload.map((slot) => slot.match_id)).toEqual(["ready"]);
+  });
+});
+
+describe("readyUnplacedCount", () => {
+  it("counts ready matches with no court or time, and nothing else", () => {
+    const placed = placementMatch("placed", "round1", "e1", "e2", {
+      status: "scheduled",
+      court_id: "c1",
+      scheduled_time: new Date("2026-09-17T10:00:00").toISOString(),
+    });
+    const fresh = placementMatch("fresh", "round1", "e3", "e4");
+    const reported = placementMatch("done", "round1", "e1", "e3", { status: "reported" });
+    const ready = tierMatch("ready", 1, 1, "e1", "e2", { status: "scheduled" });
+    const waiting = tierMatch("waiting", 2, 1, "e3", null, { status: "scheduled" });
+    const bye = tierMatch("bye", 1, 2, "e4", null, { status: "bye", is_bye: true });
+
+    expect(readyUnplacedCount([placed, fresh, reported], [ready, waiting, bye])).toBe(2);
+    expect(readyUnplacedCount([placed], [])).toBe(0);
+  });
+});
+
+describe("automatic placement and the closing time", () => {
+  /** A 20-minute day with one court cannot hold a 30-minute match. */
+  const shortDay: TournamentDay = { ...DAY, end_time: "09:20:00" };
+  const fresh = placementMatch("fresh", "round1", "e1", "e2");
+
+  it("leaves a match unplaced rather than running it past the close", () => {
+    const result = plan({
+      mode: "place-ready",
+      dayConfig: shortDay,
+      courts: [court(1)],
+      placementMatches: [fresh],
+    });
+
+    expect(result.placementNewPayload).toEqual([]);
+    expect(result.unplaced).toEqual([{ matchId: "fresh", reason: "past_closing" }]);
+  });
+
+  it("still lets a rebuild overrun, because its preview forecasts that for the host", () => {
+    const result = plan({ dayConfig: shortDay, courts: [court(1)], placementMatches: [fresh] });
+
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["fresh"]);
+    expect(result.unplaced).toEqual([]);
+  });
+
+  it("places the matches that fit and reports only the ones that do not", () => {
+    const result = plan({
+      mode: "place-ready",
+      dayConfig: { ...DAY, end_time: "09:40:00" },
+      courts: [court(1)],
+      placementMatches: [fresh, placementMatch("second", "round1", "e3", "e4")],
+    });
+
+    expect(result.placementNewPayload).toHaveLength(1);
+    expect(result.unplaced).toHaveLength(1);
+    expect(result.unplaced[0]?.reason).toBe("past_closing");
+  });
+
+  it("holds a knockout behind a placement match that has no slot, and says so", () => {
+    const result = plan({
+      mode: "place-ready",
+      dayConfig: shortDay,
+      courts: [court(1)],
+      placementMatches: [fresh],
+      tierMatches: [tierMatch("k1", 1, 1, "e3", "e4", { status: "scheduled" })],
+    });
+
+    const byId = new Map(result.unplaced.map((entry) => [entry.matchId, entry.reason]));
+    expect(byId.get("fresh")).toBe("past_closing");
+    expect(byId.get("k1")).toBe("held_behind_placement");
+  });
+});
+
+describe("classifyUnplaced", () => {
+  const item = (id: string, dependencies: string[] = []) => ({ id, dependencies }) as never;
+
+  it("says no courts first, because it explains everything", () => {
+    expect(
+      classifyUnplaced({
+        blocked: ["a"],
+        awaitingTeams: ["b"],
+        items: [item("a"), item("b")],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(["a"]),
+        daysWithCourts: 0,
+        strictClose: true,
+      }),
+    ).toEqual([
+      { matchId: "b", reason: "no_courts" },
+      { matchId: "a", reason: "no_courts" },
+    ]);
+  });
+
+  it("calls a missing prerequisite a data problem, not a capacity one", () => {
+    expect(
+      classifyUnplaced({
+        blocked: ["a"],
+        awaitingTeams: [],
+        items: [item("a", ["ghost"])],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(["a"]),
+        daysWithCourts: 1,
+        strictClose: true,
+      }),
+    ).toEqual([{ matchId: "a", reason: "data" }]);
+  });
+
+  it("names an entrant with no team as data", () => {
+    expect(
+      classifyUnplaced({
+        blocked: [],
+        awaitingTeams: ["a"],
+        items: [item("a")],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(),
+        daysWithCourts: 1,
+        strictClose: true,
+      }),
+    ).toEqual([{ matchId: "a", reason: "data" }]);
+  });
+
+  it("falls back to no_slot outside automatic placement", () => {
+    expect(
+      classifyUnplaced({
+        blocked: ["a"],
+        awaitingTeams: [],
+        items: [item("a")],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(["a"]),
+        daysWithCourts: 1,
+        strictClose: false,
+      }),
+    ).toEqual([{ matchId: "a", reason: "no_slot" }]);
+  });
+});
+
+describe("planning around a match that is on court", () => {
+  const started = (id: string, entrantA: string, entrantB: string, startIso: string) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "in-progress",
+      court_id: "c1",
+      scheduled_time: new Date(startIso).toISOString(),
+      started_at: new Date(startIso).toISOString(),
+    });
+  const kickoff = "2026-09-17T09:00:00";
+
+  it("starts the next match when the running one is due to end, not a slot from now", () => {
+    // Started at 09:00 on a 30-minute slot; it is 09:20, so ten minutes remain. The old model
+    // reserved the court until 09:50.
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 20 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("next", "round1", "e3", "e4"),
+      ],
+    });
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "next");
+    expect(slot?.scheduled_time).toBe(new Date(DAY_START + 30 * MINUTE).toISOString());
+  });
+
+  it("holds a running match that has overrun until now, like the database", () => {
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 45 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("next", "round1", "e3", "e4"),
+      ],
+    });
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "next");
+    expect(Date.parse(slot?.scheduled_time as string)).toBeGreaterThanOrEqual(DAY_START + 45 * MINUTE);
+    expect(Date.parse(slot?.scheduled_time as string)).toBeLessThan(DAY_START + 46 * MINUTE);
+  });
+
+  it("keeps a pinned next match that now clears the running one, where it used to be released", () => {
+    // Pinned for 09:35 while the running match is due to end at 09:30. Against "a slot from now"
+    // (09:50) the pin overlapped it and was thrown back to the solver; against the real end it fits.
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 20 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("pinned", "round1", "e3", "e4", {
+          status: "scheduled",
+          court_id: "c1",
+          scheduled_time: new Date(DAY_START + 35 * MINUTE).toISOString(),
+        }),
+      ],
+    });
+    expect(result.frozenMatchIds).toContain("pinned");
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "pinned");
+    expect(slot?.scheduled_time).toBe(new Date(DAY_START + 35 * MINUTE).toISOString());
+  });
+
+  it("releases a pin that would sit on a running match that is still inside its slot", () => {
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 20 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("pinned", "round1", "e3", "e4", {
+          status: "scheduled",
+          court_id: "c1",
+          scheduled_time: new Date(DAY_START + 25 * MINUTE).toISOString(),
+        }),
+      ],
+    });
+    expect(result.frozenMatchIds).not.toContain("pinned");
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "pinned");
+    expect(Date.parse(slot?.scheduled_time as string)).toBeGreaterThanOrEqual(DAY_START + 30 * MINUTE);
+  });
+
+  it("does not throw on a fractional clock", () => {
+    expect(() =>
+      plan({
+        courts: [court(1)],
+        now: DAY_START + 50 * MINUTE + 0.37,
+        placementMatches: [
+          started("running", "e1", "e2", kickoff),
+          placementMatch("next", "round1", "e3", "e4"),
+        ],
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("place-ready when a held match is a prerequisite", () => {
+  it("does not fail the plan, and still keeps the dependent after the held match", () => {
+    // `clash` is committed on top of a match that overran, so place-ready cannot hold it as an anchor and
+    // takes it out of the problem. `followup` names it as a prerequisite (the held entrant's second
+    // make-up match depends on the first); the problem rejects a dependency on a match it does not
+    // contain, which used to fail the whole plan.
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        placementMatch("played", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T11:00:00",
+        }),
+        placementMatch("clash", "round1", "e3", "e4", {
+          status: "scheduled",
+          court_id: "c1",
+          scheduled_time: new Date("2026-09-17T10:00:00").toISOString(),
+        }),
+        placementMatch("followup", "round2", "e3", "e4", { prerequisite_ids: ["clash"] }),
+      ],
+    });
+
+    const slot = result.placementNewPayload.find((s) => s.match_id === "followup");
+    expect(slot).toBeDefined();
+    // The held match stands at 10:00 for a 30-minute slot, so the dependent cannot start before 10:30.
+    expect(Date.parse(slot?.scheduled_time as string)).toBeGreaterThanOrEqual(
+      new Date("2026-09-17T10:30:00").getTime(),
+    );
   });
 });

@@ -471,3 +471,111 @@ and `straggler`. `shapes.test.ts` pins that the straggler stage closes before ev
 later than the pre-change baseline; `fixtures.test-helpers.ts`'s `F16` pins the same semantics at
 fixture scale with a closed-form assertion; `core-contract.test.ts` pins the metric hierarchy, the
 disruption arithmetic and re-solve idempotence; `placement-schedule.test.ts` pins the freeze.
+## 26. The full knockout bracket and what is schedulable
+
+A knockout draw creates its whole bracket at once (see
+[`tournament-format.md`](tournament-format.md#the-whole-bracket-exists-from-the-draw)), so the
+planner no longer relies on "a later round does not exist yet" to keep unknown matches out.
+
+- **Only ready matches are scheduled.** `tierItems` keeps a non-fixed match only when both sides
+  resolve to players (`participantsKnown`). A half-known semifinal is dropped there, not handed to
+  the solver, exactly as a match with no players always was.
+- **Parents are now real.** `parent_a_id` / `parent_b_id` are filled at the draw, so `eligibleFrom`
+  and the reflow dependencies bind a child to its feeders' `ended_at` plus the knockout rest gap.
+  A feeder decided by a bye has no `ended_at` and constrains nothing.
+- **The writer ignores undecided slots.** The knockout completeness check
+  (`knockoutScheduledIds`, and `apply_placement_day_schedule` in SQL) counts only matches with both
+  entrants, because a slot waiting on a feeder has no court or time to lose.
+- **A freshly ready match is placed by the next rebuild.** A result fills the child slot but does
+  not place it; the live reflow shifts only rows that already hold a court and time. Placing newly
+  ready matches without a manual rebuild ("Place ready") remains the open design in
+  [`knockout-bracket-ideas.md`](knockout-bracket-ideas.md).
+
+## 27. Placing a newly ready match without a rebuild
+
+A rebuild (§25) re-solves every unplayed match and rewrites the whole queue. That is the wrong tool for
+"a knockout slot just became ready". `planPlacementSchedule({ mode: "place-ready" })` is the other mode:
+
+- **Held means held.** Every `scheduled` match that already has a court and a time is an immovable anchor,
+  including one whose time has passed, sits in a break or crosses a day's close. The rebuild-mode legality
+  filter is deliberately not applied, because releasing such a pin is exactly a move. A held match that
+  collides with decided history or another held match is taken out of the problem (neither moved nor
+  planned) rather than fixed.
+- **Only unplaced ready matches get slots**, around the anchors. Whatever does not fit is `blocked`.
+- **The additive writer.** `placementNewPayload` / `knockoutNewPayload` go to `place_ready_matches`, which
+  fills only empty slots and re-checks court and player conflicts on the server, so a stale plan can place
+  fewer matches but cannot double-book.
+
+Wired in §28.
+
+## 28. Scheduling that follows the results
+
+Pressing "Rebuild schedule" after every round is not a workflow. Once a schedule exists, the work it
+used to be pressed for happens on its own, and the button is left for deliberate re-optimisation.
+
+- **After a result** (`useAutoSchedule`, called from `MatchOperationsDialog`, which both the Desk and
+  the Scores page use): an editor's client generates the stage the result unlocked - round two, the
+  knockout draws - **only for events that already have placement matches** (the first build stays the
+  operator's decision), then plans in `place-ready` mode (§27) and writes through `place_ready_matches`.
+  Overlapping results coalesce (`singleFlight`: one run plus one queued). It is best-effort and silent
+  on failure: the result is already saved, and the Schedule page's status line is where anything left
+  over stays visible. A toast names what happened ("Round 2 drawn, 2 matches scheduled").
+- **Nothing is rebuilt.** No time that was already on a match changes; a rebuild still previews and
+  needs confirmation (§24 still lists an automatic full rebuild as a non-goal).
+- **There is no "Place now" button.** A lost race, a dropped request or a result that moved under the
+  plan heals on its own: `useAutoScheduleReconciler` (mounted on the Desk and the Schedule page) looks
+  again while any ready match has no time, after a short settle and then with backoff, three tries at
+  most (`planRetry`). A persistent answer is tried once per situation, where a situation is the set of
+  unplaced matches plus the days, courts and breaks they could go on; changing any of those is a new
+  situation. With no editor looking at either page nothing retries, which is acceptable because a
+  tournament in progress always has a desk.
+- **Automatic placement never runs past the close.** The last day that has courts may overrun in a
+  rebuild, because its preview forecasts the overrun for the host to accept or fix. A pass nobody
+  reviews must not take that decision, so `place-ready` plans with `strictClose`: a match that would
+  finish after the last day closes stays unplaced.
+- **What is left is said as a cause.** `classifyUnplaced` sorts the leftovers into `no_courts`,
+  `past_closing`, `held_behind_placement` (a knockout waiting on a placement match with no slot) and
+  `data` (a missing prerequisite or a team that no longer exists); server declines that are a race
+  (`court_busy`, `player_busy`, `already_placed`, `not_ready`, `not_scheduled`, `in_the_past`) are
+  retried and never shown. The Schedule page works the reasons out itself from the rows on screen (a
+  dry run of the same planner), so every organiser sees the same, and words one notice with one action
+  (`describeUnplaced`): review a rebuild, or open settings when there are no courts. When there is
+  nothing to say it says nothing.
+- **"Update schedule" is now "Rebuild schedule"**, and is a quiet outline button unless something needs
+  a decision (a notice, or schedule conflicts). Saving timings, match settings or breaks offers
+  **Review & apply** in the toast instead of telling the host to go and find the button.
+- **A rebuild is suggested only when it is worth it.** The Schedule page runs a dry-run rebuild and, when it
+  would finish at least 30 minutes sooner, place every match and move at least one, says so with the cost
+  stated (`buildRebuildSuggestion`) and opens the usual rebuild preview. It never applies anything, and it
+  stays quiet when the unplaced-matches notice is showing.
+- **The Desk** lists a ready match with no time at all in its "ready, unassigned" pool (after every
+  timed one), so it can still be dispatched while nothing has placed it.
+- **What stays manual:** the first build, a rebuild after the day windows, courts or timings change,
+  clearing a held overlap, and withdrawals or walkovers, which the placement format does not support
+  on the Desk.
+
+## 29. Modelling a match that is on court
+
+The planner has to say when a running match ends, because it holds its court and its players until then.
+`inProgressEnd` (`src/lib/tournament/in-progress.ts`) is the one answer: `max(start + slot, now)`, in whole
+milliseconds. A match inside its slot ends when the slot is up; one that has overrun is taken as ending now,
+since nothing says when. It is the model the live reflow (`shift_live_schedule_core`),
+`placement_occupied_matches` and `schedule_conflicts` already used, and it is now also the Desk's finish
+forecast and the Schedule page's projected finish.
+
+- **What it replaced.** The planner used to model every running match as `now + slot`: a full slot from the
+  moment of planning however long it had been playing. That reserved court and player time that had already
+  been used, which left courts idle and made every rebuild push published times later. Measured against the
+  planner's own belief about when courts free up, a rebuild was as tight as gap-filling; the whole gap was
+  that reservation (`docs/scheduling-strategy-evaluation.md`).
+- **It is a planning estimate, not a lock.** Whether another match may START on a court is decided by status
+  alone (`assert_can_start_match`): a court with a match in progress is busy until it is reported, whatever
+  the estimate says. An overrun therefore never lets two matches share a court. At worst the next match is
+  published for a moment when the court is still busy; the reflow pushes it later and the conflict report
+  flags it, exactly as they did before.
+- **Pins.** A pinned next match is kept when it starts at or after the running match's modelled end, and
+  released when it would overlap it. With the shorter end more pins qualify than before.
+- **No margin on purpose.** A cushion for overruns (for example +5 minutes) was measured and gives back idle
+  court time for fewer premature publications; it would also be a second model beside the SQL one.
+- **Whole milliseconds.** The problem rejects two fixed matches on one court that overlap at all, so a
+  fractional end followed by a truncated start can overlap by under a millisecond.

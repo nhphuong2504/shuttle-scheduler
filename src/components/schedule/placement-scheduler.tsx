@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAutoScheduleReconciler } from "@/hooks/useAutoSchedule";
 import { PickerInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -62,6 +63,8 @@ import {
   type TierDrawMatch,
   type TournamentDay,
 } from "@/lib/tournament/data";
+import { describeUnplaced } from "@/lib/tournament/auto-schedule";
+import { buildRebuildSuggestion, type RebuildSuggestion } from "@/lib/tournament/rebuild-suggestion";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import {
   conflictedMatchCount,
@@ -77,6 +80,8 @@ import { cn } from "@/lib/utils";
 import { StageProgressList } from "@/components/stage-progress";
 import {
   applyPlacementSchedulePlan,
+  readyUnplacedCount,
+  type UnplacedMatch,
   courtsAddedToDays,
   courtsForDay,
   dayWindowBounds,
@@ -137,7 +142,7 @@ function normalizeTime(value: string) {
  * The organiser's block: every match that cannot run as published, and the one way to fix it.
  *
  * Read-only, and deliberately so. It names the matches, groups them by reason, and points at
- * the existing "Update schedule" control rather than offering a second button - the page has
+ * the existing "Rebuild schedule" control rather than offering a second button - the page has
  * one way to replan, and a block that re-applied a plan itself would be a second, hidden one.
  * It says plainly that nothing has changed yet, because a warning that looks like an action
  * already taken is the reading that costs a host a round.
@@ -230,10 +235,10 @@ function ConflictOverview({
             ))}
           </ul>
           <p className="mt-3 text-sm text-warn-foreground">
-            Update schedule will replan these matches. Nothing changes until you run it.
+            Rebuild schedule will replan these matches. Nothing changes until you run it.
           </p>
           <Button type="button" variant="outline" size="sm" className="mt-2" onClick={goToBuild}>
-            Go to Update schedule
+            Go to Rebuild schedule
           </Button>
         </div>
       ) : null}
@@ -243,6 +248,8 @@ function ConflictOverview({
 
 export function PlacementScheduler() {
   const qc = useQueryClient();
+  // Looks again at any ready match without a time, so there is nothing to press for it.
+  useAutoScheduleReconciler();
   const { tournament, days, loading } = useTournamentScope();
   // Scheduling and the stage reset are both `can_edit_tournament` in the database, so
   // the page has one flag rather than the two it used to gate on.
@@ -366,6 +373,8 @@ export function PlacementScheduler() {
   );
   /** Any match already has a time, so the next build is a rebuild rather than a first build. */
   const hasSchedule = placementScheduled || knockoutScheduled;
+  /** Ready to play but holding no court or time: what a result unlocked and nothing has placed yet. */
+  const readyUnplaced = readyUnplacedCount(placementMatches ?? [], tierMatches ?? []);
 
   /**
    * Whether every list a plan is computed from has actually arrived.
@@ -544,7 +553,7 @@ export function PlacementScheduler() {
         return next;
       });
       await qc.invalidateQueries();
-      toast.success("Timing updated. Rebuild a day to apply it.");
+      offerRebuild("Timing updated.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the timing");
     }
@@ -663,7 +672,7 @@ export function PlacementScheduler() {
         });
       }
       await qc.invalidateQueries();
-      toast.success("Match settings updated. Rebuild a day to apply it.");
+      offerRebuild("Match settings updated.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the match settings");
     } finally {
@@ -726,7 +735,7 @@ export function PlacementScheduler() {
         return next;
       });
       await qc.invalidateQueries();
-      toast.success(`Day ${day.day_number} breaks saved. Rebuild a day to apply them.`);
+      offerRebuild(`Day ${day.day_number} breaks saved.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the breaks");
     } finally {
@@ -766,6 +775,142 @@ export function PlacementScheduler() {
     for (const day of tournamentDays) map.set(day.id, breaksForDay(day.id));
     return map;
   }, [tournamentDays, breaksForDay]);
+
+  /**
+   * Why ready matches are still without a time, worked out here from the rows already on screen.
+   *
+   * Computed rather than remembered: it does not depend on which desk ran the automatic pass, so
+   * every organiser looking at this page sees the same, and a change to the days or courts
+   * re-evaluates it by itself. A dry run of the same planner the automatic pass uses, never
+   * written, and only when something is actually missing a time.
+   */
+  const [unplacedReasons, setUnplacedReasons] = useState<UnplacedMatch[]>([]);
+  useEffect(() => {
+    if (!canEdit || !tournament || !planInputsReady || readyUnplaced === 0) {
+      setUnplacedReasons([]);
+      return;
+    }
+    // A dry run: nothing is generated or written, so the rows already on screen are the right input
+    // (a build re-reads them from the network; this only describes what the page shows).
+    const dryRunEntrants = entrants ?? [];
+    const timer = setTimeout(() => {
+      try {
+        const plan = planPlacementSchedule({
+          mode: "place-ready",
+          tournament,
+          days: plannerDays,
+          allCourts: courts ?? [],
+          dayCourtIds: dayCourtIdSets,
+          breaksByDayId: breaksByDay,
+          teams: teams ?? [],
+          entrants: dryRunEntrants,
+          draws: draws ?? [],
+          placementMatches: placementMatches ?? [],
+          tierMatches: tierMatches ?? [],
+          categoryOrder: new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
+          options: { graspRuns: 1, seed: 1 },
+        });
+        setUnplacedReasons(plan.unplaced);
+      } catch {
+        setUnplacedReasons([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [
+    canEdit,
+    tournament,
+    planInputsReady,
+    readyUnplaced,
+    plannerDays,
+    courts,
+    dayCourtIdSets,
+    breaksByDay,
+    teams,
+    entrants,
+    draws,
+    placementMatches,
+    tierMatches,
+    categories,
+  ]);
+  const notice = useMemo(() => describeUnplaced(unplacedReasons), [unplacedReasons]);
+
+  /**
+   * Whether a full rebuild is worth the organiser's while, worked out from the rows on screen.
+   *
+   * A dry run of the rebuild that "Rebuild schedule" would show, compared with the schedule as it
+   * stands, judged the same way on both sides (the latest end among matches still to play). Only said
+   * when it finishes meaningfully sooner and can place every match; the cost, in matches moved and how
+   * many start within the hour, is part of the sentence. Nothing is applied. It is the case gap-filling
+   * is worst at: a tight day or a large field.
+   */
+  const [suggestion, setSuggestion] = useState<RebuildSuggestion | null>(null);
+  useEffect(() => {
+    if (!canEdit || !tournament || !planInputsReady || !hasSchedule || busy || preview) {
+      setSuggestion(null);
+      return;
+    }
+    // A dry run, like the one above: nothing is generated or written, so the rows on screen are the input.
+    const dryRunEntrants = entrants ?? [];
+    const timer = setTimeout(() => {
+      try {
+        const now = Date.now();
+        const plan = planPlacementSchedule({
+          tournament,
+          days: plannerDays,
+          allCourts: courts ?? [],
+          dayCourtIds: dayCourtIdSets,
+          breaksByDayId: breaksByDay,
+          teams: teams ?? [],
+          entrants: dryRunEntrants,
+          draws: draws ?? [],
+          placementMatches: placementMatches ?? [],
+          tierMatches: tierMatches ?? [],
+          categoryOrder: new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
+          now,
+        });
+        const finishOf = (placement: readonly PlacementMatch[], tier: readonly TierDrawMatch[]) => {
+          const a = projectedFinishFromRemainingMatches(placement, tournament.group_slot_minutes, now);
+          const b = projectedFinishFromRemainingMatches(
+            tier.filter((match) => !match.is_bye),
+            tournament.knockout_slot_minutes,
+            now,
+          );
+          return Math.max(a ?? 0, b ?? 0) || null;
+        };
+        const afterPlacement = projectSlotsOntoMatches(placementMatches ?? [], plan.placementSlotPayload);
+        const afterTier = projectSlotsOntoMatches(tierMatches ?? [], plan.knockoutSlotPayload);
+        setSuggestion(
+          buildRebuildSuggestion({
+            currentFinishMs: finishOf(placementMatches ?? [], tierMatches ?? []),
+            plannedFinishMs: finishOf(afterPlacement, afterTier),
+            blockedCount: plan.blocked.length,
+            diff: plan.diff,
+            now,
+          }),
+        );
+      } catch {
+        setSuggestion(null);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [
+    canEdit,
+    tournament,
+    planInputsReady,
+    hasSchedule,
+    busy,
+    preview,
+    plannerDays,
+    courts,
+    dayCourtIdSets,
+    breaksByDay,
+    teams,
+    entrants,
+    draws,
+    placementMatches,
+    tierMatches,
+    categories,
+  ]);
 
   /**
    * The official close: the end of the last configured day that actually has courts.
@@ -883,11 +1028,9 @@ export function PlacementScheduler() {
         const draw = (draws ?? []).find((entry) => entry.id === match.draw_id);
         return {
           id: match.id,
-          // The round is named from the bracket size, not from how many rounds the
-          // draw has rows for: later rounds are only created once the round before
-          // is decided, so counting them would call the opening round of a
-          // half-played draw "Final". Falls back to the raw round number if the
-          // draw has not loaded, since the size is what the name is derived from.
+          // The round is named from the bracket size, the one input every view of a draw
+          // shares. Falls back to the raw round number if the draw has not loaded, since
+          // the size is what the name is derived from.
           stage: `Draw ${draw?.tier ?? "?"} · ${
             draw ? roundName(draw.bracket_size, match.round) : `R${match.round}`
           }`,
@@ -1223,9 +1366,13 @@ export function PlacementScheduler() {
     return { placementMatches, tierMatches, draws, entrants };
   };
 
-  const computePlan = async (fresh: Awaited<ReturnType<typeof freshSchedulingData>>) => {
+  const computePlan = async (
+    fresh: Awaited<ReturnType<typeof freshSchedulingData>>,
+    mode: "rebuild" | "place-ready" = "rebuild",
+  ) => {
     if (!tournament) throw new Error("No active tournament is configured.");
     return planPlacementSchedule({
+      mode,
       tournament,
       days: plannerDays,
       allCourts: courts ?? [],
@@ -1354,6 +1501,20 @@ export function PlacementScheduler() {
     }
   };
 
+  /**
+   * Saved timings, breaks and match settings only change the next plan. Once a schedule exists,
+   * say so and put the way to apply them in the toast, rather than telling the host to go and find it.
+   */
+  const offerRebuild = (saved: string) => {
+    if (!hasSchedule) {
+      toast.success(saved);
+      return;
+    }
+    toast.success(`${saved} The current schedule still uses the old values.`, {
+      action: { label: "Review & apply", onClick: () => void previewRebuild() },
+    });
+  };
+
   const previewRebuild = async () => {
     if (!tournamentDays.length) {
       toast.error("Choose the days you play first.");
@@ -1437,6 +1598,10 @@ export function PlacementScheduler() {
   const buildButton = (
     <Button
       id="build-schedule"
+      // A rebuild is for deliberate re-optimising. It only takes the primary place when something
+      // needs the organiser's decision: matches that could not be placed, or a schedule that
+      // contradicts itself. Before the first build it is the one thing to do, so it stays primary.
+      variant={hasSchedule && !notice && conflictMatchCount === 0 ? "outline" : "default"}
       disabled={busy || !planInputsReady || !tournament || Boolean(buildBlocker)}
       aria-describedby={buildBlocker ? "build-blocker" : undefined}
       onClick={() => void (hasSchedule ? previewRebuild() : build())}
@@ -1446,7 +1611,7 @@ export function PlacementScheduler() {
         : busy
           ? "Planning…"
           : hasSchedule
-            ? "Update schedule"
+            ? "Rebuild schedule"
             : "Build schedule"}
     </Button>
   );
@@ -1496,6 +1661,35 @@ export function PlacementScheduler() {
             matchLabel={matchLabel}
             courtNumberLabel={courtNumberLabel}
           />
+        ) : null}
+        {canEdit && hasSchedule && notice ? (
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2.5 text-sm"
+            role="status"
+          >
+            <span className="font-semibold text-warn-foreground">{notice.headline}</span>
+            <span className="text-muted-foreground">{notice.detail}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void (notice.action === "settings" ? setShowSettings(true) : previewRebuild())}
+            >
+              {notice.actionLabel}
+            </Button>
+          </div>
+        ) : null}
+        {canEdit && hasSchedule && !notice && suggestion ? (
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm"
+            role="status"
+          >
+            <span className="font-semibold text-foreground">{suggestion.headline}</span>
+            <span className="text-muted-foreground">{suggestion.detail}</span>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => void previewRebuild()}>
+              Review rebuild
+            </Button>
+          </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm text-muted-foreground">
           <span className="font-score font-semibold text-foreground">

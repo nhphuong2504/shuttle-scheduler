@@ -23,6 +23,13 @@
 --      placement results and desk activity. `profiles` is kept, so nobody loses
 --      their login or its platform role - the same contract as
 --      `reset-tournament-data.sql`.
+--
+--      Because "every tournament" includes the sample ones, run
+--      `npm run demo:remove` (or `select public.remove_demo_tournaments();`)
+--      around this if you want them back: the deletion above takes the sample
+--      tournaments but not the sample *people*, who are a global roster with no
+--      tournament to cascade from, and who would otherwise be left behind with
+--      nothing referencing them.
 --   2. Inserts three tournaments with data shaped like a real event: venue,
 --      timezone, organizer, days, courts, four events, a player roster, entries,
 --      and - for the two finished ones - two placement rounds of reported results.

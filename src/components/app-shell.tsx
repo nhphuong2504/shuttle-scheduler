@@ -426,6 +426,47 @@ export function TournamentStatusPill({
 }
 
 /**
+ * "This is sample data", in the one place every tournament surface already draws a label.
+ *
+ * ## Why it is neither a status nor a registration state
+ *
+ * The pills beside it answer "what is this tournament doing" and "may I enter it". This
+ * answers "is this tournament real", which is a different axis and stays true through every
+ * one of those states - a demo tournament is upcoming, live and completed, and open or
+ * closed, exactly like a real one. Folding it into either vocabulary would make one word
+ * carry two questions and would let a demo tournament's status read as its provenance.
+ *
+ * ## Why the treatment is a dashed outline and not a colour
+ *
+ * It sits in a row of chips whose colours already mean something (green is live, amber is a
+ * reminder), so a fifth hue would read as a fifth state. A dashed border says "placeholder"
+ * in every design vocabulary this page is read in, it is the one border treatment no other
+ * chip in the system uses, and it survives grayscale and colour-blindness untouched. The
+ * word does the work; the dash only makes the word findable at a glance, which is the same
+ * rule the rest of the system follows: a word and a glyph, never colour alone.
+ *
+ * ## Why it is short
+ *
+ * The pill has to fit beside a status on a 320px card, so it is one word. The sentence that
+ * explains what sample data means is on the tournament itself, where a reader who opened it
+ * has room to read it (`WorkspaceShell`).
+ */
+export function DemoPill({ className }: { className?: string | undefined }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-border-control px-2 py-0.5 font-score text-sm uppercase tracking-wide text-muted-foreground",
+        className,
+      )}
+      title="Sample tournament, shipped with Tournova to show how the app works. Not a real event."
+    >
+      {DEMO_GLYPH}
+      Demo
+    </span>
+  );
+}
+
+/**
  * The one page-level callout treatment.
  *
  * This is the treatment the read-only notice and Access's ownership notice both draw, and
@@ -782,6 +823,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 phase={summary ? tournamentPhase(summary) : undefined}
               />
             ) : null}
+            {tournament?.is_demo ? <DemoPill /> : null}
           </div>
           {meta ? <p className="mt-1 break-words text-sm text-muted-foreground">{meta}</p> : null}
         </div>
@@ -840,6 +882,30 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
         {readOnly ? <ReadOnlyNotice signedIn={signedIn} /> : null}
+        {/*
+          The sentence the pill cannot hold.
+
+          The pill has to survive a 320px card, so it says one word. This is where a reader who
+          opened the tournament - the point at which "is this real" becomes a question somebody
+          actually asks - gets the answer, in the one callout treatment the app already uses for
+          standing information. It sits above the page rather than inside it because every page
+          in the workspace carries it: the draws, the schedule and the results are all sample
+          data, and a reader who landed on one of them directly sees this before the page.
+
+          The wording states the two things that would otherwise be a false claim. Nothing here
+          is a real event, so the names, scores and standings are invented; and an in-progress
+          demo is a snapshot, so nothing on the page is changing - "live" on this tournament
+          means "the moment this snapshot describes", never "updating now".
+        */}
+        {tournament?.is_demo ? (
+          <Notice tone="info" data-testid="demo-notice">
+            <strong className="font-bold">Sample tournament.</strong> Tournova ships a few
+            example tournaments so you can see how the app works. This is not a real event and
+            nothing here is happening on a real court - the entries, scores and standings are
+            demonstration data. A tournament shown as in progress is a snapshot of a moment
+            during play, so nothing on the page updates on its own.
+          </Notice>
+        ) : null}
         {children}
       </main>
       <SiteFooter />
@@ -1162,6 +1228,20 @@ const STATE_GLYPH: Record<string, ReactNode> = {
 
 const STATE_FALLBACK_GLYPH = glyph(
   <circle cx="9" cy="9" r="1.8" fill="currentColor" stroke="none" />,
+);
+
+/**
+ * The sample-data mark: a dashed square, the shape every design vocabulary uses for a
+ * placeholder.
+ *
+ * It is not borrowed from `STATE_GLYPH` and deliberately shares no shape with it. A sample
+ * tournament can be in any state, so any match glyph here would be read as "this is a live
+ * match" or "this is finished" - a claim about the tournament rather than about its data.
+ * The dashed square claims nothing about what the tournament is doing, only that the record
+ * is a stand-in.
+ */
+const DEMO_GLYPH = glyph(
+  <rect x="3.6" y="3.6" width="10.8" height="10.8" rx="1.6" strokeDasharray="2.6 2.2" />,
 );
 
 /**

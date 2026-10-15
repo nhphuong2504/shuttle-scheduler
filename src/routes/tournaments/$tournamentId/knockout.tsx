@@ -29,6 +29,7 @@ import {
 } from "@/lib/tournament/data";
 import { gamesLabel, parseGames } from "@/lib/tournament/format";
 import { isByeMatch } from "@/lib/tournament/match-status";
+import { feederLabel, isTierMatchReady } from "@/lib/tournament/tier-draw";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/knockout")({
   head: () => ({
@@ -181,9 +182,9 @@ function BracketSection({
     for (const entrant of entrants) map.set(entrant.id, entrant.team_id);
     return map;
   }, [entrants]);
-  const label = (entrantId: string | null | undefined) => {
+  const label = (entrantId: string | null | undefined, fallback = "TBC") => {
     const teamId = entrantId ? entrantTeam.get(entrantId) : undefined;
-    return teamId ? teamLabel(teamMap.get(teamId), playerMap) : "TBC";
+    return teamId ? teamLabel(teamMap.get(teamId), playerMap) : fallback;
   };
 
   const short = view.gate.short.length;
@@ -282,7 +283,12 @@ function BracketSection({
                           {roundName(draw.bracket_size, round)}
                         </p>
                         {roundMatches.map((match) => (
-                          <TierMatchRow key={match.id} match={match} label={label} />
+                          <TierMatchRow
+                            key={match.id}
+                            match={match}
+                            bracketSize={draw.bracket_size}
+                            label={label}
+                          />
                         ))}
                       </div>
                     ))}
@@ -300,19 +306,29 @@ function BracketSection({
 /** One match in a bracket. Read-only: scoring lives on the Scores page. */
 function TierMatchRow({
   match,
+  bracketSize,
   label,
 }: {
   match: TierDrawMatch;
-  label: (entrantId: string | null | undefined) => string;
+  bracketSize: number;
+  label: (entrantId: string | null | undefined, fallback?: string) => string;
 }) {
   const decided = match.status === "reported" || match.status === "walkover";
   const bye = isByeMatch(match);
+  const waiting =
+    !bye &&
+    match.status === "scheduled" &&
+    !isTierMatchReady({ entrantAId: match.entrant_a_id, entrantBId: match.entrant_b_id });
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-hairline px-2 py-1.5">
       <div className="min-w-0 break-words text-sm">
-        <span className="font-medium">{label(match.entrant_a_id)}</span>
+        <span className="font-medium">
+          {label(match.entrant_a_id, feederLabel(bracketSize, match.round, match.slot, "a"))}
+        </span>
         <span className="mx-1.5 text-muted-foreground">vs</span>
-        <span className="font-medium">{label(match.entrant_b_id)}</span>
+        <span className="font-medium">
+          {label(match.entrant_b_id, feederLabel(bracketSize, match.round, match.slot, "b"))}
+        </span>
         {decided && !bye ? (
           <span className="ml-2 font-score text-t4 text-muted-foreground">
             {gamesLabel(parseGames(match.games))}
@@ -323,7 +339,15 @@ function TierMatchRow({
           automatic advance, so rendering the raw status would label it "Completed".
           The marker replaces the pill rather than sitting beside it, and takes over
           the games label too: a bye has no games to show. */}
-      {bye ? <ByeMarker /> : <StatusPill status={match.status} />}
+      {bye ? (
+        <ByeMarker />
+      ) : waiting ? (
+        // An empty future slot is not "Scheduled": nothing can be scheduled until both sides
+        // are known, so say what it is waiting on.
+        <span className="shrink-0 text-t4 text-muted-foreground">Waiting for teams</span>
+      ) : (
+        <StatusPill status={match.status} />
+      )}
     </div>
   );
 }

@@ -493,6 +493,7 @@ export type Database = {
           email: string | null
           gender: string | null
           id: string
+          is_demo: boolean
           name: string
           phone: string | null
           profile_id: string | null
@@ -502,6 +503,7 @@ export type Database = {
           email?: string | null
           gender?: string | null
           id?: string
+          is_demo?: boolean
           name: string
           phone?: string | null
           profile_id?: string | null
@@ -511,6 +513,7 @@ export type Database = {
           email?: string | null
           gender?: string | null
           id?: string
+          is_demo?: boolean
           name?: string
           phone?: string | null
           profile_id?: string | null
@@ -1307,6 +1310,7 @@ export type Database = {
           group_rest_gap_minutes: number
           group_slot_minutes: number
           id: string
+          is_demo: boolean
           knockout_best_of: number
           knockout_games_to: number
           knockout_rest_gap_minutes: number
@@ -1341,6 +1345,7 @@ export type Database = {
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
+          is_demo?: boolean
           knockout_best_of?: number
           knockout_games_to?: number
           knockout_rest_gap_minutes?: number
@@ -1375,6 +1380,7 @@ export type Database = {
           group_rest_gap_minutes?: number
           group_slot_minutes?: number
           id?: string
+          is_demo?: boolean
           knockout_best_of?: number
           knockout_games_to?: number
           knockout_rest_gap_minutes?: number
@@ -1560,6 +1566,7 @@ export type Database = {
         Args: { p_tournament_id: string }
         Returns: undefined
       }
+      demo_tournament_owner: { Args: never; Returns: string }
       explore_tournament_counts: {
         Args: {
           p_query?: string
@@ -1587,6 +1594,7 @@ export type Database = {
           ends_at: string
           entry_count: number
           id: string
+          is_demo: boolean
           name: string
           play_ends_at: string | null
           play_starts_at: string | null
@@ -1666,6 +1674,10 @@ export type Database = {
           starts_at: string
         }[]
       }
+      place_ready_matches: {
+        Args: { p_slots: Json; p_stage: string; p_tournament_id: string }
+        Returns: Json
+      }
       placement_required_matches: {
         Args: { p_category_id: string }
         Returns: number
@@ -1682,6 +1694,7 @@ export type Database = {
         Args: { p_games: Json; p_match_id: string }
         Returns: undefined
       }
+      remove_demo_tournaments: { Args: never; Returns: number }
       report_placement_result: {
         Args: { p_ended_minutes_ago?: number; p_games: Json; p_match_id: string }
         Returns: undefined
@@ -1794,6 +1807,18 @@ export type Database = {
       search_players: {
         Args: { p_limit?: number; p_query: string; p_tournament_id: string }
         Returns: { gender: string; id: string; name: string }[]
+      }
+      seed_demo_tournaments: {
+        Args: never
+        Returns: {
+          dates: string
+          entries: number
+          events: number
+          stage: string
+          status: string
+          tournament: string
+          venue: string
+        }[]
       }
       set_current_tournament: {
         Args: { p_tournament_id: string }
@@ -1909,6 +1934,7 @@ export type Database = {
           ends_at: string
           entry_count: number
           id: string
+          is_demo: boolean
           name: string
           play_ends_at: string | null
           play_starts_at: string | null

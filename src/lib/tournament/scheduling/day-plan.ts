@@ -328,6 +328,15 @@ export interface PlanDaysInput {
    * exactly right for a first build and for a day that has nothing on it yet.
    */
   baselineByMatchId?: ReadonlyMap<string, BaselineSlot> | undefined;
+  /**
+   * Treat the last day's closing time as a wall too.
+   *
+   * By default the last day that has courts may overrun, because a rebuild has nowhere after it to
+   * defer to and its preview forecasts the overrun for the host to accept or fix. A pass nobody
+   * reviews must not take that decision for them, so the automatic placement sets this and a match
+   * that would finish after the close is left unplaced instead.
+   */
+  strictClose?: boolean | undefined;
 }
 
 export interface PlanDaysResult {
@@ -375,6 +384,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     nextWholeMinute,
     options,
     baselineByMatchId,
+    strictClose = false,
   } = input;
 
   const everything = [...placementAll, ...knockoutAll];
@@ -497,7 +507,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     // Every day but the last one that has courts is a wall. The last day is left to
     // overrun, which is where a tournament's overrun forecast belongs: there is
     // nowhere after it to defer to.
-    const hardEnd = day.id === lastFilledDayId ? undefined : planningEnd;
+    const hardEnd = day.id === lastFilledDayId && !strictClose ? undefined : planningEnd;
     // A rebuild starts from now, never from the day's opening time: replanning a day
     // already under way must not put matches in the past.
     const schedulingFloor = isRebuild

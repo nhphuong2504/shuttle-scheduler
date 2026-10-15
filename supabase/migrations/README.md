@@ -3274,3 +3274,91 @@ without the function the toggle's request fails — remove `StartPolicySection` 
 
 
 
+
+## Applying `20261016000000_full_knockout_bracket.sql`
+
+A knockout draw now creates its whole bracket at once. Before, `apply_tier_draws` made round one and
+`advance_tier_draw_locked` made each later round when the previous one finished, so a viewer saw no path to
+the final until it was close. Now every round and slot exists from the draw; later slots start with no
+entrants (a bye's winner is advanced immediately), a result fills the winner into the existing child slot,
+and a slot with both sides known may be scheduled.
+
+### What it changes
+
+- `fill_tier_bracket(draw)` (new, internal): creates missing rounds, links `parent_a_id` / `parent_b_id`
+  (previously never populated for tier matches), and advances decided winners. Idempotent.
+- `apply_tier_draws`: same gates; after inserting the payload it calls `fill_tier_bracket`, so the payload
+  may carry every round or only the first.
+- `advance_tier_draw_locked`: no longer inserts rows. It writes each decided winner into its child slot (odd
+  slot feeds side A, even side B; only while the child is still `scheduled`) and sets `champion_id` from
+  the final.
+- `reset_tier_draw_result`: refuses only when the child has started; otherwise it withdraws the winner from
+  the child and clears the child's court and time. Resetting the final clears `champion_id`.
+- `start_tier_draw_match`: refuses a match with an empty side.
+- `apply_placement_day_schedule`: the knockout completeness check ignores slots with an undecided side.
+- `seed_demo_tournaments()`: renamed to `seed_demo_tournaments_rows()` and wrapped by a function of the same name, signature and privileges that completes every demo bracket, so the one-call reset still yields full brackets.
+- Backfill: every existing draw is given its full bracket.
+
+Application: `buildTierBracket` and `isTierMatchReady` (`src/lib/tournament/tier-draw.ts`) mirror the same
+rules; `tierItems`, `buildDeskMatches` and `knockoutScheduledIds` skip slots that are not ready.
+
+### Verify after applying
+
+```sql
+SELECT d.tier, d.bracket_size, count(m.*) AS slots           -- slots = bracket_size - 1
+FROM public.tier_draws d JOIN public.tier_draw_matches m ON m.draw_id = d.id
+WHERE d.bracket_size > 1 GROUP BY d.id, d.tier, d.bracket_size;
+SELECT count(*) FROM public.tier_draw_matches
+WHERE round > 1 AND (parent_a_id IS NULL OR parent_b_id IS NULL);      -- 0
+SELECT has_function_privilege('authenticated', 'public.fill_tier_bracket(uuid)', 'execute');  -- false
+```
+
+The `DO $verify$` block asserts the same on apply. Then run `npm run test:integration` on the local stack.
+
+### Rolling back
+
+The previous bodies of the five replaced functions are in `20260917010000_placement_stage_rpcs.sql`,
+`20260927000000_tournova_role_redesign.sql` and `20261010000000_start_match_checks_and_reflow.sql`; re-run
+them to restore. The extra later-round rows can stay, but the old `advance_tier_draw_locked` would then see
+`max(round)` as the final and never advance, so delete rounds above one from any draw that has not been
+played before restoring.
+
+## Applying `20261017000000_place_ready_matches.sql`
+
+An additive writer: it gives a newly ready match a court and a time without touching any other row.
+`apply_placement_day_schedule` stays the full-rebuild writer (it clears every `scheduled` row of a stage and
+re-sets the lot, publishing a change for each); this is its quiet counterpart for "a knockout slot just got
+its second team".
+
+### What it adds
+
+`place_ready_matches(p_tournament_id, p_stage, p_slots)` returns `{ placed: [match ids], skipped: [{ match_id,
+reason }] }`. For each slot it writes `court_id` and `scheduled_time` only on a `scheduled` row that has
+**neither** and whose two sides are known, after re-checking on the server that the court is free and no player
+is busy or inside the rest gap (the same `placement_occupied_matches` test `reschedule_placement_match` uses). A
+slot that fails a check is skipped with a reason (`already_placed`, `not_ready`, `not_scheduled`, `bad_court`,
+`in_the_past`, `court_busy`, `player_busy`, `incomplete`, `unknown_match`) instead of failing the batch, so a
+plan computed from slightly stale data places fewer matches but cannot double-book. Guarded by
+`can_edit_tournament` and `assert_tournament_writable`; takes the `live-schedule` advisory lock. The day window
+and breaks are the planner's to honour; the server does not re-check them.
+
+Application: `planPlacementSchedule({ mode: "place-ready" })` and `applyPlaceReadyPlan`
+(`src/lib/tournament/placement-schedule.ts`). Nothing calls them from the UI yet.
+
+### Verify after applying
+
+```sql
+SELECT count(*) FROM pg_proc WHERE proname = 'place_ready_matches';                                    -- 1
+SELECT has_function_privilege('anon', 'public.place_ready_matches(uuid, text, jsonb)', 'execute');         -- false
+SELECT has_function_privilege('authenticated', 'public.place_ready_matches(uuid, text, jsonb)', 'execute'); -- true
+```
+
+The `DO $verify$` block asserts the same on apply.
+
+### Rolling back
+
+```sql
+DROP FUNCTION public.place_ready_matches(uuid, text, jsonb);
+```
+
+Rows it already placed keep their court and time.
