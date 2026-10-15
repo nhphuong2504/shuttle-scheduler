@@ -1674,6 +1674,10 @@ export type Database = {
           starts_at: string
         }[]
       }
+      place_ready_matches: {
+        Args: { p_slots: Json; p_stage: string; p_tournament_id: string }
+        Returns: Json
+      }
       placement_required_matches: {
         Args: { p_category_id: string }
         Returns: number

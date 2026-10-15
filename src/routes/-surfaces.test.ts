@@ -544,7 +544,9 @@ describe("byes are drawn as draw conditions, not as statuses", () => {
     // buildDeskMatches filters them, which is why the scores page needs the guard in
     // its draw list only.
     expect(scores).toMatch(/isByeMatch\(m\)[\s\S]{0,80}<ByeMarker \/>/);
-    expect(bracket).toMatch(/bye \? <ByeMarker \/> : <StatusPill/);
+    // A slot still waiting on a feeder gets its own marker between the two, so the bye test is
+    // pinned to the marker preceding the pill, not to their being adjacent.
+    expect(bracket).toMatch(/bye \?\s*\(?\s*<ByeMarker \/>[\s\S]{0,600}<StatusPill/);
   });
 
   it("tests for a bye through one shared predicate", () => {

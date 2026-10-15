@@ -2508,3 +2508,31 @@ describe("full knockout bracket migration", () => {
     expect(sql).toMatch(/DO \$verify\$/);
   });
 });
+
+describe("place_ready_matches migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "20261017000000_place_ready_matches.sql"),
+    "utf8",
+  );
+
+  it("is additive: it fills only empty slots and never clears a row", () => {
+    expect(sql).toMatch(/court_id IS NULL AND scheduled_time IS NULL/);
+    expect(sql).not.toMatch(/SET scheduled_time = NULL/);
+    expect(sql).not.toMatch(/DELETE FROM/);
+    expect(sql).toMatch(/'already_placed'/);
+  });
+
+  it("re-checks each slot on the server and skips rather than failing the batch", () => {
+    for (const reason of ["court_busy", "player_busy", "not_ready", "bad_court", "in_the_past"]) {
+      expect(sql).toContain(`'${reason}'`);
+    }
+    expect(sql).toMatch(/placement_occupied_matches\(p_tournament_id\)/);
+  });
+
+  it("is guarded like the other writers and shares their lock", () => {
+    expect(sql).toMatch(/can_edit_tournament\(p_tournament_id\)/);
+    expect(sql).toMatch(/assert_tournament_writable\(p_tournament_id\)/);
+    expect(sql).toMatch(/pg_advisory_xact_lock\(hashtext\('live-schedule'\)\)/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.place_ready_matches\(uuid, text, jsonb\) FROM anon, PUBLIC/);
+  });
+});

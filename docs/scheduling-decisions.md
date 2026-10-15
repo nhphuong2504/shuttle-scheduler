@@ -490,3 +490,20 @@ planner no longer relies on "a later round does not exist yet" to keep unknown m
   not place it; the live reflow shifts only rows that already hold a court and time. Placing newly
   ready matches without a manual rebuild ("Place ready") remains the open design in
   [`knockout-bracket-ideas.md`](knockout-bracket-ideas.md).
+
+## 27. Placing a newly ready match without a rebuild
+
+A rebuild (§25) re-solves every unplayed match and rewrites the whole queue. That is the wrong tool for
+"a knockout slot just became ready". `planPlacementSchedule({ mode: "place-ready" })` is the other mode:
+
+- **Held means held.** Every `scheduled` match that already has a court and a time is an immovable anchor,
+  including one whose time has passed, sits in a break or crosses a day's close. The rebuild-mode legality
+  filter is deliberately not applied, because releasing such a pin is exactly a move. A held match that
+  collides with decided history or another held match is taken out of the problem (neither moved nor
+  planned) rather than fixed.
+- **Only unplaced ready matches get slots**, around the anchors. Whatever does not fit is `blocked`.
+- **The additive writer.** `placementNewPayload` / `knockoutNewPayload` go to `place_ready_matches`, which
+  fills only empty slots and re-checks court and player conflicts on the server, so a stale plan can place
+  fewer matches but cannot double-book.
+
+Not yet wired to any trigger; see the plan for the automatic and manual entry points.

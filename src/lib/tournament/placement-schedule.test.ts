@@ -2432,3 +2432,82 @@ describe("planPlacementSchedule — a fixed knockout on another event's court", 
     expect(placement?.start.toISOString()).toBe(new Date("2026-09-17T09:00:00").toISOString());
   });
 });
+
+describe("place-ready mode", () => {
+  const committed = (id: string, entrantA: string, entrantB: string, courtId: string, time: string) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "scheduled",
+      court_id: courtId,
+      scheduled_time: new Date(time).toISOString(),
+    });
+
+  it("places a new match without touching one that already has a time", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        committed("held", "e1", "e2", "c1", "2026-09-17T14:00:00"),
+        placementMatch("fresh", "round1", "e3", "e4"),
+      ],
+    });
+
+    // Only the new match is written; the held one is neither moved nor listed.
+    expect(result.placementNewPayload.map((slot) => slot.match_id)).toEqual(["fresh"]);
+    expect(result.diff.movedCount).toBe(0);
+    expect(result.blocked).toEqual([]);
+  });
+
+  it("holds a past or stale time exactly as it is, where a rebuild would pull it forward", () => {
+    // Held for 09:00 while the clock says 12:00: a rebuild releases it to "now", place-ready must not.
+    const stale = committed("stale", "e1", "e2", "c1", "2026-09-17T09:00:00");
+    const clock = new Date("2026-09-17T12:00:00").getTime();
+
+    const rebuild = plan({ placementMatches: [stale], now: clock });
+    const placeReady = plan({ mode: "place-ready", placementMatches: [stale], now: clock });
+
+    expect(rebuild.frozenMatchIds).toEqual([]);
+    expect(placeReady.frozenMatchIds).toEqual(["stale"]);
+    expect(placeReady.placementNewPayload).toEqual([]);
+  });
+
+  it("holds every later committed match too, not only the next one on each court", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        committed("first", "e1", "e2", "c1", "2026-09-17T10:00:00"),
+        committed("second", "e3", "e4", "c1", "2026-09-17T11:30:00"),
+      ],
+    });
+    expect(result.frozenMatchIds).toEqual(["first", "second"]);
+    expect(result.placementNewPayload).toEqual([]);
+  });
+
+  it("never plans a held match that collides with decided history", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        placementMatch("played", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T11:00:00",
+        }),
+        committed("clash", "e3", "e4", "c1", "2026-09-17T10:00:00"),
+      ],
+    });
+    // Neither re-placed nor pinned: it keeps whatever time it has, and nothing is written for it.
+    expect(result.placementNewPayload.map((slot) => slot.match_id)).not.toContain("clash");
+    expect(result.frozenMatchIds).not.toContain("clash");
+  });
+
+  it("places a newly ready knockout match and ignores a slot still waiting on a feeder", () => {
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [],
+      tierMatches: [
+        tierMatch("ready", 1, 1, "e1", "e2", { status: "scheduled" }),
+        tierMatch("waiting", 2, 1, "e3", null, { status: "scheduled" }),
+      ],
+    });
+    expect(result.knockoutNewPayload.map((slot) => slot.match_id)).toEqual(["ready"]);
+  });
+});

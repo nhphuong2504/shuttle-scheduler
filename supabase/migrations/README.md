@@ -3322,3 +3322,43 @@ The previous bodies of the five replaced functions are in `20260917010000_placem
 them to restore. The extra later-round rows can stay, but the old `advance_tier_draw_locked` would then see
 `max(round)` as the final and never advance, so delete rounds above one from any draw that has not been
 played before restoring.
+
+## Applying `20261017000000_place_ready_matches.sql`
+
+An additive writer: it gives a newly ready match a court and a time without touching any other row.
+`apply_placement_day_schedule` stays the full-rebuild writer (it clears every `scheduled` row of a stage and
+re-sets the lot, publishing a change for each); this is its quiet counterpart for "a knockout slot just got
+its second team".
+
+### What it adds
+
+`place_ready_matches(p_tournament_id, p_stage, p_slots)` returns `{ placed: [match ids], skipped: [{ match_id,
+reason }] }`. For each slot it writes `court_id` and `scheduled_time` only on a `scheduled` row that has
+**neither** and whose two sides are known, after re-checking on the server that the court is free and no player
+is busy or inside the rest gap (the same `placement_occupied_matches` test `reschedule_placement_match` uses). A
+slot that fails a check is skipped with a reason (`already_placed`, `not_ready`, `not_scheduled`, `bad_court`,
+`in_the_past`, `court_busy`, `player_busy`, `incomplete`, `unknown_match`) instead of failing the batch, so a
+plan computed from slightly stale data places fewer matches but cannot double-book. Guarded by
+`can_edit_tournament` and `assert_tournament_writable`; takes the `live-schedule` advisory lock. The day window
+and breaks are the planner's to honour; the server does not re-check them.
+
+Application: `planPlacementSchedule({ mode: "place-ready" })` and `applyPlaceReadyPlan`
+(`src/lib/tournament/placement-schedule.ts`). Nothing calls them from the UI yet.
+
+### Verify after applying
+
+```sql
+SELECT count(*) FROM pg_proc WHERE proname = 'place_ready_matches';                                    -- 1
+SELECT has_function_privilege('anon', 'public.place_ready_matches(uuid, text, jsonb)', 'execute');         -- false
+SELECT has_function_privilege('authenticated', 'public.place_ready_matches(uuid, text, jsonb)', 'execute'); -- true
+```
+
+The `DO $verify$` block asserts the same on apply.
+
+### Rolling back
+
+```sql
+DROP FUNCTION public.place_ready_matches(uuid, text, jsonb);
+```
+
+Rows it already placed keep their court and time.

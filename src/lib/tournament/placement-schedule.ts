@@ -231,6 +231,13 @@ export interface PlacementSchedulePlan {
    */
   placementScheduledIds: string[];
   knockoutScheduledIds: string[];
+  /**
+   * The slots for matches that held no court or time before this plan, split by stage. This is
+   * what `place_ready_matches` writes: the additive path, which names only the new placements and
+   * clears nothing. In `place-ready` mode it is the whole payload.
+   */
+  placementNewPayload: PlacementSlotPayload[];
+  knockoutNewPayload: PlacementSlotPayload[];
   /** Why the scheduler could not place something, for the desk-facing error. */
   blockedReason: string | null;
 }
@@ -262,6 +269,13 @@ export interface PlanPlacementScheduleInput {
    * rather than the starting point.
    */
   freezeHorizonMinutes?: number | undefined;
+  /**
+   * `rebuild` (the default) re-solves every unplayed match. `place-ready` never moves a match that
+   * already holds a court and a time: each one is an immovable anchor, wherever it sits (past, in
+   * a break, over a close), and only matches with no court or time are placed around them. It is
+   * what lets a newly ready match be slotted in without disturbing a published time.
+   */
+  mode?: "rebuild" | "place-ready" | undefined;
 }
 
 /**
@@ -301,6 +315,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     now = Date.now(),
     freezeHorizonMinutes = 0,
   } = input;
+  const placeReady = input.mode === "place-ready";
 
   if (!days.length) {
     throw new Error("A tournament needs at least one day before a schedule can be built.");
@@ -414,7 +429,17 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       resourceId: match.court_id,
     });
   }
-  const freezeIds = new Set(
+  /**
+   * Rows `place-ready` must leave exactly where they are but cannot hold as a pin (an illegal or
+   * colliding one). They are taken out of the problem entirely: never moved, never planned.
+   */
+  const dropIds = new Set<string>();
+  const release = (item: StageItem): void => {
+    if (placeReady) dropIds.add(item.id);
+  };
+  const freezeIds = placeReady
+    ? new Set(committedById.keys())
+    : new Set(
     frozenMatchIdsFor({
       committed: [...committedById.values()].map((slot) => ({
         id: slot.matchId,
@@ -478,31 +503,43 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     const committed = committedById.get(item.id);
     if (!committed) continue;
     const owningDay = orderedDays[dayOwning(committed.start, orderedDays)];
-    if (!owningDay) continue;
+    if (!owningDay) {
+      release(item);
+      continue;
+    }
     const dayCourts = courtsForDay(allCourts, dayCourtIds?.get(owningDay.id) ?? new Set());
-    if (!dayCourts.some((court) => court.id === committed.resourceId)) continue;
+    if (!dayCourts.some((court) => court.id === committed.resourceId)) {
+      release(item);
+      continue;
+    }
 
     const start = committed.start;
     const end = start + item.durationMinutes * MINUTE;
 
-    // A pin is the match the desk is about to call, and one the day has already passed is not that
-    // match any more. Releasing it lets the solver pull it forward to the floor rather than keeping
-    // a stale time the desk can no longer act on.
-    if (start < nextWholeMinute) continue;
-    // A match may not sleep inside a break. The day runner steps movable work over breaks, so a pin
-    // that kept a break-violating time would preserve exactly what the run exists to fix.
-    const breaks = normalizeBreaks(
-      breakWindowsFor(owningDay, breaksByDayId?.get(owningDay.id)),
-      dayWindowBounds(owningDay).end,
-    );
-    if (breaks.some((brk) => start < brk.end && brk.start < end)) continue;
-    // Every day but the last is a wall, and the last day is where a long plan is allowed to overrun.
-    // So a pin crossing a non-final day's close is invalid; the same on the final day is left alone.
-    if (owningDay.id !== lastCourtDayId && end > dayWindowBounds(owningDay).end) continue;
+    if (!placeReady) {
+      // A pin is the match the desk is about to call, and one the day has already passed is not
+      // that match any more. Releasing it lets the solver pull it forward to the floor rather than
+      // keeping a stale time the desk can no longer act on.
+      if (start < nextWholeMinute) continue;
+      // A match may not sleep inside a break. The day runner steps movable work over breaks, so a
+      // pin that kept a break-violating time would preserve exactly what the run exists to fix.
+      const breaks = normalizeBreaks(
+        breakWindowsFor(owningDay, breaksByDayId?.get(owningDay.id)),
+        dayWindowBounds(owningDay).end,
+      );
+      if (breaks.some((brk) => start < brk.end && brk.start < end)) continue;
+      // Every day but the last is a wall, and the last day is where a long plan is allowed to
+      // overrun. So a pin crossing a non-final day's close is invalid; the same on the final day is
+      // left alone.
+      if (owningDay.id !== lastCourtDayId && end > dayWindowBounds(owningDay).end) continue;
+    }
     // The court's decided history, kept exactly as it was: two fixed matches on one resource is a
     // physical impossibility the problem validator rejects.
     const busy = decidedWindowsByCourt.get(item.courtNumber ?? -1) ?? [];
-    if (busy.some((window) => start < window.end && window.start < end)) continue;
+    if (busy.some((window) => start < window.end && window.start < end)) {
+      release(item);
+      continue;
+    }
 
     candidates.push({ item, start, end });
   }
@@ -555,8 +592,13 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   for (const candidate of [...candidates].sort(
     (a, b) => a.start - b.start || compareIds(a.item.id, b.item.id),
   )) {
-    if (decidedOccupancies.some((occupancy) => collidesWith(candidate, occupancy))) continue;
-    if (acceptedPins.some((occupancy) => collidesWith(candidate, occupancy))) continue;
+    if (
+      decidedOccupancies.some((occupancy) => collidesWith(candidate, occupancy)) ||
+      acceptedPins.some((occupancy) => collidesWith(candidate, occupancy))
+    ) {
+      release(candidate.item);
+      continue;
+    }
     acceptedPins.push({
       start: candidate.start,
       end: candidate.end,
@@ -574,8 +616,8 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       : item;
   };
 
-  const placementAll = placementRaw.map(applyFreeze);
-  const knockoutAll = knockoutRaw.map(applyFreeze);
+  const placementAll = placementRaw.filter((item) => !dropIds.has(item.id)).map(applyFreeze);
+  const knockoutAll = knockoutRaw.filter((item) => !dropIds.has(item.id)).map(applyFreeze);
 
   const run = runPlanDays({
     orderedDays,
@@ -658,6 +700,19 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
         court_id: slot.courtId,
       }));
 
+  /** Slots for matches that held no court or time before: the additive writer's whole input. */
+  const newPayloadFor = (stageIds: ReadonlySet<string>): PlacementSlotPayload[] =>
+    run.allSlots
+      .filter(
+        (slot) =>
+          stageIds.has(slot.matchId) && !fixedSet.has(slot.matchId) && !committedById.has(slot.matchId),
+      )
+      .map((slot) => ({
+        match_id: slot.matchId,
+        scheduled_time: slot.start.toISOString(),
+        court_id: slot.courtId,
+      }));
+
   // The rows the writer is about to clear, which the payloads above must therefore
   // cover. Byes and `void` rows are excluded because the RPC excludes them too.
   const placementScheduledIds = placementMatches
@@ -690,6 +745,8 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     days: run.days,
     placementSlotPayload: payloadFor(new Set(placementAll.map((item) => item.id))),
     knockoutSlotPayload: payloadFor(new Set(knockoutAll.map((item) => item.id))),
+    placementNewPayload: newPayloadFor(new Set(placementAll.map((item) => item.id))),
+    knockoutNewPayload: newPayloadFor(new Set(knockoutAll.map((item) => item.id))),
     placementScheduledIds,
     knockoutScheduledIds,
     blockedReason,
@@ -883,6 +940,42 @@ export async function applyPlacementSchedulePlan(plan: PlacementSchedulePlan): P
     });
     if (error) throw new Error(error.message);
   }
+}
+
+/** What `place_ready_matches` did with a plan, by match id. */
+export interface PlaceReadyResult {
+  placed: string[];
+  skipped: { match_id: string; reason: string }[];
+}
+
+/**
+ * Writes a `place-ready` plan through the additive RPC.
+ *
+ * Unlike `applyPlacementSchedulePlan` this clears nothing, so the coverage guard does not apply:
+ * a match the plan does not name keeps whatever time it has. A match the server declines (the court
+ * or a player got busy since the plan was read, it was placed by someone else, it is no longer
+ * ready) is reported in `skipped` rather than thrown, because a plan computed a moment ago being
+ * slightly stale is expected, not an error. Only a transport or authorization failure throws.
+ */
+export async function applyPlaceReadyPlan(plan: PlacementSchedulePlan): Promise<PlaceReadyResult> {
+  const result: PlaceReadyResult = { placed: [], skipped: [] };
+  const calls: [PlacementStageName, PlacementSlotPayload[]][] = [
+    ["placement", plan.placementNewPayload],
+    ["knockout", plan.knockoutNewPayload],
+  ];
+  for (const [stage, slots] of calls) {
+    if (slots.length === 0) continue;
+    const { data, error } = await supabase.rpc("place_ready_matches", {
+      p_tournament_id: plan.tournamentId,
+      p_stage: stage,
+      p_slots: slots as never,
+    });
+    if (error) throw new Error(error.message);
+    const body = (data ?? {}) as Partial<PlaceReadyResult>;
+    result.placed.push(...(body.placed ?? []));
+    result.skipped.push(...(body.skipped ?? []));
+  }
+  return result;
 }
 
 /** The columns the schedule writer owns, shared by the two match tables. */
