@@ -39,6 +39,7 @@ const DEFAULT_CONFIG = {
   group_rest_gap_minutes: 10,
   group_slot_minutes: 20,
   id: "tournament-default",
+  is_demo: false,
   knockout_best_of: 3,
   knockout_games_to: 21,
   knockout_rest_gap_minutes: 30,

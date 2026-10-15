@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { RegistrationStatePill } from "@/components/app-shell";
+import { DemoPill, RegistrationStatePill } from "@/components/app-shell";
 import { EXPLORE_ACTION_OUTLINE, RegisterAction } from "@/components/explore-card";
 import type { TournamentSummary } from "@/lib/tournament/data";
 import { countText, dateRangeText } from "@/lib/tournament/summary-format";
@@ -92,6 +92,12 @@ export function ExploreRow({
             >
               {summary.name}
             </Link>
+            {/*
+              Beside the name rather than out at the end of the row, because the row's end is
+              where the actions are and this is not one. The name is the thing being qualified,
+              and on a phone the two stay on the same line when the actions wrap below.
+            */}
+            {summary.is_demo ? <DemoPill className="ml-2 align-middle" /> : null}
           </h4>
           <p className="mt-0.5 break-words text-sm text-muted-foreground">
             {dateRangeText(summary.starts_at, summary.ends_at)}
@@ -166,6 +172,7 @@ export function CompletedList({ rows }: { rows: TournamentSummary[] }) {
                   >
                     {row.name}
                   </Link>
+                  {row.is_demo ? <DemoPill className="ml-2 align-middle" /> : null}
                 </td>
                 <td className="py-3 pr-4 text-muted-foreground">
                   {dateRangeText(row.starts_at, row.ends_at)}
@@ -198,6 +205,7 @@ export function CompletedList({ rows }: { rows: TournamentSummary[] }) {
               className="block min-h-11 rounded-sm"
             >
               <strong className="font-display text-lg">{row.name}</strong>
+              {row.is_demo ? <DemoPill className="ml-2 align-middle" /> : null}
               <span className="mt-0.5 block text-sm text-muted-foreground">
                 {dateRangeText(row.starts_at, row.ends_at)}
               </span>

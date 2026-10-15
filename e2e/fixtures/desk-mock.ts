@@ -627,6 +627,8 @@ export interface MockTournamentSummary {
   /** The first and last playing day, as instants. Null until playing days are chosen. */
   play_starts_at: string | null;
   play_ends_at: string | null;
+  /** Sample data rather than a real tournament, which Explore labels and the workspace states. */
+  is_demo: boolean;
 }
 
 /** The filters `tournament_summary` takes that this fixture models. */
@@ -676,18 +678,31 @@ const buildFixture = (
   format: MockTournamentFormat | undefined,
   registrationState: string | null | undefined,
   startPolicy: boolean | undefined,
+  demo: boolean | undefined,
 ): DeskFixture => {
+  /**
+   * Whether this fixture stands in for sample data.
+   *
+   * It is a fact about the tournament rather than about the reader, so it reaches the page
+   * through two reads that have to agree: the `tournaments` row (which the workspace header
+   * draws) and the `tournament_summary` card (which Explore draws). Both are served from this
+   * one value, because a fixture that said "sample" in one place and nothing in the other
+   * would let a spec pass against a state the database cannot produce.
+   */
+  const isDemo = demo === true;
+
   // The lifecycle word is the one thing a spec needs to vary and cannot click its way
   // to: the fixture is a running event, and `Upcoming` and `Completed` are the other two
   // states the vocabulary has.
   const served: Record<string, unknown> =
-    status || membership !== "owner" || format || startPolicy !== undefined
+    status || membership !== "owner" || format || startPolicy !== undefined || isDemo
       ? {
           ...tournament,
           ...(status ? { status } : {}),
           ...(format ? { format } : {}),
           ...(startPolicy !== undefined ? { block_start_on_short_rest: startPolicy } : {}),
           ...(membership === "owner" ? {} : { owner_profile_id: OTHER_OWNER_PROFILE_ID }),
+          ...(isDemo ? { is_demo: true } : {}),
         }
       : tournament;
 
@@ -746,6 +761,7 @@ const buildFixture = (
           : membership === "editor"
             ? "editor"
             : "viewer",
+    is_demo: isDemo,
   };
 
   /** What `p_query` matches. The events are the third thing a person remembers. */
@@ -851,6 +867,8 @@ export function deskFixture(
   format?: MockTournamentFormat,
   registrationState?: string | null,
   startPolicy?: boolean,
+  /** Serve the fixture as a sample tournament. See `isDemo` in `buildFixture`. */
+  demo?: boolean,
 ): DeskFixture {
   const chosen = PRESETS[preset];
   return buildFixture(
@@ -865,5 +883,6 @@ export function deskFixture(
     format,
     registrationState,
     startPolicy,
+    demo,
   );
 }

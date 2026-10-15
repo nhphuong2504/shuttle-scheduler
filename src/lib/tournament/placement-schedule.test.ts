@@ -35,6 +35,7 @@ const TOURNAMENT_ID = "t1";
 function tournament(overrides: Partial<Tournament> = {}): Tournament {
   return {
     id: TOURNAMENT_ID,
+    is_demo: false,
     name: "Test Open",
     block_start_on_short_rest: false,
     court_count: 2,

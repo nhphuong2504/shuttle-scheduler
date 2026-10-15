@@ -426,6 +426,16 @@ export interface TournamentSummary {
   entry_count: number;
   category_count: number;
   access_level: TournamentSummaryAccess;
+  /**
+   * Sample data, not a real tournament.
+   *
+   * Carried on the summary because the label belongs where the tournament is named - the
+   * card, the row, the header - and because every one of those surfaces is built from this
+   * one read. It is a fact about the row, never a permission: a demo tournament the caller
+   * owns still grants them the same access as any other, so a visitor exploring one is not
+   * quietly handed an editor's view of the platform.
+   */
+  is_demo: boolean;
 }
 
 export interface TournamentSummaryParams {
@@ -484,6 +494,7 @@ function toTournamentSummary(row: {
   entry_count: number | null;
   category_count: number | null;
   access_level: string;
+  is_demo?: boolean | null;
 }): TournamentSummary {
   return {
     id: row.id,
@@ -503,6 +514,7 @@ function toTournamentSummary(row: {
       row.access_level === "editor"
         ? row.access_level
         : "viewer",
+    is_demo: row.is_demo === true,
   };
 }
 
