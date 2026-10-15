@@ -1,0 +1,546 @@
+{
+ "source": "Viet Nam Open (staging), entries only; player identities replaced by anonymous labels",
+ "events": [
+  {
+   "code": "MS",
+   "entrants": [
+    {
+     "players": [
+      "p001"
+     ]
+    },
+    {
+     "players": [
+      "p002"
+     ]
+    },
+    {
+     "players": [
+      "p003"
+     ]
+    },
+    {
+     "players": [
+      "p004"
+     ]
+    },
+    {
+     "players": [
+      "p005"
+     ]
+    },
+    {
+     "players": [
+      "p006"
+     ]
+    },
+    {
+     "players": [
+      "p007"
+     ]
+    },
+    {
+     "players": [
+      "p008"
+     ]
+    },
+    {
+     "players": [
+      "p009"
+     ]
+    },
+    {
+     "players": [
+      "p010"
+     ]
+    },
+    {
+     "players": [
+      "p011"
+     ]
+    },
+    {
+     "players": [
+      "p012"
+     ]
+    },
+    {
+     "players": [
+      "p013"
+     ]
+    },
+    {
+     "players": [
+      "p014"
+     ]
+    },
+    {
+     "players": [
+      "p015"
+     ]
+    },
+    {
+     "players": [
+      "p016"
+     ]
+    },
+    {
+     "players": [
+      "p017"
+     ]
+    },
+    {
+     "players": [
+      "p018"
+     ]
+    },
+    {
+     "players": [
+      "p019"
+     ]
+    },
+    {
+     "players": [
+      "p020"
+     ]
+    },
+    {
+     "players": [
+      "p021"
+     ]
+    },
+    {
+     "players": [
+      "p022"
+     ]
+    },
+    {
+     "players": [
+      "p023"
+     ]
+    },
+    {
+     "players": [
+      "p024"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "WS",
+   "entrants": [
+    {
+     "players": [
+      "p025"
+     ]
+    },
+    {
+     "players": [
+      "p026"
+     ]
+    },
+    {
+     "players": [
+      "p027"
+     ]
+    },
+    {
+     "players": [
+      "p028"
+     ]
+    },
+    {
+     "players": [
+      "p029"
+     ]
+    },
+    {
+     "players": [
+      "p030"
+     ]
+    },
+    {
+     "players": [
+      "p031"
+     ]
+    },
+    {
+     "players": [
+      "p032"
+     ]
+    },
+    {
+     "players": [
+      "p033"
+     ]
+    },
+    {
+     "players": [
+      "p034"
+     ]
+    },
+    {
+     "players": [
+      "p035"
+     ]
+    },
+    {
+     "players": [
+      "p036"
+     ]
+    },
+    {
+     "players": [
+      "p037"
+     ]
+    },
+    {
+     "players": [
+      "p038"
+     ]
+    },
+    {
+     "players": [
+      "p039"
+     ]
+    },
+    {
+     "players": [
+      "p040"
+     ]
+    },
+    {
+     "players": [
+      "p041"
+     ]
+    },
+    {
+     "players": [
+      "p042"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "MD",
+   "entrants": [
+    {
+     "players": [
+      "p001",
+      "p002"
+     ]
+    },
+    {
+     "players": [
+      "p003",
+      "p004"
+     ]
+    },
+    {
+     "players": [
+      "p005",
+      "p006"
+     ]
+    },
+    {
+     "players": [
+      "p007",
+      "p008"
+     ]
+    },
+    {
+     "players": [
+      "p009",
+      "p010"
+     ]
+    },
+    {
+     "players": [
+      "p011",
+      "p012"
+     ]
+    },
+    {
+     "players": [
+      "p013",
+      "p014"
+     ]
+    },
+    {
+     "players": [
+      "p015",
+      "p016"
+     ]
+    },
+    {
+     "players": [
+      "p043",
+      "p044"
+     ]
+    },
+    {
+     "players": [
+      "p045",
+      "p046"
+     ]
+    },
+    {
+     "players": [
+      "p047",
+      "p048"
+     ]
+    },
+    {
+     "players": [
+      "p049",
+      "p050"
+     ]
+    },
+    {
+     "players": [
+      "p051",
+      "p052"
+     ]
+    },
+    {
+     "players": [
+      "p053",
+      "p054"
+     ]
+    },
+    {
+     "players": [
+      "p055",
+      "p056"
+     ]
+    },
+    {
+     "players": [
+      "p057",
+      "p058"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "WD",
+   "entrants": [
+    {
+     "players": [
+      "p025",
+      "p026"
+     ]
+    },
+    {
+     "players": [
+      "p027",
+      "p028"
+     ]
+    },
+    {
+     "players": [
+      "p029",
+      "p030"
+     ]
+    },
+    {
+     "players": [
+      "p031",
+      "p032"
+     ]
+    },
+    {
+     "players": [
+      "p033",
+      "p034"
+     ]
+    },
+    {
+     "players": [
+      "p035",
+      "p036"
+     ]
+    },
+    {
+     "players": [
+      "p037",
+      "p038"
+     ]
+    },
+    {
+     "players": [
+      "p059",
+      "p060"
+     ]
+    },
+    {
+     "players": [
+      "p061",
+      "p062"
+     ]
+    },
+    {
+     "players": [
+      "p063",
+      "p064"
+     ]
+    },
+    {
+     "players": [
+      "p065",
+      "p066"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "XD",
+   "entrants": [
+    {
+     "players": [
+      "p001",
+      "p025"
+     ]
+    },
+    {
+     "players": [
+      "p002",
+      "p026"
+     ]
+    },
+    {
+     "players": [
+      "p003",
+      "p027"
+     ]
+    },
+    {
+     "players": [
+      "p004",
+      "p028"
+     ]
+    },
+    {
+     "players": [
+      "p005",
+      "p029"
+     ]
+    },
+    {
+     "players": [
+      "p006",
+      "p030"
+     ]
+    },
+    {
+     "players": [
+      "p007",
+      "p067"
+     ]
+    },
+    {
+     "players": [
+      "p008",
+      "p068"
+     ]
+    },
+    {
+     "players": [
+      "p069",
+      "p070"
+     ]
+    },
+    {
+     "players": [
+      "p071",
+      "p072"
+     ]
+    },
+    {
+     "players": [
+      "p073",
+      "p074"
+     ]
+    },
+    {
+     "players": [
+      "p075",
+      "p076"
+     ]
+    },
+    {
+     "players": [
+      "p077",
+      "p078"
+     ]
+    },
+    {
+     "players": [
+      "p079",
+      "p080"
+     ]
+    },
+    {
+     "players": [
+      "p081",
+      "p082"
+     ]
+    },
+    {
+     "players": [
+      "p083",
+      "p084"
+     ]
+    },
+    {
+     "players": [
+      "p085",
+      "p086"
+     ]
+    },
+    {
+     "players": [
+      "p087",
+      "p088"
+     ]
+    },
+    {
+     "players": [
+      "p089",
+      "p090"
+     ]
+    },
+    {
+     "players": [
+      "p091",
+      "p092"
+     ]
+    },
+    {
+     "players": [
+      "p093",
+      "p094"
+     ]
+    },
+    {
+     "players": [
+      "p095",
+      "p096"
+     ]
+    },
+    {
+     "players": [
+      "p097",
+      "p098"
+     ]
+    },
+    {
+     "players": [
+      "p099",
+      "p100"
+     ]
+    }
+   ]
+  }
+ ]
+}
