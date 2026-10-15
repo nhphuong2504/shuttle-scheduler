@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { Button } from "@/components/ui/button";
+import { useAutoSchedule } from "@/hooks/useAutoSchedule";
 import {
   Dialog,
   DialogContent,
@@ -547,12 +548,20 @@ function Desk() {
    * this day. "Scheduled for the selected day" and "ready to dispatch now" stay separate: the
    * first is attribution, the second is the shared readiness rule.
    */
-  const readyUnassigned = dayMatches
+  // A ready match that has no time at all (a result unlocked it and nothing has placed it yet) is on
+  // no day, so it is added from the neutral untimed pool: the desk can still dispatch it, and it
+  // sorts last because it has no scheduled time.
+  const readyUnassigned = [...dayMatches, ...attribution.untimed]
     .filter((match) => match.status === "scheduled" && !match.courtId)
     .filter(
       (match) => getMatchReadiness(match, dayMatches, restMinutesFor(match), now).state === "ready",
     )
-    .sort((a, b) => new Date(a.scheduled ?? 0).getTime() - new Date(b.scheduled ?? 0).getTime());
+    .sort((a, b) => {
+      // A match with no time sorts after every timed one, never ahead of it.
+      const at = (match: typeof a) =>
+        match.scheduled ? new Date(match.scheduled).getTime() : Number.POSITIVE_INFINITY;
+      return at(a) === at(b) ? 0 : at(a) < at(b) ? -1 : 1;
+    });
 
   /** The pairing the idle courts offer, named once so the card cannot drift. */
   const nextReadyLabel = readyUnassigned[0]
@@ -1083,6 +1092,8 @@ export function MatchOperationsDialog({
   timezone?: string | undefined;
   onDone: () => void;
 }) {
+  /** After a result: draw what it unlocked and slot newly ready matches, never moving a time. */
+  const autoSchedule = useAutoSchedule();
   const rows = scoringRule.bestOf;
   const [values, setValues] = useState(() =>
     scoreFormValues(rows, match.status, match.initialGames),
@@ -1255,6 +1266,8 @@ export function MatchOperationsDialog({
             .filter(Boolean)
             .join(". ")}.`,
         );
+        // The result is saved and announced; scheduling what it unlocked is best-effort.
+        autoSchedule();
       } else if (match.kind === "pool") {
         const g = games[0];
         if (!g) throw new Error("Enter both scores.");

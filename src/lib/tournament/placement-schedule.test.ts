@@ -21,6 +21,7 @@ import {
   planPlacementSchedule,
   projectSlotsOntoMatches,
   sliceRowsByDay,
+  readyUnplacedCount,
   uncoveredScheduledMatches,
   type PlanPlacementScheduleInput,
 } from "./placement-schedule";
@@ -2509,5 +2510,23 @@ describe("place-ready mode", () => {
       ],
     });
     expect(result.knockoutNewPayload.map((slot) => slot.match_id)).toEqual(["ready"]);
+  });
+});
+
+describe("readyUnplacedCount", () => {
+  it("counts ready matches with no court or time, and nothing else", () => {
+    const placed = placementMatch("placed", "round1", "e1", "e2", {
+      status: "scheduled",
+      court_id: "c1",
+      scheduled_time: new Date("2026-09-17T10:00:00").toISOString(),
+    });
+    const fresh = placementMatch("fresh", "round1", "e3", "e4");
+    const reported = placementMatch("done", "round1", "e1", "e3", { status: "reported" });
+    const ready = tierMatch("ready", 1, 1, "e1", "e2", { status: "scheduled" });
+    const waiting = tierMatch("waiting", 2, 1, "e3", null, { status: "scheduled" });
+    const bye = tierMatch("bye", 1, 2, "e4", null, { status: "bye", is_bye: true });
+
+    expect(readyUnplacedCount([placed, fresh, reported], [ready, waiting, bye])).toBe(2);
+    expect(readyUnplacedCount([placed], [])).toBe(0);
   });
 });

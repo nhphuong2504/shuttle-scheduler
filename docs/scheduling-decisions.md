@@ -506,4 +506,28 @@ A rebuild (§25) re-solves every unplayed match and rewrites the whole queue. Th
   fills only empty slots and re-checks court and player conflicts on the server, so a stale plan can place
   fewer matches but cannot double-book.
 
-Not yet wired to any trigger; see the plan for the automatic and manual entry points.
+Wired in §28.
+
+## 28. Scheduling that follows the results
+
+Pressing "Rebuild schedule" after every round is not a workflow. Once a schedule exists, the work it
+used to be pressed for happens on its own, and the button is left for deliberate re-optimisation.
+
+- **After a result** (`useAutoSchedule`, called from `MatchOperationsDialog`, which both the Desk and
+  the Scores page use): an editor's client generates the stage the result unlocked - round two, the
+  knockout draws - **only for events that already have placement matches** (the first build stays the
+  operator's decision), then plans in `place-ready` mode (§27) and writes through `place_ready_matches`.
+  Overlapping results coalesce (`singleFlight`: one run plus one queued). It is best-effort and silent
+  on failure: the result is already saved, and the Schedule page's status line is where anything left
+  over stays visible. A toast names what happened ("Round 2 drawn, 2 matches scheduled").
+- **Nothing is rebuilt.** No time that was already on a match changes; a rebuild still previews and
+  needs confirmation (§24 still lists an automatic full rebuild as a non-goal).
+- **The Schedule page** shows "N ready matches have no time yet" with **Place now** (the same pass,
+  run on demand, loudly) or "Every ready match has a time". "Update schedule" is renamed **Rebuild
+  schedule**. Saving timings, match settings or breaks offers **Review & apply** in the toast instead
+  of telling the host to go and find the button.
+- **The Desk** lists a ready match with no time at all in its "ready, unassigned" pool (after every
+  timed one), so it can still be dispatched while nothing has placed it.
+- **What stays manual:** the first build, a rebuild after the day windows, courts or timings change,
+  clearing a held overlap, and withdrawals or walkovers, which the placement format does not support
+  on the Desk.

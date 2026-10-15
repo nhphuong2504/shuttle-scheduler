@@ -76,7 +76,9 @@ import { buildStageProgress } from "@/lib/tournament/stage-progress";
 import { cn } from "@/lib/utils";
 import { StageProgressList } from "@/components/stage-progress";
 import {
+  applyPlaceReadyPlan,
   applyPlacementSchedulePlan,
+  readyUnplacedCount,
   courtsAddedToDays,
   courtsForDay,
   dayWindowBounds,
@@ -137,7 +139,7 @@ function normalizeTime(value: string) {
  * The organiser's block: every match that cannot run as published, and the one way to fix it.
  *
  * Read-only, and deliberately so. It names the matches, groups them by reason, and points at
- * the existing "Update schedule" control rather than offering a second button - the page has
+ * the existing "Rebuild schedule" control rather than offering a second button - the page has
  * one way to replan, and a block that re-applied a plan itself would be a second, hidden one.
  * It says plainly that nothing has changed yet, because a warning that looks like an action
  * already taken is the reading that costs a host a round.
@@ -230,10 +232,10 @@ function ConflictOverview({
             ))}
           </ul>
           <p className="mt-3 text-sm text-warn-foreground">
-            Update schedule will replan these matches. Nothing changes until you run it.
+            Rebuild schedule will replan these matches. Nothing changes until you run it.
           </p>
           <Button type="button" variant="outline" size="sm" className="mt-2" onClick={goToBuild}>
-            Go to Update schedule
+            Go to Rebuild schedule
           </Button>
         </div>
       ) : null}
@@ -366,6 +368,8 @@ export function PlacementScheduler() {
   );
   /** Any match already has a time, so the next build is a rebuild rather than a first build. */
   const hasSchedule = placementScheduled || knockoutScheduled;
+  /** Ready to play but holding no court or time: what a result unlocked and nothing has placed yet. */
+  const readyUnplaced = readyUnplacedCount(placementMatches ?? [], tierMatches ?? []);
 
   /**
    * Whether every list a plan is computed from has actually arrived.
@@ -544,7 +548,7 @@ export function PlacementScheduler() {
         return next;
       });
       await qc.invalidateQueries();
-      toast.success("Timing updated. Rebuild a day to apply it.");
+      offerRebuild("Timing updated.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the timing");
     }
@@ -663,7 +667,7 @@ export function PlacementScheduler() {
         });
       }
       await qc.invalidateQueries();
-      toast.success("Match settings updated. Rebuild a day to apply it.");
+      offerRebuild("Match settings updated.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the match settings");
     } finally {
@@ -726,7 +730,7 @@ export function PlacementScheduler() {
         return next;
       });
       await qc.invalidateQueries();
-      toast.success(`Day ${day.day_number} breaks saved. Rebuild a day to apply them.`);
+      offerRebuild(`Day ${day.day_number} breaks saved.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the breaks");
     } finally {
@@ -1221,9 +1225,13 @@ export function PlacementScheduler() {
     return { placementMatches, tierMatches, draws, entrants };
   };
 
-  const computePlan = async (fresh: Awaited<ReturnType<typeof freshSchedulingData>>) => {
+  const computePlan = async (
+    fresh: Awaited<ReturnType<typeof freshSchedulingData>>,
+    mode: "rebuild" | "place-ready" = "rebuild",
+  ) => {
     if (!tournament) throw new Error("No active tournament is configured.");
     return planPlacementSchedule({
+      mode,
       tournament,
       days: plannerDays,
       allCourts: courts ?? [],
@@ -1352,6 +1360,65 @@ export function PlacementScheduler() {
     }
   };
 
+  /**
+   * Slots every ready match that has no time into free court time, without moving anything that
+   * already has one. The manual twin of the pass that runs after each result: same planner mode,
+   * same additive writer, but loud, because the person pressed it.
+   */
+  const placeNow = async () => {
+    if (!planInputsReady) {
+      toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const before = await freshSchedulingData();
+      // Only events already under way: starting an event's round one is the first build.
+      const underWay = new Set(before.placementMatches.map((match) => match.category_id));
+      const generation = await generateMissingStages({
+        categories: (categories ?? []).filter((category) => underWay.has(category.id)),
+        entrants: before.entrants,
+        matches: before.placementMatches,
+        draws: before.draws,
+      });
+      const fresh = stageGenerationChanged(generation) ? await freshSchedulingData() : before;
+      const plan = await computePlan(fresh, "place-ready");
+      const result = await applyPlaceReadyPlan(plan);
+      const left = result.skipped.length + plan.blocked.length;
+      if (result.placed.length === 0) {
+        toast.info(
+          left > 0
+            ? `No room found for ${left} ready match${left === 1 ? "" : "es"}. Rebuild the schedule to make space.`
+            : "Every ready match already has a time.",
+        );
+      } else {
+        toast.success(
+          `${result.placed.length} match${result.placed.length === 1 ? "" : "es"} scheduled` +
+            (left > 0 ? `; ${left} still without a time.` : "."),
+        );
+      }
+      await qc.invalidateQueries();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not place the ready matches");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Saved timings, breaks and match settings only change the next plan. Once a schedule exists,
+   * say so and put the way to apply them in the toast, rather than telling the host to go and find it.
+   */
+  const offerRebuild = (saved: string) => {
+    if (!hasSchedule) {
+      toast.success(saved);
+      return;
+    }
+    toast.success(`${saved} The current schedule still uses the old values.`, {
+      action: { label: "Review & apply", onClick: () => void previewRebuild() },
+    });
+  };
+
   const previewRebuild = async () => {
     if (!tournamentDays.length) {
       toast.error("Choose the days you play first.");
@@ -1444,7 +1511,7 @@ export function PlacementScheduler() {
         : busy
           ? "Planning…"
           : hasSchedule
-            ? "Update schedule"
+            ? "Rebuild schedule"
             : "Build schedule"}
     </Button>
   );
@@ -1494,6 +1561,32 @@ export function PlacementScheduler() {
             matchLabel={matchLabel}
             courtNumberLabel={courtNumberLabel}
           />
+        ) : null}
+        {canEdit && hasSchedule ? (
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm"
+            role="status"
+          >
+            {readyUnplaced > 0 ? (
+              <>
+                <span className="font-semibold text-warn-foreground">
+                  {readyUnplaced} ready match{readyUnplaced === 1 ? " has" : "es have"} no time yet
+                </span>
+                <span className="text-muted-foreground">
+                  Results place new matches automatically; this one found no room, or has not been
+                  tried.
+                </span>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void placeNow()}>
+                  Place now
+                </Button>
+              </>
+            ) : (
+              <span className="text-muted-foreground">
+                Every ready match has a time. New matches are placed as results come in; rebuild
+                only to re-optimise.
+              </span>
+            )}
+          </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm text-muted-foreground">
           <span className="font-score font-semibold text-foreground">

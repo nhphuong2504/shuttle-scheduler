@@ -124,7 +124,7 @@ test.describe("staff surfaces", () => {
     /**
      * The primary schedule action, matched without assuming which of its two labels
      * is showing. It reads "Build schedule" on a tournament that has never been
-     * built and "Update schedule" once a schedule exists, so `layout` fixture data
+     * built and "Rebuild schedule" once a schedule exists, so `layout` fixture data
      * - which already has times on it - lands on the second. Matching `/build/i`
      * alone silently made this assertion depend on the verb "rebuild".
      */

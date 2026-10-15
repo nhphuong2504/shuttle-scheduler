@@ -942,6 +942,39 @@ export async function applyPlacementSchedulePlan(plan: PlacementSchedulePlan): P
   }
 }
 
+/**
+ * How many matches are ready to play but hold no court or time.
+ *
+ * Ready means the same thing everywhere: still `scheduled`, both sides known, not a bye. The
+ * Schedule page shows this as "N ready matches have no time", the one thing the automatic pass
+ * can leave behind (no room in the day, or the server declined a slot).
+ */
+export function readyUnplacedCount(
+  placementMatches: readonly PlacementMatch[],
+  tierMatches: readonly TierDrawMatch[],
+): number {
+  const unplaced = (match: { court_id: string | null; scheduled_time: string | null }) =>
+    match.court_id == null || match.scheduled_time == null;
+  const placement = placementMatches.filter(
+    (match) =>
+      match.status === "scheduled" &&
+      match.entrant_a_id != null &&
+      match.entrant_b_id != null &&
+      unplaced(match),
+  );
+  const tier = tierMatches.filter(
+    (match) =>
+      match.status === "scheduled" &&
+      isTierMatchReady({
+        entrantAId: match.entrant_a_id,
+        entrantBId: match.entrant_b_id,
+        isBye: match.is_bye,
+      }) &&
+      unplaced(match),
+  );
+  return placement.length + tier.length;
+}
+
 /** What `place_ready_matches` did with a plan, by match id. */
 export interface PlaceReadyResult {
   placed: string[];
