@@ -64,6 +64,7 @@ import {
   type TournamentDay,
 } from "@/lib/tournament/data";
 import { describeUnplaced } from "@/lib/tournament/auto-schedule";
+import { buildRebuildSuggestion, type RebuildSuggestion } from "@/lib/tournament/rebuild-suggestion";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import {
   conflictedMatchCount,
@@ -834,6 +835,84 @@ export function PlacementScheduler() {
   const notice = useMemo(() => describeUnplaced(unplacedReasons), [unplacedReasons]);
 
   /**
+   * Whether a full rebuild is worth the organiser's while, worked out from the rows on screen.
+   *
+   * A dry run of the rebuild that "Rebuild schedule" would show, compared with the schedule as it
+   * stands, judged the same way on both sides (the latest end among matches still to play). Only said
+   * when it finishes meaningfully sooner and can place every match; the cost, in matches moved and how
+   * many start within the hour, is part of the sentence. Nothing is applied. It is the case gap-filling
+   * is worst at: a tight day or a large field.
+   */
+  const [suggestion, setSuggestion] = useState<RebuildSuggestion | null>(null);
+  useEffect(() => {
+    if (!canEdit || !tournament || !planInputsReady || !hasSchedule || busy || preview) {
+      setSuggestion(null);
+      return;
+    }
+    // A dry run, like the one above: nothing is generated or written, so the rows on screen are the input.
+    const dryRunEntrants = entrants ?? [];
+    const timer = setTimeout(() => {
+      try {
+        const now = Date.now();
+        const plan = planPlacementSchedule({
+          tournament,
+          days: plannerDays,
+          allCourts: courts ?? [],
+          dayCourtIds: dayCourtIdSets,
+          breaksByDayId: breaksByDay,
+          teams: teams ?? [],
+          entrants: dryRunEntrants,
+          draws: draws ?? [],
+          placementMatches: placementMatches ?? [],
+          tierMatches: tierMatches ?? [],
+          categoryOrder: new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
+          now,
+        });
+        const finishOf = (placement: readonly PlacementMatch[], tier: readonly TierDrawMatch[]) => {
+          const a = projectedFinishFromRemainingMatches(placement, tournament.group_slot_minutes, now);
+          const b = projectedFinishFromRemainingMatches(
+            tier.filter((match) => !match.is_bye),
+            tournament.knockout_slot_minutes,
+            now,
+          );
+          return Math.max(a ?? 0, b ?? 0) || null;
+        };
+        const afterPlacement = projectSlotsOntoMatches(placementMatches ?? [], plan.placementSlotPayload);
+        const afterTier = projectSlotsOntoMatches(tierMatches ?? [], plan.knockoutSlotPayload);
+        setSuggestion(
+          buildRebuildSuggestion({
+            currentFinishMs: finishOf(placementMatches ?? [], tierMatches ?? []),
+            plannedFinishMs: finishOf(afterPlacement, afterTier),
+            blockedCount: plan.blocked.length,
+            diff: plan.diff,
+            now,
+          }),
+        );
+      } catch {
+        setSuggestion(null);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [
+    canEdit,
+    tournament,
+    planInputsReady,
+    hasSchedule,
+    busy,
+    preview,
+    plannerDays,
+    courts,
+    dayCourtIdSets,
+    breaksByDay,
+    teams,
+    entrants,
+    draws,
+    placementMatches,
+    tierMatches,
+    categories,
+  ]);
+
+  /**
    * The official close: the end of the last configured day that actually has courts.
    *
    * A day with no courts offers no capacity, so its window cannot be what the tournament is
@@ -1597,6 +1676,18 @@ export function PlacementScheduler() {
               onClick={() => void (notice.action === "settings" ? setShowSettings(true) : previewRebuild())}
             >
               {notice.actionLabel}
+            </Button>
+          </div>
+        ) : null}
+        {canEdit && hasSchedule && !notice && suggestion ? (
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm"
+            role="status"
+          >
+            <span className="font-semibold text-foreground">{suggestion.headline}</span>
+            <span className="text-muted-foreground">{suggestion.detail}</span>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => void previewRebuild()}>
+              Review rebuild
             </Button>
           </div>
         ) : null}

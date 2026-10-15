@@ -328,6 +328,14 @@ seeded shuffle. 20 seeds per scenario, paired: the same tournament under each st
   leaves ready matches without a time for hours at the worst (95th percentile 566 minutes at six courts) and
   needs the organiser once or twice, the same trade as before.
 
+**When the page speaks up.** The Schedule tab now says when a rebuild is worth the organiser's while
+(`buildRebuildSuggestion`): a dry-run rebuild is compared with the schedule as it stands, judged the same way on
+both sides, and only offered when it finishes at least 30 minutes sooner, can place every match and moves at
+least one that already has a time. The sentence states the cost ("It would move 14 matches, 4 of them starting
+within the hour"). On the real entries, following place-ready (which never rebuilds), it would have spoken at
+2-9 % of the moments a result arrived, and at some point in 4 to 8 of 10 tournaments, offering a gain of
+2.5-6 hours for 13-17 moves (42 minutes in the one-day case). Rare enough not to nag, large enough to matter.
+
 **A bug found by using real entries, now fixed.** `place-ready` threw `unknown-dependency` on 30-50 % of runs
 on this field and never on rebuild. The 11-entrant event has a held entrant, so its second make-up match names
 the first as a prerequisite; when place-ready could not keep the first where it stood (it collided with decided

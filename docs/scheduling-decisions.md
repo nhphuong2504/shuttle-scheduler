@@ -544,6 +544,10 @@ used to be pressed for happens on its own, and the button is left for deliberate
 - **"Update schedule" is now "Rebuild schedule"**, and is a quiet outline button unless something needs
   a decision (a notice, or schedule conflicts). Saving timings, match settings or breaks offers
   **Review & apply** in the toast instead of telling the host to go and find the button.
+- **A rebuild is suggested only when it is worth it.** The Schedule page runs a dry-run rebuild and, when it
+  would finish at least 30 minutes sooner, place every match and move at least one, says so with the cost
+  stated (`buildRebuildSuggestion`) and opens the usual rebuild preview. It never applies anything, and it
+  stays quiet when the unplaced-matches notice is showing.
 - **The Desk** lists a ready match with no time at all in its "ready, unassigned" pool (after every
   timed one), so it can still be dispatched while nothing has placed it.
 - **What stays manual:** the first build, a rebuild after the day windows, courts or timings change,

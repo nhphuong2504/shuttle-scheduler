@@ -38,6 +38,7 @@ import {
   type PlacementSchedulePlan,
 } from "../placement-schedule";
 import { inProgressEnd } from "../in-progress";
+import { buildRebuildSuggestion, type RebuildSuggestion } from "../rebuild-suggestion";
 import { buildPlacementRoundTwo, pairPlacementRoundOne } from "../placement";
 import {
   buildCategoryView,
@@ -1252,6 +1253,8 @@ export interface PackingStats {
 export type LeadingCause = "frozen" | "player_limited" | "parent_limited" | "barrier" | "unexplained";
 
 export interface PackingSample {
+  /** What the Schedule page would suggest at this moment, with the cost stated; null when it would say nothing. */
+  suggestion: RebuildSuggestion | null;
   /**
    * Court minutes the planner USED TO reserve beyond a running match's likely end, when it modelled every
    * running match as ending one full slot from NOW. Kept as a measure of that old behaviour; the planner now
@@ -1479,7 +1482,38 @@ function measurePlans(ctx: Ctx): PackingSample {
       phantom += Math.max(0, Math.min(elapsed, slotMinutes(ctx.world, r)));
     }
   }
+  // The suggestion, judged as the page judges it: latest end among matches still to play, before and after.
+  const endOf = (r: Row, startMs: number) => startMs + slotMinutes(ctx.world, r) * MINUTE;
+  const rowsById = new Map(rowsOf(ctx.world).map((r) => [r.id, r]));
+  const running = rowsOf(ctx.world).filter((r) => r.status === "in-progress" && r.started_at);
+  const runningEnd = Math.max(
+    0,
+    ...running.map((r) => inProgressEnd({ start: Date.parse(r.started_at as string), slotMs: slotMinutes(ctx.world, r) * MINUTE, now: ctx.clock })),
+  );
+  const currentFinish =
+    Math.max(
+      runningEnd,
+      ...rowsOf(ctx.world)
+        .filter((r) => r.status === "scheduled" && isLive(r) && r.scheduled_time)
+        .map((r) => endOf(r, Date.parse(r.scheduled_time as string))),
+    ) || null;
+  const plannedFinish =
+    Math.max(
+      runningEnd,
+      ...rebuildSlots.flatMap((s) => {
+        const r = rowsById.get(s.matchId);
+        return r ? [endOf(r, s.startMs)] : [];
+      }),
+    ) || null;
+  const suggestion = buildRebuildSuggestion({
+    currentFinishMs: currentFinish,
+    plannedFinishMs: plannedFinish,
+    blockedCount: rebuild.blocked.length,
+    diff: rebuild.diff,
+    now: ctx.clock,
+  });
   return {
+    suggestion,
     inProgressPhantomMinutes: phantom,
     rebuildCauses: leadingCauses(ctx, rebuildSlots, new Set(rebuild.frozenMatchIds), placementUntimed),
     placeReadyCauses: leadingCauses(ctx, [...keep, ...added], new Set(placeReady.frozenMatchIds), placementUntimed),
