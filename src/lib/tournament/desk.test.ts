@@ -121,8 +121,21 @@ describe("desk operational metrics", () => {
       startedAt: at(0),
       scheduled: at(0),
     });
+    // Overrun by five minutes: nothing says when it ends, so it is taken as ending now, like the database.
     const finish = projectedFinishFromRemaining([active], () => 20, base + 25 * 60_000);
-    expect(finish).toBe(base + 45 * 60_000);
+    expect(finish).toBe(base + 25 * 60_000);
+  });
+
+  it("projects finish at the end of the slot while an in-progress match is still inside it", () => {
+    const active = match({
+      id: "active",
+      status: "in-progress",
+      startedAt: at(0),
+      scheduled: at(0),
+    });
+    // Ten minutes in, a twenty-minute slot has ten left: not twenty from now.
+    const finish = projectedFinishFromRemaining([active], () => 20, base + 10 * 60_000);
+    expect(finish).toBe(base + 20 * 60_000);
   });
 
   it("formats finish status against the day target", () => {

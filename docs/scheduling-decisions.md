@@ -549,3 +549,29 @@ used to be pressed for happens on its own, and the button is left for deliberate
 - **What stays manual:** the first build, a rebuild after the day windows, courts or timings change,
   clearing a held overlap, and withdrawals or walkovers, which the placement format does not support
   on the Desk.
+
+## 29. Modelling a match that is on court
+
+The planner has to say when a running match ends, because it holds its court and its players until then.
+`inProgressEnd` (`src/lib/tournament/in-progress.ts`) is the one answer: `max(start + slot, now)`, in whole
+milliseconds. A match inside its slot ends when the slot is up; one that has overrun is taken as ending now,
+since nothing says when. It is the model the live reflow (`shift_live_schedule_core`),
+`placement_occupied_matches` and `schedule_conflicts` already used, and it is now also the Desk's finish
+forecast and the Schedule page's projected finish.
+
+- **What it replaced.** The planner used to model every running match as `now + slot`: a full slot from the
+  moment of planning however long it had been playing. That reserved court and player time that had already
+  been used, which left courts idle and made every rebuild push published times later. Measured against the
+  planner's own belief about when courts free up, a rebuild was as tight as gap-filling; the whole gap was
+  that reservation (`docs/scheduling-strategy-evaluation.md`).
+- **It is a planning estimate, not a lock.** Whether another match may START on a court is decided by status
+  alone (`assert_can_start_match`): a court with a match in progress is busy until it is reported, whatever
+  the estimate says. An overrun therefore never lets two matches share a court. At worst the next match is
+  published for a moment when the court is still busy; the reflow pushes it later and the conflict report
+  flags it, exactly as they did before.
+- **Pins.** A pinned next match is kept when it starts at or after the running match's modelled end, and
+  released when it would overlap it. With the shorter end more pins qualify than before.
+- **No margin on purpose.** A cushion for overruns (for example +5 minutes) was measured and gives back idle
+  court time for fewer premature publications; it would also be a second model beside the SQL one.
+- **Whole milliseconds.** The problem rejects two fixed matches on one court that overlap at all, so a
+  fractional end followed by a truncated start can overlap by under a millisecond.

@@ -369,11 +369,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     (match) => match.status !== "void" && match.scheduled_time != null,
   );
 
-  // Only used to model an in-progress match's end, because each day applies its own
-  // floor at run time. The earliest plausible start keeps that model conservative.
-  const firstDayStart = new Date(`${orderedDays[0]!.date}T${orderedDays[0]!.start_time}`).getTime();
-  const itemFloor = isRebuild ? Math.max(firstDayStart, nextWholeMinute) : firstDayStart;
-
   /**
    * The stage-closing signal, both halves, from the format's own pipeline knowledge.
    *
@@ -410,7 +405,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     roundTwoCategories,
     slotMinutes: placementSlot,
     restGap: placementRest,
-    floor: itemFloor,
     now,
   });
   const knockoutRaw = tierItems({
@@ -422,7 +416,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     categoryOrder,
     slotMinutes: knockoutSlot,
     restGap: knockoutRest,
-    floor: itemFloor,
     now,
   });
 

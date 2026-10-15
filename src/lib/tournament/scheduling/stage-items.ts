@@ -10,6 +10,7 @@
 import { MINUTE_MS } from "@/lib/scheduling";
 import type { PlacementEntrant, PlacementMatch, Team, TierDrawMatch } from "../data";
 import type { ComposedMatch } from "./composition";
+import { inProgressEnd } from "../in-progress";
 
 const MINUTE = MINUTE_MS;
 
@@ -73,7 +74,6 @@ export function fixedRange(input: {
   startedAt: string | null;
   endedAt: string | null;
   slotMinutes: number;
-  floor: number;
   now: number;
 }): { start: number; end: number } | undefined {
   const slotMs = input.slotMinutes * MINUTE;
@@ -87,15 +87,12 @@ export function fixedRange(input: {
     return end > start ? { start, end } : { start, end: start + slotMs };
   }
 
-  // Anything else is in progress. Its real end is unknown, so it is modelled as at
-  // least one slot from now: leaving it at its planned end would let the next match
-  // start on that court before the running one has finished.
+  // Anything else is in progress. Its real end is unknown, so it is modelled the way the database
+  // models it: at the end of its slot, and no earlier than now once it has overrun. See
+  // `inProgressEnd` for why this is not "a slot from now" and why that is safe.
   const start = anchored ?? finished;
   if (start == null) return undefined;
-  return {
-    start,
-    end: Math.max(start + slotMs, input.floor + slotMs, input.now + slotMs),
-  };
+  return { start, end: inProgressEnd({ start, slotMs, now: input.now }) };
 }
 
 export interface PlayerLookup {
@@ -168,10 +165,9 @@ export function placementItems(input: {
   roundTwoCategories?: ReadonlySet<string> | undefined;
   slotMinutes: number;
   restGap: number;
-  floor: number;
   now: number;
 }): StageItem[] {
-  const { matches, playerLookup, courtNumberById, categoryOrder, slotMinutes, floor, now } = input;
+  const { matches, playerLookup, courtNumberById, categoryOrder, slotMinutes, now } = input;
   const roundTwoCategories = input.roundTwoCategories ?? new Set<string>();
   // Non-void rows are the schedulable universe, and the set a prerequisite must
   // be a member of to be honoured.
@@ -191,7 +187,6 @@ export function placementItems(input: {
             startedAt: match.started_at,
             endedAt: match.ended_at,
             slotMinutes,
-            floor,
             now,
           })
         : undefined;
@@ -250,11 +245,10 @@ export function tierItems(input: {
   categoryOrder: ReadonlyMap<string, number>;
   slotMinutes: number;
   restGap: number;
-  floor: number;
   now: number;
 }): StageItem[] {
   const { matches, drawCategory, playerLookup, courtNumberById, categoryOrder } = input;
-  const { slotMinutes, restGap, floor, now } = input;
+  const { slotMinutes, restGap, now } = input;
   const drawRoundCount = input.drawRoundCount ?? new Map<string, number>();
 
   // Indexed once: the parent lookup below would otherwise rescan `matches` for
@@ -281,7 +275,6 @@ export function tierItems(input: {
             startedAt: match.started_at,
             endedAt: match.ended_at,
             slotMinutes,
-            floor,
             now,
           })
         : undefined;

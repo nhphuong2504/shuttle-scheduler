@@ -10,12 +10,17 @@
 import { describe, expect, it } from "vitest";
 
 import type { PlacementMatch, TierDrawMatch } from "../data";
-import { buildPlayerLookup, placementItems, tierItems, type PlayerLookup } from "./stage-items";
+import {
+  buildPlayerLookup,
+  fixedRange,
+  placementItems,
+  tierItems,
+  type PlayerLookup,
+} from "./stage-items";
 import { buildRoundRobin } from "./formats/round-robin";
 import { buildSingleElimination } from "./formats/single-elimination";
 
 const NOW = new Date("2026-09-17T08:00:00Z").getTime();
-const FLOOR = new Date("2026-09-17T09:00:00Z").getTime();
 
 /** Every entrant resolves to a distinct pair of players, so no test depends on a lookup collision. */
 const playerLookup: PlayerLookup = (entrantIds) => ({
@@ -90,7 +95,6 @@ describe("placementItems stage identity", () => {
       roundTwoCategories: new Set(["cat1"]),
       slotMinutes: 30,
       restGap: 20,
-      floor: FLOOR,
       now: NOW,
     });
 
@@ -109,7 +113,6 @@ describe("placementItems stage identity", () => {
         roundTwoCategories,
         slotMinutes: 30,
         restGap: 20,
-        floor: FLOOR,
         now: NOW,
       });
 
@@ -132,7 +135,6 @@ describe("placementItems stage identity", () => {
       categoryOrder: EMPTY_ORDER,
       slotMinutes: 30,
       restGap: 20,
-      floor: FLOOR,
       now: NOW,
     });
     expect(items[0]?.stageKey).toBe("cat1:round1");
@@ -158,7 +160,6 @@ describe("tierItems stage identity", () => {
       categoryOrder: EMPTY_ORDER,
       slotMinutes: 45,
       restGap: 30,
-      floor: FLOOR,
       now: NOW,
     });
 
@@ -193,7 +194,6 @@ describe("tierItems with the whole bracket drawn", () => {
       categoryOrder: EMPTY_ORDER,
       slotMinutes: 45,
       restGap: 30,
-      floor: FLOOR,
       now: NOW,
     });
 
@@ -302,5 +302,42 @@ describe("buildPlayerLookup", () => {
     expect(lookup(["e1"])).toEqual({ playerIds: ["p1"], playersKnown: true });
     // A knockout side awaiting its winner: not schedulable, and not a one-player match either.
     expect(lookup(["e1", null])).toEqual({ playerIds: ["p1"], playersKnown: false });
+  });
+});
+
+describe("fixedRange for a match that is in progress", () => {
+  const MIN = 60_000;
+  const start = Date.parse("2026-09-17T10:00:00Z");
+  const base = {
+    status: "in-progress",
+    scheduledTime: new Date(start).toISOString(),
+    startedAt: new Date(start).toISOString(),
+    endedAt: null,
+    slotMinutes: 30,
+  };
+
+  it("ends at the end of its slot while it is inside it, not a slot from now", () => {
+    const range = fixedRange({ ...base, now: start + 20 * MIN });
+    expect(range).toEqual({ start, end: start + 30 * MIN });
+  });
+
+  it("is taken as ending now once it has overrun", () => {
+    const now = start + 50 * MIN;
+    expect(fixedRange({ ...base, now })).toEqual({ start, end: now });
+  });
+
+  it("gives whole milliseconds even from a fractional clock", () => {
+    const range = fixedRange({ ...base, now: start + 50 * MIN + 0.6 });
+    expect(Number.isInteger(range?.end)).toBe(true);
+  });
+
+  it("still models a finished match by the interval it really took", () => {
+    const range = fixedRange({
+      ...base,
+      status: "reported",
+      endedAt: new Date(start + 22 * MIN).toISOString(),
+      now: start + 90 * MIN,
+    });
+    expect(range).toEqual({ start, end: start + 22 * MIN });
   });
 });

@@ -1,4 +1,5 @@
 import type { CourtState } from "@/lib/tournament/court-state";
+import { inProgressEnd } from "@/lib/tournament/in-progress";
 
 const MINUTE = 60_000;
 
@@ -259,14 +260,16 @@ export function projectedFinishFromRemaining<TMatch extends DeskMatchModel>(
     if (match.status !== "scheduled" && match.status !== "in-progress") continue;
     const slotMs = slotMinutesFor(match) * MINUTE;
     let start: number | null = null;
+    let end: number | null = null;
     if (match.status === "in-progress") {
+      // The same model the planner and the database use: its slot, and no earlier than now once it overruns.
       const anchor = asTime(match.startedAt) ?? asTime(match.scheduled);
-      start = anchor != null ? Math.max(anchor, now) : now;
+      end = inProgressEnd({ start: anchor ?? now, slotMs, now });
     } else {
       start = asTime(match.scheduled);
+      end = start == null ? null : start + slotMs;
     }
-    if (start == null) continue;
-    const end = start + slotMs;
+    if (end == null) continue;
     latest = latest == null ? end : Math.max(latest, end);
   }
   return latest;

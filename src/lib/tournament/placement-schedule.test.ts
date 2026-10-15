@@ -2646,3 +2646,94 @@ describe("classifyUnplaced", () => {
     ).toEqual([{ matchId: "a", reason: "no_slot" }]);
   });
 });
+
+describe("planning around a match that is on court", () => {
+  const started = (id: string, entrantA: string, entrantB: string, startIso: string) =>
+    placementMatch(id, "round1", entrantA, entrantB, {
+      status: "in-progress",
+      court_id: "c1",
+      scheduled_time: new Date(startIso).toISOString(),
+      started_at: new Date(startIso).toISOString(),
+    });
+  const kickoff = "2026-09-17T09:00:00";
+
+  it("starts the next match when the running one is due to end, not a slot from now", () => {
+    // Started at 09:00 on a 30-minute slot; it is 09:20, so ten minutes remain. The old model
+    // reserved the court until 09:50.
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 20 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("next", "round1", "e3", "e4"),
+      ],
+    });
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "next");
+    expect(slot?.scheduled_time).toBe(new Date(DAY_START + 30 * MINUTE).toISOString());
+  });
+
+  it("holds a running match that has overrun until now, like the database", () => {
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 45 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("next", "round1", "e3", "e4"),
+      ],
+    });
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "next");
+    expect(Date.parse(slot?.scheduled_time as string)).toBeGreaterThanOrEqual(DAY_START + 45 * MINUTE);
+    expect(Date.parse(slot?.scheduled_time as string)).toBeLessThan(DAY_START + 46 * MINUTE);
+  });
+
+  it("keeps a pinned next match that now clears the running one, where it used to be released", () => {
+    // Pinned for 09:35 while the running match is due to end at 09:30. Against "a slot from now"
+    // (09:50) the pin overlapped it and was thrown back to the solver; against the real end it fits.
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 20 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("pinned", "round1", "e3", "e4", {
+          status: "scheduled",
+          court_id: "c1",
+          scheduled_time: new Date(DAY_START + 35 * MINUTE).toISOString(),
+        }),
+      ],
+    });
+    expect(result.frozenMatchIds).toContain("pinned");
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "pinned");
+    expect(slot?.scheduled_time).toBe(new Date(DAY_START + 35 * MINUTE).toISOString());
+  });
+
+  it("releases a pin that would sit on a running match that is still inside its slot", () => {
+    const result = plan({
+      courts: [court(1)],
+      now: DAY_START + 20 * MINUTE,
+      placementMatches: [
+        started("running", "e1", "e2", kickoff),
+        placementMatch("pinned", "round1", "e3", "e4", {
+          status: "scheduled",
+          court_id: "c1",
+          scheduled_time: new Date(DAY_START + 25 * MINUTE).toISOString(),
+        }),
+      ],
+    });
+    expect(result.frozenMatchIds).not.toContain("pinned");
+    const slot = result.placementSlotPayload.find((s) => s.match_id === "pinned");
+    expect(Date.parse(slot?.scheduled_time as string)).toBeGreaterThanOrEqual(DAY_START + 30 * MINUTE);
+  });
+
+  it("does not throw on a fractional clock", () => {
+    expect(() =>
+      plan({
+        courts: [court(1)],
+        now: DAY_START + 50 * MINUTE + 0.37,
+        placementMatches: [
+          started("running", "e1", "e2", kickoff),
+          placementMatch("next", "round1", "e3", "e4"),
+        ],
+      }),
+    ).not.toThrow();
+  });
+});
