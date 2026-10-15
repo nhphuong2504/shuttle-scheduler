@@ -49,7 +49,7 @@ import type {
 } from "./data";
 import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
 import { MIN_ENTRANTS_FOR_ROUND_TWO } from "./placement-actions";
-import { bracketRoundCount } from "./tier-draw";
+import { bracketRoundCount, isTierMatchReady } from "./tier-draw";
 import {
   breakWindowsFor,
   courtsAddedToDays,
@@ -275,9 +275,10 @@ export interface PlanPlacementScheduleInput {
  * The stage barrier is real rather than advisory: the knockouts are only placed on
  * a day once every placement match has a slot. But it is also already guaranteed
  * by the generators, because round two cannot exist until every round one result
- * is in and a knockout round cannot exist until the previous one is decided. That
- * is why this needs no round-ordering logic of its own: scheduling everything that
- * exists is the same thing as scheduling in order.
+ * is in. A knockout bracket exists in full from its draw, but only the matches whose two
+ * sides are known are schedulable (`tierItems` drops the rest), and a child slot is filled
+ * only when its feeders finish. So this still needs no round-ordering logic of its own:
+ * scheduling everything that is ready is the same thing as scheduling in order.
  *
  * A stage's duration and rest gap come from the tournament's group and knockout
  * columns; the placement stage reuses the group columns rather than adding a third
@@ -663,7 +664,18 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     .filter((match) => match.status === "scheduled")
     .map((match) => match.id);
   const knockoutScheduledIds = tierMatches
-    .filter((match) => match.status === "scheduled" && !match.is_bye)
+    .filter(
+      (match) =>
+        match.status === "scheduled" &&
+        // The whole bracket exists from the draw, so a slot still waiting on a feeder is
+        // scheduled in name only: it has no court or time to lose, and the writer's
+        // completeness check (mirrored in SQL) ignores it.
+        isTierMatchReady({
+          entrantAId: match.entrant_a_id,
+          entrantBId: match.entrant_b_id,
+          isBye: match.is_bye,
+        }),
+    )
     .map((match) => match.id);
 
   return {

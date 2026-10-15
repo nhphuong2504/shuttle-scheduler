@@ -471,3 +471,22 @@ and `straggler`. `shapes.test.ts` pins that the straggler stage closes before ev
 later than the pre-change baseline; `fixtures.test-helpers.ts`'s `F16` pins the same semantics at
 fixture scale with a closed-form assertion; `core-contract.test.ts` pins the metric hierarchy, the
 disruption arithmetic and re-solve idempotence; `placement-schedule.test.ts` pins the freeze.
+## 26. The full knockout bracket and what is schedulable
+
+A knockout draw creates its whole bracket at once (see
+[`tournament-format.md`](tournament-format.md#the-whole-bracket-exists-from-the-draw)), so the
+planner no longer relies on "a later round does not exist yet" to keep unknown matches out.
+
+- **Only ready matches are scheduled.** `tierItems` keeps a non-fixed match only when both sides
+  resolve to players (`participantsKnown`). A half-known semifinal is dropped there, not handed to
+  the solver, exactly as a match with no players always was.
+- **Parents are now real.** `parent_a_id` / `parent_b_id` are filled at the draw, so `eligibleFrom`
+  and the reflow dependencies bind a child to its feeders' `ended_at` plus the knockout rest gap.
+  A feeder decided by a bye has no `ended_at` and constrains nothing.
+- **The writer ignores undecided slots.** The knockout completeness check
+  (`knockoutScheduledIds`, and `apply_placement_day_schedule` in SQL) counts only matches with both
+  entrants, because a slot waiting on a feeder has no court or time to lose.
+- **A freshly ready match is placed by the next rebuild.** A result fills the child slot but does
+  not place it; the live reflow shifts only rows that already hold a court and time. Placing newly
+  ready matches without a manual rebuild ("Place ready") remains the open design in
+  [`knockout-bracket-ideas.md`](knockout-bracket-ideas.md).

@@ -2450,3 +2450,61 @@ describe("demo tournament migrations", () => {
     expect(flagSql).toMatch(/RAISE EXCEPTION 'D1:/);
   });
 });
+
+describe("full knockout bracket migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "20261016000000_full_knockout_bracket.sql"),
+    "utf8",
+  );
+  const body = (name: string) => {
+    const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    expect(start, `${name} is defined`).toBeGreaterThan(-1);
+    const next = sql.indexOf("CREATE OR REPLACE FUNCTION", start + 1);
+    return sql.slice(start, next === -1 ? undefined : next);
+  };
+
+  it("creates every round at the draw and links parents", () => {
+    const fill = body("fill_tier_bracket");
+    expect(fill).toMatch(/generate_series\(1, v_size \/ \(1 << v_round\)\)/);
+    expect(fill).toMatch(/ON CONFLICT \(draw_id, round, slot\) DO NOTHING/);
+    expect(fill).toMatch(/parent_a_id = a\.id/);
+    expect(sql).toMatch(/PERFORM public\.fill_tier_bracket\(v_draw_id\)/);
+  });
+
+  it("advances by filling the child slot and never inserts a round", () => {
+    const advance = body("advance_tier_draw_locked");
+    expect(advance).not.toMatch(/INSERT INTO/);
+    // Odd slots feed side A and even slots side B, the rule the correction trigger uses too.
+    expect(advance).toMatch(/p\.slot % 2 = 1/);
+    expect(advance).toMatch(/p\.slot % 2 = 0/);
+    expect(advance).toMatch(/c\.status = 'scheduled'/);
+    expect(advance).toMatch(/champion_id/);
+  });
+
+  it("refuses to start a match with an empty side, and to reset one whose child began", () => {
+    expect(body("start_tier_draw_match")).toMatch(/entrant_a_id IS NOT NULL/);
+    const reset = body("reset_tier_draw_result");
+    expect(reset).toMatch(/v_child\.status <> 'scheduled'/);
+    expect(reset).toMatch(/champion_id = NULL/);
+  });
+
+  it("ignores undecided slots in the knockout completeness check", () => {
+    const writer = body("apply_placement_day_schedule");
+    expect(writer).toMatch(/AND entrant_a_id IS NOT NULL\s+AND entrant_b_id IS NOT NULL/);
+  });
+
+  it("wraps the sample seed so a reset still yields full brackets, with the same privileges", () => {
+    expect(sql).toMatch(/RENAME TO seed_demo_tournaments_rows/);
+    const wrapper = body("seed_demo_tournaments");
+    expect(wrapper).toMatch(/seed_demo_tournaments_rows\(\)/);
+    expect(wrapper).toMatch(/fill_tier_bracket\(v_draw\)/);
+    expect(wrapper).toMatch(/t\.is_demo/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.seed_demo_tournaments\(\) TO service_role/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.seed_demo_tournaments\(\) FROM PUBLIC, anon, authenticated/);
+  });
+
+  it("keeps the internal helper off the client surface", () => {
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.fill_tier_bracket\(uuid\) FROM anon, authenticated, PUBLIC/);
+    expect(sql).toMatch(/DO \$verify\$/);
+  });
+});

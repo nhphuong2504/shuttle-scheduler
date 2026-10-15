@@ -313,7 +313,9 @@ export function tierItems(input: {
       // needs two sides that have actually been decided: a knockout fixture waiting
       // on its bracket is not a match yet, and listing it would make every
       // not-yet-reached round look like something the desk has to chase.
-      if (!item.fixed) return item.participantIds.length > 0;
+      // The whole bracket exists as rows from the draw, so a half-known match (one side
+      // still waiting on a feeder) must be dropped here too: only both sides known counts.
+      if (!item.fixed) return item.participantsKnown && item.participantIds.length > 0;
       // A decided match needs no slot of its own, so it is only ever an anchor — and
       // an anchor needs a window to hold. A reported row with no window cannot be
       // modelled, so it is left out rather than making the problem invalid over a row

@@ -1804,10 +1804,21 @@ describe("uncoveredScheduledMatches", () => {
     expect(uncoveredScheduledMatches(result)).toEqual({ placement: [], knockout: [] });
   });
 
-  it("reports a knockout fixture whose players are not known yet", () => {
-    // Undrawn bracket: no entrants, so no players. This is the legacy reason a row
-    // lands in `awaitingTeams`, and it must still be caught rather than written.
-    const knockout = tierMatch("k1", 1, 1, null, null, { status: "scheduled" });
+  it("ignores a knockout slot still waiting on a feeder", () => {
+    // The whole bracket exists from the draw. A slot with an undecided side has no court or
+    // time to lose, so the writer's completeness check must not count it.
+    const waiting = tierMatch("k1", 2, 1, "e1", null, { status: "scheduled" });
+    const empty = tierMatch("k2", 3, 1, null, null, { status: "scheduled" });
+    const result = withMatches([], { tierMatches: [waiting, empty] });
+
+    expect(result.knockoutScheduledIds).toEqual([]);
+    expect(uncoveredScheduledMatches(result).knockout).toEqual([]);
+  });
+
+  it("reports a knockout fixture with two entrants that the planner could not place", () => {
+    // Entrants named but not resolvable to players: ready on paper, unplaced in practice,
+    // and the writer must refuse rather than strip it of a court it never had.
+    const knockout = tierMatch("k1", 1, 1, "ghost-a", "ghost-b", { status: "scheduled" });
     const result = withMatches([], { tierMatches: [knockout] });
 
     expect(result.knockoutScheduledIds).toEqual(["k1"]);

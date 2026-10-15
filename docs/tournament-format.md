@@ -84,6 +84,27 @@ Source: [`draws.ts`](../src/lib/tournament/draws.ts) (`totalMatchesInDraw`,
 
 ### Bracket size rounds up to the next power of two.
 
+### The whole bracket exists from the draw
+
+The draw creates **every round and every slot** of each A/B/C/D bracket at once
+(`bracket_size - 1` matches), so a viewer sees the full path to the final immediately.
+Slots above round one start empty, except that a bye's winner is advanced straight away.
+
+- **Filling.** When a match is reported, its winner is written into the slot that already
+  exists in the next round: the winner of round `r` slot `s` goes to round `r+1` slot
+  `(s+1)/2`, as side A when `s` is odd and side B when `s` is even. The final's winner is
+  the draw's champion.
+- **Ready.** A match is *ready* only when both sides are known (and it is not a bye or void).
+  Only ready matches are scheduled, shown on the Desk or Scores, started, or counted by the
+  schedule writer; a slot waiting on a feeder is just a place in the bracket, drawn as
+  "Winner of Semifinal 2". One definition serves all of them: `isTierMatchReady`.
+- **Correcting.** Resetting a result withdraws the winner from the next slot (clearing its
+  court and time) unless that match has already started, in which case it is refused.
+
+Source: [`tier-draw.ts`](../src/lib/tournament/tier-draw.ts) (`buildTierBracket`,
+`childSlot`, `isTierMatchReady`, `feederLabel`) and migration
+`20261016000000_full_knockout_bracket.sql`.
+
 ## Configurable rules
 
 These are tournament settings, not constants. The defaults are noted because they

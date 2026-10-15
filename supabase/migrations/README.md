@@ -3274,3 +3274,51 @@ without the function the toggle's request fails — remove `StartPolicySection` 
 
 
 
+
+## Applying `20261016000000_full_knockout_bracket.sql`
+
+A knockout draw now creates its whole bracket at once. Before, `apply_tier_draws` made round one and
+`advance_tier_draw_locked` made each later round when the previous one finished, so a viewer saw no path to
+the final until it was close. Now every round and slot exists from the draw; later slots start with no
+entrants (a bye's winner is advanced immediately), a result fills the winner into the existing child slot,
+and a slot with both sides known may be scheduled.
+
+### What it changes
+
+- `fill_tier_bracket(draw)` (new, internal): creates missing rounds, links `parent_a_id` / `parent_b_id`
+  (previously never populated for tier matches), and advances decided winners. Idempotent.
+- `apply_tier_draws`: same gates; after inserting the payload it calls `fill_tier_bracket`, so the payload
+  may carry every round or only the first.
+- `advance_tier_draw_locked`: no longer inserts rows. It writes each decided winner into its child slot (odd
+  slot feeds side A, even side B; only while the child is still `scheduled`) and sets `champion_id` from
+  the final.
+- `reset_tier_draw_result`: refuses only when the child has started; otherwise it withdraws the winner from
+  the child and clears the child's court and time. Resetting the final clears `champion_id`.
+- `start_tier_draw_match`: refuses a match with an empty side.
+- `apply_placement_day_schedule`: the knockout completeness check ignores slots with an undecided side.
+- `seed_demo_tournaments()`: renamed to `seed_demo_tournaments_rows()` and wrapped by a function of the same name, signature and privileges that completes every demo bracket, so the one-call reset still yields full brackets.
+- Backfill: every existing draw is given its full bracket.
+
+Application: `buildTierBracket` and `isTierMatchReady` (`src/lib/tournament/tier-draw.ts`) mirror the same
+rules; `tierItems`, `buildDeskMatches` and `knockoutScheduledIds` skip slots that are not ready.
+
+### Verify after applying
+
+```sql
+SELECT d.tier, d.bracket_size, count(m.*) AS slots           -- slots = bracket_size - 1
+FROM public.tier_draws d JOIN public.tier_draw_matches m ON m.draw_id = d.id
+WHERE d.bracket_size > 1 GROUP BY d.id, d.tier, d.bracket_size;
+SELECT count(*) FROM public.tier_draw_matches
+WHERE round > 1 AND (parent_a_id IS NULL OR parent_b_id IS NULL);      -- 0
+SELECT has_function_privilege('authenticated', 'public.fill_tier_bracket(uuid)', 'execute');  -- false
+```
+
+The `DO $verify$` block asserts the same on apply. Then run `npm run test:integration` on the local stack.
+
+### Rolling back
+
+The previous bodies of the five replaced functions are in `20260917010000_placement_stage_rpcs.sql`,
+`20260927000000_tournova_role_redesign.sql` and `20261010000000_start_match_checks_and_reflow.sql`; re-run
+them to restore. The extra later-round rows can stay, but the old `advance_tier_draw_locked` would then see
+`max(round)` as the final and never advance, so delete rounds above one from any draw that has not been
+played before restoring.

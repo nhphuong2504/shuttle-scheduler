@@ -182,6 +182,49 @@ describe("tierItems stage identity", () => {
   });
 });
 
+describe("tierItems with the whole bracket drawn", () => {
+  const items = (matches: TierDrawMatch[]) =>
+    tierItems({
+      matches,
+      drawCategory: new Map([["draw-A", "cat1"]]),
+      drawRoundCount: new Map([["draw-A", 2]]),
+      playerLookup,
+      courtNumberById: EMPTY_COURTS,
+      categoryOrder: EMPTY_ORDER,
+      slotMinutes: 45,
+      restGap: 30,
+      floor: FLOOR,
+      now: NOW,
+    });
+
+  it("schedules only a match whose two sides are both known", () => {
+    const ready = tierMatch("ready", "draw-A", 1, 1);
+    const half = { ...tierMatch("half", "draw-A", 2, 1), entrant_b_id: null };
+    const empty = {
+      ...tierMatch("empty", "draw-A", 2, 2),
+      entrant_a_id: null,
+      entrant_b_id: null,
+    };
+    expect(items([ready, half, empty]).map((item) => item.id)).toEqual(["ready"]);
+  });
+
+  it("binds a child to its feeders once the parents are linked", () => {
+    const parentA = {
+      ...tierMatch("pa", "draw-A", 1, 1),
+      status: "reported" as const,
+      ended_at: "2026-09-20T10:00:00Z",
+    };
+    const child = {
+      ...tierMatch("child", "draw-A", 2, 1),
+      parent_a_id: "pa",
+      parent_b_id: "pb",
+    };
+    const item = items([parentA, child]).find((entry) => entry.id === "child");
+    // 30 minutes of rest after the feeder ended; the missing second feeder adds no floor.
+    expect(item?.eligibleFrom).toBe(Date.parse("2026-09-20T10:30:00Z"));
+  });
+});
+
 describe("format builders stage identity", () => {
   it("gives a round robin one stage per round, and releases all but the last", () => {
     const matches = buildRoundRobin({ entrants: ["a", "b", "c", "d"], groupKey: "pool-1" });

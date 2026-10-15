@@ -12,6 +12,7 @@ import type {
 import { indexBy, teamPlayerIds } from "./data";
 import type { DeskMatchKind, DeskMatchModel } from "./desk";
 import { gamesLabel, parseGames, type GameScore } from "./format";
+import { isTierMatchReady } from "./tier-draw";
 
 /**
  * A match as both live screens need to see it.
@@ -175,7 +176,15 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
       };
     }),
     ...(sources.tierMatches ?? [])
-      .filter((match) => !match.is_bye)
+      // The bracket exists in full from its draw, so a slot still waiting on a feeder is
+      // not a match yet: the desk only lists fixtures whose two sides are known.
+      .filter((match) =>
+        isTierMatchReady({
+          entrantAId: match.entrant_a_id,
+          entrantBId: match.entrant_b_id,
+          isBye: match.is_bye,
+        }),
+      )
       .map((match): DeskMatch => {
         const teams: [string | null, string | null] = [
           entrantTeamOf(match.entrant_a_id),

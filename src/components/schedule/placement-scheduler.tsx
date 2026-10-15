@@ -883,11 +883,9 @@ export function PlacementScheduler() {
         const draw = (draws ?? []).find((entry) => entry.id === match.draw_id);
         return {
           id: match.id,
-          // The round is named from the bracket size, not from how many rounds the
-          // draw has rows for: later rounds are only created once the round before
-          // is decided, so counting them would call the opening round of a
-          // half-played draw "Final". Falls back to the raw round number if the
-          // draw has not loaded, since the size is what the name is derived from.
+          // The round is named from the bracket size, the one input every view of a draw
+          // shares. Falls back to the raw round number if the draw has not loaded, since
+          // the size is what the name is derived from.
           stage: `Draw ${draw?.tier ?? "?"} · ${
             draw ? roundName(draw.bracket_size, match.round) : `R${match.round}`
           }`,

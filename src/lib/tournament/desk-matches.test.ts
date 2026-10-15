@@ -215,6 +215,19 @@ describe("buildDeskMatches lists the format the tournament runs", () => {
     expect(rows.map((row) => row.id)).toEqual(["plm1", "tdm1"]);
   });
 
+  it("leaves out a knockout slot still waiting on a feeder", () => {
+    // The bracket is drawn in full, so these rows exist but are not matches yet.
+    const rows = buildDeskMatches({
+      ...sources("two_round_placement"),
+      tierMatches: [
+        tierMatch("ready"),
+        tierMatch("half", { round: 2, entrant_b_id: null }),
+        tierMatch("empty", { round: 3, entrant_a_id: null, entrant_b_id: null }),
+      ],
+    });
+    expect(rows.filter((row) => row.kind === "tier").map((row) => row.id)).toEqual(["ready"]);
+  });
+
   it("never emits a bye, whichever format the tournament runs", () => {
     for (const format of ["round_robin", "two_round_placement"]) {
       const rows = buildDeskMatches({
