@@ -2737,3 +2737,36 @@ describe("planning around a match that is on court", () => {
     ).not.toThrow();
   });
 });
+
+describe("place-ready when a held match is a prerequisite", () => {
+  it("does not fail the plan, and still keeps the dependent after the held match", () => {
+    // `clash` is committed on top of a match that overran, so place-ready cannot hold it as an anchor and
+    // takes it out of the problem. `followup` names it as a prerequisite (the held entrant's second
+    // make-up match depends on the first); the problem rejects a dependency on a match it does not
+    // contain, which used to fail the whole plan.
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [
+        placementMatch("played", "round1", "e1", "e2", {
+          status: "reported",
+          court_id: "c1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T11:00:00",
+        }),
+        placementMatch("clash", "round1", "e3", "e4", {
+          status: "scheduled",
+          court_id: "c1",
+          scheduled_time: new Date("2026-09-17T10:00:00").toISOString(),
+        }),
+        placementMatch("followup", "round2", "e3", "e4", { prerequisite_ids: ["clash"] }),
+      ],
+    });
+
+    const slot = result.placementNewPayload.find((s) => s.match_id === "followup");
+    expect(slot).toBeDefined();
+    // The held match stands at 10:00 for a 30-minute slot, so the dependent cannot start before 10:30.
+    expect(Date.parse(slot?.scheduled_time as string)).toBeGreaterThanOrEqual(
+      new Date("2026-09-17T10:30:00").getTime(),
+    );
+  });
+});

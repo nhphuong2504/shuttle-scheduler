@@ -637,8 +637,37 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       : item;
   };
 
-  const placementAll = placementRaw.filter((item) => !dropIds.has(item.id)).map(applyFreeze);
-  const knockoutAll = knockoutRaw.filter((item) => !dropIds.has(item.id)).map(applyFreeze);
+  /**
+   * An item taken out of the problem must not stay named as somebody's dependency: the problem rejects a
+   * dependency on a match it does not contain, which failed whole plans (a held entrant's second make-up
+   * match depends on the first). The dependency becomes what it meant, a floor: the dependent may not
+   * start before the dropped match is due to end where it stands.
+   */
+  const rawById = new Map([...placementRaw, ...knockoutRaw].map((item) => [item.id, item]));
+  const withoutDropped = (item: StageItem): StageItem => {
+    const dropped = (item.dependencies ?? []).filter((id) => dropIds.has(id));
+    if (!dropped.length) return item;
+    let floor = item.eligibleFrom ?? 0;
+    for (const id of dropped) {
+      const gone = rawById.get(id);
+      const at = committedById.get(id)?.start;
+      if (gone && at != null) floor = Math.max(floor, at + gone.durationMinutes * MINUTE);
+    }
+    return {
+      ...item,
+      dependencies: (item.dependencies ?? []).filter((id) => !dropIds.has(id)),
+      ...(floor ? { eligibleFrom: floor } : {}),
+    };
+  };
+
+  const placementAll = placementRaw
+    .filter((item) => !dropIds.has(item.id))
+    .map(withoutDropped)
+    .map(applyFreeze);
+  const knockoutAll = knockoutRaw
+    .filter((item) => !dropIds.has(item.id))
+    .map(withoutDropped)
+    .map(applyFreeze);
 
   const run = runPlanDays({
     orderedDays,
