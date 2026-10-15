@@ -20,7 +20,11 @@
 
 import type { PlacementEntrant, PlacementMatch, TierDraw, TierDrawMatch } from "./data";
 import type { StageGenerationOutcome } from "./placement-actions";
-import type { PlaceReadyResult, PlacementSchedulePlan } from "./placement-schedule";
+import type {
+  PlaceReadyResult,
+  PlacementSchedulePlan,
+  UnplacedMatch,
+} from "./placement-schedule";
 
 export interface FreshSchedulingRows {
   placementMatches: PlacementMatch[];
@@ -46,6 +50,27 @@ export interface AutoScheduleOutcome {
   declined: number;
   /** Ready matches the planner found no room for. */
   unplaced: number;
+  /** Why each one was left, for the Schedule page's notice and for deciding whether to retry. */
+  reasons: UnplacedMatch[];
+  /**
+   * Declines that may well succeed on the next try (a race with another desk, a result that moved
+   * under the plan). A persistent reason is not counted here: asking again changes nothing.
+   */
+  transient: number;
+}
+
+/** Server refusals that come from a moment passing, not from the schedule being full. */
+const TRANSIENT_DECLINES: ReadonlySet<string> = new Set([
+  "court_busy",
+  "player_busy",
+  "already_placed",
+  "not_ready",
+  "not_scheduled",
+  "in_the_past",
+]);
+
+export function isTransientDecline(reason: string): boolean {
+  return TRANSIENT_DECLINES.has(reason);
 }
 
 const NOTHING: AutoScheduleOutcome["generated"] = { roundOne: 0, roundTwo: 0, draws: 0 };
@@ -72,7 +97,15 @@ function changed(outcome: StageGenerationOutcome): boolean {
 export async function runAutoSchedule(deps: AutoScheduleDeps): Promise<AutoScheduleOutcome> {
   let fresh = await deps.fetchFresh();
   if (!hasBuiltSchedule(fresh)) {
-    return { ran: false, generated: NOTHING, placed: 0, declined: 0, unplaced: 0 };
+    return {
+      ran: false,
+      generated: NOTHING,
+      placed: 0,
+      declined: 0,
+      unplaced: 0,
+      reasons: [],
+      transient: 0,
+    };
   }
 
   const generation = await deps.generate(fresh);
@@ -86,7 +119,9 @@ export async function runAutoSchedule(deps: AutoScheduleDeps): Promise<AutoSched
       generated: generation.generated,
       placed: 0,
       declined: 0,
-      unplaced: plan.blocked.length,
+      unplaced: plan.unplaced.length,
+      reasons: plan.unplaced,
+      transient: 0,
     };
   }
 
@@ -96,7 +131,9 @@ export async function runAutoSchedule(deps: AutoScheduleDeps): Promise<AutoSched
     generated: generation.generated,
     placed: result.placed.length,
     declined: result.skipped.length,
-    unplaced: plan.blocked.length,
+    unplaced: plan.unplaced.length,
+    reasons: plan.unplaced,
+    transient: result.skipped.filter((entry) => isTransientDecline(entry.reason)).length,
   };
 }
 
@@ -107,8 +144,8 @@ export async function runAutoSchedule(deps: AutoScheduleDeps): Promise<AutoSched
  * rows. A call made while a run is going marks one more run to follow it, and every caller shares
  * the same promise, so ten quick results cost two passes, not ten.
  */
-export function singleFlight(run: () => Promise<void>): () => Promise<void> {
-  let running: Promise<void> | null = null;
+export function singleFlight<T>(run: () => Promise<T>): () => Promise<T> {
+  let running: Promise<T> | null = null;
   let again = false;
   return () => {
     if (running) {
@@ -117,14 +154,125 @@ export function singleFlight(run: () => Promise<void>): () => Promise<void> {
     }
     running = (async () => {
       try {
+        let last: T;
         do {
           again = false;
-          await run();
+          last = await run();
         } while (again);
+        return last;
       } finally {
         running = null;
       }
     })();
     return running;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Saying what is left, in the organiser's terms
+// ---------------------------------------------------------------------------
+
+export interface UnplacedNotice {
+  headline: string;
+  detail: string;
+  /** `rebuild` opens the rebuild preview, `settings` opens days and courts. */
+  action: "rebuild" | "settings";
+  actionLabel: string;
+}
+
+/**
+ * The one sentence the Schedule page shows when ready matches are still without a time after
+ * everything that could be done automatically was done.
+ *
+ * It names the cause, never the operation: nobody should have to know what "place" means. The
+ * most fundamental cause wins (no courts explains all the rest), and there is one action, because
+ * every cause here needs the organiser to change the schedule's rules or accept a rebuild.
+ */
+export function describeUnplaced(unplaced: readonly UnplacedMatch[]): UnplacedNotice | null {
+  if (!unplaced.length) return null;
+  const n = unplaced.length;
+  const headline = `${n} ready match${n === 1 ? " has" : "es have"} no time yet`;
+  const has = (reason: UnplacedMatch["reason"]) => unplaced.some((entry) => entry.reason === reason);
+
+  if (has("no_courts")) {
+    return {
+      headline,
+      detail: "No day has a court, so nothing can be scheduled.",
+      action: "settings",
+      actionLabel: "Open settings",
+    };
+  }
+  if (has("past_closing") || has("no_slot")) {
+    return {
+      headline,
+      detail:
+        "They would finish after the last day closes. Extend a day, add a court, or review a rebuild.",
+      action: "rebuild",
+      actionLabel: "Review options",
+    };
+  }
+  if (has("held_behind_placement")) {
+    return {
+      headline,
+      detail: "Knockout matches are waiting for placement matches that have no slot yet.",
+      action: "rebuild",
+      actionLabel: "Review options",
+    };
+  }
+  return {
+    headline,
+    detail: "A prerequisite is missing or a team no longer exists, so they cannot be placed.",
+    action: "rebuild",
+    actionLabel: "Review options",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Retrying without a button
+// ---------------------------------------------------------------------------
+
+/** Wait before the first look at a changed set of unplaced matches, so a burst coalesces. */
+export const SETTLE_MS = 1500;
+/** Waits between retries of a transient failure. Three tries, then stop and let the next change decide. */
+export const RETRY_DELAYS_MS: readonly number[] = [2000, 8000, 30000];
+
+export interface RetryState {
+  signature: string | null;
+  attempts: number;
+}
+
+export const INITIAL_RETRY: RetryState = { signature: null, attempts: 0 };
+
+/** What an attempt ended as, for the purpose of deciding whether to ask again. */
+export type AttemptResult = "settled" | "transient" | "failed";
+
+/** Classifies an attempt: an outcome with transient declines, or a thrown error, is worth retrying. */
+export function attemptResult(outcome: AutoScheduleOutcome | null, threw: boolean): AttemptResult {
+  if (threw) return "failed";
+  if (outcome && outcome.transient > 0) return "transient";
+  return "settled";
+}
+
+/**
+ * Whether to look again, and after how long.
+ *
+ * A new signature (the set of matches without a time, plus the days, courts and breaks they could
+ * go on) is a new situation: wait for it to settle, then try once. A transient failure retries with
+ * backoff, three times at most. A persistent reason (no room before the close, nothing to place
+ * on) is not retried: the same signature would give the same answer, and the notice on the Schedule
+ * page is what asks the organiser to change something, which changes the signature.
+ */
+export function planRetry(
+  state: RetryState,
+  signature: string | null,
+  last: AttemptResult | null,
+): { state: RetryState; delayMs: number | null } {
+  if (signature == null) return { state: INITIAL_RETRY, delayMs: null };
+  if (signature !== state.signature) {
+    return { state: { signature, attempts: 0 }, delayMs: SETTLE_MS };
+  }
+  if (last == null || last === "settled") return { state, delayMs: null };
+  const attempts = state.attempts + 1;
+  const delayMs = RETRY_DELAYS_MS[state.attempts] ?? null;
+  return { state: { signature, attempts }, delayMs };
 }

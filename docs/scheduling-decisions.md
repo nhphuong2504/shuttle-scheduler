@@ -522,10 +522,28 @@ used to be pressed for happens on its own, and the button is left for deliberate
   over stays visible. A toast names what happened ("Round 2 drawn, 2 matches scheduled").
 - **Nothing is rebuilt.** No time that was already on a match changes; a rebuild still previews and
   needs confirmation (§24 still lists an automatic full rebuild as a non-goal).
-- **The Schedule page** shows "N ready matches have no time yet" with **Place now** (the same pass,
-  run on demand, loudly) or "Every ready match has a time". "Update schedule" is renamed **Rebuild
-  schedule**. Saving timings, match settings or breaks offers **Review & apply** in the toast instead
-  of telling the host to go and find the button.
+- **There is no "Place now" button.** A lost race, a dropped request or a result that moved under the
+  plan heals on its own: `useAutoScheduleReconciler` (mounted on the Desk and the Schedule page) looks
+  again while any ready match has no time, after a short settle and then with backoff, three tries at
+  most (`planRetry`). A persistent answer is tried once per situation, where a situation is the set of
+  unplaced matches plus the days, courts and breaks they could go on; changing any of those is a new
+  situation. With no editor looking at either page nothing retries, which is acceptable because a
+  tournament in progress always has a desk.
+- **Automatic placement never runs past the close.** The last day that has courts may overrun in a
+  rebuild, because its preview forecasts the overrun for the host to accept or fix. A pass nobody
+  reviews must not take that decision, so `place-ready` plans with `strictClose`: a match that would
+  finish after the last day closes stays unplaced.
+- **What is left is said as a cause.** `classifyUnplaced` sorts the leftovers into `no_courts`,
+  `past_closing`, `held_behind_placement` (a knockout waiting on a placement match with no slot) and
+  `data` (a missing prerequisite or a team that no longer exists); server declines that are a race
+  (`court_busy`, `player_busy`, `already_placed`, `not_ready`, `not_scheduled`, `in_the_past`) are
+  retried and never shown. The Schedule page works the reasons out itself from the rows on screen (a
+  dry run of the same planner), so every organiser sees the same, and words one notice with one action
+  (`describeUnplaced`): review a rebuild, or open settings when there are no courts. When there is
+  nothing to say it says nothing.
+- **"Update schedule" is now "Rebuild schedule"**, and is a quiet outline button unless something needs
+  a decision (a notice, or schedule conflicts). Saving timings, match settings or breaks offers
+  **Review & apply** in the toast instead of telling the host to go and find the button.
 - **The Desk** lists a ready match with no time at all in its "ready, unassigned" pool (after every
   timed one), so it can still be dispatched while nothing has placed it.
 - **What stays manual:** the first build, a rebuild after the day windows, courts or timings change,

@@ -238,8 +238,36 @@ export interface PlacementSchedulePlan {
    */
   placementNewPayload: PlacementSlotPayload[];
   knockoutNewPayload: PlacementSlotPayload[];
+  /**
+   * Why each match the plan left without a slot has none, in the host's terms.
+   *
+   * Covers `blocked` and `awaitingTeams` alike. The Schedule page words a notice from these, and
+   * the automatic pass uses them to tell "ask the organiser" from "nothing to ask".
+   */
+  unplaced: UnplacedMatch[];
   /** Why the scheduler could not place something, for the desk-facing error. */
   blockedReason: string | null;
+}
+
+/**
+ * - `no_courts`: no day has a court, so nothing can be placed anywhere.
+ * - `past_closing`: the match would finish after the last day's closing time (automatic placement
+ *   only; a rebuild may overrun and forecasts it instead).
+ * - `held_behind_placement`: a knockout waits because a placement match has no slot yet.
+ * - `data`: a prerequisite the plan never schedules, matches waiting on each other, or an entrant
+ *   with no team. Pressing anything again will not change it.
+ * - `no_slot`: no court and free pair of players coincide (rebuild mode's generic cause).
+ */
+export type UnplacedReason =
+  | "no_courts"
+  | "past_closing"
+  | "held_behind_placement"
+  | "data"
+  | "no_slot";
+
+export interface UnplacedMatch {
+  matchId: string;
+  reason: UnplacedReason;
 }
 
 export interface PlanPlacementScheduleInput {
@@ -632,6 +660,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     knockoutRestGapMinutes: knockoutRest,
     isRebuild,
     nextWholeMinute,
+    strictClose: placeReady,
     ...(options ? { options } : {}),
     ...(committedById.size ? { baselineByMatchId: committedById } : {}),
   });
@@ -663,6 +692,16 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
           run.placementUnscheduled.length > 0 ? new Set(run.knockoutUnscheduled) : new Set(),
       })
     : null;
+
+  const unplaced = classifyUnplaced({
+    blocked,
+    awaitingTeams,
+    items: everything,
+    scheduledIds: new Set(run.allSlots.map((slot) => slot.matchId)),
+    placementUnscheduled: new Set(run.placementUnscheduled),
+    daysWithCourts: run.daysWithCourts,
+    strictClose: placeReady,
+  });
 
   const diff = diffPlan(existing, run.allSlots, fixedSet, courtNumberById);
   diff.unplaceable = blocked;
@@ -749,6 +788,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     knockoutNewPayload: newPayloadFor(new Set(knockoutAll.map((item) => item.id))),
     placementScheduledIds,
     knockoutScheduledIds,
+    unplaced,
     blockedReason,
   };
 }
@@ -888,6 +928,56 @@ function explainBlocked(
   return "Each has every prerequisite placed, but no court and a free pair of players come free at the same time.";
 }
 
+/**
+ * Sorts every match the plan left without a slot into a cause the host can act on.
+ *
+ * Pure. The order matters: no courts anywhere explains everything and is checked first; an entrant
+ * with no team and a broken prerequisite chain are data problems no retry can fix; a knockout held
+ * behind placement is named for what it is waiting on rather than for its own symptom; and what is
+ * left is a capacity cause, which for automatic placement means the close.
+ */
+export function classifyUnplaced(input: {
+  blocked: readonly string[];
+  awaitingTeams: readonly string[];
+  items: readonly StageItem[];
+  scheduledIds: ReadonlySet<string>;
+  placementUnscheduled: ReadonlySet<string>;
+  daysWithCourts: number;
+  strictClose: boolean;
+}): UnplacedMatch[] {
+  const byId = new Map(input.items.map((item) => [item.id, item]));
+  const blockedIds = new Set(input.blocked);
+  const out: UnplacedMatch[] = [];
+
+  const noCourts = input.daysWithCourts === 0;
+  for (const matchId of input.awaitingTeams) {
+    out.push({ matchId, reason: noCourts ? "no_courts" : "data" });
+  }
+
+  // A placement match is stuck for itself when it waits on something that will never be placed.
+  const orphaned = (id: string) =>
+    (byId.get(id)?.dependencies ?? []).some(
+      (dependencyId) => !input.scheduledIds.has(dependencyId) && !blockedIds.has(dependencyId),
+    );
+  const placementBlocked = input.blocked.filter((id) => input.placementUnscheduled.has(id));
+  const mutual =
+    placementBlocked.length > 0 &&
+    !placementBlocked.some((id) =>
+      (byId.get(id)?.dependencies ?? []).every((dependencyId) => input.scheduledIds.has(dependencyId)),
+    );
+
+  for (const matchId of input.blocked) {
+    let reason: UnplacedReason;
+    if (noCourts) reason = "no_courts";
+    else if (orphaned(matchId) || (mutual && input.placementUnscheduled.has(matchId))) reason = "data";
+    else if (!input.placementUnscheduled.has(matchId) && input.placementUnscheduled.size > 0) {
+      reason = "held_behind_placement";
+    } else reason = input.strictClose ? "past_closing" : "no_slot";
+    out.push({ matchId, reason });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Persistence
 // ---------------------------------------------------------------------------
@@ -953,6 +1043,14 @@ export function readyUnplacedCount(
   placementMatches: readonly PlacementMatch[],
   tierMatches: readonly TierDrawMatch[],
 ): number {
+  return readyUnplacedIds(placementMatches, tierMatches).length;
+}
+
+/** The ids behind `readyUnplacedCount`, sorted, so a set of them can be compared by value. */
+export function readyUnplacedIds(
+  placementMatches: readonly PlacementMatch[],
+  tierMatches: readonly TierDrawMatch[],
+): string[] {
   const unplaced = (match: { court_id: string | null; scheduled_time: string | null }) =>
     match.court_id == null || match.scheduled_time == null;
   const placement = placementMatches.filter(
@@ -972,7 +1070,7 @@ export function readyUnplacedCount(
       }) &&
       unplaced(match),
   );
-  return placement.length + tier.length;
+  return [...placement, ...tier].map((match) => match.id).sort();
 }
 
 /** What `place_ready_matches` did with a plan, by match id. */

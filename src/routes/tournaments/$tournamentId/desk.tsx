@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { Button } from "@/components/ui/button";
-import { useAutoSchedule } from "@/hooks/useAutoSchedule";
+import { useAutoSchedule, useAutoScheduleReconciler } from "@/hooks/useAutoSchedule";
 import {
   Dialog,
   DialogContent,
@@ -174,6 +174,8 @@ function scoreFormValues(rows: number, status: string, initialGames?: GameScore[
 
 function Desk() {
   const qc = useQueryClient();
+  // A ready match with no time keeps being looked at until it has one, with no button to press.
+  useAutoScheduleReconciler();
   const live = useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);

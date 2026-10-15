@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAutoScheduleReconciler } from "@/hooks/useAutoSchedule";
 import { PickerInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -62,6 +63,7 @@ import {
   type TierDrawMatch,
   type TournamentDay,
 } from "@/lib/tournament/data";
+import { describeUnplaced } from "@/lib/tournament/auto-schedule";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import {
   conflictedMatchCount,
@@ -76,9 +78,9 @@ import { buildStageProgress } from "@/lib/tournament/stage-progress";
 import { cn } from "@/lib/utils";
 import { StageProgressList } from "@/components/stage-progress";
 import {
-  applyPlaceReadyPlan,
   applyPlacementSchedulePlan,
   readyUnplacedCount,
+  type UnplacedMatch,
   courtsAddedToDays,
   courtsForDay,
   dayWindowBounds,
@@ -245,6 +247,8 @@ function ConflictOverview({
 
 export function PlacementScheduler() {
   const qc = useQueryClient();
+  // Looks again at any ready match without a time, so there is nothing to press for it.
+  useAutoScheduleReconciler();
   const { tournament, days, loading } = useTournamentScope();
   // Scheduling and the stage reset are both `can_edit_tournament` in the database, so
   // the page has one flag rather than the two it used to gate on.
@@ -770,6 +774,64 @@ export function PlacementScheduler() {
     for (const day of tournamentDays) map.set(day.id, breaksForDay(day.id));
     return map;
   }, [tournamentDays, breaksForDay]);
+
+  /**
+   * Why ready matches are still without a time, worked out here from the rows already on screen.
+   *
+   * Computed rather than remembered: it does not depend on which desk ran the automatic pass, so
+   * every organiser looking at this page sees the same, and a change to the days or courts
+   * re-evaluates it by itself. A dry run of the same planner the automatic pass uses, never
+   * written, and only when something is actually missing a time.
+   */
+  const [unplacedReasons, setUnplacedReasons] = useState<UnplacedMatch[]>([]);
+  useEffect(() => {
+    if (!canEdit || !tournament || !planInputsReady || readyUnplaced === 0) {
+      setUnplacedReasons([]);
+      return;
+    }
+    // A dry run: nothing is generated or written, so the rows already on screen are the right input
+    // (a build re-reads them from the network; this only describes what the page shows).
+    const dryRunEntrants = entrants ?? [];
+    const timer = setTimeout(() => {
+      try {
+        const plan = planPlacementSchedule({
+          mode: "place-ready",
+          tournament,
+          days: plannerDays,
+          allCourts: courts ?? [],
+          dayCourtIds: dayCourtIdSets,
+          breaksByDayId: breaksByDay,
+          teams: teams ?? [],
+          entrants: dryRunEntrants,
+          draws: draws ?? [],
+          placementMatches: placementMatches ?? [],
+          tierMatches: tierMatches ?? [],
+          categoryOrder: new Map((categories ?? []).map((c) => [c.id, c.sort_order])),
+          options: { graspRuns: 1, seed: 1 },
+        });
+        setUnplacedReasons(plan.unplaced);
+      } catch {
+        setUnplacedReasons([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [
+    canEdit,
+    tournament,
+    planInputsReady,
+    readyUnplaced,
+    plannerDays,
+    courts,
+    dayCourtIdSets,
+    breaksByDay,
+    teams,
+    entrants,
+    draws,
+    placementMatches,
+    tierMatches,
+    categories,
+  ]);
+  const notice = useMemo(() => describeUnplaced(unplacedReasons), [unplacedReasons]);
 
   /**
    * The official close: the end of the last configured day that actually has courts.
@@ -1361,51 +1423,6 @@ export function PlacementScheduler() {
   };
 
   /**
-   * Slots every ready match that has no time into free court time, without moving anything that
-   * already has one. The manual twin of the pass that runs after each result: same planner mode,
-   * same additive writer, but loud, because the person pressed it.
-   */
-  const placeNow = async () => {
-    if (!planInputsReady) {
-      toast.error(`Still loading ${planInputsPending.join(", ")} — try again in a moment.`);
-      return;
-    }
-    setBusy(true);
-    try {
-      const before = await freshSchedulingData();
-      // Only events already under way: starting an event's round one is the first build.
-      const underWay = new Set(before.placementMatches.map((match) => match.category_id));
-      const generation = await generateMissingStages({
-        categories: (categories ?? []).filter((category) => underWay.has(category.id)),
-        entrants: before.entrants,
-        matches: before.placementMatches,
-        draws: before.draws,
-      });
-      const fresh = stageGenerationChanged(generation) ? await freshSchedulingData() : before;
-      const plan = await computePlan(fresh, "place-ready");
-      const result = await applyPlaceReadyPlan(plan);
-      const left = result.skipped.length + plan.blocked.length;
-      if (result.placed.length === 0) {
-        toast.info(
-          left > 0
-            ? `No room found for ${left} ready match${left === 1 ? "" : "es"}. Rebuild the schedule to make space.`
-            : "Every ready match already has a time.",
-        );
-      } else {
-        toast.success(
-          `${result.placed.length} match${result.placed.length === 1 ? "" : "es"} scheduled` +
-            (left > 0 ? `; ${left} still without a time.` : "."),
-        );
-      }
-      await qc.invalidateQueries();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not place the ready matches");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /**
    * Saved timings, breaks and match settings only change the next plan. Once a schedule exists,
    * say so and put the way to apply them in the toast, rather than telling the host to go and find it.
    */
@@ -1502,6 +1519,10 @@ export function PlacementScheduler() {
   const buildButton = (
     <Button
       id="build-schedule"
+      // A rebuild is for deliberate re-optimising. It only takes the primary place when something
+      // needs the organiser's decision: matches that could not be placed, or a schedule that
+      // contradicts itself. Before the first build it is the one thing to do, so it stays primary.
+      variant={hasSchedule && !notice && conflictMatchCount === 0 ? "outline" : "default"}
       disabled={busy || !planInputsReady || !tournament || Boolean(buildBlocker)}
       aria-describedby={buildBlocker ? "build-blocker" : undefined}
       onClick={() => void (hasSchedule ? previewRebuild() : build())}
@@ -1562,30 +1583,21 @@ export function PlacementScheduler() {
             courtNumberLabel={courtNumberLabel}
           />
         ) : null}
-        {canEdit && hasSchedule ? (
+        {canEdit && hasSchedule && notice ? (
           <div
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm"
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2.5 text-sm"
             role="status"
           >
-            {readyUnplaced > 0 ? (
-              <>
-                <span className="font-semibold text-warn-foreground">
-                  {readyUnplaced} ready match{readyUnplaced === 1 ? " has" : "es have"} no time yet
-                </span>
-                <span className="text-muted-foreground">
-                  Results place new matches automatically; this one found no room, or has not been
-                  tried.
-                </span>
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => void placeNow()}>
-                  Place now
-                </Button>
-              </>
-            ) : (
-              <span className="text-muted-foreground">
-                Every ready match has a time. New matches are placed as results come in; rebuild
-                only to re-optimise.
-              </span>
-            )}
+            <span className="font-semibold text-warn-foreground">{notice.headline}</span>
+            <span className="text-muted-foreground">{notice.detail}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void (notice.action === "settings" ? setShowSettings(true) : previewRebuild())}
+            >
+              {notice.actionLabel}
+            </Button>
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-hairline bg-surface px-3 py-2.5 text-sm text-muted-foreground">

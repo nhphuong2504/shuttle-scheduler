@@ -473,7 +473,9 @@ describe("a build reads its rows from the network, not the query cache", () => {
     expect(snapshot).toMatch(/fetchPlacementEntrants\(/);
     expect(schedule).toMatch(/entrants: before\.entrants/);
     expect(schedule).toMatch(/entrants: fresh\.entrants/);
-    // The stale component value must not reach either the generator or the planner.
+    // The stale component value must not reach either the generator or the planner that a build
+    // writes from. (The page's read-only dry run, which describes what is on screen, names its
+    // input `dryRunEntrants` and writes nothing.)
     expect(schedule).not.toMatch(/entrants: entrants \?\? \[\]/);
   });
 

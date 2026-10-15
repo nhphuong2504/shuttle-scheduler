@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  INITIAL_RETRY,
+  RETRY_DELAYS_MS,
+  type RetryState,
+  SETTLE_MS,
+  attemptResult,
+  describeUnplaced,
   eventsUnderWay,
   hasBuiltSchedule,
+  isTransientDecline,
+  planRetry,
   runAutoSchedule,
   singleFlight,
   type AutoScheduleDeps,
@@ -28,6 +36,7 @@ function plan(partial: Partial<PlacementSchedulePlan> = {}): PlacementSchedulePl
     placementNewPayload: [],
     knockoutNewPayload: [],
     blocked: [],
+    unplaced: [],
     ...partial,
   } as PlacementSchedulePlan;
 }
@@ -72,9 +81,12 @@ describe("runAutoSchedule", () => {
   });
 
   it("does not write when there is nothing new to place", async () => {
-    const d = deps({ plan: vi.fn(() => plan({ blocked: ["x"] })) });
+    const d = deps({
+      plan: vi.fn(() => plan({ unplaced: [{ matchId: "x", reason: "past_closing" }] })),
+    });
     const outcome = await runAutoSchedule(d);
-    expect(outcome).toMatchObject({ ran: true, placed: 0, unplaced: 1 });
+    expect(outcome).toMatchObject({ ran: true, placed: 0, unplaced: 1, transient: 0 });
+    expect(outcome.reasons).toEqual([{ matchId: "x", reason: "past_closing" }]);
     expect(d.apply).not.toHaveBeenCalled();
   });
 
@@ -91,7 +103,7 @@ describe("runAutoSchedule", () => {
       })),
     });
     const outcome = await runAutoSchedule(d);
-    expect(outcome).toMatchObject({ ran: true, placed: 1, declined: 1 });
+    expect(outcome).toMatchObject({ ran: true, placed: 1, declined: 1, transient: 1 });
     expect(d.apply).toHaveBeenCalledTimes(1);
   });
 
@@ -158,5 +170,102 @@ describe("singleFlight", () => {
     await expect(run()).rejects.toThrow("boom");
     await run();
     expect(calls).toBe(2);
+  });
+});
+
+describe("isTransientDecline / attemptResult", () => {
+  it("treats races as transient and a bad court as not", () => {
+    for (const reason of ["court_busy", "player_busy", "already_placed", "not_ready"]) {
+      expect(isTransientDecline(reason)).toBe(true);
+    }
+    for (const reason of ["bad_court", "incomplete", "unknown_match"]) {
+      expect(isTransientDecline(reason)).toBe(false);
+    }
+  });
+
+  it("calls an attempt settled, transient or failed", () => {
+    const base = {
+      ran: true,
+      generated: { roundOne: 0, roundTwo: 0, draws: 0 },
+      placed: 0,
+      declined: 0,
+      unplaced: 0,
+      reasons: [],
+      transient: 0,
+    };
+    expect(attemptResult({ ...base }, false)).toBe("settled");
+    expect(attemptResult({ ...base, transient: 2 }, false)).toBe("transient");
+    expect(attemptResult(null, true)).toBe("failed");
+    expect(attemptResult(null, false)).toBe("settled");
+  });
+});
+
+describe("planRetry", () => {
+  it("waits for a new situation to settle, then tries once", () => {
+    const first = planRetry(INITIAL_RETRY, "a|b", null);
+    expect(first).toEqual({ state: { signature: "a|b", attempts: 0 }, delayMs: SETTLE_MS });
+  });
+
+  it("does not ask again once an attempt settled, whatever it left behind", () => {
+    const state = { signature: "a|b", attempts: 0 };
+    expect(planRetry(state, "a|b", "settled").delayMs).toBeNull();
+  });
+
+  it("retries a transient failure with growing waits, three times, then stops", () => {
+    let state: RetryState = { signature: "s", attempts: 0 };
+    const waits: (number | null)[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const next = planRetry(state, "s", "transient");
+      waits.push(next.delayMs);
+      state = next.state;
+    }
+    expect(waits).toEqual([...RETRY_DELAYS_MS, null]);
+  });
+
+  it("treats a thrown error like a transient one", () => {
+    expect(planRetry({ signature: "s", attempts: 0 }, "s", "failed").delayMs).toBe(RETRY_DELAYS_MS[0]);
+  });
+
+  it("starts over when the situation changes, and stops when there is nothing left", () => {
+    const worn = { signature: "old", attempts: 3 };
+    expect(planRetry(worn, "new", "transient")).toEqual({
+      state: { signature: "new", attempts: 0 },
+      delayMs: SETTLE_MS,
+    });
+    expect(planRetry(worn, null, null)).toEqual({ state: INITIAL_RETRY, delayMs: null });
+  });
+});
+
+describe("describeUnplaced", () => {
+  const u = (reason: "no_courts" | "past_closing" | "held_behind_placement" | "data" | "no_slot") =>
+    ({ matchId: reason, reason }) as const;
+
+  it("says nothing when nothing is left", () => {
+    expect(describeUnplaced([])).toBeNull();
+  });
+
+  it("names the cause in the organiser's terms and counts matches", () => {
+    const notice = describeUnplaced([u("past_closing"), { matchId: "b", reason: "past_closing" }]);
+    expect(notice?.headline).toBe("2 ready matches have no time yet");
+    expect(notice?.detail).toMatch(/after the last day closes/);
+    expect(notice?.action).toBe("rebuild");
+    expect(describeUnplaced([u("past_closing")])?.headline).toBe("1 ready match has no time yet");
+  });
+
+  it("puts the most fundamental cause first and sends no-courts to settings", () => {
+    const notice = describeUnplaced([u("past_closing"), u("no_courts"), u("data")]);
+    expect(notice?.action).toBe("settings");
+    expect(notice?.detail).toMatch(/No day has a court/);
+  });
+
+  it("explains a knockout held behind placement, then a data problem, in that order", () => {
+    expect(describeUnplaced([u("held_behind_placement"), u("data")])?.detail).toMatch(/placement matches/);
+    expect(describeUnplaced([u("data")])?.detail).toMatch(/prerequisite is missing/);
+  });
+
+  it("never offers a button called Place now", () => {
+    for (const reason of ["no_courts", "past_closing", "held_behind_placement", "data"] as const) {
+      expect(describeUnplaced([u(reason)])?.actionLabel).not.toMatch(/place/i);
+    }
   });
 });

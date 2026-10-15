@@ -21,6 +21,7 @@ import {
   planPlacementSchedule,
   projectSlotsOntoMatches,
   sliceRowsByDay,
+  classifyUnplaced,
   readyUnplacedCount,
   uncoveredScheduledMatches,
   type PlanPlacementScheduleInput,
@@ -2528,5 +2529,120 @@ describe("readyUnplacedCount", () => {
 
     expect(readyUnplacedCount([placed, fresh, reported], [ready, waiting, bye])).toBe(2);
     expect(readyUnplacedCount([placed], [])).toBe(0);
+  });
+});
+
+describe("automatic placement and the closing time", () => {
+  /** A 20-minute day with one court cannot hold a 30-minute match. */
+  const shortDay: TournamentDay = { ...DAY, end_time: "09:20:00" };
+  const fresh = placementMatch("fresh", "round1", "e1", "e2");
+
+  it("leaves a match unplaced rather than running it past the close", () => {
+    const result = plan({
+      mode: "place-ready",
+      dayConfig: shortDay,
+      courts: [court(1)],
+      placementMatches: [fresh],
+    });
+
+    expect(result.placementNewPayload).toEqual([]);
+    expect(result.unplaced).toEqual([{ matchId: "fresh", reason: "past_closing" }]);
+  });
+
+  it("still lets a rebuild overrun, because its preview forecasts that for the host", () => {
+    const result = plan({ dayConfig: shortDay, courts: [court(1)], placementMatches: [fresh] });
+
+    expect(result.placementSlotPayload.map((slot) => slot.match_id)).toEqual(["fresh"]);
+    expect(result.unplaced).toEqual([]);
+  });
+
+  it("places the matches that fit and reports only the ones that do not", () => {
+    const result = plan({
+      mode: "place-ready",
+      dayConfig: { ...DAY, end_time: "09:40:00" },
+      courts: [court(1)],
+      placementMatches: [fresh, placementMatch("second", "round1", "e3", "e4")],
+    });
+
+    expect(result.placementNewPayload).toHaveLength(1);
+    expect(result.unplaced).toHaveLength(1);
+    expect(result.unplaced[0]?.reason).toBe("past_closing");
+  });
+
+  it("holds a knockout behind a placement match that has no slot, and says so", () => {
+    const result = plan({
+      mode: "place-ready",
+      dayConfig: shortDay,
+      courts: [court(1)],
+      placementMatches: [fresh],
+      tierMatches: [tierMatch("k1", 1, 1, "e3", "e4", { status: "scheduled" })],
+    });
+
+    const byId = new Map(result.unplaced.map((entry) => [entry.matchId, entry.reason]));
+    expect(byId.get("fresh")).toBe("past_closing");
+    expect(byId.get("k1")).toBe("held_behind_placement");
+  });
+});
+
+describe("classifyUnplaced", () => {
+  const item = (id: string, dependencies: string[] = []) => ({ id, dependencies }) as never;
+
+  it("says no courts first, because it explains everything", () => {
+    expect(
+      classifyUnplaced({
+        blocked: ["a"],
+        awaitingTeams: ["b"],
+        items: [item("a"), item("b")],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(["a"]),
+        daysWithCourts: 0,
+        strictClose: true,
+      }),
+    ).toEqual([
+      { matchId: "b", reason: "no_courts" },
+      { matchId: "a", reason: "no_courts" },
+    ]);
+  });
+
+  it("calls a missing prerequisite a data problem, not a capacity one", () => {
+    expect(
+      classifyUnplaced({
+        blocked: ["a"],
+        awaitingTeams: [],
+        items: [item("a", ["ghost"])],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(["a"]),
+        daysWithCourts: 1,
+        strictClose: true,
+      }),
+    ).toEqual([{ matchId: "a", reason: "data" }]);
+  });
+
+  it("names an entrant with no team as data", () => {
+    expect(
+      classifyUnplaced({
+        blocked: [],
+        awaitingTeams: ["a"],
+        items: [item("a")],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(),
+        daysWithCourts: 1,
+        strictClose: true,
+      }),
+    ).toEqual([{ matchId: "a", reason: "data" }]);
+  });
+
+  it("falls back to no_slot outside automatic placement", () => {
+    expect(
+      classifyUnplaced({
+        blocked: ["a"],
+        awaitingTeams: [],
+        items: [item("a")],
+        scheduledIds: new Set(),
+        placementUnscheduled: new Set(["a"]),
+        daysWithCourts: 1,
+        strictClose: false,
+      }),
+    ).toEqual([{ matchId: "a", reason: "no_slot" }]);
   });
 });
