@@ -11,6 +11,7 @@ import type {
 } from "./data";
 import { indexBy, teamPlayerIds } from "./data";
 import type { DeskMatchKind, DeskMatchModel } from "./desk";
+import { roundName } from "./draws";
 import { gamesLabel, parseGames, type GameScore } from "./format";
 import { isTierMatchReady } from "./tier-draw";
 
@@ -26,6 +27,15 @@ import { isTierMatchReady } from "./tier-draw";
 export type DeskMatch = DeskMatchModel & {
   teams: [string | null, string | null];
   tag: string;
+  /**
+   * The knockout round alone ("Semifinal"), for a surface that already names the draw.
+   *
+   * The Control desk prints `tag` in full - the event and draw are not on the tile - but the
+   * Score desk groups tier matches under "MS · Draw A", so repeating that in every row is
+   * noise and the round is the part the group header does not carry. Undefined for every kind
+   * that is not a tier bracket match.
+   */
+  roundTag?: string | undefined;
   score: string | null;
   initialGames?: GameScore[] | undefined;
   /** Only the score desk needs this, for its per-category filter. */
@@ -73,6 +83,27 @@ function placementTag(match: PlacementMatch, catMap: Map<string, Category | unde
 }
 
 /**
+ * How a knockout match is labelled: event code, draw and round.
+ *
+ * The board used to print only the draw - "Tier A" - which named neither the event it
+ * belonged to (every event has a Draw A) nor the round inside the bracket, so a semifinal
+ * and a final read identically on the tile. It now mirrors `placementTag`'s shape and uses
+ * the same round vocabulary the Knockout tab prints, so one thing has one name across the
+ * app rather than "Tier A" here and "Draw A" everywhere else.
+ */
+function tierTag(
+  draw: TierDraw | undefined,
+  round: number,
+  catMap: Map<string, Category | undefined>,
+): string {
+  if (!draw) return "";
+  const code = catMap.get(draw.category_id)?.code;
+  return [code, `Draw ${draw.tier}`, roundName(draw.bracket_size, round)]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
  * Every row the desk and the score desk should see, from the tables the tournament's
  * own format uses.
  *
@@ -98,10 +129,10 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
     teamIds.flatMap((id) => (id ? teamPlayerIds(teamMap.get(id)) : []));
   const entrantTeamOf = (entrantId: string | null): string | null =>
     entrantId ? sources.entrantTeam(entrantId) : null;
-  const tierOf = (drawId: string) =>
-    (sources.tierDraws ?? []).find((draw) => draw.id === drawId)?.tier ?? "";
-  const categoryOfDraw = (drawId: string) =>
-    (sources.tierDraws ?? []).find((draw) => draw.id === drawId)?.category_id ?? "";
+  const drawOf = (drawId: string): TierDraw | undefined =>
+    (sources.tierDraws ?? []).find((draw) => draw.id === drawId);
+  const tierOf = (drawId: string) => drawOf(drawId)?.tier ?? "";
+  const categoryOfDraw = (drawId: string) => drawOf(drawId)?.category_id ?? "";
 
   /** False for the supported format, whose pools and pooled draws are leftovers. */
   const roundRobin = !isSupportedFormat(sources.format);
@@ -190,6 +221,7 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
           entrantTeamOf(match.entrant_a_id),
           entrantTeamOf(match.entrant_b_id),
         ];
+        const draw = drawOf(match.draw_id);
         return {
           id: match.id,
           kind: "tier" as DeskMatchKind,
@@ -200,8 +232,9 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
           scheduled: match.scheduled_time,
           teams,
           playerIds: playersOf(teams),
-          tag: `Tier ${tierOf(match.draw_id)}`,
-          categoryId: categoryOfDraw(match.draw_id),
+          tag: tierTag(draw, match.round, catMap),
+          roundTag: draw ? roundName(draw.bracket_size, match.round) : undefined,
+          categoryId: draw?.category_id ?? "",
           score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
           initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
         };

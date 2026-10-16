@@ -254,8 +254,27 @@ describe("buildDeskMatches labels every kind", () => {
     expect(byId.get("plm1")?.playerIds).toEqual(["team-e1-p1", "team-e2-p1"]);
   });
 
-  it("tags a tier row with its draw and reads the draw's category", () => {
-    expect(byId.get("tdm1")).toMatchObject({ tag: "Tier A", categoryId: CATEGORY_ID });
+  it("tags a tier row with its event, draw and round, and reads the draw's category", () => {
+    // "Tier A" named neither the event (every event has a Draw A) nor the round, so a
+    // semifinal and a final read identically on the board. The tag now mirrors a placement
+    // row's shape and the round comes from the same `roundName` the Knockout tab prints.
+    expect(byId.get("tdm1")).toMatchObject({
+      tag: "MS · Draw A · Semifinal",
+      roundTag: "Semifinal",
+      categoryId: CATEGORY_ID,
+    });
+  });
+
+  it("names a later knockout round by where it sits in the bracket", () => {
+    const rows = buildDeskMatches({
+      ...sources("two_round_placement"),
+      tierMatches: [tierMatch("final", { round: 2 })],
+    });
+    // The fixture's Draw A is a bracket of four: its second round is the final.
+    expect(rows.find((row) => row.id === "final")).toMatchObject({
+      tag: "MS · Draw A · Final",
+      roundTag: "Final",
+    });
   });
 
   it("carries a pool score across as a raw pair and a draw score as games", () => {
