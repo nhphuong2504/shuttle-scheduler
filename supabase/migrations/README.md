@@ -3362,3 +3362,49 @@ DROP FUNCTION public.place_ready_matches(uuid, text, jsonb);
 ```
 
 Rows it already placed keep their court and time.
+
+## Applying `20261018000000_conflict_overrun_alignment.sql`
+
+A `CREATE OR REPLACE` of `schedule_conflicts` with one behavioural change. Written as a new migration because
+`20261009020000` is already applied to staging and production.
+
+### The mismatch it fixes
+
+Two matches back to back on one court — `m1` at 12:00, `m2` at 12:10, a ten-minute slot — are not
+double-booked while `m1` is still inside its slot. `20261009020000` read a still-running match as occupying the
+court until `GREATEST(planned_end, now)`, so the pair overlapped from the first instant `now` passed 12:10 and
+the "Same court and time as another match" chip appeared at 12:10. The desk only calls the same match Overrun
+once the whole minutes on court pass its slot (`deriveCourtState` in `src/lib/tournament/desk.ts`):
+`floor((now - started_at) / 60s) > slot`, i.e. at `started_at + slot + 1 minute` — 12:11. Same event, two
+clocks, one minute apart.
+
+### What changes
+
+`eff` gains `eff_court_end`, which the overlap pairing alone reads. It is `planned_end` until Overrun and
+`GREATEST(planned_end, now)` after it, which is the old day-of value. `eff_end` is untouched, so
+`rest_shortfall`, `past_closing` and `before_prerequisite` are unchanged: for those, "the match is still on
+court" is the honest answer, and a different question from whether the court has been held past its slot. Two
+*published* matches that overlap remain a conflict from publication, and an overlap against a `reported` match
+is still measured from its `ended_at`; only the still-running side moves.
+
+The reflow (`20261009010000`) is deliberately **not** changed. Its
+`GREATEST(shifted_time + duration, statement_timestamp())` answers "when does this court physically free up",
+and at 12:10 the court is still occupied, so it must keep using `now`. Applying the Overrun boundary there
+would let the reflow publish a successor at a time already in the past.
+
+### Verify after applying
+
+```sql
+SELECT has_function_privilege('anon', 'public.schedule_conflicts(uuid)', 'execute');          -- false
+SELECT has_function_privilege('authenticated', 'public.schedule_conflicts(uuid)', 'execute'); -- true
+SELECT prosrc LIKE '%eff_court_end%' AND prosrc LIKE '%interval ''1 minute''%'
+FROM pg_proc WHERE proname = 'schedule_conflicts';                                            -- true
+```
+
+The `DO $verify$` block asserts the security-definer guard, the four conflict kinds, the retirement of the
+`overdue` kind, the still-scheduled-only restriction and the new Overrun gate on apply. Then run
+`npm run test:integration` on the local stack, which is where the conflict read is exercised against real rows.
+
+### Rolling back
+
+Re-apply `20261009020000_schedule_conflicts.sql`; it restores the previous body and its grants.
