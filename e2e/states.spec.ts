@@ -738,7 +738,7 @@ for (const cell of MATRIX_CELLS) {
       // fixture holds two events, and the knockout is last in both.
       const stages = lines.map(
         (line) =>
-          line.match(/^(?:MD|XD) (Round 1|Round 2|Knockout|Tournament Complete)/)?.[1] ??
+          line.match(/^[✓●○]\s*(Round 1|Round 2|Knockout|Tournament Complete)/)?.[1] ??
           `not a stage: ${line.slice(0, 40)}`,
       );
       expect(stages).toEqual([
