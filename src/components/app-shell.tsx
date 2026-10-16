@@ -1364,10 +1364,13 @@ export function StatusPill({ status }: { status: string }) {
  * and without inventing a status the schema does not have. That matters because
  * the vocabulary is a closed set of five and a bye is not one of them.
  */
-export function ByeMarker() {
+export function ByeMarker({ className }: { className?: string } = {}) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full border border-dashed border-hairline px-2 py-0.5 font-score text-t2 uppercase tracking-wide text-muted-foreground"
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-dashed border-hairline px-2 py-0.5 font-score text-t2 uppercase tracking-wide text-muted-foreground",
+        className,
+      )}
       title={BYE_NOTE}
     >
       {BYE_GLYPH}
