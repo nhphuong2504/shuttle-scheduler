@@ -161,9 +161,9 @@ export interface AppMockOptions {
    * What `schedule_conflicts` answers, in the RPC's row-per-conflict shape.
    *
    * Empty by default, which is the honest answer for every spec that is not about
-   * conflicts: a clean schedule is what most surfaces assume, so the desk chip and the
-   * organiser's block are simply absent rather than wrong. A spec about them supplies the
-   * rows it wants and the app folds them exactly as it folds the real answer.
+   * conflicts: a clean schedule is what most surfaces assume, so the organiser's block and
+   * the start confirmation are simply absent rather than wrong. A spec about them supplies
+   * the rows it wants and the app folds them exactly as it folds the real answer.
    *
    * The handler answers regardless of access on purpose. The RPC is editor-gated, and the
    * viewer spec proves the *app* makes no request by counting requests itself - a mock that
