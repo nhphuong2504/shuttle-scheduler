@@ -530,7 +530,8 @@ describe("a build shows the plan it just applied", () => {
  */
 describe("byes are drawn as draw conditions, not as statuses", () => {
   const scores = readWorkspace("scores.tsx");
-  const bracket = readWorkspace("knockout.tsx");
+  // The tree is drawn by a shared component, so that is where a bye is told from a status.
+  const bracketTree = readFileSync(join(__dirname, "../components/knockout-bracket.tsx"), "utf8");
   const draws = readWorkspace("draws.tsx");
 
   it("never coerces a bye onto a status the schema does have", () => {
@@ -546,16 +547,16 @@ describe("byes are drawn as draw conditions, not as statuses", () => {
     // buildDeskMatches filters them, which is why the scores page needs the guard in
     // its draw list only.
     expect(scores).toMatch(/isByeMatch\(m\)[\s\S]{0,80}<ByeMarker \/>/);
-    // A slot still waiting on a feeder gets its own marker between the two, so the bye test is
+    // A bye returns its own slim card before the status pill is ever reached, so the bye test is
     // pinned to the marker preceding the pill, not to their being adjacent.
-    expect(bracket).toMatch(/bye \?\s*\(?\s*<ByeMarker \/>[\s\S]{0,600}<StatusPill/);
+    expect(bracketTree).toMatch(/if \(bye\)[\s\S]{0,900}<ByeMarker[\s\S]*<StatusPill/);
   });
 
   it("tests for a bye through one shared predicate", () => {
     // Three different detections used to coexist - `is_bye` in one place, `note` in
     // another, `status === "bye"` in the schema - so a row carrying only one signal
     // was drawn differently on two pages.
-    for (const source of [scores, bracket, draws]) {
+    for (const source of [scores, bracketTree, draws]) {
       expect(source).toMatch(/isByeMatch/);
       expect(source).not.toMatch(/note === "Bye"/);
       expect(source).not.toMatch(/status === "bye"/);
@@ -857,7 +858,9 @@ describe("the workspace chrome is mounted once, by the layout", () => {
   ];
 
   it("renders WorkspaceShell in the layout route and nowhere else", () => {
-    const renderers = files.filter((file) => readFileSync(join(src, file), "utf8").includes("<WorkspaceShell"));
+    const renderers = files.filter((file) =>
+      readFileSync(join(src, file), "utf8").includes("<WorkspaceShell"),
+    );
     expect(renderers).toEqual([join("routes", "tournaments", "$tournamentId", "route.tsx")]);
   });
 
@@ -865,7 +868,9 @@ describe("the workspace chrome is mounted once, by the layout", () => {
     // A page composes `Page`, which is the header over the page's own content. A page
     // reaching for the bare header would render two titles, which is the shape this guard
     // is here to keep out of the tree.
-    const headerUsers = files.filter((file) => readFileSync(join(src, file), "utf8").includes("<PageHeader"));
+    const headerUsers = files.filter((file) =>
+      readFileSync(join(src, file), "utf8").includes("<PageHeader"),
+    );
     expect(headerUsers).toEqual([join("components", "app-shell.tsx")]);
   });
 
@@ -976,9 +981,7 @@ describe("the working-tournament pointer is written in one place per act", () =>
 
   it("calls the action from the three acts that change where you are working", () => {
     const callers = files
-      .filter((file) =>
-        readFileSync(join(src, file), "utf8").includes("setCurrentTournament("),
-      )
+      .filter((file) => readFileSync(join(src, file), "utf8").includes("setCurrentTournament("))
       .sort();
     expect(callers).toEqual(
       [
@@ -1047,7 +1050,9 @@ describe("the read-only workspace removes the operator's controls, rather than d
     // What is missing before a build instructs an operator, and the bar that builds is the
     // operator's too: both go with the panel.
     expect(schedule).toMatch(/\{canEdit && showSettings \? \(\s*<div className="sticky/);
-    expect(schedule).toMatch(/actions=\{\s*canEdit \? \(\s*<div className="flex flex-col items-end gap-1">/);
+    expect(schedule).toMatch(
+      /actions=\{\s*canEdit \? \(\s*<div className="flex flex-col items-end gap-1">/,
+    );
   });
 
   it("hides the tournament-wide forecast from a read-only reader", () => {
