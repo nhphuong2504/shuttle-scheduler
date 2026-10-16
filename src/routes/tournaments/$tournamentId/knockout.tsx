@@ -1,10 +1,11 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Trophy } from "lucide-react";
 import { useMemo } from "react";
 
-import { Page, EmptyState, Panel } from "@/components/app-shell";
-import { KnockoutBracket } from "@/components/knockout-bracket";
+import { Page, ByeMarker, EmptyState, Panel, StatusPill } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS } from "@/lib/tournament/competition-format";
+import { roundName } from "@/lib/tournament/draws";
 import { bracketNote, bracketRounds, buildCategoryView } from "@/lib/tournament/placement-actions";
 import {
   indexBy,
@@ -26,6 +27,9 @@ import {
   type TierDraw,
   type TierDrawMatch,
 } from "@/lib/tournament/data";
+import { gamesLabel, parseGames } from "@/lib/tournament/format";
+import { isByeMatch } from "@/lib/tournament/match-status";
+import { feederLabel, isTierMatchReady } from "@/lib/tournament/tier-draw";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/knockout")({
   head: () => ({
@@ -226,31 +230,12 @@ function BracketSection({
           </div>
         </Panel>
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {PLACEMENT_TIERS.map((tierMapping) => {
             const draw = draws.find((entry) => entry.tier === tierMapping.tier);
             const rounds = draw
               ? bracketRounds(categoryTierMatches.filter((match) => match.draw_id === draw.id))
               : new Map<number, TierDrawMatch[]>();
-
-            if (!draw) {
-              // A tier nobody landed in is one line, not a panel: four panels of which three say
-              // "empty" push the one real bracket down the page.
-              return (
-                <div
-                  key={tierMapping.tier}
-                  className="flex flex-wrap items-baseline justify-between gap-x-3 rounded-xl border border-hairline bg-card px-4 py-2.5 text-sm"
-                >
-                  <span className="font-semibold">
-                    {tierMapping.label} · {tierMapping.title}
-                  </span>
-                  <span className="text-muted-foreground">
-                    <span className="font-score text-t2">{tierMapping.record}</span> · No entrants
-                    in this tier.
-                  </span>
-                </div>
-              );
-            }
 
             return (
               <Panel
@@ -262,24 +247,107 @@ function BracketSection({
                   </span>
                 }
               >
-                {
+                {!draw ? (
+                  <p className="text-sm text-muted-foreground">No entrants in this tier.</p>
+                ) : (
                   <div className="space-y-3">
                     <p className="text-t4 text-muted-foreground">{bracketNote(draw)}</p>
 
-                    <KnockoutBracket
-                      rounds={rounds}
-                      bracketSize={draw.bracket_size}
-                      label={label}
-                      ariaLabel={`${category.code} ${tierMapping.label} bracket`}
-                      champion={draw.champion_id ? label(draw.champion_id) : null}
-                    />
+                    {draw.champion_id ? (
+                      // A decided bracket is a state, and the system's rule is that a state
+                      // carries a colour, a glyph and a word - never colour alone. The tint was
+                      // here; the glyph was not, so finding which of the four brackets had been
+                      // decided meant reading all four. `draws.tsx` already marks the same award
+                      // with a `Trophy`, and the other arm of this ternary is already `text-t4`,
+                      // so the size follows the branch it is chosen against rather than `text-sm`.
+                      //
+                      // The glyph inherits the row's ink rather than taking `text-success`.
+                      // `--success` is a fill token: `styles.css` states it is not text-safe
+                      // at 2.95:1 and that a text use must add an ink twin. No such
+                      // twin exists, and no sweep would catch the mistake - axe reads text nodes,
+                      // and the 1.4.11 sweep measures selected markers and control edges, not
+                      // icons. The measured ink is the one already on the surface.
+                      <p className="flex items-center gap-1.5 rounded-md border border-hairline bg-success/10 px-3 py-2 text-t4">
+                        <Trophy className="size-3.5 shrink-0" aria-hidden />
+                        <span>
+                          <span className="font-semibold">Champion:</span> {label(draw.champion_id)}
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-t4 text-muted-foreground">No champion yet.</p>
+                    )}
+
+                    {[...rounds.entries()].map(([round, roundMatches]) => (
+                      <div key={round} className="space-y-1">
+                        <p className="text-sm font-semibold text-muted-foreground">
+                          {roundName(draw.bracket_size, round)}
+                        </p>
+                        {roundMatches.map((match) => (
+                          <TierMatchRow
+                            key={match.id}
+                            match={match}
+                            bracketSize={draw.bracket_size}
+                            label={label}
+                          />
+                        ))}
+                      </div>
+                    ))}
                   </div>
-                }
+                )}
               </Panel>
             );
           })}
         </div>
       )}
     </section>
+  );
+}
+
+/** One match in a bracket. Read-only: scoring lives on the Scores page. */
+function TierMatchRow({
+  match,
+  bracketSize,
+  label,
+}: {
+  match: TierDrawMatch;
+  bracketSize: number;
+  label: (entrantId: string | null | undefined, fallback?: string) => string;
+}) {
+  const decided = match.status === "reported" || match.status === "walkover";
+  const bye = isByeMatch(match);
+  const waiting =
+    !bye &&
+    match.status === "scheduled" &&
+    !isTierMatchReady({ entrantAId: match.entrant_a_id, entrantBId: match.entrant_b_id });
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-hairline px-2 py-1.5">
+      <div className="min-w-0 break-words text-sm">
+        <span className="font-medium">
+          {label(match.entrant_a_id, feederLabel(bracketSize, match.round, match.slot, "a"))}
+        </span>
+        <span className="mx-1.5 text-muted-foreground">vs</span>
+        <span className="font-medium">
+          {label(match.entrant_b_id, feederLabel(bracketSize, match.round, match.slot, "b"))}
+        </span>
+        {decided && !bye ? (
+          <span className="ml-2 font-score text-t4 text-muted-foreground">
+            {gamesLabel(parseGames(match.games))}
+          </span>
+        ) : null}
+      </div>
+      {/* A bye carries status "reported" because that is how the generator stores an
+          automatic advance, so rendering the raw status would label it "Completed".
+          The marker replaces the pill rather than sitting beside it, and takes over
+          the games label too: a bye has no games to show. */}
+      {bye ? (
+        <ByeMarker />
+      ) : waiting ? (
+        // An empty future slot is not "Scheduled": nothing can be scheduled until both sides
+        // are known, so say what it is waiting on.
+        <span className="shrink-0 text-t4 text-muted-foreground">Waiting for teams</span>
+      ) : (
+        <StatusPill status={match.status} />
+      )}
+    </div>
   );
 }

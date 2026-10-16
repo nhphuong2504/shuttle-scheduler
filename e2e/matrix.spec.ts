@@ -276,8 +276,6 @@ async function measureLayout(page: Page): Promise<LayoutReport> {
       const style = getComputedStyle(element);
       if (style.overflowX !== "hidden" && style.overflowX !== "clip") continue;
       if (style.textOverflow === "ellipsis") continue;
-      // Visually-hidden text is clipped on purpose and still read aloud, so it is not "gone".
-      if (element.classList.contains("sr-only")) continue;
       const own = Array.from(element.childNodes)
         .filter((node) => node.nodeType === Node.TEXT_NODE)
         .map((node) => node.textContent ?? "")
@@ -337,3 +335,4 @@ test.describe("layout integrity across the matrix", () => {
     }
   }
 });
+
