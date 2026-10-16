@@ -610,7 +610,7 @@ function MatchesPage() {
                       <MatchRow
                         key={m.id}
                         match={m}
-                        left={m.tag || "Tier"}
+                        left={m.roundTag || m.tag || "Tier"}
                         label={label}
                         courtMap={courtMap}
                         canEdit={canEdit}
