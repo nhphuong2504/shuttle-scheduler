@@ -145,8 +145,8 @@ export function entryTypeLabel(entryType: string | null | undefined): string {
 export function capacityText(usage: CategoryUsage | undefined): string {
   if (!usage) return "";
   if (usage.cap === null) return `${countText(usage.taken, "entry", "entries")} so far`;
-  if (usage.full) return `Full · ${usage.cap} of ${usage.cap} taken`;
-  return `${usage.taken} of ${usage.cap} taken · ${countText(usage.remaining ?? 0, "place", "places")} left`;
+  if (usage.full) return `Full, ${usage.cap} of ${usage.cap} taken`;
+  return `${usage.taken} of ${usage.cap} taken, ${countText(usage.remaining ?? 0, "place", "places")} left`;
 }
 
 /**

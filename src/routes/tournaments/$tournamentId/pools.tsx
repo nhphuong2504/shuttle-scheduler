@@ -73,7 +73,7 @@ function PoolsPage() {
                 <h2 className="font-display text-lg font-bold">
                   {c.code} — {c.name}
                   <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
-                    {catTeams.length} entries · {catPools.length} pools
+                    {catTeams.length} entries, {catPools.length} pools
                   </span>
                 </h2>
                 <Button
@@ -134,7 +134,7 @@ function PoolsPage() {
                         title={pool.name}
                         right={
                           <span className="font-score text-t4 text-muted-foreground">
-                            {played}/{poolMatches.length} {complete ? "· complete" : ""}
+                            {played}/{poolMatches.length}{complete ? ", complete" : ""}
                           </span>
                         }
                       >

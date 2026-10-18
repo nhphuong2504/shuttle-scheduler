@@ -128,9 +128,9 @@ export function summarizeConflicts(
   const labels = conflictKindLabels(conflicts);
   const reasons = labels.slice(0, Math.max(0, max));
   const more = Math.max(0, labels.length - reasons.length);
-  // A middot separates reasons rather than a comma: the reasons are phrases, not a list of
-  // nouns, and a comma can be mistaken for one phrase continuing.
-  const text = more > 0 ? `${reasons.join(" · ")} +${more}` : reasons.join(" · ");
+  // A semicolon separates reasons rather than a comma: each is a whole clause, and a
+  // comma lets one read as the previous clause continuing.
+  const text = more > 0 ? `${reasons.join("; ")} +${more}` : reasons.join("; ");
   return { reasons, more, text };
 }
 

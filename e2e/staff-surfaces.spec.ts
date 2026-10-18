@@ -881,7 +881,7 @@ test.describe("the registration queue", () => {
     // match twice.
     const firstRequest = page.locator("li").filter({ hasText: "ana@example.test" });
     await expect(firstRequest.getByText(/Men's Doubles with Rin/)).toBeVisible();
-    await expect(firstRequest.getByText(/Doubles · 6 entries so far/)).toBeVisible();
+    await expect(firstRequest.getByText(/Doubles, 6 entries so far/)).toBeVisible();
     await expect(page.getByText(/Mixed Doubles with Ada/)).toBeVisible();
   });
 

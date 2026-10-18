@@ -992,7 +992,7 @@ export function bracketNote(draw: TierDraw): string {
   const parts = [`${draw.entrant_count} entrants`];
   if (byes > 0) parts.push(`${byes} bye${byes === 1 ? "" : "s"} to the top seeds`);
   parts.push(`bracket of ${draw.bracket_size}`);
-  return parts.join(" · ");
+  return parts.join(", ");
 }
 
 /** True when a tier draw has a champion, whether by bye or by winning the final. */

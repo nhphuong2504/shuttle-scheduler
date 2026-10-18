@@ -101,9 +101,9 @@ function look(match: DemoMatch, step: number, lit: boolean): string {
 
 function label(match: DemoMatch, step: number, lit: boolean): string {
   const resolved = step >= DEMO_RESULT_STEP;
-  if (match.kind === "late" && step >= 1) return `${match.label} · +12`;
-  if (match.kind === "held" && resolved) return `Review · ${match.label}`;
-  if (match.kind === "absorbed" && resolved && lit) return `No move · ${match.label}`;
+  if (match.kind === "late" && step >= 1) return `${match.label}, +12`;
+  if (match.kind === "held" && resolved) return `Review, ${match.label}`;
+  if (match.kind === "absorbed" && resolved && lit) return `No move, ${match.label}`;
   return match.label;
 }
 
@@ -170,7 +170,7 @@ export function ScheduleDemo() {
         <div className="flex font-mono text-[11px]">
           <span className="flex-[2] text-muted-foreground">While it plays</span>
           <span className="flex flex-[3] items-center gap-2 text-info-foreground">
-            <span>Report result · one update</span>
+            <span>Report result, one update</span>
             <span aria-hidden="true" className="flex-1 border-t-[1.5px] border-primary" />
           </span>
         </div>

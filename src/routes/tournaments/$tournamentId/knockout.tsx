@@ -194,7 +194,7 @@ function BracketSection({
           {category.code} — {category.name}
           <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
             {hasDraws
-              ? `${draws.length} bracket${draws.length === 1 ? "" : "s"} · ${championCount} decided`
+              ? `${draws.length} bracket${draws.length === 1 ? "" : "s"}, ${championCount} decided`
               : view.gate.ready
                 ? "ready to draw"
                 : `${short} short`}
@@ -242,10 +242,10 @@ function BracketSection({
                   className="flex flex-wrap items-baseline justify-between gap-x-3 rounded-xl border border-hairline bg-card px-4 py-2.5 text-sm"
                 >
                   <span className="font-semibold">
-                    {tierMapping.label} · {tierMapping.title}
+                    {tierMapping.label}, {tierMapping.title}
                   </span>
                   <span className="text-muted-foreground">
-                    <span className="font-score text-t2">{tierMapping.record}</span> · No entrants
+                    <span className="font-score text-t2">{tierMapping.record}</span>. No entrants
                     in this tier.
                   </span>
                 </div>
@@ -255,7 +255,7 @@ function BracketSection({
             return (
               <Panel
                 key={tierMapping.tier}
-                title={`${tierMapping.label} · ${tierMapping.title}`}
+                title={`${tierMapping.label}, ${tierMapping.title}`}
                 right={
                   <span className="font-score text-t2 text-muted-foreground">
                     {tierMapping.record}

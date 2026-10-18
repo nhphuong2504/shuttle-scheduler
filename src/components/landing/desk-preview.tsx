@@ -35,7 +35,7 @@ export function DeskPreview() {
           <span className="hidden font-display text-[15px] font-bold sm:inline">Riverside Open</span>
           <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
           <span className="font-display text-[17px] font-bold whitespace-nowrap">Control desk</span>
-          <span className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">· Sat, Oct 18</span>
+          <span className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">Sat 18 Oct</span>
         </span>
         <span className="ml-auto flex items-center gap-2.5">
           <span className="rounded-full bg-state-live-chip px-2.5 py-1 text-sm font-semibold text-state-live-ink">
@@ -50,7 +50,7 @@ export function DeskPreview() {
       <div className="flex flex-col gap-3 p-3.5 sm:p-4">
         <Panel
           title="Needs action"
-          right={<span className="text-sm text-muted-foreground tabular-nums">14:37 · updates every 30s</span>}
+          right={<span className="text-sm text-muted-foreground tabular-nums">14:37 (updates every 30s)</span>}
           className="min-w-0"
           bodyClassName="p-3"
         >
@@ -58,8 +58,8 @@ export function DeskPreview() {
             <PreviewActionRow tone="go" title="Court 4 is ready" detail="Jack Evans vs Liam Murphy" action="Start" />
             <PreviewActionRow
               tone="warn"
-              title="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks · 37 min on court"
-              detail="Court 2 · past the expected finish"
+              title="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks, 37 min on court"
+              detail="Court 2, past the expected finish"
               action="Open score desk"
             />
           </ul>
@@ -67,7 +67,7 @@ export function DeskPreview() {
 
         <Panel
           title="Court board"
-          right={<span className="text-sm text-muted-foreground tabular-nums">Sat, Oct 18 · 4 courts</span>}
+          right={<span className="text-sm text-muted-foreground tabular-nums">Sat 18 Oct, 4 courts</span>}
           className="min-w-0"
           bodyClassName="p-3"
         >
@@ -79,7 +79,7 @@ export function DeskPreview() {
               tag="WS R2"
               names="Hannah Kim vs Grace Lowe"
               timer="12′ on court"
-              next="Next: 14:50 · Tom Hughes / Dev Patel vs Sam Okafor / Luke Reid"
+              next="Next 14:50: Tom Hughes / Dev Patel vs Sam Okafor / Luke Reid"
               readiness={{ text: "Ready now", tone: "ready" }}
             />
             <PreviewTile
@@ -87,21 +87,21 @@ export function DeskPreview() {
               state="overrun"
               tag="MD R2 crossover"
               names="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks"
-              timer="37′ on court · +12 over slot"
-              next="Next: 14:25 · Ryan Lewis / Adam Grant vs Chris Bell / Dan Ortiz"
+              timer="37′ on court"
+              next="Next 14:25: Ryan Lewis / Adam Grant vs Chris Bell / Dan Ortiz"
               readiness={{ text: "Ready now", tone: "ready" }}
             />
             <PreviewTile
               number={3}
               state="free-blocked"
-              next="Next: 14:35 · Ben Carter / Amy Young vs Sam Lee / Ella Fox"
-              readiness={{ text: "Ben Carter · on Court 2", tone: "busy" }}
+              next="Next 14:35: Ben Carter / Amy Young vs Sam Lee / Ella Fox"
+              readiness={{ text: "Ben Carter, on Court 2", tone: "busy" }}
             />
             <PreviewTile
               number={4}
               phone={false}
               state="free-ready"
-              next="Next: 14:30 · Jack Evans vs Liam Murphy"
+              next="Next 14:30: Jack Evans vs Liam Murphy"
               readiness={{ text: "Ready now", tone: "ready" }}
             />
           </div>
@@ -181,9 +181,6 @@ function PreviewTile({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 font-display text-base font-bold whitespace-nowrap">
-          <span className="grid size-8 place-items-center rounded-lg bg-foreground/10 font-score text-base font-bold">
-            {number}
-          </span>
           Court {number}
         </span>
         <span
@@ -209,7 +206,7 @@ function PreviewTile({
           </>
         ) : (
           <span className="font-medium">
-            {state === "free-ready" ? "Free · next match ready" : "Free · next match not ready"}
+            {state === "free-ready" ? "Free, next match ready" : "Free, next match not ready"}
           </span>
         )}
       </p>

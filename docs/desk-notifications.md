@@ -50,10 +50,10 @@ Each row is a short title, one line of detail and the button that clears it.
 
 | Row | Level | Action |
 | --- | --- | --- |
-| Court N is ready · A vs B | Do this now (accent) | Start |
-| A vs B · N min on court · Court C, past the expected finish | Warning | Open score desk |
-| Pool X · CODE — results incomplete · Over 15 min past scheduled finish | Warning | Enter results |
-| N matches need a court · Not placed on the schedule yet | Info (the desk can't fix it) | Open Schedule |
+| Court N is ready, A vs B | Do this now (accent) | Start |
+| A vs B, N min on court; Court C, past the expected finish | Warning | Open score desk |
+| CODE — Pool X, results incomplete; Over 15 min past scheduled finish | Warning | Enter results |
+| N matches need a court, not placed on the schedule yet | Info (the desk can't fix it) | Open Schedule |
 | All clear | Info | — |
 
 An overdue result is an omission, not a danger, so it is amber.
@@ -62,9 +62,11 @@ An overdue result is an omission, not a danger, so it is amber.
 
 Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 
-- **Overrun** is amber with a ring, and the tile says how far over: "52′ on court · +12 over slot".
+- **Overrun** is amber with a ring, and the tile says how long the match has been on: "52′ on
+  court". The state is the whole statement that it is running long, so the elapsed line carries
+  no `+N over slot` and no `started N min late/early` arithmetic beside it.
 - **Waiting** is neutral. It asks nothing of the moderator; the line beneath it gives the
-  specific reason ("A. Nguyen · ready in 4 min", "A. Nguyen · on Court 2", "Teams not assigned").
+  specific reason ("A. Nguyen, ready in 4 min", "A. Nguyen, on Court 2", "Teams not assigned").
   Its chip is a deeper grey than Idle so the two stay distinct fills.
 - **Playing and Overrun name the next pairing and stop there** — no "Ready now", no reason it
   is not ready. That line answers "can the queued match start now", which a court that still
@@ -78,8 +80,8 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 
 ## Connection badge
 
-The chip says whether live updates are arriving: Live, Connecting, Offline · live updates
-paused, Connection problem · live updates paused. The age of the last change is a separate
+The chip says whether live updates are arriving: Live, Connecting, Offline, live updates
+paused, Connection problem, live updates paused. The age of the last change is a separate
 muted note, shown only while connected, and never changes the chip.
 
 ## Recording a result: when did it finish?

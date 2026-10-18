@@ -496,7 +496,7 @@ const STATE_POOLS = [
     id: uid(900),
     tournament_id: TID,
     category_id: uid(800),
-    name: "Men's Doubles · Pool A",
+    name: "Pool A",
     scheduled_end: at(-60),
     created_at: CREATED,
   },

@@ -103,9 +103,9 @@ export function ExploreRow({
             {dateRangeText(summary.starts_at, summary.ends_at)}
           </p>
           <p className="break-words text-sm text-muted-foreground">
-            {summary.venue_name || "Venue not set"} ·{" "}
+            {summary.venue_name || "Venue not set"},{" "}
             <span className="tabular-nums">
-              {countText(summary.entry_count, "entry", "entries")} ·{" "}
+              {countText(summary.entry_count, "entry", "entries")},{" "}
               {countText(summary.category_count, "event", "events")}
             </span>
           </p>

@@ -259,7 +259,7 @@ describe("buildDeskMatches labels every kind", () => {
     // semifinal and a final read identically on the board. The tag now mirrors a placement
     // row's shape and the round comes from the same `roundName` the Knockout tab prints.
     expect(byId.get("tdm1")).toMatchObject({
-      tag: "MS · Draw A · Semifinal",
+      tag: "MS — Draw A, Semifinal",
       roundTag: "Semifinal",
       categoryId: CATEGORY_ID,
     });
@@ -272,7 +272,7 @@ describe("buildDeskMatches labels every kind", () => {
     });
     // The fixture's Draw A is a bracket of four: its second round is the final.
     expect(rows.find((row) => row.id === "final")).toMatchObject({
-      tag: "MS · Draw A · Final",
+      tag: "MS — Draw A, Final",
       roundTag: "Final",
     });
   });

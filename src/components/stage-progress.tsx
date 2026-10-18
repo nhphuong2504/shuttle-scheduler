@@ -97,7 +97,7 @@ export function StageProgressList({ rows }: { rows: readonly StageProgressRow[] 
                         )}
                       >
                         {row.stageLabel}
-                        {row.roundLabel ? ` · ${row.roundLabel}` : ""}
+                        {row.roundLabel ? `, ${row.roundLabel}` : ""}
                       </span>
                       <span className="sr-only">{STATUS_WORD[row.status]}</span>
                     </span>

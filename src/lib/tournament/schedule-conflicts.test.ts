@@ -116,7 +116,7 @@ describe("summarizeConflicts", () => {
     ]);
     expect(summary.more).toBe(2);
     expect(summary.text).toBe(
-      "Same court and time as another match · A player won't have had full rest +2",
+      "Same court and time as another match; A player won't have had full rest +2",
     );
   });
 

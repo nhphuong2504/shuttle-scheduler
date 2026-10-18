@@ -503,7 +503,7 @@ test.describe("My tournaments", () => {
     await expect(row).toBeVisible();
     // The card's counts come from the summary read - entries are teams, events are categories
     // - and they are the same numbers on every surface that draws this card.
-    await expect(row.getByText(/12 entries · 2 events/)).toBeVisible();
+    await expect(row.getByText(/12 entries, 2 events/)).toBeVisible();
     // This caller's pointer names the fixture, so the row says so and offers no switch.
     await expect(row.getByText(/working here/i)).toBeVisible();
     await expect(row.getByRole("button", { name: /work in this one/i })).toHaveCount(0);
@@ -875,7 +875,7 @@ test.describe("The window is open", () => {
     // control - the type, and capacity counted at approval (six approved entries here).
     await expect(page.getByRole("button", { name: /Men's Doubles/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Mixed Doubles/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Singles · 6 entries so far/ })).toHaveCount(2);
+    await expect(page.getByRole("button", { name: /Singles, 6 entries so far/ })).toHaveCount(2);
 
     // Nothing is chosen, so the request cannot be sent and the form says why.
     const send = page.getByRole("button", { name: "Send registration request" });
@@ -884,7 +884,7 @@ test.describe("The window is open", () => {
 
     await page.getByRole("button", { name: /Men's Doubles/ }).click();
     await expect(send).toBeEnabled();
-    await expect(page.getByText("1 event selected · up to 3 per player")).toBeVisible();
+    await expect(page.getByText("1 event selected, up to 3 per player")).toBeVisible();
   });
 
   test("asks a visitor to sign in, carrying this page as the place to come back to", async ({

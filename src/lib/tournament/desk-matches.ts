@@ -31,7 +31,7 @@ export type DeskMatch = DeskMatchModel & {
    * The knockout round alone ("Semifinal"), for a surface that already names the draw.
    *
    * The Control desk prints `tag` in full - the event and draw are not on the tile - but the
-   * Score desk groups tier matches under "MS · Draw A", so repeating that in every row is
+   * Score desk groups tier matches under "MS — Draw A", so repeating that in every row is
    * noise and the round is the part the group header does not carry. Undefined for every kind
    * that is not a tier bracket match.
    */
@@ -98,9 +98,11 @@ function tierTag(
 ): string {
   if (!draw) return "";
   const code = catMap.get(draw.category_id)?.code;
-  return [code, `Draw ${draw.tier}`, roundName(draw.bracket_size, round)]
-    .filter(Boolean)
-    .join(" · ");
+  // The code names the draw with a dash, as every panel heading does; the round narrows it
+  // with a comma, because it is a part of that identity rather than a second name.
+  const identity = [code, `Draw ${draw.tier}`].filter(Boolean).join(" — ");
+  const roundText = roundName(draw.bracket_size, round);
+  return [identity, roundText].filter(Boolean).join(", ");
 }
 
 /**

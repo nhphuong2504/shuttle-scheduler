@@ -649,7 +649,7 @@ function Desk() {
           right={
             <span className="text-sm text-muted-foreground">
               {clockAdopted
-                ? `${timeLabel(new Date(now))} · updates every 30s`
+                ? `${timeLabel(new Date(now))} (updates every 30s)`
                 : "updates every 30s"}
             </span>
           }
@@ -690,8 +690,8 @@ function Desk() {
                   <ActionRow
                     key={m.id}
                     tone="warn"
-                    title={`${label(m.teams[0])} vs ${label(m.teams[1])} · ${minutesSince(m.startedAt, now)} min on court`}
-                    detail={`Court ${courtMap.get(m.courtId ?? "")?.number ?? "?"} · past the expected finish`}
+                    title={`${label(m.teams[0])} vs ${label(m.teams[1])}, ${minutesSince(m.startedAt, now)} min on court`}
+                    detail={`Court ${courtMap.get(m.courtId ?? "")?.number ?? "?"}, past the expected finish`}
                     action={
                       <Button
                         size="sm"
@@ -711,7 +711,7 @@ function Desk() {
                   <ActionRow
                     key={p.id}
                     tone="warn"
-                    title={`${p.name} · ${catMap.get(p.category_id)?.code} — results incomplete`}
+                    title={`${catMap.get(p.category_id)?.code} — ${p.name}, results incomplete`}
                     detail="Over 15 min past scheduled finish"
                     action={
                       <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
@@ -757,7 +757,7 @@ function Desk() {
           right={
             selectedDay ? (
               <span className="text-sm text-muted-foreground">
-                {dayDateLabel(selectedDay.date)} · {courtsOnSelectedDay.length} court
+                {dayDateLabel(selectedDay.date)}, {courtsOnSelectedDay.length} court
                 {courtsOnSelectedDay.length === 1 ? "" : "s"}
               </span>
             ) : null
@@ -834,10 +834,10 @@ function Desk() {
                           {state.state === "overrun" &&
                           state.elapsedMinutes != null &&
                           state.elapsedMinutes > slotMinutesFor(state.playing)
-                            ? ` · +${state.elapsedMinutes - slotMinutesFor(state.playing)} over slot`
+                            ? `, +${state.elapsedMinutes - slotMinutesFor(state.playing)} over slot`
                             : ""}
                           {state.varianceMinutes
-                            ? ` · started ${Math.abs(state.varianceMinutes)} min ${
+                            ? `, started ${Math.abs(state.varianceMinutes)} min ${
                                 state.varianceMinutes > 0 ? "late" : "early"
                               }`
                             : ""}
@@ -846,9 +846,9 @@ function Desk() {
                     ) : (
                       <span className="font-medium">
                         {state.state === "free-ready"
-                          ? "Free · next match ready"
+                          ? "Free, next match ready"
                           : state.state === "free-blocked"
-                            ? "Free · next match not ready"
+                            ? "Free, next match not ready"
                             : "Idle"}
                       </span>
                     )}
@@ -861,7 +861,7 @@ function Desk() {
                     {state.next ? (
                       <>
                         <p className="text-t2">
-                          Next: {timeLabel(state.next.scheduled)} · {label(state.next.teams[0])} vs{" "}
+                          Next {timeLabel(state.next.scheduled)}: {label(state.next.teams[0])} vs{" "}
                           {label(state.next.teams[1])}
                         </p>
                         {/*
@@ -887,9 +887,9 @@ function Desk() {
                       </>
                     ) : nextReadyLabel ? (
                       <p className="text-t2">
-                        No match scheduled · ready to place: {nextReadyLabel}
+                        No match scheduled. Ready to place: {nextReadyLabel}
                         {readyUnassigned.length > 1
-                          ? ` · ${readyUnassigned.length - 1} more waiting`
+                          ? `, ${readyUnassigned.length - 1} more waiting`
                           : ""}
                       </p>
                     ) : (
@@ -1384,8 +1384,8 @@ export function MatchOperationsDialog({
           {nameA} <span className="text-muted-foreground">vs</span> {nameB}
         </DialogTitle>
         <DialogDescription className="text-sm">
-          {match.tag} · {scoringRuleLabel(scoringRule)}
-          {courtNumber ? ` · Court ${courtNumber}` : ""} ·{" "}
+          {match.tag}, {scoringRuleLabel(scoringRule)}
+          {courtNumber ? `, Court ${courtNumber}` : ""},{" "}
           {match.status === "in-progress"
             ? `${minutesSince(match.startedAt)}′ on court`
             : isReported
@@ -2067,7 +2067,7 @@ function ReadinessText({
   if (readiness.state === "resting") {
     return (
       <span className="text-warn-foreground">
-        {readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"} · ` : ""}
+        {readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"}, ` : ""}
         ready in {readiness.remainingMinutes} min
       </span>
     );
@@ -2075,7 +2075,7 @@ function ReadinessText({
   if (readiness.state === "player-busy") {
     return (
       <span className="text-danger-foreground">
-        {readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"} · ` : ""}
+        {readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"}, ` : ""}
         on Court{" "}
         {readiness.blockingCourtId ? (courts.get(readiness.blockingCourtId)?.number ?? "?") : "?"}
       </span>

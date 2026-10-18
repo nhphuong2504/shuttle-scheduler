@@ -27,9 +27,17 @@ export function ScheduledFinish({ finishMs, closeMs = null }: ScheduledFinishPro
 
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
-      <span className="font-semibold text-foreground">{wording.finish}</span>
-      {wording.close ? <span className="text-muted-foreground">· {wording.close}</span> : null}
-      {wording.warning ? <span className="text-warn-foreground">· {wording.warning}</span> : null}
+      <span className="font-semibold text-foreground">
+        {wording.finish}
+        {wording.close ? ";" : ""}
+      </span>
+      {wording.close ? (
+        <span className="text-muted-foreground">
+          {wording.close}
+          {wording.warning ? ";" : ""}
+        </span>
+      ) : null}
+      {wording.warning ? <span className="text-warn-foreground">{wording.warning}</span> : null}
     </span>
   );
 }
@@ -50,10 +58,16 @@ export function DayScheduleStatus({
   const wording = dayScheduleWording({ latestFinishMs, closeMs });
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
-      <span className="text-muted-foreground">{wording.latestFinish}</span>
-      <span className="text-muted-foreground">· {wording.closingTime}</span>
+      <span className="text-muted-foreground">
+        {wording.latestFinish}
+        {wording.closingTime ? ";" : ""}
+      </span>
+      <span className="text-muted-foreground">
+        {wording.closingTime}
+        {wording.warning ? ";" : ""}
+      </span>
       {wording.warning ? (
-        <span className="font-semibold text-warn-foreground">· {wording.warning}</span>
+        <span className="font-semibold text-warn-foreground">{wording.warning}</span>
       ) : null}
     </span>
   );
