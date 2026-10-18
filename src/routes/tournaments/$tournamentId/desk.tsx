@@ -781,30 +781,6 @@ function Desk() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 font-display text-lg font-bold">
-                      {/*
-                        The badge is `foreground`-tinted rather than `primary`-tinted, and
-                        that is a correctness fix rather than a style preference.
-
-                        `--primary-ink` is solved against `bg-primary/10` over a *surface*.
-                        This badge sits on a court tile, whose background is not a surface -
-                        it is `COURT_STATE_TILE[state]`, so it is a green live wash, an
-                        amber tint, a primary wash or a plain surface depending on the state. An
-                        ink solved against a *surface* therefore has no fixed pair to clear
-                        here: the same badge sits on five different fills, so whether it
-                        passes or not is decided by the tile underneath it - a fact that was
-                        only visible at all once the fixture put a real match on a court.
-
-                        An ink is only valid against the fill it was solved for, so an
-                        element that can sit on five different backgrounds cannot use one.
-                        `foreground` on a `foreground/10` wash is backdrop-agnostic and
-                        clears the requirement on every tile, and it also
-                        respects the system's own rule that hue is reserved for state -
-                        a violet chip inside a state-coloured tile was already the one
-                        place that broke it.
-                      */}
-                      <span className="grid size-9 place-items-center rounded-lg bg-foreground/10 font-score text-lg font-bold text-foreground">
-                        {court.number}
-                      </span>
                       Court {court.number}
                     </span>
                     <CourtStatePill state={state.state} />
@@ -831,12 +807,14 @@ function Desk() {
                           }`}
                         >
                           {state.elapsedMinutes}′ on court
-                          {state.state === "overrun" &&
-                          state.elapsedMinutes != null &&
-                          state.elapsedMinutes > slotMinutesFor(state.playing)
-                            ? `, +${state.elapsedMinutes - slotMinutesFor(state.playing)} over slot`
-                            : ""}
-                          {state.varianceMinutes
+                          {/*
+                            An overrun says only how long the match has been on, never how far
+                            past its slot that is or how it started. The amber tile is already
+                            the statement "this is running long", and the arithmetic beside it
+                            ("+7 over slot, started 4 min early") was three numbers competing
+                            with the one a moderator needs: how long the court has been held.
+                          */}
+                          {state.state !== "overrun" && state.varianceMinutes
                             ? `, started ${Math.abs(state.varianceMinutes)} min ${
                                 state.varianceMinutes > 0 ? "late" : "early"
                               }`

@@ -163,11 +163,6 @@
 
   .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .tile-court { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 18px; font-weight: 700; }
-  .court-badge {
-    display: grid; place-items: center; width: 36px; height: 36px; flex: none;
-    border-radius: 8px; background: rgb(23 26 29 / 0.10);
-    font-family: var(--font-score); font-size: 18px; font-weight: 700; color: var(--foreground);
-  }
 
   /* COURT_STATE_CHIP */
   .pill {
@@ -317,7 +312,7 @@
 
           <figure class="cell">
             <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill playing">Playing</span></div>
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -330,7 +325,7 @@
 
           <figure class="cell">
             <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill playing">Playing</span></div>
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">18′ on court, started 3 min late</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -343,7 +338,7 @@
 
           <figure class="cell">
             <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill playing">Playing</span></div>
               <p class="tile-primary"><span class="tag">MS R2</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">7′ on court, started 5 min early</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -356,7 +351,7 @@
 
           <figure class="cell">
             <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill playing">Playing</span></div>
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">No match scheduled. Ready to place: E. Vo vs F. Do</p>
@@ -370,7 +365,7 @@
 
           <figure class="cell">
             <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill playing">Playing</span></div>
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
               <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
               <p class="tile-foot">Open score desk</p>
@@ -381,7 +376,7 @@
 
           <figure class="cell">
             <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill playing">Playing</span></div>
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -394,7 +389,7 @@
 
           <figure class="cell">
             <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill playing">Playing</span></div>
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -417,9 +412,12 @@
       <h2>4. <code>overrun</code> — a match is live and past its slot</h2>
     </div>
     <p class="lede">
-      A delay, not a fault, so it is amber rather than red. It always adds
-      <code>, +N over slot</code>, and — unlike <code>playing</code> — it also turns the elapsed line bold
-      warn ink. It raises the &quot;N min on court&quot; row in Needs action too.
+      A delay, not a fault, so it is amber rather than red. Unlike <code>playing</code> it turns
+      the elapsed line bold warn ink; the line itself stays a single fact — how long the match has
+      been on — because the tile already says it is running long, and a
+      <code>+N over slot</code> or <code>started N min late</code> clause beside it was arithmetic
+      competing with the number a moderator actually reads. It raises the &quot;N min on court&quot;
+      row in Needs action too.
     </p>
 
     <div class="panel">
@@ -429,45 +427,32 @@
 
           <figure class="cell">
             <div class="tile overrun" role="img" aria-label="Court 3: overrun">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
-              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">32′ on court, +12 over slot</span></p>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">32′ on court</span></p>
               <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
               <p class="tile-foot">Open score desk</p>
             </div>
-            <figcaption><b>Baseline overrun.</b> The group slot is 20 minutes, so 32 minutes is 12 over. The bold warn ink is the only hue on the tile besides the pill and the edge.
+            <figcaption><b>Baseline overrun.</b> 32 minutes on court against a 20-minute group slot. The elapsed line carries no arithmetic — the state and the bold warn ink are the whole statement that it is over. The bold warn ink is the only hue on the tile besides the pill and the edge.
               <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
           </figure>
 
           <figure class="cell">
             <div class="tile overrun" role="img" aria-label="Court 3: overrun">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
-              <p class="tile-primary"><span class="tag">MS R2</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">24′ on court, +4 over slot, started 6 min late</span></p>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">MS R2</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">24′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 10:15: C. Le vs D. Pham</p>
               </div>
               <p class="tile-foot">Open score desk</p>
             </div>
-            <figcaption><b>Overrun, and it started late.</b> A late start is one reason to overrun. The queued pairing is named and nothing else — on a court that still has a match on it, the readiness line is not drawn.
+            <figcaption><b>Overrun with a pairing behind it.</b> The queued pairing is named and nothing else — on a court that still has a match on it, the readiness line is not drawn. A late start is one reason to overrun and is deliberately not reported here; the amber tile is the report.
               <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
           </figure>
 
           <figure class="cell">
             <div class="tile overrun" role="img" aria-label="Court 3: overrun">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
-              <p class="tile-primary"><span class="tag">XD R1</span><br>A. Nguyen / K. Anh vs B. Tran / M. Linh<br><span class="elapsed over">27′ on court, +7 over slot, started 4 min early</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next 10:30: C. Le / D. Pham vs E. Vo / F. Do</p>
-              </div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>Overrun although it started early.</b> A late start is the usual cause, not the only one — a long match overruns on its own.
-              <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile overrun" role="img" aria-label="Court 3: overrun">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
-              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">32′ on court, +12 over slot</span></p>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">32′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
               </div>
@@ -500,7 +485,7 @@
 
           <figure class="cell">
             <div class="tile free-ready" role="img" aria-label="Court 3: free ready">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-ready">Ready</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill free-ready">Ready</span></div>
               <p class="tile-primary"><span>Free, next match ready</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -514,7 +499,7 @@
 
           <figure class="cell">
             <div class="tile free-ready" role="img" aria-label="Court 3: free ready">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-ready">Ready</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill free-ready">Ready</span></div>
               <p class="tile-primary"><span>Free, next match ready</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -550,7 +535,7 @@
 
           <figure class="cell">
             <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill free-blocked">Waiting</span></div>
               <p class="tile-primary"><span>Free, next match not ready</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -564,7 +549,7 @@
 
           <figure class="cell">
             <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill free-blocked">Waiting</span></div>
               <p class="tile-primary"><span>Free, next match not ready</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -578,7 +563,7 @@
 
           <figure class="cell">
             <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill free-blocked">Waiting</span></div>
               <p class="tile-primary"><span>Free, next match not ready</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -592,7 +577,7 @@
 
           <figure class="cell">
             <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill free-blocked">Waiting</span></div>
               <p class="tile-primary"><span>Free, next match not ready</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: TBC vs TBC</p>
@@ -606,7 +591,7 @@
 
           <figure class="cell">
             <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill free-blocked">Waiting</span></div>
               <p class="tile-primary"><span>Free, next match not ready</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next 09:40: C. Le vs D. Pham</p>
@@ -620,7 +605,7 @@
 
           <figure class="cell" style="grid-column: 1 / -1; max-width: 360px;">
             <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill idle">Idle</span></div>
               <p class="tile-primary"><span>Idle</span></p>
               <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
             </div>
@@ -651,7 +636,7 @@
 
           <figure class="cell">
             <div class="tile idle" role="img" aria-label="Court 3: idle">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill idle">Idle</span></div>
               <p class="tile-primary"><span>Idle</span></p>
               <div class="tile-queue">
                 <p class="q-next">No match scheduled. Ready to place: E. Vo vs F. Do</p>
@@ -664,7 +649,7 @@
 
           <figure class="cell">
             <div class="tile idle" role="img" aria-label="Court 3: idle">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill idle">Idle</span></div>
               <p class="tile-primary"><span>Idle</span></p>
               <div class="tile-queue">
                 <p class="q-next">No match scheduled. Ready to place: E. Vo vs F. Do</p>
@@ -678,7 +663,7 @@
 
           <figure class="cell">
             <div class="tile idle disabled" role="img" aria-label="Court 3: idle">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <div class="tile-head"><span class="tile-court">Court 3</span><span class="pill idle">Idle</span></div>
               <p class="tile-primary"><span>Idle</span></p>
               <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
             </div>
@@ -763,9 +748,9 @@
     <table class="ref">
       <thead><tr><th style="width:200px">Part</th><th>Renders as</th><th style="width:230px">Shown when</th></tr></thead>
       <tbody>
-        <tr><td><b>Court badge and number</b></td><td>A <code>bg-foreground/10</code> badge with the court number, then &quot;Court N&quot; in the display face. The badge is backdrop-agnostic on purpose: it sits on five different tile fills, so an ink solved against one surface has no fixed pair to clear.</td><td>always</td></tr>
+        <tr><td><b>Court name</b></td><td>&quot;Court N&quot; in the display face — one statement of which court this is. There is no separate number badge beside it: &quot;3 Court 3&quot; said the same thing twice, and a figure a moderator does not read is decoration.</td><td>always</td></tr>
         <tr><td><b>State pill</b></td><td><code>COURT_STATE_LABEL[state]</code> uppercased on <code>COURT_STATE_CHIP[state]</code></td><td>always</td></tr>
-        <tr><td><b>Primary line</b></td><td>Playing: the match tag, the two sides, then <code>N′ on court</code> with any <code>, +N over slot</code> and <code>, started N min late / early</code>. Free: &quot;Free, next match ready&quot;, &quot;Free, next match not ready&quot; or &quot;Idle&quot;.</td><td>always</td></tr>
+        <tr><td><b>Primary line</b></td><td>Playing: the match tag, the two sides, then <code>N′ on court</code>, with a <code>started N min late / early</code> clause appended after a comma when the start drifted. Overrun: the same line with the elapsed time alone, in bold warn ink — no <code>+N over slot</code>, because the state already says it. Free: &quot;Free, next match ready&quot;, &quot;Free, next match not ready&quot; or &quot;Idle&quot;.</td><td>always</td></tr>
         <tr><td><b>Divider and queue block</b></td><td>The separated block beneath the names — the <code>Next:</code> line and, on a free court only, the readiness line. See 8.2.</td><td>always</td></tr>
         <tr><td><b>Footer action</b></td><td>An accent label naming what the tile opens — see 8.3</td><td>only when there is a target</td></tr>
         <tr><td><b>Accessible name</b></td><td><code>Court N: &lt;state, hyphens read as spaces&gt;</code> — the state, and nothing else. The tile's own <code>aria-label</code> replaces whatever text is inside it for a screen reader, so it names the state rather than repeating the queue.</td><td>always</td></tr>
