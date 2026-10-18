@@ -44,8 +44,8 @@ const MINUTE = 60_000;
  * ## What is left out, on purpose
  *
  *   - **A court already over its expected finish** is not a transition - it is an overrun, and
- *     it already has a tile state and an Act-now alert. Counting it down here would be a third
- *     copy of one fact, so it is excluded rather than reworded.
+ *     it already has a tile state and, once it is well past, an Act-now row. Counting it down
+ *     here would be a third copy of one fact, so it is excluded rather than reworded.
  *   - **A match with no usable time** cannot be projected at all. `expectedEndMs` returns null
  *     and it is skipped, never counted down from a guess.
  *   - **A scheduled match with no court** has no court number to hang a transition on. It is a
@@ -53,11 +53,10 @@ const MINUTE = 60_000;
  *
  * ## Overdue starts are shown, without a countdown
  *
- * An unstarted match whose scheduled time has passed is surfaced by nothing else on the desk:
- * the overrun alert only covers a match that is *in progress*, and the pool alert cannot fire
- * on a tournament with no pools. So it is kept here and marked rather than hidden - with the
- * elapsed direction spelled out, because a countdown that has gone negative is the misleading
- * thing requirement 8 is about. It sorts to the top, which is where the most-overdue work
+ * An unstarted match whose scheduled time has passed on a free court is also an Act-now row,
+ * which says what to do about it; this panel only places it in the venue's order. It is kept
+ * here and marked rather than hidden - with the elapsed direction spelled out, because a
+ * countdown that has gone negative is the misleading thing requirement 8 is about. It sorts to the top, which is where the most-overdue work
  * belongs.
  */
 

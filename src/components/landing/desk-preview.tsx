@@ -23,7 +23,7 @@ export function DeskPreview() {
   return (
     <div
       role="img"
-      aria-label="The Control desk at 14:37: Court 4 is ready to start, Court 2 has run 12 minutes over its slot, and Court 3 is waiting for a player who is still on Court 2."
+      aria-label="The Control desk at 14:37: Court 2 has run 12 minutes past its expected finish and the match after it is 12 minutes late, Court 4's match is 7 minutes late and ready to start, and Court 3's match is 2 minutes late, waiting for a player who is still on Court 2."
       className="overflow-hidden rounded-[20px] bg-background shadow-[0_0_0_1px_rgb(23_26_29/0.08),0_60px_120px_-40px_var(--info-foreground)]"
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-hairline bg-surface px-4 py-3">
@@ -55,12 +55,24 @@ export function DeskPreview() {
           bodyClassName="p-3"
         >
           <ul className="space-y-2 text-base">
-            <PreviewActionRow tone="go" title="Court 4 is ready" detail="Jack Evans vs Liam Murphy" action="Start" />
+            {/* Ranked as the Desk ranks them: by how late each one is. */}
             <PreviewActionRow
               tone="warn"
-              title="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks, 37 min on court"
-              detail="Court 2, past the expected finish"
-              action="Open score desk"
+              title="Court 2, 37 min on court"
+              detail="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks, 12 min past the expected finish. The next match is 12 min late"
+              action="Enter result"
+            />
+            <PreviewActionRow
+              tone="go"
+              title="Court 4, 7 min late"
+              detail="Jack Evans vs Liam Murphy, ready to start"
+              action="Start"
+            />
+            <PreviewActionRow
+              tone="warn"
+              title="Court 3, 2 min late"
+              detail="Ben Carter / Amy Young vs Sam Lee / Ella Fox. Waiting: Ben Carter, on Court 2"
+              action="Open match"
             />
           </ul>
         </Panel>

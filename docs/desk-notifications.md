@@ -46,14 +46,24 @@ the Block rows above. Organiser headline: "N matches need schedule review".
 
 ## Needs action (top of the Desk)
 
-Each row is a short title, one line of detail and the button that clears it.
+Each row leads with the court, then names the match, the one number that put it there, what is
+in the way when something is, and the single button that clears it. Rows are ranked by how
+late they are, whatever their kind; ready courts that are not late come last, soonest first.
+The first five are drawn and the rest fold behind "Show N more". Derived in
+`src/lib/tournament/desk-actions.ts`.
 
-| Row | Level | Action |
-| --- | --- | --- |
-| Court N is ready, A vs B | Do this now (accent) | Start |
-| A vs B, N min on court; Court C, past the expected finish | Warning | Open score desk |
-| CODE — Pool X, results incomplete; Over 15 min past scheduled finish | Warning | Enter results |
-| All clear | Info | — |
+| Row | When | Level | Action |
+| --- | --- | --- | --- |
+| Court N, M min late; A vs B, ready to start | A free court's next match is past its start and can start | Do this now (accent) | Start |
+| Court N, M min late; A vs B. Waiting: (the tile's readiness words) | The same, but a player is busy, resting or not known | Warning | Open match |
+| Court N, M min on court; A vs B, K min past the expected finish | K ≥ 10, or the match behind it is already late | Warning | Enter result |
+| CODE — Pool X, results incomplete; M min past scheduled finish | More than 15 min past the pool's finish | Warning | Enter results |
+| Court N is ready; A vs B | A free court with a ready match, free for 3 min or more | Do this now (accent) | Start |
+| All clear. Nothing needs action right now. | Nothing above | — | — |
+
+The thresholds are `OVERRUN_ALERT_AFTER_MINUTES` (10) and `READY_ALERT_AFTER_MINUTES` (3). The
+tile turns amber the moment a match passes its slot; the row waits, because a long rally is not
+yet worth walking over for, and a court that freed a minute ago is a moment between matches.
 
 An overdue result is an omission, not a danger, so it is amber.
 
