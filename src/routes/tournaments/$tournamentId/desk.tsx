@@ -657,7 +657,6 @@ function Desk() {
           <div aria-live="polite">
             {latePools.length ||
             overCap.length ||
-            readyUnassigned.length ||
             courtStates.some(({ state }) => state.state === "free-ready") ? (
               <ul className="space-y-2 text-base">
                 {courtStates
@@ -722,28 +721,14 @@ function Desk() {
                     }
                   />
                 ))}
-                {readyUnassigned.length ? (
-                  <ActionRow
-                    tone="info"
-                    title={`${readyUnassigned.length} match${
-                      readyUnassigned.length === 1 ? " needs" : "es need"
-                    } a court`}
-                    detail="Not placed on the schedule yet"
-                    action={
-                      /*
-                        One link, not two. The old pair pointed at `/placement-schedule` and
-                        `/schedule` because those were two routes; they are one route now, and
-                        it reads the format itself. Asking the desk to choose would be the desk
-                        re-deciding something the route already knows.
-                      */
-                      <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
-                        <Link to="/tournaments/$tournamentId/schedule" params={{ tournamentId }}>
-                          Open Schedule
-                        </Link>
-                      </Button>
-                    }
-                  />
-                ) : null}
+                {/*
+                  No row for ready matches without a court. Every way a match ends up there is
+                  either transient (a result just unlocked it and place-ready is about to slot
+                  it) or the organiser's call (no slot before the close, no courts, a first
+                  build or a rebuild not yet made), and the Schedule page already names the
+                  cause. The one thing a moderator can do about it - put the match on a court
+                  that is free now - is the idle tile's "Ready to place", so the board keeps it.
+                */}
               </ul>
             ) : (
               <EmptyState title="All clear" hint="Nothing needs action right now." />
@@ -1784,8 +1769,6 @@ const ACTION_TONE = {
     icon: "bg-warn-foreground text-warn-surface",
     glyph: "!",
   },
-  // State of the plan that the desk cannot fix itself.
-  info: { row: "bg-muted text-foreground", icon: "bg-muted-foreground text-surface", glyph: "i" },
 } as const;
 
 /**

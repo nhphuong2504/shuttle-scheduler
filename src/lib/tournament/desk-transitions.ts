@@ -49,7 +49,7 @@ const MINUTE = 60_000;
  *   - **A match with no usable time** cannot be projected at all. `expectedEndMs` returns null
  *     and it is skipped, never counted down from a guess.
  *   - **A scheduled match with no court** has no court number to hang a transition on. It is a
- *     real condition, but it is the "ready, no court" alert's subject, not this panel's.
+ *     real condition, but it is the Schedule page's to resolve, not this panel's.
  *
  * ## Overdue starts are shown, without a countdown
  *

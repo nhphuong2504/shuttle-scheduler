@@ -53,10 +53,14 @@ Each row is a short title, one line of detail and the button that clears it.
 | Court N is ready, A vs B | Do this now (accent) | Start |
 | A vs B, N min on court; Court C, past the expected finish | Warning | Open score desk |
 | CODE — Pool X, results incomplete; Over 15 min past scheduled finish | Warning | Enter results |
-| N matches need a court, not placed on the schedule yet | Info (the desk can't fix it) | Open Schedule |
 | All clear | Info | — |
 
 An overdue result is an omission, not a danger, so it is amber.
+
+There is no row for a ready match without a court. It is either about to be placed
+automatically, or it is waiting on an organiser's decision (no slot before the close, no
+courts, a first build or a rebuild), and the Schedule page names that cause. What a moderator
+can do - put it on a court that is free now - is the idle tile's "Ready to place".
 
 ## Court board
 
