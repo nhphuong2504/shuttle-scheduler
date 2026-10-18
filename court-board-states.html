@@ -187,15 +187,6 @@
   .elapsed { font-family: var(--font-score); font-size: 16px; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
   .elapsed.over { font-weight: 600; color: var(--warn-foreground); }
 
-  /* AttentionChip */
-  .chip {
-    margin-top: 8px; display: inline-flex; max-width: 100%; align-items: flex-start; gap: 6px;
-    border-radius: 6px; background: var(--warn-surface); padding: 4px 8px;
-    font-size: 14px; font-weight: 600; color: var(--warn-foreground);
-    box-shadow: inset 0 0 0 1px var(--warn-border);
-  }
-  .chip .bang { font-weight: 800; }
-
   /* The separated queue block */
   .tile-queue { margin-top: 8px; border-top: 1px solid var(--hairline); padding-top: 8px; color: var(--muted-foreground); }
   .q-next { margin: 0; font-size: 14px; line-height: 20px; }
@@ -238,7 +229,7 @@
       <div><span class="count">3</span><span>Queue-block lines</span></div>
       <div><span class="count">5</span><span>Footer labels</span></div>
       <div><span class="count">5</span><span>Conflict kinds</span></div>
-      <div><span class="count">37</span><span>Tiles below</span></div>
+      <div><span class="count">25</span><span>Tiles below</span></div>
     </div>
   </header>
 
@@ -314,8 +305,8 @@
     </div>
     <p class="lede">
       The only green state, and the only one whose elapsed time is measured. Everything below is
-      reachable: 1–8 differ by the queue behind the court and the chips on either match, 9–10 by what the
-      queue block falls back to, 11 by who is signed in, 12 by a missing start instant.
+      reachable: 1–7 differ by the queue behind the court, 8 by who is signed in, 9 by a missing
+      start instant.
     </p>
 
     <div class="panel">
@@ -363,48 +354,6 @@
             </div>
             <figcaption><b>Started early.</b> <code>varianceMinutes &lt; 0</code>. Worded as a direction, never a negative number. A <em>zero</em> variance renders nothing at all.
               <span class="aria">aria-label="Court 3: playing"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile playing" role="img" aria-label="Court 3: playing — Schedule review: Same court and time as another match">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
-              <p class="tile-primary"><span class="tag">MD QF</span><br>E. Vo / F. Do vs G. Ha / H. Ly<br><span class="elapsed">9′ on court</span></p>
-              <span class="chip"><span class="bang">!</span><span>Schedule review — Same court and time as another match</span></span>
-              <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>The playing match carries a conflict.</b> One reason. Computed by the <code>schedule_conflicts</code> RPC — a planning discrepancy, not something that stops play.
-              <span class="aria">aria-label="Court 3: playing — Schedule review: Same court and time as another match"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile playing" role="img" aria-label="Court 3: playing — Schedule review: Same court and time as another match · A player won't have had full rest +1">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
-              <p class="tile-primary"><span class="tag">MS · Draw A · Semifinal</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">21′ on court</span></p>
-              <span class="chip"><span class="bang">!</span><span>Schedule review — Same court and time as another match · A player won't have had full rest +1</span></span>
-              <div class="tile-queue">
-                <p class="q-next">Next: 10:15 · I. Ngo vs J. Bui</p>
-                <span class="ready-now">Ready now</span>
-              </div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>Capped at two reasons.</b> Three or more kinds collapse to two plus a <code>+N</code> tail; the start dialog lists them all. Reasons are distinct by <em>kind</em>, so two overlaps on one match are one reason.
-              <span class="aria">aria-label="Court 3: playing — Schedule review: … +1"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile playing" role="img" aria-label="Court 3: playing — Schedule review: Scheduled during a break">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
-              <p class="tile-primary"><span class="tag">WS R1</span><br>Kim Anh vs Lan Phuong<br><span class="elapsed">6′ on court</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next: 09:55 · My Linh vs Thu Ha</p>
-                <span class="ready-rest">An Nguyen · ready in 4 min</span>
-                <span class="chip"><span class="bang">!</span><span>Schedule review — Scheduled during a break</span></span>
-              </div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>The <em>queued</em> match carries the conflict, and is still resting.</b> Two independent channels: the readiness line answers &quot;can it start&quot;, the chip answers &quot;is it playable where the schedule put it&quot;.
-              <span class="aria">aria-label="Court 3: playing — Schedule review: Scheduled during a break"</span></figcaption>
           </figure>
 
           <figure class="cell">
@@ -470,7 +419,7 @@
               </div>
               <p class="tile-foot">View match</p>
             </div>
-            <figcaption><b>Read-only session.</b> No edit right on this tournament. The footer changes verb — <em>View</em>, not <em>Open</em> — and the chip never appears, because the conflicts read is not even issued.
+            <figcaption><b>Read-only session.</b> No edit right on this tournament. The footer changes verb — <em>View</em>, not <em>Open</em>.
               <span class="aria">aria-label="Court 3: playing"</span></figcaption>
           </figure>
 
@@ -533,21 +482,6 @@
             </div>
             <figcaption><b>Overrun, started late, queued match still resting.</b> The queue block already knows the next match must wait — the board says so without a countdown.
               <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile overrun" role="img" aria-label="Court 3: overrun — Schedule review: Ends after the courts close">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
-              <p class="tile-primary"><span class="tag">WS QF</span><br>Kim Anh vs Lan Phuong<br><span class="elapsed over">46′ on court · +21 over slot</span></p>
-              <span class="chip"><span class="bang">!</span><span>Schedule review — Ends after the courts close</span></span>
-              <div class="tile-queue">
-                <p class="q-next">Next: 10:40 · My Linh vs Thu Ha</p>
-                <span class="ready-now">Ready now</span>
-              </div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>Overrun and the match is flagged by the schedule.</b> Knockout slot here — 25 minutes — so 46 is 21 over. <code>past_closing</code> is the one conflict kind also reported on an in-progress match.
-              <span class="aria">aria-label="Court 3: overrun — Schedule review: Ends after the courts close"</span></figcaption>
           </figure>
 
           <figure class="cell">
@@ -625,36 +559,6 @@
             </div>
             <figcaption><b>Baseline ready.</b> The court is empty, the queued match has both sides and every player has had their rest. Needs action shows &quot;Court 3 is ready&quot; with a Start button.
               <span class="aria">aria-label="Court 3: free ready"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile free-ready" role="img" aria-label="Court 3: free ready — Schedule review: A player won't have had full rest">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-ready">Ready</span></div>
-              <p class="tile-primary"><span>Free · next match ready</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-now">Ready now</span>
-                <span class="chip"><span class="bang">!</span><span>Schedule review — A player won't have had full rest</span></span>
-              </div>
-              <p class="tile-foot">Open next match</p>
-            </div>
-            <figcaption><b>Ready, but the schedule disagrees with itself.</b> The readiness rule and the conflict rule are different rules — &quot;ready now&quot; measures the clock, <code>rest_shortfall</code> measures the plan. Both can be true.
-              <span class="aria">aria-label="Court 3: free ready — Schedule review: A player won't have had full rest"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile free-ready" role="img" aria-label="Court 3: free ready — Schedule review: Same court and time as another match · Scheduled before a match it depends on +1">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-ready">Ready</span></div>
-              <p class="tile-primary"><span>Free · next match ready</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next: 11:05 · I. Ngo vs J. Bui</p>
-                <span class="ready-now">Ready now</span>
-                <span class="chip"><span class="bang">!</span><span>Schedule review — Same court and time as another match · Scheduled before a match it depends on +1</span></span>
-              </div>
-              <p class="tile-foot">Open next match</p>
-            </div>
-            <figcaption><b>Three reasons, two shown.</b> Reading order is structural: court overlap first, then rest, break, closing, prerequisites. The organiser's Schedule block groups the same rows by kind.
-              <span class="aria">aria-label="Court 3: free ready — Schedule review: … +1"</span></figcaption>
           </figure>
 
           <figure class="cell">
@@ -750,21 +654,6 @@
           </figure>
 
           <figure class="cell">
-            <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked — Schedule review: Scheduled during a break">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
-              <p class="tile-primary"><span>Free · next match not ready</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-busy">C. Le · on Court 2</span>
-                <span class="chip"><span class="bang">!</span><span>Schedule review — Scheduled during a break</span></span>
-              </div>
-              <p class="tile-foot">Open next match</p>
-            </div>
-            <figcaption><b>Both channels at once.</b> The chip is drawn for the queued match independently of its readiness — which is exactly why the two are separate treatments.
-              <span class="aria">aria-label="Court 3: free blocked — Schedule review: Scheduled during a break"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
             <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
               <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
               <p class="tile-primary"><span>Free · next match not ready</span></p>
@@ -842,7 +731,7 @@
               <p class="tile-primary"><span>Idle</span></p>
               <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
             </div>
-            <figcaption><b>Idle with no target — the disabled tile.</b> Nothing on this court and nothing waiting anywhere. The button is <code>disabled</code>: 80% opacity, a default cursor, and the hover lift and border swap switched off. No chip, no footer action.
+            <figcaption><b>Idle with no target — the disabled tile.</b> Nothing on this court and nothing waiting anywhere. The button is <code>disabled</code>: 80% opacity, a default cursor, and the hover lift and border swap switched off. No footer action.
               <span class="aria">aria-label="Court 3: idle"</span></figcaption>
           </figure>
 
@@ -878,7 +767,7 @@
     <table class="ref">
       <thead><tr><th style="width:340px">Condition</th><th>What renders</th></tr></thead>
       <tbody>
-        <tr><td>The court has a scheduled match with a time</td><td><code>Next: 09:40 · C. Le vs D. Pham</code>, then the readiness line, then the Schedule-review chip if that queued match carries conflicts</td></tr>
+        <tr><td>The court has a scheduled match with a time</td><td><code>Next: 09:40 · C. Le vs D. Pham</code>, then the readiness line</td></tr>
         <tr><td>No such match, but a match on this day is ready and holds no court</td><td><code>No match scheduled · ready to place: E. Vo vs F. Do</code>, plus <code>· N more waiting</code> when more than one pairing waits</td></tr>
         <tr><td>Neither</td><td><code>Nothing queued</code></td></tr>
       </tbody>
@@ -899,8 +788,14 @@
     </p>
 
     <h3 style="margin-top:24px">8.4 The five conflict kinds</h3>
+    <p class="lede" style="margin-bottom:8px">
+      The tile no longer carries conflicts — a schedule conflict reaches a moderator only through the
+      start confirmation, which lists every reason for the match being started. The organiser's Schedule
+      block names the same five, grouped by kind. The strings live in
+      <code>src/lib/tournament/schedule-conflicts.ts</code>.
+    </p>
     <table class="ref">
-      <thead><tr><th style="width:210px">Kind</th><th>What the moderator reads</th></tr></thead>
+      <thead><tr><th style="width:210px">Kind</th><th>Reads as</th></tr></thead>
       <tbody>
         <tr><td><code>court_overlap</code></td><td>Same court and time as another match</td></tr>
         <tr><td><code>rest_shortfall</code></td><td>A player won't have had full rest</td></tr>
@@ -917,10 +812,9 @@
         <tr><td><b>Court badge and number</b></td><td>A <code>bg-foreground/10</code> badge with the court number, then &quot;Court N&quot; in the display face. The badge is backdrop-agnostic on purpose: it sits on five different tile fills, so an ink solved against one surface has no fixed pair to clear.</td><td>always</td></tr>
         <tr><td><b>State pill</b></td><td><code>COURT_STATE_LABEL[state]</code> uppercased on <code>COURT_STATE_CHIP[state]</code></td><td>always</td></tr>
         <tr><td><b>Primary line</b></td><td>Playing: the match tag, the two sides, then <code>N′ on court</code> with any <code>· +N over slot</code> and <code>· started N min late / early</code>. Free: &quot;Free · next match ready&quot;, &quot;Free · next match not ready&quot; or &quot;Idle&quot;.</td><td>always</td></tr>
-        <tr><td><b>Schedule-review chip</b></td><td>&quot;! Schedule review — …&quot; on a warn surface, for the playing match and the queued match independently</td><td>that match carries conflicts, editor session only</td></tr>
         <tr><td><b>Divider and queue block</b></td><td>The separated block beneath the names — see 8.2</td><td>always</td></tr>
         <tr><td><b>Footer action</b></td><td>An accent label naming what the tile opens — see 8.3</td><td>only when there is a target</td></tr>
-        <tr><td><b>Accessible name</b></td><td><code>Court N: &lt;state, hyphens read as spaces&gt;</code>, then <code> — Schedule review: &lt;summary&gt;</code>. The chip's text is folded in because the tile's own <code>aria-label</code> would otherwise replace it for a screen reader.</td><td>always</td></tr>
+        <tr><td><b>Accessible name</b></td><td><code>Court N: &lt;state, hyphens read as spaces&gt;</code> — the state, and nothing else. The tile's own <code>aria-label</code> replaces whatever text is inside it for a screen reader, so it names the state rather than repeating the queue.</td><td>always</td></tr>
       </tbody>
     </table>
 
@@ -954,7 +848,7 @@
         </tr>
         <tr>
           <td>Colour is never the only channel.</td>
-          <td>Every pill carries a word, every chip carries a word and a glyph, and the reasons are folded into the tile's accessible name.</td>
+          <td>Every pill carries a word as well as a fill, and each of the five states has its own label — so the board is readable with no hue at all.</td>
         </tr>
         <tr>
           <td>All five states at once only ever happens in a fixture.</td>
@@ -983,10 +877,10 @@
       <tbody>
         <tr><td>The five states, their labels, pill and tile tokens</td><td><code>src/lib/tournament/court-state.ts</code></td></tr>
         <tr><td><code>deriveCourtState</code>, <code>getMatchReadiness</code>, schedule variance, projected finish</td><td><code>src/lib/tournament/desk.ts</code></td></tr>
-        <tr><td>Tile JSX, board header, day selector, queue block, footer, chip, aria-label</td><td><code>src/routes/tournaments/$tournamentId/desk.tsx</code></td></tr>
+        <tr><td>Tile JSX, board header, day selector, queue block, footer, aria-label</td><td><code>src/routes/tournaments/$tournamentId/desk.tsx</code></td></tr>
         <tr><td>Which slot measures a match (group vs knockout pacing)</td><td><code>src/lib/tournament/desk.ts</code> — <code>deskKindPhase</code></td></tr>
         <tr><td>Expected end for a running match — the projection, not a promise</td><td><code>src/lib/tournament/in-progress.ts</code></td></tr>
-        <tr><td>Conflict kind labels, ordering and the chip summary</td><td><code>src/lib/tournament/schedule-conflicts.ts</code></td></tr>
+        <tr><td>Conflict kind labels and their reading order</td><td><code>src/lib/tournament/schedule-conflicts.ts</code></td></tr>
         <tr><td>Conflict detection (the rules)</td><td><code>schedule_conflicts</code> RPC, <code>supabase/migrations</code></td></tr>
         <tr><td>Colour, contrast, grayscale and deuteranopia sweeps</td><td><code>e2e/states.spec.ts</code></td></tr>
         <tr><td>Colour tokens mirrored in this page</td><td><code>src/styles.css</code> — <code>:root</code></td></tr>
