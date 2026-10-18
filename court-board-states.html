@@ -126,6 +126,8 @@
   .panel-body { padding: 16px; }
 
   .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  /* Row cards carry a sentence or two of caption, so they take a wider minimum. */
+  .board.wide { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
 
   /* A gallery cell: the tile, with a caption under it. --------------------- */
   figure.cell { margin: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -193,6 +195,42 @@
 
   .tile-foot { margin: 12px 0 0; font-size: 14px; font-weight: 600; color: var(--primary-ink); }
 
+  /* ---------------------------------------------------------------------------
+     The Needs action panel. `ACTION_TONE` and `ActionRow` from desk.tsx, the two
+     Button variants the rows use (`size="sm"` overridden to h-11 px-4), the ghost
+     fold, and the one-line "All clear".
+     --------------------------------------------------------------------------- */
+  .act-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .act-row {
+    display: flex; align-items: center; gap: 12px;
+    min-height: 48px; border-radius: 8px; padding: 8px 12px;
+    font-size: 16px; line-height: 24px;
+  }
+  .act-row.go   { background: rgb(91 79 199 / 0.10); color: var(--foreground); }
+  .act-row.warn { border: 1px solid var(--warn-border); background: var(--warn-surface); color: var(--warn-foreground); }
+  .act-icon {
+    display: grid; place-items: center; flex: none; width: 24px; height: 24px;
+    border-radius: 9999px; font-size: 12px; font-weight: 800; line-height: 1;
+  }
+  .act-row.go   .act-icon { background: var(--primary); color: var(--primary-foreground); }
+  .act-row.warn .act-icon { background: var(--warn-foreground); color: var(--warn-surface); }
+  .act-text { min-width: 0; flex: 1; }
+  .act-title { display: block; font-weight: 600; line-height: 1.375; }
+  .act-detail { display: block; font-size: 14px; line-height: 20px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    height: 44px; padding: 0 16px; border-radius: 6px; border: 1px solid transparent;
+    font: inherit; font-family: var(--font-score); font-size: 14px; font-weight: 500;
+    white-space: nowrap; cursor: pointer;
+  }
+  .btn.primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn.outline { border-color: var(--border-control); background: var(--background); color: var(--foreground); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--foreground); }
+  /* The fold that hides the rows past MAX_ACTION_ROWS. */
+  .fold { margin-top: 8px; }
+  .all-clear { margin: 0; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+  .all-clear b { font-weight: 600; color: var(--foreground); }
+
   /* Plain tables for the reference sections */
   table.ref { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; }
   table.ref th, table.ref td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; font-size: 13px; line-height: 19px; }
@@ -224,6 +262,7 @@
       <div><span class="count">3</span><span>Queue-block lines</span></div>
       <div><span class="count">5</span><span>Footer labels</span></div>
       <div><span class="count">5</span><span>Conflict kinds</span></div>
+      <div><span class="count">5</span><span>Needs-action rows</span></div>
       <div><span class="count">22</span><span>Tiles below</span></div>
     </div>
   </header>
@@ -417,7 +456,8 @@
       been on — because the tile already says it is running long, and a
       <code>+N over slot</code> or <code>started N min late</code> clause beside it was arithmetic
       competing with the number a moderator actually reads. It raises the &quot;N min on court&quot;
-      row in Needs action too.
+      row in Needs action once it is ten minutes past its slot, or sooner if the match behind it is
+      already late — see 9.2 and 9.3.
     </p>
 
     <div class="panel">
@@ -626,7 +666,9 @@
     </div>
     <p class="lede">
       No playing match and no scheduled match with a time. It can still be <em>actionable</em>: if a ready
-      match holds no court, an idle tile is an enabled button offering that pairing.
+      match holds no court, an idle tile is an enabled button offering that pairing. That tile is also the
+      only place an unplaced match appears — Needs action deliberately has no row for it, because the
+      decision is the organiser's, not the desk's (see 9.2).
     </p>
 
     <div class="panel">
@@ -776,7 +818,441 @@
   <section class="section">
     <div class="section-head">
       <div class="kicker">Cross-cutting</div>
-      <h2>9. Invariants the sweep pins</h2>
+      <h2>9. Needs action — every row the panel can draw</h2>
+    </div>
+    <p class="lede">
+      The panel above the board is the desk's only &quot;do this now&quot; surface, and it draws five
+      kinds of row. They share one shape — a tone, a glyph, a title, one line of detail and the
+      single button that clears it — and differ in what put them there and in how late they are.
+      Which rows exist, how late each one is and the order they are drawn in all come from
+      <code>deskActions</code> in <code>src/lib/tournament/desk-actions.ts</code>, read from the
+      board's own court states, so the panel cannot disagree with the tiles above it. Everything
+      here is scoped to the <b>selected day</b>.
+    </p>
+    <p class="lede">
+      Every string below is copied out of <code>desk.tsx</code> and <code>desk-actions.ts</code> —
+      the titles, the details, the button labels, the fold and the empty state. The names, courts
+      and minutes are illustrative instances of that copy, not values from a fixture; 9.1 is the
+      panel as it really stacks, and the cards in 9.2 show one kind at a time only so each
+      condition can be read on its own.
+    </p>
+
+    <h3 style="margin-top:20px">9.1 One panel, in the order it really stacks</h3>
+    <figure class="cell">
+      <div class="panel">
+        <div class="panel-head"><h4>Needs action</h4><div class="right">14:37 (updates every 30s)</div></div>
+        <div class="panel-body">
+          <ul class="act-list">
+            <li class="act-row warn">
+              <span class="act-icon" aria-hidden="true">!</span>
+              <span class="act-text">
+                <span class="act-title">MD — Pool B, results incomplete</span>
+                <span class="act-detail">22 min past scheduled finish</span>
+              </span>
+              <button class="btn outline" type="button">Enter results</button>
+            </li>
+            <li class="act-row warn">
+              <span class="act-icon" aria-hidden="true">!</span>
+              <span class="act-text">
+                <span class="act-title">Court 2, 37 min on court</span>
+                <span class="act-detail">Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks, 12 min past the expected finish. The next match is 12 min late</span>
+              </span>
+              <button class="btn outline" type="button">Enter result</button>
+            </li>
+            <li class="act-row go">
+              <span class="act-icon" aria-hidden="true">▶</span>
+              <span class="act-text">
+                <span class="act-title">Court 4, 7 min late</span>
+                <span class="act-detail">Jack Evans vs Liam Murphy, ready to start</span>
+              </span>
+              <button class="btn primary" type="button">Start</button>
+            </li>
+            <li class="act-row warn">
+              <span class="act-icon" aria-hidden="true">!</span>
+              <span class="act-text">
+                <span class="act-title">Court 3, 2 min late</span>
+                <span class="act-detail">Ben Carter / Amy Young vs Sam Lee / Ella Fox. Waiting: Ben Carter, on Court 2</span>
+              </span>
+              <button class="btn outline" type="button">Open match</button>
+            </li>
+            <li class="act-row go">
+              <span class="act-icon" aria-hidden="true">▶</span>
+              <span class="act-text">
+                <span class="act-title">Court 5 is ready</span>
+                <span class="act-detail">Priya Nair vs Alice Wong</span>
+              </span>
+              <button class="btn primary" type="button">Start</button>
+            </li>
+          </ul>
+          <button class="btn ghost fold" type="button" aria-expanded="false">Show 2 more</button>
+        </div>
+      </div>
+      <figcaption>
+        <b>The order is lateness, not kind.</b> Every late row is ranked by how late it is, whatever
+        it is about, so a pool twenty-two minutes behind leads an overrun twelve minutes past its
+        finish. Rows that are not late — a free court with a ready match — come after all of them,
+        soonest scheduled first. Ties keep the board's court order, because the sort is stable.
+      </figcaption>
+    </figure>
+
+    <div class="note" style="margin-top:12px">
+      <strong>Five rows, then a fold.</strong> <code>MAX_ACTION_ROWS</code> is five: the panel draws
+      the five most urgent and hides the rest behind <em>Show 2 more</em>, which becomes
+      <em>Show fewer</em> and carries <code>aria-expanded</code>. With five or fewer rows there is no
+      button at all. The fold is screen state, not a preference — it is not persisted, so leaving the
+      Desk forgets it. The list, the fold and the empty state sit in one
+      <code>aria-live=&quot;polite&quot;</code> region, so a row appearing is announced rather than
+      waited for.
+    </div>
+
+    <div class="caution" style="margin-top:8px">
+      <strong>Rows are re-ranked every thirty seconds.</strong> The panel is derived from
+      <code>now</code>, which advances on the same tick as the clock in its header. A ready row
+      becomes a late one the moment its scheduled start passes, and an overrun's rank jumps when the
+      match behind it turns late. Nothing is pinned in place, because the ranking is the panel's
+      whole claim: the top row really is the most overdue thing on the floor. A consequence worth
+      knowing: a row can move, and a folded row can become a shown one, while the host is reading.
+    </div>
+
+    <h3 style="margin-top:24px">9.2 Each kind of row on its own</h3>
+    <p class="lede">
+      Two tones remain, after the one that spoke for the organiser's plan was withdrawn. <b>▶</b> is
+      the action the desk wants taken now; <b>!</b> is something allowed that somebody should look
+      at. Amber, never red — a delayed match is not a danger, and nothing here is an error. Every row
+      but the pool's leads with the court, because that is the thing a moderator walks to.
+    </p>
+    <div class="board wide" style="margin-top:12px">
+
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-body">
+            <ul class="act-list">
+              <li class="act-row go">
+                <span class="act-icon" aria-hidden="true">▶</span>
+                <span class="act-text">
+                  <span class="act-title">Court 5 is ready</span>
+                  <span class="act-detail">Priya Nair vs Alice Wong</span>
+                </span>
+                <button class="btn primary" type="button">Start</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <figcaption><b>Ready, and not late yet.</b> A <code>free-ready</code> court whose queued match can start, drawn only once the court has stood free for <code>READY_ALERT_AFTER_MINUTES</code> — a court that freed a minute ago is a moment between matches, not a waste. A court nothing has finished on yet counts as free since the day began, so it is drawn at once. A side that is not decided yet reads <code>TBC</code> and the row is still drawn: readiness only asks about the players the match has, and a match with no players at all is <code>teams-missing</code>, which is never ready.</figcaption>
+      </figure>
+
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-body">
+            <ul class="act-list">
+              <li class="act-row go">
+                <span class="act-icon" aria-hidden="true">▶</span>
+                <span class="act-text">
+                  <span class="act-title">Court 4, 7 min late</span>
+                  <span class="act-detail">Jack Evans vs Liam Murphy, ready to start</span>
+                </span>
+                <button class="btn primary" type="button">Start</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <figcaption><b>Late, and it can start.</b> The same <code>free-ready</code> court once the queued match's scheduled start has passed by at least a minute. The title carries the number that ranks the row; the detail says the pairing and that nothing is in the way. With <em>ready</em>, this is the only filled button in the panel, because it is the only row the desk can finish in place.</figcaption>
+      </figure>
+
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-body">
+            <ul class="act-list">
+              <li class="act-row warn">
+                <span class="act-icon" aria-hidden="true">!</span>
+                <span class="act-text">
+                  <span class="act-title">Court 3, 2 min late</span>
+                  <span class="act-detail">Ben Carter / Amy Young vs Sam Lee / Ella Fox. Waiting: Ben Carter, on Court 2</span>
+                </span>
+                <button class="btn outline" type="button">Open match</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <figcaption><b>Late, and something is in the way.</b> The same lateness test, but readiness is not <code>ready</code>, so the row names who is holding it up in the board's own words: <code>Ben Carter, ready in 4 min</code> (resting), <code>Ben Carter, on Court 2</code> (busy elsewhere), or <code>Teams not assigned</code>. Chasing that person <em>is</em> the action, so the button opens the match rather than starting it. The wording comes from one function the tile also uses, <code>readinessReason</code>, so a row and a tile can never name a different reason. <code>Waiting: Ready now</code> cannot appear — a ready match becomes <em>start-late</em> instead.</figcaption>
+      </figure>
+
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-body">
+            <ul class="act-list">
+              <li class="act-row warn">
+                <span class="act-icon" aria-hidden="true">!</span>
+                <span class="act-text">
+                  <span class="act-title">Court 2, 37 min on court</span>
+                  <span class="act-detail">Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks, 12 min past the expected finish. The next match is 12 min late</span>
+                </span>
+                <button class="btn outline" type="button">Enter result</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <figcaption><b>Running long enough to owe a result.</b> The tile turns amber the moment the match passes its slot; this row waits a further <code>OVERRUN_ALERT_AFTER_MINUTES</code>, because a long rally is not yet worth walking over for. It fires early when the match queued behind it is already late — then the sentence about the next match is appended, because the match waiting for that court is the cost. A court number the match does not have reads <code>Court ?</code>.</figcaption>
+      </figure>
+
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-body">
+            <ul class="act-list">
+              <li class="act-row warn">
+                <span class="act-icon" aria-hidden="true">!</span>
+                <span class="act-text">
+                  <span class="act-title">Court 1, 33 min on court</span>
+                  <span class="act-detail">An Nguyen vs Bao Tran, 13 min past the expected finish</span>
+                </span>
+                <button class="btn outline" type="button">Enter result</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <figcaption><b>The same row with nobody waiting.</b> With no next match, or a next match whose start has not passed, the clause about the queue is simply absent rather than filled with a placeholder. The row still names the overrun, because the match is past its expected finish with nothing behind it to explain why.</figcaption>
+      </figure>
+
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-body">
+            <ul class="act-list">
+              <li class="act-row warn">
+                <span class="act-icon" aria-hidden="true">!</span>
+                <span class="act-text">
+                  <span class="act-title">MD — Pool B, results incomplete</span>
+                  <span class="act-detail">22 min past scheduled finish</span>
+                </span>
+                <button class="btn outline" type="button">Enter results</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <figcaption><b>A pool, not a match.</b> No match is named, because the row is about a set of results. The title leads with the event's code and an em dash, then the pool's own name; with no code loaded it drops the dash rather than print a placeholder. The action opens <em>Score entry</em> — the same page a reader calls <em>Scores</em> — with no match chosen, because the desk must not pick one result for the host. Full anatomy in 9.4.</figcaption>
+      </figure>
+
+    </div>
+
+    <div class="note" style="margin-top:12px">
+      <strong>There is no row for a ready match with no court.</strong> That pairing appears on the
+      <em>idle tile</em> — &quot;No match scheduled. Ready to place: E. Vo vs F. Do&quot;, plus
+      &quot;, N more waiting&quot; — and nowhere in this panel, because every way a match ends up
+      unplaced is either transient or the organiser's call. A result just recorded can unlock a match
+      that the schedule is about to slot; a match with no slot before the close, or a tournament with
+      no courts, or a first build that has not been run, is a planning decision the Schedule page
+      names with its own cause. The one thing a moderator can do about it — put the pairing on a court
+      that is free right now — is that tile. A row here would either duplicate the tile or hand the
+      desk a link to a page where it cannot make the decision.
+    </div>
+
+    <h3 style="margin-top:24px">9.3 How a row earns its place, and its rank</h3>
+    <table class="ref">
+      <thead>
+        <tr><th style="width:150px">Kind</th><th style="width:250px">Ranked by</th><th>Drawn when</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>results-late</code></td>
+          <td>Minutes past the pool's <code>scheduled_end</code></td>
+          <td>The pool has an end, that end is more than fifteen minutes ago, and the pool is still incomplete. See 9.4.</td>
+        </tr>
+        <tr>
+          <td><code>overrun</code></td>
+          <td>The larger of minutes past its slot and how late the match behind it is</td>
+          <td>The court's state is <code>overrun</code> and the match is ten minutes past its slot, <em>or</em> the match queued behind it has already passed its start.</td>
+        </tr>
+        <tr>
+          <td><code>start-late</code></td>
+          <td>Minutes past the queued match's scheduled start</td>
+          <td>The court is free, its next match can start, and that start has passed by at least a minute.</td>
+        </tr>
+        <tr>
+          <td><code>blocked-late</code></td>
+          <td>The same</td>
+          <td>The same, except readiness is <code>resting</code>, <code>player-busy</code> or <code>teams-missing</code>. The row names the person, because that is what has to be found.</td>
+        </tr>
+        <tr>
+          <td><code>ready</code></td>
+          <td>Nothing — these sort after every late row, soonest scheduled first</td>
+          <td>The court is <code>free-ready</code>, the next match is not late, and the court has stood free for <code>READY_ALERT_AFTER_MINUTES</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table class="ref" style="margin-top:12px">
+      <thead><tr><th style="width:310px">Constant</th><th style="width:90px">Value</th><th>What it gates</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>OVERRUN_ALERT_AFTER_MINUTES</code></td>
+          <td>10</td>
+          <td>How far past its slot a running match must be before the desk asks about it, with no late successor forcing the row earlier. It is independent of the tile, which turns amber at the slot itself.</td>
+        </tr>
+        <tr>
+          <td><code>READY_ALERT_AFTER_MINUTES</code></td>
+          <td>3</td>
+          <td>How long a court with a ready match must have stood free before the desk asks for it to start. Measured from the latest <code>ended_at</code> on that court; a court with no finished match counts as free since the day began.</td>
+        </tr>
+        <tr>
+          <td><code>MAX_ACTION_ROWS</code></td>
+          <td>5</td>
+          <td>How many rows are drawn before the fold. It is a length, not a filter: the folded rows are the ones the ranking already put last.</td>
+        </tr>
+        <tr>
+          <td>Pool grace</td>
+          <td>15 min</td>
+          <td>A pool's scheduled end plus fifteen minutes, before its missing results become a row. A local constant in <code>desk.tsx</code>, not exported from <code>desk-actions.ts</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:24px">9.4 The overdue-pool row, in full</h3>
+    <p class="lede">
+      This is the row whose title is longest and whose subject is least obvious, so it gets the
+      detail. <b>MD — Pool B, results incomplete</b> is two identities and one state: the event,
+      then the pool, then what is wrong with it. Nothing in it names a match, because a pool is
+      not a match.
+    </p>
+    <table class="ref">
+      <thead><tr><th style="width:190px">Part</th><th>Where it comes from</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>MD</code></td>
+          <td><code>categories.code</code>, read through <code>catMap</code>. The setup step ships five codes and never asks for one: <code>MS</code> Men's Singles, <code>WS</code> Women's Singles, <code>MD</code> Men's Doubles, <code>WD</code> Women's Doubles, <code>XD</code> Mixed Doubles. A code is an identity, not an abbreviation to be re-derived from the name — which is why a renamed event keeps it.</td>
+        </tr>
+        <tr>
+          <td><code>—</code></td>
+          <td>An em dash joins the event to the pool, the same shape every panel heading uses (<code>MS — Draw A</code>). When the category row has not loaded, the dash goes with the code rather than standing alone, so the title reads <code>Pool B, results incomplete</code> and never <code>undefined — Pool B</code>.</td>
+        </tr>
+        <tr>
+          <td><code>Pool B</code></td>
+          <td><code>pools.name</code>, written by <code>generatePoolsForCategory</code> as <code>Pool</code> plus a letter from the alphabet in generation order. It is stored, not computed, so a renamed pool keeps its new name on this row.</td>
+        </tr>
+        <tr>
+          <td><code>, results incomplete</code></td>
+          <td>The row's own state clause. It is the only part of the title that says anything is wrong; the dash and the two names are identification.</td>
+        </tr>
+        <tr>
+          <td><code>22 min past scheduled finish</code></td>
+          <td>The detail line, and the row's rank: whole minutes between <code>scheduled_end</code> and <code>now</code>, at least fifteen by the gate. It is recomputed on every tick, so it counts up while the row is on screen, and a schedule rebuild that moves <code>scheduled_end</code> moves the number with it. It is no longer a fixed sentence, because the panel now ranks by lateness: a row that hid its own rank could not be read as first of five.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="lede" style="margin-top:12px">
+      Four conditions must hold together. Any one of them failing keeps the row off the panel:
+    </p>
+    <table class="ref">
+      <thead><tr><th style="width:250px">Condition</th><th>What it reads</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>The pool has a scheduled end</b></td>
+          <td><code>pool.scheduled_end</code> is not null. The schedule writes it as <code>max(scheduled_time + slot)</code> over the pool's non-void matches that have a time, so it is the projected end of the pool's <em>last</em> match — a plan figure, not a result. A pool with no time has no end, and therefore no row: the desk cannot call a result late against a finish that was never planned.</td>
+        </tr>
+        <tr>
+          <td><b>It belongs to the selected day</b></td>
+          <td><code>dayIdForTime(orderedDays, scheduled_end)</code> equals the day the desk is showing — the same attribution matches use, so a pool that ends after midnight stays on the day it started rather than jumping to the next calendar date. Switching days can empty the row without anything having changed, which is why the panel is read as a day, not as the tournament.</td>
+        </tr>
+        <tr>
+          <td><b>It is not complete</b></td>
+          <td><code>poolIsComplete</code>, the same function the pool table reads. A pool of fewer than four teams is incomplete by definition. Above that, every pairing must appear exactly once with a reported winner from one of its two sides; a duplicate pairing or a winner outside the match does not count. So the row clears itself the moment the last missing result is entered — no dismissal exists, and none is needed.</td>
+        </tr>
+        <tr>
+          <td><b>It is past the grace</b></td>
+          <td><code>now</code> is later than <code>scheduled_end + 15 minutes</code>. A pool that finished at its planned time but whose results were entered two minutes later never raises the row, and a pool whose last match is still playing has not reached its end at all.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note" style="margin-top:12px">
+      <strong>What this row is not.</strong> It is not the overrun row: an overrun is one running
+      match past its slot, and its action is to enter that match's result; this is a set of matches
+      whose <em>results</em> are missing, and its action opens the score page with no match chosen.
+      It is not per match — one pool, one row, however many pairings are outstanding. It is not
+      gated by tournament format, deliberately: gating it on &quot;this tournament has pools&quot;
+      removed the row from the format the app actually runs, which <code>states.spec.ts</code> caught
+      by planting a pool inside a placement-only tournament. And it is amber, never red: a missing
+      result is an omission, not a danger.
+    </div>
+    <div class="caution" style="margin-top:8px">
+      <strong>One consequence worth knowing.</strong> A <code>void</code> pairing is not a reported
+      one, so a pool whose last outstanding match was voided rather than played keeps this row —
+      the completion rule counts decided pairings, and a void match decides nothing. That is the
+      pool table's rule as well, deliberately: a desk that cleared the row while the table still
+      called the pool incomplete would be two answers to one question. The row disappears when the
+      remaining pairing is actually played, or when the schedule no longer gives the pool an end
+      at all.
+    </div>
+
+    <h3 style="margin-top:24px">9.5 All clear</h3>
+    <figure class="cell">
+      <div class="panel">
+        <div class="panel-head"><h4>Needs action</h4><div class="right">14:37 (updates every 30s)</div></div>
+        <div class="panel-body">
+          <p class="all-clear"><b>All clear.</b> Nothing needs action right now.</p>
+        </div>
+      </div>
+      <figcaption>
+        <b>One line, not an empty-state block.</b> When nothing needs doing the panel should cost the
+        board as little height as possible, so the state is a sentence rather than a bordered box —
+        the board below it is what the host came for. It is still drawn, because &quot;nothing needs
+        action&quot; is information: the panel is where a host glances to decide whether anything is
+        wrong. The panel is <em>not</em> drawn at all for a read-only session, or while the access
+        read is still in flight — see 9.7.
+      </figcaption>
+    </figure>
+
+    <h3 style="margin-top:24px">9.6 The header's right slot, in both states</h3>
+    <div class="board wide">
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-head"><h4>Needs action</h4><div class="right">updates every 30s</div></div>
+          <div class="panel-body">
+            <p class="all-clear"><b>All clear.</b> Nothing needs action right now.</p>
+          </div>
+        </div>
+        <figcaption><b>Before the clock is adopted.</b> The server render and the first client paint agree on this wording, because a rendered clock would differ between them and hydration would fail. No time, no mismatch.</figcaption>
+      </figure>
+      <figure class="cell">
+        <div class="panel">
+          <div class="panel-head"><h4>Needs action</h4><div class="right">14:37 (updates every 30s)</div></div>
+          <div class="panel-body">
+            <ul class="act-list">
+              <li class="act-row go">
+                <span class="act-icon" aria-hidden="true">▶</span>
+                <span class="act-text">
+                  <span class="act-title">Court 5 is ready</span>
+                  <span class="act-detail">Priya Nair vs Alice Wong</span>
+                </span>
+                <button class="btn primary" type="button">Start</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <figcaption><b>After the browser's clock is adopted.</b> The time appears on the next paint; the refresh cadence follows in parentheses, because it is a quality of the time, not a second fact beside it.</figcaption>
+      </figure>
+    </div>
+
+    <h3 style="margin-top:24px">9.7 What the panel decides, and what it refuses to</h3>
+    <table class="ref">
+      <thead><tr><th style="width:220px">Rule</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><b>Who sees it</b></td><td>Editors only. A reader gets the board and the progress — the things that answer &quot;what is on each court&quot; without asking them to chase anything they cannot act on. Hidden rather than disabled, and hidden while the access read is still in flight, so nothing that can start a match is drawn for someone who may not.</td></tr>
+        <tr><td><b>Scope</b></td><td>The selected day. A pool belongs to the day its scheduled end falls on, by the same rule as a match, so switching days can empty the panel without anything having changed.</td></tr>
+        <tr><td><b>One derivation</b></td><td>Rows read the board's own <code>DeskCourtState</code>s and the same slot and readiness rules, so a row cannot disagree with the tile it is about. There is no second notion of &quot;late&quot; in the panel.</td></tr>
+        <tr><td><b>One match, one row</b></td><td>A match appears at most once: a running match as <em>overrun</em>, a queued match as <em>start-late</em>, <em>blocked-late</em> or <em>ready</em>, never two of those. A <em>court</em> can hold two rows — the match on it and the one behind it — and those are two different matches.</td></tr>
+        <tr><td><b>Ranked, and re-ranked</b></td><td>Late rows first, most late first, by the figure their own title prints; then the rows that are not late, soonest scheduled first. The order is recomputed every tick, so a row can move when something crosses a threshold.</td></tr>
+        <tr><td><b>Five, then fold</b></td><td>Five rows are drawn; the rest are behind <em>Show N more</em>. The fold is a count, not a severity filter: what is hidden was ranked last, so nothing urgent is ever only behind the button.</td></tr>
+        <tr><td><b>No dismissal</b></td><td>There is no &quot;done&quot; or &quot;snooze&quot;. A row leaves when the fact behind it changes: the match starts, the result is recorded, the pool completes, the next match stops being late. Acknowledging a conflict is a different surface (the schedule review), not this one.</td></tr>
+        <tr><td><b>A number that explains the order</b></td><td>Every late title carries the number that ranked it — minutes late, minutes on court, minutes past the finish. It is the same figure the sort used, so the order is readable from the rows themselves instead of being an unexplained arrangement. The one kind with no number is <em>ready</em>, and it sorts last.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">Cross-cutting</div>
+      <h2>10. Invariants the sweep pins</h2>
     </div>
     <table class="ref">
       <thead><tr><th>The rule</th><th style="width:300px">Why it exists</th></tr></thead>
@@ -809,7 +1285,7 @@
   <section class="section">
     <div class="section-head">
       <div class="kicker">Reference</div>
-      <h2>10. Where each state comes from</h2>
+      <h2>11. Where each state comes from</h2>
     </div>
     <table class="ref">
       <thead><tr><th style="width:420px">Surface</th><th>Source</th></tr></thead>
@@ -817,6 +1293,9 @@
         <tr><td>The five states, their labels, pill and tile tokens</td><td><code>src/lib/tournament/court-state.ts</code></td></tr>
         <tr><td><code>deriveCourtState</code>, <code>getMatchReadiness</code>, schedule variance, projected finish</td><td><code>src/lib/tournament/desk.ts</code></td></tr>
         <tr><td>Tile JSX, board header, day selector, queue block, footer, aria-label</td><td><code>src/routes/tournaments/$tournamentId/desk.tsx</code></td></tr>
+        <tr><td>The Needs action rows: which kinds exist, how late each is, and the order they are drawn in</td><td><code>src/lib/tournament/desk-actions.ts</code> — <code>deskActions</code>, <code>OVERRUN_ALERT_AFTER_MINUTES</code>, <code>READY_ALERT_AFTER_MINUTES</code>, <code>MAX_ACTION_ROWS</code>, <code>splitActions</code></td></tr>
+        <tr><td>Each row's words, tones, glyphs and buttons</td><td><code>desk.tsx</code> — <code>ACTION_TONE</code>, <code>ActionRow</code>, <code>NeedsActionRow</code>, <code>readinessReason</code>, <code>latePools</code>; <code>readyUnassigned</code> still feeds the idle tile, not the panel</td></tr>
+        <tr><td>Which treatments the panel must render and keep separate</td><td><code>e2e/states.spec.ts</code> — the &quot;three urgency treatments&quot; test, driven by the states fixture in <code>e2e/fixtures/desk-mock.ts</code></td></tr>
         <tr><td>Which slot measures a match (group vs knockout pacing)</td><td><code>src/lib/tournament/desk.ts</code> — <code>deskKindPhase</code></td></tr>
         <tr><td>Expected end for a running match — the projection, not a promise</td><td><code>src/lib/tournament/in-progress.ts</code></td></tr>
         <tr><td>Conflict kind labels and their reading order</td><td><code>src/lib/tournament/schedule-conflicts.ts</code></td></tr>
