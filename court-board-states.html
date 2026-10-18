@@ -229,7 +229,7 @@
       <div><span class="count">3</span><span>Queue-block lines</span></div>
       <div><span class="count">5</span><span>Footer labels</span></div>
       <div><span class="count">5</span><span>Conflict kinds</span></div>
-      <div><span class="count">25</span><span>Tiles below</span></div>
+      <div><span class="count">22</span><span>Tiles below</span></div>
     </div>
   </header>
 
@@ -305,8 +305,9 @@
     </div>
     <p class="lede">
       The only green state, and the only one whose elapsed time is measured. Everything below is
-      reachable: 1–7 differ by the queue behind the court, 8 by who is signed in, 9 by a missing
-      start instant.
+      reachable: 1–5 differ by the queue behind the court, 6 by who is signed in, 7 by a missing
+      start instant. A court with a match on it names its next pairing and nothing more — no
+      readiness line, because the question it answers cannot be acted on yet.
     </p>
 
     <div class="panel">
@@ -320,11 +321,10 @@
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-now">Ready now</span>
               </div>
               <p class="tile-foot">Open score desk</p>
             </div>
-            <figcaption><b>Baseline.</b> On court 12 minutes, inside its slot; the queued match is already clear to start.
+            <figcaption><b>Baseline.</b> On court 12 minutes, inside its slot, with a pairing queued behind it.
               <span class="aria">aria-label="Court 3: playing"</span></figcaption>
           </figure>
 
@@ -334,7 +334,6 @@
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">18′ on court · started 3 min late</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-now">Ready now</span>
               </div>
               <p class="tile-foot">Open score desk</p>
             </div>
@@ -348,39 +347,10 @@
               <p class="tile-primary"><span class="tag">MS R2</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">7′ on court · started 5 min early</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-now">Ready now</span>
               </div>
               <p class="tile-foot">Open score desk</p>
             </div>
             <figcaption><b>Started early.</b> <code>varianceMinutes &lt; 0</code>. Worded as a direction, never a negative number. A <em>zero</em> variance renders nothing at all.
-              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
-              <p class="tile-primary"><span class="tag">XD QF</span><br>An Nguyen / Kim Anh vs Bao Tran / My Linh<br><span class="elapsed">14′ on court</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next: 10:05 · C. Le / D. Pham vs E. Vo / F. Do</p>
-                <span class="ready-busy">An Nguyen · on Court 2</span>
-              </div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>Queued match blocked by a player on another court.</b> Danger ink, because it is a hard block — the server refuses the start outright, whoever is asking.
-              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile playing" role="img" aria-label="Court 3: playing">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
-              <p class="tile-primary"><span class="tag">MD R2</span><br>An Nguyen / Bao Tran vs<br><span class="elapsed">11′ on court</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next: 10:20 · C. Le / D. Pham vs E. Vo / F. Do</p>
-                <span class="q-line">Teams not assigned</span>
-              </div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>Queued match has no players yet.</b> The bracket is not decided, so a side resolved to nothing. Inherits the block's muted ink — it is not a fault, just a bracket still opening.
               <span class="aria">aria-label="Court 3: playing"</span></figcaption>
           </figure>
 
@@ -415,7 +385,6 @@
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-now">Ready now</span>
               </div>
               <p class="tile-foot">View match</p>
             </div>
@@ -429,7 +398,6 @@
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">′ on court</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-now">Ready now</span>
               </div>
               <p class="tile-foot">Open score desk</p>
             </div>
@@ -476,25 +444,10 @@
               <p class="tile-primary"><span class="tag">MS R2</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">24′ on court · +4 over slot · started 6 min late</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 10:15 · C. Le vs D. Pham</p>
-                <span class="ready-rest">C. Le · ready in 2 min</span>
               </div>
               <p class="tile-foot">Open score desk</p>
             </div>
-            <figcaption><b>Overrun, started late, queued match still resting.</b> The queue block already knows the next match must wait — the board says so without a countdown.
-              <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
-          </figure>
-
-          <figure class="cell">
-            <div class="tile overrun" role="img" aria-label="Court 3: overrun">
-              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
-              <p class="tile-primary"><span class="tag">MD R1</span><br>An Nguyen / Bao Tran vs C. Le / D. Pham<br><span class="elapsed over">35′ on court · +15 over slot</span></p>
-              <div class="tile-queue">
-                <p class="q-next">Next: 10:50 · E. Vo / F. Do vs G. Ha / H. Ly</p>
-                <span class="ready-busy">E. Vo · on Court 5</span>
-              </div>
-              <p class="tile-foot">Open score desk</p>
-            </div>
-            <figcaption><b>Overrun, and the queued match is blocked.</b> An overrun court is excluded from the Next transitions panel — it is this tile and the alert, not a countdown.
+            <figcaption><b>Overrun, and it started late.</b> A late start is one reason to overrun. The queued pairing is named and nothing else — on a court that still has a match on it, the readiness line is not drawn.
               <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
           </figure>
 
@@ -504,7 +457,6 @@
               <p class="tile-primary"><span class="tag">XD R1</span><br>A. Nguyen / K. Anh vs B. Tran / M. Linh<br><span class="elapsed over">27′ on court · +7 over slot · started 4 min early</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 10:30 · C. Le / D. Pham vs E. Vo / F. Do</p>
-                <span class="q-line">Teams not assigned</span>
               </div>
               <p class="tile-foot">Open score desk</p>
             </div>
@@ -518,7 +470,6 @@
               <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">32′ on court · +12 over slot</span></p>
               <div class="tile-queue">
                 <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
-                <span class="ready-now">Ready now</span>
               </div>
               <p class="tile-foot">View match</p>
             </div>
@@ -749,9 +700,12 @@
 
     <h3>8.1 The four readiness lines</h3>
     <p class="lede">
-      Only drawn when the court has a queued match with a time. Evaluated in this order, first match wins;
-      the last three make the court <code>free-blocked</code>, and <code>ready</code> is what makes it
-      <code>free-ready</code>.
+      Drawn only on a <em>free</em> court — <code>free-ready</code> or <code>free-blocked</code> — that has a
+      queued match with a time. A court with a match on it (<code>playing</code>, <code>overrun</code>) names
+      its next pairing and stops there: the readiness line answers &quot;can the queued match start now&quot;,
+      and a court that is still occupied cannot answer yes whatever the clock says. Evaluated in this
+      order, first match wins; the last three make the court <code>free-blocked</code>, and
+      <code>ready</code> is what makes it <code>free-ready</code>.
     </p>
     <table class="ref">
       <thead><tr><th style="width:140px">Readiness</th><th style="width:250px">Rendered text</th><th style="width:150px">Ink</th><th>Predicate</th></tr></thead>
@@ -767,7 +721,7 @@
     <table class="ref">
       <thead><tr><th style="width:340px">Condition</th><th>What renders</th></tr></thead>
       <tbody>
-        <tr><td>The court has a scheduled match with a time</td><td><code>Next: 09:40 · C. Le vs D. Pham</code>, then the readiness line</td></tr>
+        <tr><td>The court has a scheduled match with a time</td><td><code>Next: 09:40 · C. Le vs D. Pham</code>. Only when the court is free does the readiness line follow — see 8.1.</td></tr>
         <tr><td>No such match, but a match on this day is ready and holds no court</td><td><code>No match scheduled · ready to place: E. Vo vs F. Do</code>, plus <code>· N more waiting</code> when more than one pairing waits</td></tr>
         <tr><td>Neither</td><td><code>Nothing queued</code></td></tr>
       </tbody>
@@ -812,7 +766,7 @@
         <tr><td><b>Court badge and number</b></td><td>A <code>bg-foreground/10</code> badge with the court number, then &quot;Court N&quot; in the display face. The badge is backdrop-agnostic on purpose: it sits on five different tile fills, so an ink solved against one surface has no fixed pair to clear.</td><td>always</td></tr>
         <tr><td><b>State pill</b></td><td><code>COURT_STATE_LABEL[state]</code> uppercased on <code>COURT_STATE_CHIP[state]</code></td><td>always</td></tr>
         <tr><td><b>Primary line</b></td><td>Playing: the match tag, the two sides, then <code>N′ on court</code> with any <code>· +N over slot</code> and <code>· started N min late / early</code>. Free: &quot;Free · next match ready&quot;, &quot;Free · next match not ready&quot; or &quot;Idle&quot;.</td><td>always</td></tr>
-        <tr><td><b>Divider and queue block</b></td><td>The separated block beneath the names — see 8.2</td><td>always</td></tr>
+        <tr><td><b>Divider and queue block</b></td><td>The separated block beneath the names — the <code>Next:</code> line and, on a free court only, the readiness line. See 8.2.</td><td>always</td></tr>
         <tr><td><b>Footer action</b></td><td>An accent label naming what the tile opens — see 8.3</td><td>only when there is a target</td></tr>
         <tr><td><b>Accessible name</b></td><td><code>Court N: &lt;state, hyphens read as spaces&gt;</code> — the state, and nothing else. The tile's own <code>aria-label</code> replaces whatever text is inside it for a screen reader, so it names the state rather than repeating the queue.</td><td>always</td></tr>
       </tbody>

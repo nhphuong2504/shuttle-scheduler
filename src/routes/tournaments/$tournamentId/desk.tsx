@@ -864,11 +864,26 @@ function Desk() {
                           Next: {timeLabel(state.next.scheduled)} · {label(state.next.teams[0])} vs{" "}
                           {label(state.next.teams[1])}
                         </p>
-                        <ReadinessText
-                          readiness={state.readiness}
-                          courts={courtMap}
-                          players={playerMap}
-                        />
+                        {/*
+                          A court with a match on it names its next pairing and nothing
+                          more - no "Ready now", no reason it is not ready yet.
+
+                          The readiness line answers "can the queued match start", which is
+                          the question a *free* court is asked: free-ready is exactly "yes",
+                          free-blocked is exactly "not yet, and here is why". While a match is
+                          in progress the question is premature - the court cannot take it
+                          until the current match ends, whatever the clock says about rest -
+                          so the line would be an answer to a question nobody has asked yet.
+                          It also goes stale in a way that reads as a fault: a two-minute
+                          countdown on a court with twenty minutes left is noise, not a plan.
+                        */}
+                        {state.playing ? null : (
+                          <ReadinessText
+                            readiness={state.readiness}
+                            courts={courtMap}
+                            players={playerMap}
+                          />
+                        )}
                       </>
                     ) : nextReadyLabel ? (
                       <p className="text-t2">

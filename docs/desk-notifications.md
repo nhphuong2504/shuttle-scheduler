@@ -66,6 +66,9 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 - **Waiting** is neutral. It asks nothing of the moderator; the line beneath it gives the
   specific reason ("A. Nguyen · ready in 4 min", "A. Nguyen · on Court 2", "Teams not assigned").
   Its chip is a deeper grey than Idle so the two stay distinct fills.
+- **Playing and Overrun name the next pairing and stop there** — no "Ready now", no reason it
+  is not ready. That line answers "can the queued match start now", which a court that still
+  has a match on it cannot honestly answer; it is drawn on Ready and Waiting only.
 
 ## Toasts after a result
 
