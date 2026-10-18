@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Control desk — court board states (static mirror)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ---------------------------------------------------------------------------
+     Tokens. Copied by hand from src/styles.css (:root) so this page paints the
+     same colours the app does. If a token moves there, it must move here too -
+     this file is a mirror, not a second source of truth.
+     --------------------------------------------------------------------------- */
+  :root {
+    --background: #F4F5F4;
+    --foreground: #171A1D;
+    --surface: #FFFFFF;
+    --hairline: #D9DDDF;
+    --muted: #EDEFEE;
+    --muted-foreground: #5B656C;
+    --primary: #5B4FC7;
+    --primary-ink: #5B4FC7;
+    --primary-foreground: #FFFFFF;
+    --border-control: #7F8A91;
+
+    --warn-surface: #FAF0E1;
+    --warn-border: #E8CFA3;
+    --warn-foreground: #8F5300;
+    --info-surface: #ECEAFA;
+    --info-border: #C9C4F0;
+    --info-foreground: #3F35A0;
+    --danger-surface: #FBEAEB;
+    --danger-border: #EDB9BD;
+    --danger-foreground: #B3343D;
+
+    --play: #16865C;
+    --play-surface: #D6F1E3;
+    --play-foreground: #0E5A3A;
+
+    --radius: 1rem;
+    --elev-1: 0 1px 2px -1px rgb(23 26 29 / 0.12), 0 4px 14px -8px rgb(23 26 29 / 0.18);
+    --elev-2: 0 2px 6px -2px rgb(23 26 29 / 0.14), 0 18px 38px -20px rgb(23 26 29 / 0.30);
+
+    --type-t1-size: 1.5rem;   --type-t1-lh: 1.75rem;
+    --type-t2-size: 0.875rem; --type-t2-lh: 1.25rem;
+    --type-t4-size: 0.75rem;  --type-t4-lh: 1rem;
+    --row-height: 2.75rem;
+
+    --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+    --font-score: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-score);
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1360px; margin: 0 auto; padding: 32px 24px 96px; }
+  .font-display { font-family: var(--font-display); }
+  .score { font-family: var(--font-score); font-variant-numeric: tabular-nums; }
+
+  h1 { font-family: var(--font-display); font-size: 24px; line-height: 30px; font-weight: 590; margin: 0 0 6px; }
+  h2 { font-family: var(--font-display); font-size: 18px; line-height: 24px; font-weight: 590; margin: 0 0 4px; }
+  h3 { font-family: var(--font-display); font-size: 16px; line-height: 22px; font-weight: 590; margin: 0 0 4px; }
+  p { margin: 0 0 8px; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    background: rgb(23 26 29 / 0.06);
+    border-radius: 4px;
+    padding: 1px 4px;
+  }
+  .lede { color: var(--muted-foreground); max-width: 92ch; }
+
+  .section { margin-top: 40px; }
+  .section-head { border-bottom: 1px solid var(--hairline); padding-bottom: 8px; margin-bottom: 16px; }
+  .section-head .kicker { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted-foreground); font-weight: 600; }
+
+  .note {
+    background: var(--info-surface);
+    box-shadow: inset 0 0 0 1px var(--info-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--info-foreground);
+  }
+  .note strong { font-weight: 700; }
+  .caution {
+    background: var(--warn-surface);
+    box-shadow: inset 0 0 0 1px var(--warn-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--warn-foreground);
+  }
+
+  /* Token swatches ---------------------------------------------------------- */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .swatch { border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .swatch .chipfill { height: 40px; }
+  .swatch .meta { padding: 6px 8px; font-size: 12px; line-height: 16px; }
+  .swatch .meta b { display: block; font-weight: 600; }
+  .swatch .meta span { color: var(--muted-foreground); font-family: ui-monospace, Menlo, monospace; }
+
+  /* A real Panel, so a translucent tile composites over the white it really sits on. */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: var(--elev-1);
+    overflow: hidden;
+  }
+  .panel-head {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 4px 8px; border-bottom: 1px solid var(--hairline); padding: 10px 16px;
+  }
+  .panel-head h4 { font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .panel-head .right { font-size: 14px; color: var(--muted-foreground); }
+  .panel-body { padding: 16px; }
+
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+
+  /* A gallery cell: the tile, with a caption under it. --------------------- */
+  figure.cell { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  figcaption { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  figcaption b { color: var(--foreground); font-weight: 600; }
+  figcaption .aria { display: block; margin-top: 3px; font-family: ui-monospace, Menlo, monospace; color: var(--muted-foreground); opacity: .8; }
+
+  /* ---------------------------------------------------------------------------
+     The court tile. Utility classes from desk.tsx reproduced by hand:
+       rounded-xl border p-4 text-left shadow-panel transition-all
+       enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise
+       disabled:cursor-default disabled:opacity-80
+     --------------------------------------------------------------------------- */
+  .tile {
+    display: block; width: 100%; text-align: left; font: inherit; color: inherit;
+    border: 1px solid; border-radius: 12px; padding: 16px;
+    box-shadow: var(--elev-1);
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    background-clip: border-box;
+    cursor: pointer;
+  }
+  .tile:not(.disabled):hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--primary) 60%, transparent);
+    box-shadow: var(--elev-2);
+  }
+  .tile.disabled { cursor: default; opacity: 0.8; }
+
+  /* COURT_STATE_TILE */
+  .tile.playing     { border-color: var(--play);        background: rgb(214 241 227 / 0.40); }
+  .tile.overrun     { border-color: var(--warn-border); background: rgb(250 240 225 / 0.40); }
+  .tile.free-ready  { border-color: rgb(91 79 199 / 0.40); background: rgb(91 79 199 / 0.05); }
+  .tile.free-blocked{ border-color: var(--hairline);    background: var(--surface); }
+  .tile.idle        { border-color: var(--hairline);    background: var(--surface); }
+
+  .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tile-court { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+  .court-badge {
+    display: grid; place-items: center; width: 36px; height: 36px; flex: none;
+    border-radius: 8px; background: rgb(23 26 29 / 0.10);
+    font-family: var(--font-score); font-size: 18px; font-weight: 700; color: var(--foreground);
+  }
+
+  /* COURT_STATE_CHIP */
+  .pill {
+    display: inline-flex; border-radius: 9999px; padding: 4px 10px; flex: none;
+    font-family: var(--font-score); font-size: 14px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.025em; white-space: nowrap;
+  }
+  .pill.playing      { background: var(--play-surface); color: var(--play-foreground); box-shadow: inset 0 0 0 1px rgb(14 90 58 / 0.60); }
+  .pill.overrun      { background: var(--warn-surface); color: var(--warn-foreground); box-shadow: inset 0 0 0 1px var(--warn-border); }
+  .pill.free-ready   { background: rgb(91 79 199 / 0.10); color: var(--primary-ink); }
+  .pill.free-blocked { background: rgb(23 26 29 / 0.15); color: var(--foreground); }
+  .pill.idle         { background: var(--muted); color: var(--muted-foreground); }
+
+  /* The tile's primary line */
+  .tile-primary { margin: 12px 0 0; font-size: 16px; font-weight: 600; line-height: 1.375; }
+  .tag { font-family: var(--font-score); font-size: 14px; font-weight: 500; color: var(--muted-foreground); }
+  .elapsed { font-family: var(--font-score); font-size: 16px; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+  .elapsed.over { font-weight: 600; color: var(--warn-foreground); }
+
+  /* The separated queue block */
+  .tile-queue { margin-top: 8px; border-top: 1px solid var(--hairline); padding-top: 8px; color: var(--muted-foreground); }
+  .q-next { margin: 0; font-size: 14px; line-height: 20px; }
+  .q-line { display: block; }
+  .q-none { margin: 0; font-size: 14px; }
+  .ready-now { font-size: 16px; font-weight: 600; color: var(--primary-ink); }
+  .ready-rest { color: var(--warn-foreground); }
+  .ready-busy { color: var(--danger-foreground); }
+
+  .tile-foot { margin: 12px 0 0; font-size: 14px; font-weight: 600; color: var(--primary-ink); }
+
+  /* Plain tables for the reference sections */
+  table.ref { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; }
+  table.ref th, table.ref td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; font-size: 13px; line-height: 19px; }
+  table.ref thead th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); background: rgb(23 26 29 / 0.03); }
+  table.ref tbody tr:nth-child(even) { background: rgb(23 26 29 / 0.02); }
+  table.ref tbody tr:last-child td { border-bottom: 0; }
+
+  .count { font-family: var(--font-score); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600; }
+  .stats { display: flex; flex-wrap: wrap; gap: 32px; margin: 16px 0 0; }
+  .stats div span { display: block; font-size: 12px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Control desk — court board states</h1>
+    <p class="lede">
+      Every state the Desk's court board can display, and every situation each one can render in.
+      A court state is <b>derived, never stored</b>: the router keeps a closed set of match statuses,
+      while a court's state is computed from the matches on it and the clock. This page is a static
+      mirror of the real tile — same tokens, same strings, same predicates — read out of
+      <code>src/lib/tournament/court-state.ts</code>, <code>desk.ts</code> and the tile's own JSX in
+      <code>desk.tsx</code>. Hover an enabled tile: the lift is the app's own.
+    </p>
+    <div class="stats">
+      <div><span class="count">5</span><span>Court states</span></div>
+      <div><span class="count">4</span><span>Readiness states</span></div>
+      <div><span class="count">3</span><span>Queue-block lines</span></div>
+      <div><span class="count">5</span><span>Footer labels</span></div>
+      <div><span class="count">5</span><span>Conflict kinds</span></div>
+      <div><span class="count">25</span><span>Tiles below</span></div>
+    </div>
+  </header>
+
+  <div class="section">
+    <div class="note">
+      <strong>Read the tiles as a wall, not one at a time.</strong> The pill is the label, and the tint
+      is the second channel: the tile is a <em>wash</em> of the state and the pill is the denser surface, in
+      every state without exception. Tiles are <code>&lt;button&gt;</code>s, so a court with no target is
+      dimmed and inert rather than hidden — it is still readable on the wall.
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">Reference</div>
+      <h2>1. The tokens that paint the board</h2>
+    </div>
+    <p class="lede">
+      Copied from <code>src/styles.css</code>. Three stops per family — an edge, a fill and an ink —
+      which is why <code>--play-*</code> is named apart from <code>--state-live-*</code> and from
+      <code>--success-*</code>: retuning the court board must not silently re-tint a toast.
+    </p>
+    <div class="swatches">
+      <div class="swatch"><div class="chipfill" style="background:var(--play)"></div><div class="meta"><b>--play</b><span>#16865C</span><br>playing — edge</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--play-surface)"></div><div class="meta"><b>--play-surface</b><span>#D6F1E3</span><br>pill fill, tile @40%</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--play-foreground)"></div><div class="meta"><b>--play-foreground</b><span>#0E5A3A</span><br>pill ink</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--warn-surface)"></div><div class="meta"><b>--warn-surface</b><span>#FAF0E1</span><br>overrun — pill fill</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--warn-border)"></div><div class="meta"><b>--warn-border</b><span>#E8CFA3</span><br>overrun — edge</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--warn-foreground)"></div><div class="meta"><b>--warn-foreground</b><span>#8F5300</span><br>overrun ink, warnings</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--primary)"></div><div class="meta"><b>--primary / --primary-ink</b><span>#5B4FC7</span><br>ready — edge &amp; ink</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--danger-foreground)"></div><div class="meta"><b>--danger-foreground</b><span>#B3343D</span><br>a player on another court</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--muted)"></div><div class="meta"><b>--muted</b><span>#EDEFEE</span><br>idle — pill fill</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--hairline)"></div><div class="meta"><b>--hairline</b><span>#D9DDDF</span><br>idle / waiting edge</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--muted-foreground)"></div><div class="meta"><b>--muted-foreground</b><span>#5B656C</span><br>reference text</div></div>
+      <div class="swatch"><div class="chipfill" style="background:var(--foreground)"></div><div class="meta"><b>--foreground</b><span>#171A1D</span><br>primary text</div></div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">Reference</div>
+      <h2>2. How a state is derived</h2>
+    </div>
+    <p class="lede">
+      <code>deriveCourtState()</code> takes one court and the day's matches and applies these tests in
+      order. First match wins, so a court is in exactly one state.
+    </p>
+    <table class="ref">
+      <thead><tr><th style="width:52px">Order</th><th>Test</th><th style="width:150px">State</th><th style="width:130px">Pill</th></tr></thead>
+      <tbody>
+        <tr><td class="score">1</td><td>A match on this court is <code>in-progress</code>, and elapsed minutes are within the slot for its kind</td><td><b>playing</b></td><td>PLAYING</td></tr>
+        <tr><td class="score">2</td><td>A match on this court is <code>in-progress</code>, and elapsed minutes <b>exceed</b> the slot for its kind</td><td><b>overrun</b></td><td>OVERRUN</td></tr>
+        <tr><td class="score">3</td><td>No match in progress; the court's earliest <code>scheduled</code> match with a time has readiness <code>ready</code></td><td><b>free-ready</b></td><td>READY</td></tr>
+        <tr><td class="score">4</td><td>No match in progress; that match's readiness is <code>resting</code>, <code>player-busy</code> or <code>teams-missing</code></td><td><b>free-blocked</b></td><td>WAITING</td></tr>
+        <tr><td class="score">5</td><td>No match in progress and <b>no</b> scheduled match with a time on this court</td><td><b>idle</b></td><td>IDLE</td></tr>
+      </tbody>
+    </table>
+    <p class="lede" style="margin-top:10px">
+      The slot comes from the tournament's own timings — pool and placement matches are measured with
+      <code>group_slot_minutes</code>, draws and brackets with <code>knockout_slot_minutes</code>
+      (defaults 20 and 25; rest gaps 10 and 30). That mapping lives in one place
+      (<code>deskKindPhase</code>), so the board, the overrun alert and the start check cannot disagree.
+    </p>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">State 1 of 5 · green</div>
+      <h2>3. <code>playing</code> — a match is live and inside its slot</h2>
+    </div>
+    <p class="lede">
+      The only green state, and the only one whose elapsed time is measured. Everything below is
+      reachable: 1–7 differ by the queue behind the court, 8 by who is signed in, 9 by a missing
+      start instant.
+    </p>
+
+    <div class="panel">
+      <div class="panel-head"><h4>Court board</h4><div class="right">Fri 16 Oct · 8 courts</div></div>
+      <div class="panel-body">
+        <div class="board">
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Baseline.</b> On court 12 minutes, inside its slot; the queued match is already clear to start.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">18′ on court · started 3 min late</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Started late.</b> <code>varianceMinutes &gt; 0</code> — the start drifted past its published time. The suffix is the one place a late start is visible on the board.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MS R2</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">7′ on court · started 5 min early</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Started early.</b> <code>varianceMinutes &lt; 0</code>. Worded as a direction, never a negative number. A <em>zero</em> variance renders nothing at all.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">XD QF</span><br>An Nguyen / Kim Anh vs Bao Tran / My Linh<br><span class="elapsed">14′ on court</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 10:05 · C. Le / D. Pham vs E. Vo / F. Do</p>
+                <span class="ready-busy">An Nguyen · on Court 2</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Queued match blocked by a player on another court.</b> Danger ink, because it is a hard block — the server refuses the start outright, whoever is asking.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MD R2</span><br>An Nguyen / Bao Tran vs<br><span class="elapsed">11′ on court</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 10:20 · C. Le / D. Pham vs E. Vo / F. Do</p>
+                <span class="q-line">Teams not assigned</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Queued match has no players yet.</b> The bracket is not decided, so a side resolved to nothing. Inherits the block's muted ink — it is not a fault, just a bracket still opening.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
+              <div class="tile-queue">
+                <p class="q-next">No match scheduled · ready to place: E. Vo vs F. Do</p>
+                <p class="q-next" style="margin-top:4px">· 2 more waiting</p>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Nothing queued on this court, but a ready match holds no court.</b> One shared pool — the same suggestion appears on every free court, and only the first is offered because the desk starts one match at a time. Rebuilding the schedule clears it.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
+              <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Nothing queued and nothing waiting.</b> The last match on this court for the day.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">12′ on court</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">View match</p>
+            </div>
+            <figcaption><b>Read-only session.</b> No edit right on this tournament. The footer changes verb — <em>View</em>, not <em>Open</em>.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile playing" role="img" aria-label="Court 3: playing">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill playing">Playing</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed">′ on court</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Edge case: no start instant.</b> <code>started_at</code> is null, so <code>elapsedMinutes</code> is null and the number renders as nothing — the tile reads &quot;′ on court&quot;. The start RPCs always stamp it, so this is a display guard rather than a state you should see.
+              <span class="aria">aria-label="Court 3: playing"</span></figcaption>
+          </figure>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">State 2 of 5 · amber</div>
+      <h2>4. <code>overrun</code> — a match is live and past its slot</h2>
+    </div>
+    <p class="lede">
+      A delay, not a fault, so it is amber rather than red. It always adds
+      <code>· +N over slot</code>, and — unlike <code>playing</code> — it also turns the elapsed line bold
+      warn ink. It raises the &quot;N min on court&quot; row in Needs action too.
+    </p>
+
+    <div class="panel">
+      <div class="panel-head"><h4>Court board</h4><div class="right">Fri 16 Oct · 8 courts</div></div>
+      <div class="panel-body">
+        <div class="board">
+
+          <figure class="cell">
+            <div class="tile overrun" role="img" aria-label="Court 3: overrun">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">32′ on court · +12 over slot</span></p>
+              <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Baseline overrun.</b> The group slot is 20 minutes, so 32 minutes is 12 over. The bold warn ink is the only hue on the tile besides the pill and the edge.
+              <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile overrun" role="img" aria-label="Court 3: overrun">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">MS R2</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">24′ on court · +4 over slot · started 6 min late</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 10:15 · C. Le vs D. Pham</p>
+                <span class="ready-rest">C. Le · ready in 2 min</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Overrun, started late, queued match still resting.</b> The queue block already knows the next match must wait — the board says so without a countdown.
+              <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile overrun" role="img" aria-label="Court 3: overrun">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">MD R1</span><br>An Nguyen / Bao Tran vs C. Le / D. Pham<br><span class="elapsed over">35′ on court · +15 over slot</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 10:50 · E. Vo / F. Do vs G. Ha / H. Ly</p>
+                <span class="ready-busy">E. Vo · on Court 5</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Overrun, and the queued match is blocked.</b> An overrun court is excluded from the Next transitions panel — it is this tile and the alert, not a countdown.
+              <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile overrun" role="img" aria-label="Court 3: overrun">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">XD R1</span><br>A. Nguyen / K. Anh vs B. Tran / M. Linh<br><span class="elapsed over">27′ on court · +7 over slot · started 4 min early</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 10:30 · C. Le / D. Pham vs E. Vo / F. Do</p>
+                <span class="q-line">Teams not assigned</span>
+              </div>
+              <p class="tile-foot">Open score desk</p>
+            </div>
+            <figcaption><b>Overrun although it started early.</b> A late start is the usual cause, not the only one — a long match overruns on its own.
+              <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile overrun" role="img" aria-label="Court 3: overrun">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill overrun">Overrun</span></div>
+              <p class="tile-primary"><span class="tag">MS R1</span><br>An Nguyen vs Bao Tran<br><span class="elapsed over">32′ on court · +12 over slot</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">View match</p>
+            </div>
+            <figcaption><b>Read-only session.</b> An overrun is visible to a reader too — the board is shared, and only the chasing surfaces are editor-gated.
+              <span class="aria">aria-label="Court 3: overrun"</span></figcaption>
+          </figure>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">State 3 of 5 · violet</div>
+      <h2>5. <code>free-ready</code> — the court is free and its next match can start</h2>
+    </div>
+    <p class="lede">
+      This state <em>requires</em> a queued match, so it never falls back to the &quot;ready to place&quot;
+      line. It is also the only state that raises the dispatch prompt — the one action the desk wants taken.
+    </p>
+
+    <div class="panel">
+      <div class="panel-head"><h4>Court board</h4><div class="right">Fri 16 Oct · 8 courts</div></div>
+      <div class="panel-body">
+        <div class="board">
+
+          <figure class="cell">
+            <div class="tile free-ready" role="img" aria-label="Court 3: free ready">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-ready">Ready</span></div>
+              <p class="tile-primary"><span>Free · next match ready</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">Open next match</p>
+            </div>
+            <figcaption><b>Baseline ready.</b> The court is empty, the queued match has both sides and every player has had their rest. Needs action shows &quot;Court 3 is ready&quot; with a Start button.
+              <span class="aria">aria-label="Court 3: free ready"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile free-ready" role="img" aria-label="Court 3: free ready">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-ready">Ready</span></div>
+              <p class="tile-primary"><span>Free · next match ready</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-now">Ready now</span>
+              </div>
+              <p class="tile-foot">View next match</p>
+            </div>
+            <figcaption><b>Read-only session.</b> The dispatch prompt in Needs action is editor-gated too, so a reader sees the state and no way to act on it.
+              <span class="aria">aria-label="Court 3: free ready"</span></figcaption>
+          </figure>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">State 4 of 5 · neutral</div>
+      <h2>6. <code>free-blocked</code> — the court is free but its next match is not ready</h2>
+    </div>
+    <p class="lede">
+      Also requires a queued match. Asks nothing of the moderator: the line under the tile names the
+      specific reason instead. The chip is a deeper grey than <code>idle</code>'s, which is the only thing
+      separating the two fills.
+    </p>
+
+    <div class="panel">
+      <div class="panel-head"><h4>Court board</h4><div class="right">Fri 16 Oct · 8 courts</div></div>
+      <div class="panel-body">
+        <div class="board">
+
+          <figure class="cell">
+            <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <p class="tile-primary"><span>Free · next match not ready</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-rest">C. Le · ready in 4 min</span>
+              </div>
+              <p class="tile-foot">Open next match</p>
+            </div>
+            <figcaption><b>Resting.</b> Warn ink. The name is the player who has not served the rest gap, and the countdown is always at least 1 — a 20-second wait reads &quot;1 min&quot;, never &quot;0 min&quot;.
+              <span class="aria">aria-label="Court 3: free blocked"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <p class="tile-primary"><span>Free · next match not ready</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-busy">C. Le · on Court 2</span>
+              </div>
+              <p class="tile-foot">Open next match</p>
+            </div>
+            <figcaption><b>A player is on another court.</b> Danger ink and a hard block — the server refuses the start. The blocking court is named, which is what a moderator chases.
+              <span class="aria">aria-label="Court 3: free blocked"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <p class="tile-primary"><span>Free · next match not ready</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-busy">C. Le · on Court ?</span>
+              </div>
+              <p class="tile-foot">Open next match</p>
+            </div>
+            <figcaption><b>Player busy, blocking court unknown.</b> The conflict still counts — a matching match with no court on it yields a &quot;?&quot; rather than suppressing the row.
+              <span class="aria">aria-label="Court 3: free blocked"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <p class="tile-primary"><span>Free · next match not ready</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · TBC vs TBC</p>
+                <span class="q-line">Teams not assigned</span>
+              </div>
+              <p class="tile-foot">Open next match</p>
+            </div>
+            <figcaption><b>Teams not assigned.</b> Muted, not warn: a bracket that has not been decided yet is normal, not a problem to chase. This is the check that runs <em>first</em> in <code>getMatchReadiness</code>.
+              <span class="aria">aria-label="Court 3: free blocked"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill free-blocked">Waiting</span></div>
+              <p class="tile-primary"><span>Free · next match not ready</span></p>
+              <div class="tile-queue">
+                <p class="q-next">Next: 09:40 · C. Le vs D. Pham</p>
+                <span class="ready-rest">C. Le · ready in 4 min</span>
+              </div>
+              <p class="tile-foot">View next match</p>
+            </div>
+            <figcaption><b>Read-only session.</b> A reader still sees why the court is waiting — the reason is information, not an action.
+              <span class="aria">aria-label="Court 3: free blocked"</span></figcaption>
+          </figure>
+
+          <figure class="cell" style="grid-column: 1 / -1; max-width: 360px;">
+            <div class="tile free-blocked" role="img" aria-label="Court 3: free blocked">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <p class="tile-primary"><span>Idle</span></p>
+              <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
+            </div>
+            <figcaption><b>Why the two greys have to separate.</b> This is the <code>idle</code> pill and edge on a <code>free-blocked</code> tile — i.e. what the board would look like if the two chips shared a fill. The pills stay distinct; the <em>edges</em> are shared on purpose, because neither state asks for anything.
+              <span class="aria">Deliberately mismatched — shown only as a comparison.</span></figcaption>
+          </figure>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">State 5 of 5 · neutral, lightest</div>
+      <h2>7. <code>idle</code> — nothing on court and nothing scheduled</h2>
+    </div>
+    <p class="lede">
+      No playing match and no scheduled match with a time. It can still be <em>actionable</em>: if a ready
+      match holds no court, an idle tile is an enabled button offering that pairing.
+    </p>
+
+    <div class="panel">
+      <div class="panel-head"><h4>Court board</h4><div class="right">Fri 16 Oct · 8 courts</div></div>
+      <div class="panel-body">
+        <div class="board">
+
+          <figure class="cell">
+            <div class="tile idle" role="img" aria-label="Court 3: idle">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <p class="tile-primary"><span>Idle</span></p>
+              <div class="tile-queue">
+                <p class="q-next">No match scheduled · ready to place: E. Vo vs F. Do</p>
+              </div>
+              <p class="tile-foot">Open next match</p>
+            </div>
+            <figcaption><b>Idle, but actionable.</b> A ready match that a build has not placed yet. The same suggestion appears on every idle court — one shared pool, first offered only.
+              <span class="aria">aria-label="Court 3: idle"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile idle" role="img" aria-label="Court 3: idle">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <p class="tile-primary"><span>Idle</span></p>
+              <div class="tile-queue">
+                <p class="q-next">No match scheduled · ready to place: E. Vo vs F. Do</p>
+                <p class="q-next" style="margin-top:4px">· 3 more waiting</p>
+              </div>
+              <p class="tile-foot">Open next match</p>
+            </div>
+            <figcaption><b>Several pairings waiting.</b> The count is stated once rather than a second pairing being named — the desk starts one match at a time.
+              <span class="aria">aria-label="Court 3: idle"</span></figcaption>
+          </figure>
+
+          <figure class="cell">
+            <div class="tile idle disabled" role="img" aria-label="Court 3: idle">
+              <div class="tile-head"><span class="tile-court"><span class="court-badge">3</span>Court 3</span><span class="pill idle">Idle</span></div>
+              <p class="tile-primary"><span>Idle</span></p>
+              <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
+            </div>
+            <figcaption><b>Idle with no target — the disabled tile.</b> Nothing on this court and nothing waiting anywhere. The button is <code>disabled</code>: 80% opacity, a default cursor, and the hover lift and border swap switched off. No footer action.
+              <span class="aria">aria-label="Court 3: idle"</span></figcaption>
+          </figure>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">Cross-cutting</div>
+      <h2>8. The pieces every tile is assembled from</h2>
+    </div>
+
+    <h3>8.1 The four readiness lines</h3>
+    <p class="lede">
+      Only drawn when the court has a queued match with a time. Evaluated in this order, first match wins;
+      the last three make the court <code>free-blocked</code>, and <code>ready</code> is what makes it
+      <code>free-ready</code>.
+    </p>
+    <table class="ref">
+      <thead><tr><th style="width:140px">Readiness</th><th style="width:250px">Rendered text</th><th style="width:150px">Ink</th><th>Predicate</th></tr></thead>
+      <tbody>
+        <tr><td><b>teams-missing</b></td><td>Teams not assigned</td><td>muted (inherited)</td><td>1st — the queued match has no player ids at all</td></tr>
+        <tr><td><b>player-busy</b></td><td><span class="ready-busy">An Nguyen · on Court 2</span></td><td>danger foreground</td><td>2nd — one of its players is <code>in-progress</code> elsewhere; the court is &quot;?&quot; when unknown</td></tr>
+        <tr><td><b>resting</b></td><td><span class="ready-rest">An Nguyen · ready in 4 min</span></td><td>warn foreground</td><td>3rd — a player's last finished match ended fewer than the rest-gap minutes ago</td></tr>
+        <tr><td><b>ready</b></td><td><span class="ready-now">Ready now</span></td><td>primary ink, semibold</td><td>4th — none of the above</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:24px">8.2 The queue block's three outcomes</h3>
+    <table class="ref">
+      <thead><tr><th style="width:340px">Condition</th><th>What renders</th></tr></thead>
+      <tbody>
+        <tr><td>The court has a scheduled match with a time</td><td><code>Next: 09:40 · C. Le vs D. Pham</code>, then the readiness line</td></tr>
+        <tr><td>No such match, but a match on this day is ready and holds no court</td><td><code>No match scheduled · ready to place: E. Vo vs F. Do</code>, plus <code>· N more waiting</code> when more than one pairing waits</td></tr>
+        <tr><td>Neither</td><td><code>Nothing queued</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:24px">8.3 The footer action (five outcomes)</h3>
+    <table class="ref">
+      <thead><tr><th>The tile has</th><th style="width:220px">Editor session</th><th style="width:220px">Read-only session</th></tr></thead>
+      <tbody>
+        <tr><td>A match in progress</td><td><b style="color:var(--primary-ink)">Open score desk</b></td><td><b style="color:var(--primary-ink)">View match</b></td></tr>
+        <tr><td>No match in progress, but a target exists</td><td><b style="color:var(--primary-ink)">Open next match</b></td><td><b style="color:var(--primary-ink)">View next match</b></td></tr>
+        <tr><td>No target at all</td><td colspan="2" style="color:var(--muted-foreground)">nothing is drawn — and the tile is disabled</td></tr>
+      </tbody>
+    </table>
+    <p class="lede" style="margin-top:8px">
+      The target is the playing match, else the queued match, else the shared ready-and-unplaced pairing.
+      That last fallback is why an <code>idle</code> court can still open something.
+    </p>
+
+    <h3 style="margin-top:24px">8.4 The five conflict kinds</h3>
+    <p class="lede" style="margin-bottom:8px">
+      The tile no longer carries conflicts — a schedule conflict reaches a moderator only through the
+      start confirmation, which lists every reason for the match being started. The organiser's Schedule
+      block names the same five, grouped by kind. The strings live in
+      <code>src/lib/tournament/schedule-conflicts.ts</code>.
+    </p>
+    <table class="ref">
+      <thead><tr><th style="width:210px">Kind</th><th>Reads as</th></tr></thead>
+      <tbody>
+        <tr><td><code>court_overlap</code></td><td>Same court and time as another match</td></tr>
+        <tr><td><code>rest_shortfall</code></td><td>A player won't have had full rest</td></tr>
+        <tr><td><code>break</code></td><td>Scheduled during a break</td></tr>
+        <tr><td><code>past_closing</code></td><td>Ends after the courts close</td></tr>
+        <tr><td><code>before_prerequisite</code></td><td>Scheduled before a match it depends on</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:24px">8.5 Tile anatomy, in render order</h3>
+    <table class="ref">
+      <thead><tr><th style="width:200px">Part</th><th>Renders as</th><th style="width:230px">Shown when</th></tr></thead>
+      <tbody>
+        <tr><td><b>Court badge and number</b></td><td>A <code>bg-foreground/10</code> badge with the court number, then &quot;Court N&quot; in the display face. The badge is backdrop-agnostic on purpose: it sits on five different tile fills, so an ink solved against one surface has no fixed pair to clear.</td><td>always</td></tr>
+        <tr><td><b>State pill</b></td><td><code>COURT_STATE_LABEL[state]</code> uppercased on <code>COURT_STATE_CHIP[state]</code></td><td>always</td></tr>
+        <tr><td><b>Primary line</b></td><td>Playing: the match tag, the two sides, then <code>N′ on court</code> with any <code>· +N over slot</code> and <code>· started N min late / early</code>. Free: &quot;Free · next match ready&quot;, &quot;Free · next match not ready&quot; or &quot;Idle&quot;.</td><td>always</td></tr>
+        <tr><td><b>Divider and queue block</b></td><td>The separated block beneath the names — see 8.2</td><td>always</td></tr>
+        <tr><td><b>Footer action</b></td><td>An accent label naming what the tile opens — see 8.3</td><td>only when there is a target</td></tr>
+        <tr><td><b>Accessible name</b></td><td><code>Court N: &lt;state, hyphens read as spaces&gt;</code> — the state, and nothing else. The tile's own <code>aria-label</code> replaces whatever text is inside it for a screen reader, so it names the state rather than repeating the queue.</td><td>always</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:24px">8.6 Board frame, and what is <em>not</em> a state</h3>
+    <table class="ref">
+      <thead><tr><th style="width:200px">Frame element</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td>Panel title</td><td>&quot;Court board&quot;, with the right slot reading the selected day and its court count — <code>Fri 16 Oct · 8 courts</code></td></tr>
+        <tr><td>Day selector</td><td>Only when the tournament has playing days. Each day is a toggle; the right side states the day's plan — &quot;Last match scheduled to finish 18:20 · Day closes 17:30&quot;, adding &quot;· Scheduled 42 min past the day's close&quot; in warn ink when the plan overruns.</td></tr>
+        <tr><td>Tile grid</td><td>One column, two at <code>sm</code>, four at <code>lg</code>. A day's courts come from its day-court rows; a day with no rows means every court in the venue.</td></tr>
+        <tr><td>Untimed note</td><td>Above the board, when any match has no usable time: &quot;3 matches have no scheduled time, so they are not counted on any day.&quot; Deliberately neutral — a plan fact, not an operational metric.</td></tr>
+        <tr><td>Who sees it</td><td>Everyone with access. Only Needs action, Next transitions and Court progress are withheld from a read-only session.</td></tr>
+        <tr><td>A day with no courts</td><td>The grid is empty and <b>no</b> empty-state panel is drawn — the header still reads &quot;· 0 courts&quot;. Emptying a day in the schedule is the way to see it.</td></tr>
+        <tr><td>What the board does not read</td><td>The legacy <code>courts.status</code> column (<code>free</code> / <code>in-progress</code> / <code>finished</code>). Every tile's state is derived from matches; nothing on the desk paints the stored court status.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">Cross-cutting</div>
+      <h2>9. Invariants the sweep pins</h2>
+    </div>
+    <table class="ref">
+      <thead><tr><th>The rule</th><th style="width:300px">Why it exists</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>The pill must be a <b>discrete surface</b> on its own tile: the chip's fill differs from the tile's by at least 8 RGB units — the tightest separation the shipped treatments already produce (<code>free-ready</code> at 8.1).</td>
+          <td><code>playing</code> once shipped with its tile painting the pill's own fill — 1.000:1, an uppercase word in green on green with no edge at all — and nothing caught it, because the only scan that had ever run hit an empty tournament with no toned tile.</td>
+        </tr>
+        <tr>
+          <td>Colour is never the only channel.</td>
+          <td>Every pill carries a word as well as a fill, and each of the five states has its own label — so the board is readable with no hue at all.</td>
+        </tr>
+        <tr>
+          <td>All five states at once only ever happens in a fixture.</td>
+          <td>A live tournament cannot reach it — a court is playing or it is not. Showing the whole wall needs a fixture that plants the results, the clock and the queue.</td>
+        </tr>
+        <tr>
+          <td>Every chip clears 4.5:1 between ink and fill, and every state stays distinct in grayscale and under deuteranopia.</td>
+          <td>Measured by flattening the translucent fills the way a browser paints them — chip over tile over page — not by comparing raw computed values. No minimum margin is asserted; a threshold would be a number picked to pass.</td>
+        </tr>
+        <tr>
+          <td><code>free-blocked</code> and <code>idle</code> share the resting hairline; every other state has its own edge.</td>
+          <td>Neither asks for anything. Giving the blocked state its own edge would put two amber surfaces on one tile — the pill already carries that signal.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===================================================================== -->
+  <section class="section">
+    <div class="section-head">
+      <div class="kicker">Reference</div>
+      <h2>10. Where each state comes from</h2>
+    </div>
+    <table class="ref">
+      <thead><tr><th style="width:420px">Surface</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td>The five states, their labels, pill and tile tokens</td><td><code>src/lib/tournament/court-state.ts</code></td></tr>
+        <tr><td><code>deriveCourtState</code>, <code>getMatchReadiness</code>, schedule variance, projected finish</td><td><code>src/lib/tournament/desk.ts</code></td></tr>
+        <tr><td>Tile JSX, board header, day selector, queue block, footer, aria-label</td><td><code>src/routes/tournaments/$tournamentId/desk.tsx</code></td></tr>
+        <tr><td>Which slot measures a match (group vs knockout pacing)</td><td><code>src/lib/tournament/desk.ts</code> — <code>deskKindPhase</code></td></tr>
+        <tr><td>Expected end for a running match — the projection, not a promise</td><td><code>src/lib/tournament/in-progress.ts</code></td></tr>
+        <tr><td>Conflict kind labels and their reading order</td><td><code>src/lib/tournament/schedule-conflicts.ts</code></td></tr>
+        <tr><td>Conflict detection (the rules)</td><td><code>schedule_conflicts</code> RPC, <code>supabase/migrations</code></td></tr>
+        <tr><td>Colour, contrast, grayscale and deuteranopia sweeps</td><td><code>e2e/states.spec.ts</code></td></tr>
+        <tr><td>Colour tokens mirrored in this page</td><td><code>src/styles.css</code> — <code>:root</code></td></tr>
+      </tbody>
+    </table>
+    <div class="caution" style="margin-top:16px">
+      <strong>This page is a hand-written mirror.</strong> The tokens in <code>:root</code> above are copied
+      from <code>src/styles.css</code>, and the utility classes are reproduced by hand, so a token change in
+      the app will not move this page. Treat it as documentation of the vocabulary, not a second source of
+      truth — the app is the only thing that renders.
+    </div>
+    <p class="lede" style="margin-top:16px">
+      Adjacent but deliberately separate: the <b>Next transitions</b> panel answers &quot;which courts are
+      about to change hands&quot;, with two kinds of its own — <em>Expected finish</em> (projected, its Due
+      cell prefixed <code>~</code>) and <em>Scheduled start</em>. It is derived from these court states, so
+      it cannot disagree with the board, and an already-overrun court is excluded from it.
+    </p>
+  </section>
+
+</div>
+</body>
+</html>

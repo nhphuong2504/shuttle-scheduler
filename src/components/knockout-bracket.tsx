@@ -1,6 +1,7 @@
 /**
- * A single-elimination bracket drawn as a tree: one column per round, the first round on the
- * left and the final on the right, with each pair of matches joined to the match it feeds.
+ * A single-elimination bracket drawn as a mirrored tree: the top half opens on the left, the
+ * bottom half on the right, and both close on the final in the middle, with each pair of matches
+ * joined to the match it feeds.
  *
  * Pure layout. Which entrant is called what, and which match is a bye, arrive from the caller —
  * the same `label` and `isByeMatch` the list this replaces used — so this file decides how a
@@ -15,12 +16,14 @@
  *
  * Colour follows the system's rule that a screen where nothing needs attention looks nearly
  * grey. A winner is marked by weight, a check and a word; no row is tinted. The only hue on the
- * tree is the one `StatusPill` already paints on a live match.
+ * tree is the one `StatusPill` already paints on a live match. The joining lines carry the one
+ * other signal: the route out of a decided match is drawn in ink, a route not yet played is faint,
+ * so how far a draw has got reads from across the room.
  *
- * Geometry: every column splits its height equally between its pairs, and each pair splits
- * equally between its two matches. That puts the centre of a pair exactly at the centre of the
- * match in the next column, so the joining lines need no measuring — a vertical bar between the
- * two matches' centres and a stub out of its middle.
+ * Geometry: every column splits its height equally between its slots, and each slot centres its
+ * card. Two neighbouring slots meet exactly at the centre of the match they feed in the next
+ * column, so the joining lines need no measuring — each match draws a stub out of its card, half
+ * of the bar to that meeting point, and the stub into the next round.
  */
 
 import { Trophy } from "lucide-react";
@@ -184,6 +187,99 @@ function MatchCard({
   );
 }
 
+/** A match whose winner is known moves on, so the line out of it is a played path. */
+function advanced(match: TierDrawMatch | undefined): boolean {
+  if (!match) return false;
+  if (isByeMatch(match)) return true;
+  return (match.status === "reported" || match.status === "walkover") && !!match.winner_id;
+}
+
+/**
+ * The line from one match to the match it feeds: a stub out of the card, half of the bar
+ * that joins it to its pair, and the stub into the next round. Each match draws its own
+ * half, so a played match inks its own route while its partner's stays faint.
+ *
+ * `toward` is the side the next round lies on: right for the top half, left for the bottom.
+ * `place` says which half of the bar is this match's; a lone match (a semifinal, which feeds
+ * the final straight across) has no bar at all.
+ */
+function Connector({
+  toward,
+  place,
+  played,
+}: {
+  toward: "right" | "left";
+  place: "upper" | "lower" | "single";
+  played: boolean;
+}) {
+  const weight = played ? 2 : 1;
+  const tone = played ? "bg-foreground" : "bg-border-control/50";
+  const half = `${weight / 2}px`;
+  const exitY = place === "upper" ? "100%" : place === "lower" ? "0%" : "50%";
+  return (
+    <>
+      <span
+        aria-hidden
+        className={cn("pointer-events-none absolute", tone)}
+        style={{ top: `calc(50% - ${half})`, [toward]: `calc(-1 * ${ARM})`, width: ARM, height: weight }}
+      />
+      {place === "single" ? null : (
+        <span
+          aria-hidden
+          className={cn("pointer-events-none absolute", tone)}
+          style={{
+            top: place === "upper" ? `calc(50% - ${half})` : `calc(0% - ${half})`,
+            bottom: place === "upper" ? `calc(0% - ${half})` : `calc(50% - ${half})`,
+            [toward]: `calc(-1 * ${ARM} - ${half})`,
+            width: weight,
+          }}
+        />
+      )}
+      <span
+        aria-hidden
+        className={cn("pointer-events-none absolute", tone)}
+        style={{
+          top: `calc(${exitY} - ${half})`,
+          [toward]: `calc(-2 * ${ARM})`,
+          width: ARM,
+          height: weight,
+        }}
+      />
+    </>
+  );
+}
+
+/** A slot with no row yet: the road to it is known even while nobody is on it. */
+function EmptyCard({ bracketSize, round, slot }: { bracketSize: number; round: number; slot: number }) {
+  return (
+    <div className="w-full rounded-md border border-dashed border-border-control bg-card">
+      <div className="divide-y divide-hairline">
+        {(["a", "b"] as const).map((side) => (
+          <Side
+            key={side}
+            name={feederLabel(bracketSize, round, slot, side)}
+            placeholder
+            won={false}
+            lost={false}
+            scores={[]}
+            against={[]}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A single-elimination bracket drawn mirrored: the top half runs left to right, the bottom
+ * half right to left, and the two meet at the final in the middle, with the champion above it.
+ * Both semifinals sit level with the final, so the decisive match is the centre of the picture
+ * rather than the far edge of a scroll.
+ *
+ * Every slot of every round is drawn, from the bracket's size rather than from the rows that
+ * exist, so a draw that has only played its first round still shows its whole road. A slot
+ * without a row is a dashed card naming the matches that feed it.
+ */
 export function KnockoutBracket({
   rounds,
   bracketSize,
@@ -198,14 +294,74 @@ export function KnockoutBracket({
   /** The winner of the final, named; null while the final is undecided. */
   champion: string | null;
 }) {
-  const columns = [...rounds.entries()].sort(([a], [b]) => a - b);
+  const roundCount = Math.max(1, Math.ceil(Math.log2(Math.max(2, bracketSize))), ...rounds.keys());
+  const bySlot = new Map<string, TierDrawMatch>();
+  for (const [round, matches] of rounds) {
+    for (const match of matches) bySlot.set(`${round}:${match.slot}`, match);
+  }
+  const at = (round: number, slot: number) => bySlot.get(`${round}:${slot}`);
+  const slotsIn = (round: number) => Math.max(1, 2 ** (roundCount - round));
 
   // Every card in a bracket is as wide as the longest match, so they stay level.
   let mostGames = 2;
-  for (const [, matches] of columns) {
+  for (const matches of rounds.values()) {
     for (const match of matches) mostGames = Math.max(mostGames, parseGames(match.games).length);
   }
   const cardRem = CARD_BASE_REM + SCORE_COLUMN_REM * (mostGames - 2);
+
+  const card = (round: number, slot: number) => {
+    const match = at(round, slot);
+    return match ? (
+      <MatchCard match={match} bracketSize={bracketSize} label={label} />
+    ) : (
+      <EmptyCard bracketSize={bracketSize} round={round} slot={slot} />
+    );
+  };
+
+  // One column per round on each side of the final, the bottom half's in reverse order.
+  const sideRounds = Array.from({ length: roundCount - 1 }, (_, index) => index + 1);
+  const halfColumn = (round: number, half: "top" | "bottom") => {
+    const total = slotsIn(round);
+    const perHalf = total / 2;
+    const first = half === "top" ? 1 : perHalf + 1;
+    const slots = Array.from({ length: perHalf }, (_, index) => first + index);
+    const toward = half === "top" ? "right" : "left";
+    const name = roundName(bracketSize, round);
+    return (
+      <section
+        key={`${half}-${round}`}
+        aria-label={`${name}, ${half} half`}
+        className="flex shrink-0 flex-col"
+        style={{
+          width: `calc(${cardRem}rem + ${ARM} * 2)`,
+          [toward === "right" ? "paddingRight" : "paddingLeft"]: `calc(${ARM} * 2)`,
+        }}
+      >
+        <h4
+          className={cn(
+            "border-b border-hairline pb-1.5 text-sm font-semibold text-muted-foreground",
+            half === "bottom" && "text-right",
+          )}
+        >
+          {name}
+        </h4>
+        <div className="flex flex-1 flex-col">
+          {slots.map((slot) => (
+            <div key={slot} className="relative flex flex-1 items-center py-3">
+              {card(round, slot)}
+              <Connector
+                toward={toward}
+                place={perHalf === 1 ? "single" : slot % 2 === 1 ? "upper" : "lower"}
+                played={advanced(at(round, slot))}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const final = at(roundCount, 1);
 
   return (
     // A box that scrolls must be reachable by keyboard, or a sideways scroll is a mouse-only
@@ -216,84 +372,58 @@ export function KnockoutBracket({
       tabIndex={0}
       className="max-w-full overflow-x-auto rounded-md pb-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
-      <div className="flex min-w-max">
-        {columns.map(([round, matches], index) => {
-          // Two consecutive slots feed one match in the next round, so they are one pair.
-          const pairs = new Map<number, TierDrawMatch[]>();
-          for (const match of matches) {
-            const key = Math.ceil(match.slot / 2);
-            pairs.set(key, [...(pairs.get(key) ?? []), match]);
-          }
-          // Every round is joined onward: the final feeds the champion, which closes the tree.
-          const joined = true;
-
-          return (
-            <section
-              key={round}
-              aria-label={roundName(bracketSize, round)}
-              className="flex shrink-0 flex-col"
-              style={{
-                width: joined ? `calc(${cardRem}rem + ${ARM} * 2)` : `${cardRem}rem`,
-                paddingRight: joined ? `calc(${ARM} * 2)` : undefined,
-              }}
-            >
-              <h4 className="pb-1 text-sm font-semibold text-muted-foreground">
-                {roundName(bracketSize, round)}
-              </h4>
-              <div className="flex flex-1 flex-col">
-                {[...pairs.entries()].map(([key, pair]) => (
-                  <div key={key} className="relative flex flex-1 flex-col">
-                    {pair.map((match) => (
-                      <div key={match.id} className="flex flex-1 items-center pb-1 pt-4">
-                        <MatchCard match={match} bracketSize={bracketSize} label={label} />
-                      </div>
-                    ))}
-                    {joined ? (
-                      <>
-                        {/* The bar joins the two matches; a lone match needs only the stub. */}
-                        {pair.length > 1 ? (
-                          <span
-                            aria-hidden
-                            className="pointer-events-none absolute rounded-r-md border-y border-r border-border-control"
-                            style={{ top: "25%", bottom: "25%", right: `-${ARM}`, width: ARM }}
-                          />
-                        ) : null}
-                        <span
-                          aria-hidden
-                          className="pointer-events-none absolute border-t border-border-control"
-                          style={{ top: "50%", right: `calc(${ARM} * -2)`, width: ARM }}
-                        />
-                      </>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-          );
-        })}
+      <div className="mx-auto flex min-h-64 w-max">
+        {sideRounds.map((round) => halfColumn(round, "top"))}
 
         <section
-          aria-label="Champion"
+          aria-label={roundName(bracketSize, roundCount)}
           className="flex shrink-0 flex-col"
           style={{ width: `${cardRem}rem` }}
         >
-          <h4 className="pb-1 text-sm font-semibold text-muted-foreground">Champion</h4>
-          <div className="flex flex-1 items-center pb-1 pt-4">
-            {champion ? (
-              <div className="flex w-full items-center gap-2 rounded-md border border-hairline bg-success-surface px-2.5 py-2 text-success-foreground">
-                <Trophy className="size-5 shrink-0" aria-hidden />
-                <span className="min-w-0 break-words font-display text-base font-bold leading-tight">
-                  {champion}
-                </span>
-              </div>
-            ) : (
-              <div className="flex w-full items-center gap-2 rounded-md border border-dashed border-border-control px-2.5 py-2 text-t4 text-muted-foreground">
-                <Trophy className="size-4 shrink-0" aria-hidden />
-                No champion yet
-              </div>
-            )}
+          <h4 className="border-b border-hairline pb-1.5 text-center text-sm font-semibold text-muted-foreground">
+            {roundName(bracketSize, roundCount)}
+          </h4>
+          <div className="relative flex flex-1 flex-col">
+            <div className="flex flex-1 items-center py-3">{card(roundCount, 1)}</div>
+
+            {/* The champion stands over the final, joined to it by one short line. */}
+            <span
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute left-1/2 -translate-x-1/2",
+                advanced(final) ? "w-0.5 bg-foreground" : "w-px bg-border-control/50",
+              )}
+              style={{ bottom: "calc(50% + 2.5rem)", height: "1.25rem" }}
+            />
+            <section
+              aria-label="Champion"
+              className="absolute inset-x-0"
+              style={{ bottom: "calc(50% + 3.75rem)" }}
+            >
+              {champion ? (
+                <div className="flex w-full items-center gap-2.5 rounded-lg border border-hairline bg-success-surface px-3 py-2 text-success-foreground">
+                  <Trophy className="size-5 shrink-0" aria-hidden />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-t2 font-semibold uppercase tracking-wide">Champion</span>
+                    <span className="min-w-0 break-words font-display text-base font-bold leading-tight">
+                      {champion}
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex w-full items-center gap-2.5 rounded-lg border border-dashed border-border-control bg-card px-3 py-2 text-muted-foreground">
+                  <Trophy className="size-4 shrink-0" aria-hidden />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-t2 font-semibold uppercase tracking-wide">Champion</span>
+                    <span className="text-t4 italic">Decided by the final</span>
+                  </span>
+                </div>
+              )}
+            </section>
           </div>
         </section>
+
+        {[...sideRounds].reverse().map((round) => halfColumn(round, "bottom"))}
       </div>
     </div>
   );
