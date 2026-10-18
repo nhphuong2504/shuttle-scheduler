@@ -29,8 +29,9 @@ Colour is never the only channel: every row carries words, and chips carry a gly
 
 ## Schedule conflict reasons
 
-One list, shown as a chip on the court tile (moderator) and grouped in the Schedule block
-(organiser). Defined in `src/lib/tournament/schedule-conflicts.ts`.
+One list, grouped in the Schedule block (organiser). The desk no longer draws a chip on the
+court tile; a moderator only meets a conflict in the start confirmation dialog. Defined in
+`src/lib/tournament/schedule-conflicts.ts`.
 
 | Kind | Reads as |
 | --- | --- |
@@ -65,7 +66,6 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 - **Waiting** is neutral. It asks nothing of the moderator; the line beneath it gives the
   specific reason ("A. Nguyen · ready in 4 min", "A. Nguyen · on Court 2", "Teams not assigned").
   Its chip is a deeper grey than Idle so the two stay distinct fills.
-- The schedule chip reads "Schedule review — …" and is separate from the state pill.
 
 ## Toasts after a result
 

@@ -19,11 +19,10 @@ import { settleAnimations } from "./fixtures/settle";
  * shown, which is a claim no unit test can make about the real cascade and real focus order.
  *
  * It is also where the role boundary is pinned. The organiser gets a tournament-wide block
- * on the Schedule page; a moderator gets a chip on the matches in front of them and nothing
- * wider, because a desk shows every court of the day and is not scoped to one person. And a
- * viewer - who has no business reconstructing the running order from its conflicts - must
- * make no request for it at all, which is asserted by counting requests rather than by
- * reading a flag.
+ * on the Schedule page; a moderator gets only the start confirmation, because a desk shows
+ * every court of the day and is not scoped to one person. And a viewer - who has no business
+ * reconstructing the running order from its conflicts - must make no request for it at all,
+ * which is asserted by counting requests rather than by reading a flag.
  *
  * ## Why the presets differ between the describes
  *
@@ -166,7 +165,7 @@ test.describe("the organiser's conflict block", () => {
   });
 });
 
-test.describe("the desk's conflict chip and start confirmation", () => {
+test.describe("the desk's start confirmation", () => {
   test.use({
     appMock: {
       preset: "states",
@@ -175,28 +174,6 @@ test.describe("the desk's conflict chip and start confirmation", () => {
         conflict(fixtureMatchId(3), "court_overlap", { court_id: fixtureCourtId(3) }),
       ],
     },
-  });
-
-  test("chips the one court whose match is in conflict, in words not only colour", async ({
-    page,
-  }) => {
-    await page.goto(routes.desk, { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
-    await settleAnimations(page, "main");
-
-    const conflicted = page.getByRole("button", { name: /^Court 3:/ }).first();
-    await expect(conflicted).toContainText("Schedule review");
-    await expect(conflicted).toContainText("Same court and time as another match");
-    // The same reason is in the accessible name, because the tile's `aria-label` would
-    // otherwise replace the chip's text for a screen reader.
-    await expect(conflicted).toHaveAccessibleName(
-      /Schedule review: Same court and time as another match/,
-    );
-
-    // A court whose match has no conflict carries no chip, so the warning stays attached
-    // to the match rather than smeared across the board.
-    const clean = page.getByRole("button", { name: /^Court 1:/ }).first();
-    await expect(clean).not.toContainText("Schedule review");
   });
 
   test("asks before starting a conflicted match, and starts only on Start anyway", async ({
@@ -237,9 +214,7 @@ test.describe("the desk's conflict chip and start confirmation", () => {
     expect(request.postDataJSON()).toMatchObject({ p_match_id: fixtureMatchId(3) });
   });
 
-  test("introduces no accessibility violation with the chip and dialog present", async ({
-    page,
-  }) => {
+  test("introduces no accessibility violation with the dialog present", async ({ page }) => {
     await page.goto(routes.desk, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await settleAnimations(page, "main");
