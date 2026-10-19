@@ -146,6 +146,14 @@ On the console the page header scrolls away, so the clock, the badge and Refresh
 console's own bar beside the day picker; the header's copy is `display: none` there, so the
 badge's live region is never announced twice.
 
+**While updates are paused** (Offline or Connection problem - not Connecting, which is the first
+moments of a reconnect), the Desk holds its numbers at the moment the connection dropped
+(`desk-paused.ts`): lateness, overruns and when a court frees are computed at that instant, since
+the data is that old, while the clock keeps running. A bar under the day bar says "No updates since
+14:37", each panel carries "as of 14:37", and those minutes and times go grey. In the match dialog
+every control that writes - start, score, walkover, void, move, clear - is locked, with the reason
+at the top; Cancel stays usable. Opening a match is still allowed: it is a read.
+
 ## Recording a result: when did it finish?
 
 Placement and knockout matches only. Chips "Just now / 5 min ago / 10 min ago" plus "Other

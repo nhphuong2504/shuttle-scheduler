@@ -578,6 +578,28 @@ for (const cell of MATRIX_CELLS) {
       await expect(panel.getByText("Notify players: coming soon")).toBeVisible();
     });
 
+    test("going offline pauses the Desk: says since when, marks the panels, locks writes", async ({
+      page,
+    }) => {
+      await installAppMock(page, { preset: "states", role: "user" });
+      await openCell(page, routes.desk, cell);
+      await expect(page.getByRole("heading", { name: "Up next" })).toBeVisible();
+
+      await page.context().setOffline(true);
+
+      await expect(page.getByText(/No updates since \d{1,2}:\d{2}\./)).toBeVisible();
+      // Each of the three panels says what moment its numbers are from.
+      await expect(page.getByText(/^as of \d{1,2}:\d{2}$/)).toHaveCount(3);
+
+      // Opening a match still works - it is a read - but nothing in it writes.
+      await page.getByRole("button", { name: "Start", exact: true }).first().click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByText(/No connection since/)).toBeVisible();
+      await expect(dialog.getByRole("button", { name: /Start match/ })).toBeDisabled();
+
+      await page.context().setOffline(false);
+    });
+
     test("the state chips survive grayscale and deuteranopia", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
       await openCell(page, routes.desk, cell);

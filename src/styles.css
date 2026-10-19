@@ -514,3 +514,12 @@ html [data-sonner-toaster][data-sonner-theme] {
   --success-text: var(--success-foreground);
 }
 
+
+/*
+ * The Desk while live updates are paused: every minute and time derived from the clock goes
+ * grey, beside the "as of" label on its panel, so an old "7 min late" is not read as current.
+ * Unlayered, so it out-ranks the utility that colours each one (an overrun's amber, say).
+ */
+[data-desk-paused] [data-desk-derived] {
+  color: var(--muted-foreground);
+}

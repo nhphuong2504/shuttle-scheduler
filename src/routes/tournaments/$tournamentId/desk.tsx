@@ -131,6 +131,7 @@ import {
   type DeskAction,
 } from "@/lib/tournament/desk-actions";
 import { upNext, type UpNextRow } from "@/lib/tournament/desk-up-next";
+import { nextPausedSince } from "@/lib/tournament/desk-paused";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
   attributeMatchesToDays,
@@ -320,6 +321,21 @@ function Desk() {
     return () => window.clearInterval(tick);
   }, []);
 
+  /**
+   * When live updates stopped, and the instant everything below is derived at.
+   *
+   * While paused, the data is as old as the moment the connection dropped, so lateness,
+   * overruns and when a court frees are computed at that moment rather than now: a match that
+   * has started since would otherwise read as later and later. The clock in the bar keeps
+   * running; the panels say "as of" and grey their minutes. See `desk-paused.ts`.
+   */
+  const [pausedSince, setPausedSince] = useState<number | null>(null);
+  useEffect(() => {
+    setPausedSince((previous) => nextPausedSince(previous, live.status, Date.now()));
+  }, [live.status]);
+  const paused = pausedSince != null;
+  const viewNow = pausedSince ?? now;
+
   const allMatches = useMemo<DeskMatch[]>(
     () =>
       buildDeskMatches({
@@ -456,17 +472,17 @@ function Desk() {
   );
 
   const dayCounts = useMemo(
-    () => dayOperationalCounts(dayMatches, slotMinutesFor, now),
+    () => dayOperationalCounts(dayMatches, slotMinutesFor, viewNow),
     // slotMinutesFor reads only the tournament's timings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayMatches, tournament, now],
+    [dayMatches, tournament, viewNow],
   );
 
   const dayCloseMs = selectedDay ? dayWindowBounds(selectedDay).end : null;
 
   const courtStates = courtsOnSelectedDay.map((court) => ({
     court,
-    state: deriveCourtState(court.id, dayMatches, slotMinutesFor, restMinutesFor, now),
+    state: deriveCourtState(court.id, dayMatches, slotMinutesFor, restMinutesFor, viewNow),
   }));
 
   /**
@@ -491,9 +507,9 @@ function Desk() {
         .filter((e) => e.pool_id === pool.id)
         .map((e) => e.team_id);
       if (poolIsComplete(teamIds, matches)) return false;
-      return now > new Date(pool.scheduled_end).getTime() + 15 * 60000;
+      return viewNow > new Date(pool.scheduled_end).getTime() + 15 * 60000;
     });
-  }, [pools, poolMatches, poolEntries, orderedDays, selectedDayId, now]);
+  }, [pools, poolMatches, poolEntries, orderedDays, selectedDayId, viewNow]);
 
   /** "Needs action", ranked by `deskActions` from the board's own court states. */
   const actions = deskActions({
@@ -504,7 +520,7 @@ function Desk() {
       pool,
       scheduledEndMs: new Date(pool.scheduled_end!).getTime(),
     })),
-    now,
+    now: viewNow,
   });
   /**
    * On a short console (a 1366×768 laptop) Needs action draws three rows, each on one line, so
@@ -530,7 +546,7 @@ function Desk() {
       actions.flatMap((action) => (action.kind === "results-late" ? [] : [action.match.id])),
     ),
     playersKnown: (match) => match.teams[0] != null && match.teams[1] != null,
-    now,
+    now: viewNow,
   });
 
   /**
@@ -549,7 +565,7 @@ function Desk() {
   const readyUnassigned = [...dayMatches, ...attribution.untimed]
     .filter((match) => match.status === "scheduled" && !match.courtId)
     .filter(
-      (match) => getMatchReadiness(match, dayMatches, restMinutesFor(match), now).state === "ready",
+      (match) => getMatchReadiness(match, dayMatches, restMinutesFor(match), viewNow).state === "ready",
     )
     .sort((a, b) => {
       // A match with no time sorts after every timed one, never ahead of it.
@@ -581,9 +597,10 @@ function Desk() {
         </time>
       ) : null}
       <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
+      {/* While paused, Refresh is the one thing to do here, so it is the primary button. */}
       <Button
         size="sm"
-        variant="outline"
+        variant={paused ? "default" : "outline"}
         className="h-11 px-4 text-sm"
         onClick={() => void qc.invalidateQueries()}
       >
@@ -591,6 +608,13 @@ function Desk() {
       </Button>
     </>
   );
+  /** On each panel while paused: the moment its numbers are from. */
+  const asOf = paused ? (
+    <span className="rounded bg-danger-surface px-1.5 py-0.5 text-xs font-semibold text-danger-foreground">
+      as of {timeLabel(new Date(pausedSince))}
+    </span>
+  ) : null;
+
   /** Whether the day bar doubles as the console's bar, carrying `controls`. */
   const consoleBar = canEdit && orderedDays.length > 0;
 
@@ -620,6 +644,7 @@ function Desk() {
         page scrolls. A reader gets the board alone, in the page's own flow.
       */}
       <div
+        data-desk-paused={paused ? "" : undefined}
         className={
           canEdit
             ? "space-y-5 desk-console:flex desk-console:h-dvh desk-console:flex-col desk-console:gap-4 desk-console:space-y-0 desk-console:py-3"
@@ -667,6 +692,20 @@ function Desk() {
           </div>
         ) : null}
 
+        {/*
+          While updates are paused: since when, what that means for the numbers below, and that
+          it is retrying. The badge says "Offline" and is the live region; this bar is the detail,
+          so it is not announced a second time.
+        */}
+        {paused ? (
+          <p className="rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger-foreground desk-console:flex-none">
+            <span className="font-semibold">No updates since {timeLabel(new Date(pausedSince))}.</span>{" "}
+            Minutes and times below are as of then and may be out of date
+            {canEdit ? ", and starting, scoring and moving matches is paused" : ""}. Retrying on its
+            own; Refresh tries now.
+          </p>
+        ) : null}
+
         <div
           className={
             canEdit
@@ -684,6 +723,7 @@ function Desk() {
         <div className="flex min-h-0 flex-col gap-4">
         <Panel
           title="Needs action"
+          right={asOf}
           className="flex min-h-0 flex-col desk-console:max-h-[55%] desk-console:flex-none"
           bodyClassName="flex min-h-0 flex-1 flex-col p-0"
         >
@@ -769,6 +809,7 @@ function Desk() {
           bodyClassName="flex min-h-0 flex-1 flex-col p-0"
           right={
             <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+              {asOf}
               {upNextCue.hiddenCount ? (
                 <span className="text-sm font-semibold text-foreground">
                   {upNextCue.hiddenCount} more below
@@ -820,7 +861,9 @@ function Desk() {
           bodyClassName={canEdit ? "flex min-h-0 flex-1 flex-col p-0" : ""}
           right={
             selectedDay ? (
-              <span className="text-sm text-muted-foreground">
+              <span className="flex flex-wrap items-center justify-end gap-x-2 text-sm text-muted-foreground">
+                {asOf}
+                <span>
                 {dayDateLabel(selectedDay.date)}, {courtsOnSelectedDay.length} court
                 {courtsOnSelectedDay.length === 1 ? "" : "s"}
                 {/*
@@ -835,6 +878,7 @@ function Desk() {
                       : `Courts ${Math.min(...hiddenCourts)}–${Math.max(...hiddenCourts)} below`}
                   </span>
                 ) : null}
+                </span>
               </span>
             ) : null
           }
@@ -896,7 +940,7 @@ function Desk() {
                               : "text-muted-foreground"
                           }`}
                         >
-                          {state.elapsedMinutes}′ on court
+                          <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
                           {/*
                             An overrun says only how long the match has been on, never how far
                             past its slot that is or how it started. The amber tile is already
@@ -1014,6 +1058,7 @@ function Desk() {
               scoringRule={ruleFor(current.kind)}
               tournamentId={tournament?.id ?? null}
               timezone={tournament?.venue_timezone}
+              pausedSince={pausedSince}
               onDone={() => {
                 refresh();
                 setOpenMatch(null);
@@ -1042,6 +1087,7 @@ export function MatchOperationsDialog({
   scoringRule,
   tournamentId,
   timezone,
+  pausedSince = null,
   onDone,
 }: {
   match: DeskMatch;
@@ -1076,6 +1122,12 @@ export function MatchOperationsDialog({
   /** Needed by the placement path, which snapshots the day to report its ripple. */
   tournamentId: string | null;
   timezone?: string | undefined;
+  /**
+   * When live updates stopped, or null while they arrive. While set, every control that writes
+   * is locked and the dialog says why: a write made against data that may be out of date could
+   * start a match that has already started, or score one twice.
+   */
+  pausedSince?: number | null;
   onDone: () => void;
 }) {
   /** After a result: draw what it unlocked and slot newly ready matches, never moving a time. */
@@ -1084,7 +1136,9 @@ export function MatchOperationsDialog({
   const [values, setValues] = useState(() =>
     scoreFormValues(rows, match.status, match.initialGames),
   );
-  const [busy, setBusy] = useState(false);
+  const [working, setBusy] = useState(false);
+  /** Every write is off while one is in flight, and while live updates are paused. */
+  const busy = working || pausedSince != null;
   const [confirmRestOpen, setConfirmRestOpen] = useState(false);
   const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
@@ -1386,6 +1440,13 @@ export function MatchOperationsDialog({
       </DialogHeader>
 
       <div className="space-y-4">
+        {pausedSince != null && canEdit ? (
+          <p className="rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
+            <span className="font-semibold">No connection since {timeLabel(new Date(pausedSince))}.</span>{" "}
+            Starting, scoring and moving matches is paused until it is back, so nothing is written
+            against data that may be out of date.
+          </p>
+        ) : null}
         <div className="flex justify-center pt-1">
           <span
             className={`rounded-full px-3.5 py-1.5 text-sm font-semibold uppercase tracking-wide ${
@@ -1603,7 +1664,7 @@ export function MatchOperationsDialog({
               </ul>
             ) : null}
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy}>Don't start</AlertDialogCancel>
+              <AlertDialogCancel disabled={working}>Don't start</AlertDialogCancel>
               <AlertDialogAction
                 disabled={busy}
                 onClick={(e) => {
@@ -1765,7 +1826,7 @@ export function MatchOperationsDialog({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy}>Keep the result</AlertDialogCancel>
+              <AlertDialogCancel disabled={working}>Keep the result</AlertDialogCancel>
               <AlertDialogAction
                 disabled={busy}
                 onClick={(event) => {
@@ -1949,7 +2010,7 @@ function ActionRow({
       </span>
       {/* On a short console each row is one line; the full text stays in its tooltip. */}
       <span className="min-w-0 flex-1" title={`${title}. ${detail}`}>
-        <span className="block font-semibold leading-snug desk-console-short:truncate">{title}</span>
+        <span data-desk-derived className="block font-semibold leading-snug desk-console-short:truncate">{title}</span>
         <span className="block text-sm desk-console-short:truncate">{detail}</span>
       </span>
       {action}
@@ -2113,6 +2174,7 @@ function UpNextItem({
         className="my-0.5 grid min-w-0 flex-1 grid-cols-[76px_minmax(0,1fr)] gap-x-2.5 rounded-lg px-2 py-2.5 text-left hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-primary"
       >
         <span
+          data-desk-derived
           className={`row-span-3 font-score text-[15px] font-semibold leading-5 tabular-nums ${
             free.kind === "over" ? "text-warn-foreground" : known ? "text-foreground" : "text-muted-foreground"
           }`}
