@@ -685,8 +685,11 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     expect(shell).toMatch(/READ_ONLY_SECTIONS = SECTIONS;/);
     expect(shell).toMatch(/homeSection = access\.can_edit \? DESK_PATH : READER_HOME_PATH/);
     const desk = readFileSync(join(src, deskFile), "utf8");
-    // The operator's work column, Needs action included, is withheld as one block.
-    expect(desk).toMatch(/\{canEdit \? \(\s*<div[^>]*>\s*<Panel\s+title="Needs action"/);
+    // The operator's work column, Needs action included, is withheld as one block. The
+    // hold wrapper around each panel (section 4e) sits inside that branch, not outside it.
+    expect(desk).toMatch(
+      /\{canEdit \? \(\s*<div[^>]*>[\s\S]{0,1200}?<Panel\s+title="Needs action"/,
+    );
     expect(shell).toMatch(
       /access\.can_edit \? \[\.\.\.SECTIONS, \.\.\.EDITOR_SECTIONS\][\s\S]{0,40}?READ_ONLY_SECTIONS/,
     );

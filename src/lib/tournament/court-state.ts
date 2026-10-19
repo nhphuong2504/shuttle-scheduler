@@ -96,7 +96,9 @@ export const COURT_STATE_TILE: Record<CourtState, string> = {
   overrun: "border-warn-border bg-warn-surface/40",
   "free-ready": "border-primary/40 bg-primary/5",
   "free-blocked": "border-hairline bg-surface",
-  idle: "border-hairline bg-surface",
+  // Idle is dimmed by colour rather than opacity: a muted wash reads as "nothing here" at a
+  // glance and still leaves the pill (its own, deeper muted fill) a surface to sit on.
+  idle: "border-hairline bg-muted/60",
 };
 
 /** Narrows a derived state to the vocabulary. */

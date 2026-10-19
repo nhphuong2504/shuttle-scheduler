@@ -578,6 +578,29 @@ for (const cell of MATRIX_CELLS) {
       await expect(panel.getByText("Notify players: coming soon")).toBeVisible();
     });
 
+    test("hovering a list holds its order and says so; the tab carries the count", async ({
+      page,
+    }) => {
+      await installAppMock(page, { preset: "states", role: "user" });
+      await openCell(page, routes.desk, cell);
+
+      // The count is in the tab title, so a moderator on another tab sees that a court waits.
+      await expect(page).toHaveTitle(/^\(\d+\) Control desk$/);
+
+      const needsAction = page
+        .getByRole("heading", { name: "Needs action" })
+        .locator("xpath=ancestor::section[1]");
+      const note = page.getByText("Order held while you point here");
+      await expect(note).toHaveCount(0);
+
+      // The hold covers the panel header too: the note that explains it lives there.
+      await needsAction.hover();
+      await expect(note).toBeVisible();
+
+      await page.mouse.move(0, 0);
+      await expect(note).toHaveCount(0);
+    });
+
     test("going offline pauses the Desk: says since when, marks the panels, locks writes", async ({
       page,
     }) => {
