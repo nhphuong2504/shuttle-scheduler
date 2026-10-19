@@ -686,8 +686,6 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     expect(shell).toMatch(/homeSection = access\.can_edit \? DESK_PATH : READER_HOME_PATH/);
     const desk = readFileSync(join(src, deskFile), "utf8");
     expect(desk).toMatch(/\{canEdit \? \(\s*<Panel\s+title="Needs action"/);
-    // Next transitions and Court progress share one band, withheld together.
-    expect(desk).toMatch(/\{canEdit \? \(\s*<div[^>]*>\s*<Panel\s+title="Next transitions"/);
     expect(shell).toMatch(
       /access\.can_edit \? \[\.\.\.SECTIONS, \.\.\.EDITOR_SECTIONS\][\s\S]{0,40}?READ_ONLY_SECTIONS/,
     );

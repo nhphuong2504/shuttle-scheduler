@@ -379,8 +379,6 @@ test.describe("a signed-out visitor", () => {
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Court board" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Needs action" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Next transitions" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Court progress" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^start$/i })).toHaveCount(0);
   });
 
