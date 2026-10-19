@@ -456,8 +456,8 @@
       been on — because the tile already says it is running long, and a
       <code>+N over slot</code> or <code>started N min late</code> clause beside it was arithmetic
       competing with the number a moderator actually reads. It raises the &quot;N min on court&quot;
-      row in Needs action once it is ten minutes past its slot, or sooner if the match behind it is
-      already late — see 9.2 and 9.3.
+      row in Needs action once it is a third of its slot past it (five minutes at least), or sooner if
+      the match behind it is already late — see 9.2 and 9.3.
     </p>
 
     <div class="panel">
@@ -992,7 +992,7 @@
             </ul>
           </div>
         </div>
-        <figcaption><b>Running long enough to owe a result.</b> The tile turns amber the moment the match passes its slot; this row waits a further <code>OVERRUN_ALERT_AFTER_MINUTES</code>, because a long rally is not yet worth walking over for. It fires early when the match queued behind it is already late — then the sentence about the next match is appended, because the match waiting for that court is the cost. A court number the match does not have reads <code>Court ?</code>.</figcaption>
+        <figcaption><b>Running long enough to owe a result.</b> The tile turns amber the moment the match passes its slot; this row waits a further <code>overrunAlertAfterMinutes(slot)</code> - a third of the slot, at least five minutes - because a long match is not yet worth walking over for. It fires early when the match queued behind it is already late — then the sentence about the next match is appended, because the match waiting for that court is the cost. A court number the match does not have reads <code>Court ?</code>.</figcaption>
       </figure>
 
       <figure class="cell">
@@ -1059,7 +1059,7 @@
         <tr>
           <td><code>overrun</code></td>
           <td>The larger of minutes past its slot and how late the match behind it is</td>
-          <td>The court's state is <code>overrun</code> and the match is ten minutes past its slot, <em>or</em> the match queued behind it has already passed its start.</td>
+          <td>The court's state is <code>overrun</code> and the match is at least max(5, ⅓ of its slot) minutes past it, <em>or</em> the match queued behind it has already passed its start.</td>
         </tr>
         <tr>
           <td><code>start-late</code></td>
@@ -1083,9 +1083,9 @@
       <thead><tr><th style="width:310px">Constant</th><th style="width:90px">Value</th><th>What it gates</th></tr></thead>
       <tbody>
         <tr>
-          <td><code>OVERRUN_ALERT_AFTER_MINUTES</code></td>
-          <td>10</td>
-          <td>How far past its slot a running match must be before the desk asks about it, with no late successor forcing the row earlier. It is independent of the tile, which turns amber at the slot itself.</td>
+          <td><code>overrunAlertAfterMinutes(slot)</code></td>
+          <td>max(5, ⌈slot ÷ 3⌉)</td>
+          <td>How far past its slot a running match must be before the desk asks about it, with no late successor forcing the row earlier. A third because a third game adds about a third of a best-of-three; a fixed number would be half of a short slot and routine for a long one. It is independent of the tile, which turns amber at the slot itself. An assumption until a real tournament has been replayed against it.</td>
         </tr>
         <tr>
           <td><code>READY_ALERT_AFTER_MINUTES</code></td>
@@ -1293,7 +1293,7 @@
         <tr><td>The five states, their labels, pill and tile tokens</td><td><code>src/lib/tournament/court-state.ts</code></td></tr>
         <tr><td><code>deriveCourtState</code>, <code>getMatchReadiness</code>, schedule variance, projected finish</td><td><code>src/lib/tournament/desk.ts</code></td></tr>
         <tr><td>Tile JSX, board header, day selector, queue block, footer, aria-label</td><td><code>src/routes/tournaments/$tournamentId/desk.tsx</code></td></tr>
-        <tr><td>The Needs action rows: which kinds exist, how late each is, and the order they are drawn in</td><td><code>src/lib/tournament/desk-actions.ts</code> — <code>deskActions</code>, <code>OVERRUN_ALERT_AFTER_MINUTES</code>, <code>READY_ALERT_AFTER_MINUTES</code>, <code>MAX_ACTION_ROWS</code>, <code>splitActions</code></td></tr>
+        <tr><td>The Needs action rows: which kinds exist, how late each is, and the order they are drawn in</td><td><code>src/lib/tournament/desk-actions.ts</code> — <code>deskActions</code>, <code>overrunAlertAfterMinutes</code>, <code>READY_ALERT_AFTER_MINUTES</code>, <code>MAX_ACTION_ROWS</code>, <code>splitActions</code></td></tr>
         <tr><td>Each row's words, tones, glyphs and buttons</td><td><code>desk.tsx</code> — <code>ACTION_TONE</code>, <code>ActionRow</code>, <code>NeedsActionRow</code>, <code>readinessReason</code>, <code>latePools</code>; <code>readyUnassigned</code> still feeds the idle tile, not the panel</td></tr>
         <tr><td>Which treatments the panel must render and keep separate</td><td><code>e2e/states.spec.ts</code> — the &quot;three urgency treatments&quot; test, driven by the states fixture in <code>e2e/fixtures/desk-mock.ts</code></td></tr>
         <tr><td>Which slot measures a match (group vs knockout pacing)</td><td><code>src/lib/tournament/desk.ts</code> — <code>deskKindPhase</code></td></tr>

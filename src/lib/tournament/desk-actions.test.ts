@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_ACTION_ROWS,
-  OVERRUN_ALERT_AFTER_MINUTES,
+  OVERRUN_ALERT_MIN_MINUTES,
+  overrunAlertAfterMinutes,
   READY_ALERT_AFTER_MINUTES,
   deskActions,
   splitActions,
@@ -159,18 +160,28 @@ describe("needs action: overruns", () => {
   const live = (id: string, courtId: string, elapsed: number, playerIds = [`${id}-a`, `${id}-b`]) =>
     match({ id, courtId, status: "in-progress", startedAt: at(-elapsed), scheduled: at(-elapsed), playerIds });
 
+  it("measures the grace against the slot, with a floor", () => {
+    // A third of the slot, rounded up, and never less than the floor.
+    expect(overrunAlertAfterMinutes(15)).toBe(OVERRUN_ALERT_MIN_MINUTES);
+    expect(overrunAlertAfterMinutes(9)).toBe(OVERRUN_ALERT_MIN_MINUTES);
+    expect(overrunAlertAfterMinutes(30)).toBe(10);
+    expect(overrunAlertAfterMinutes(25)).toBe(9);
+    expect(overrunAlertAfterMinutes(45)).toBe(15);
+  });
+
   it("leaves a match running a little long to the amber tile", () => {
-    const elapsed = 15 + OVERRUN_ALERT_AFTER_MINUTES - 1;
+    const elapsed = 15 + overrunAlertAfterMinutes(15) - 1;
     expect(actionsOf([live("m", "c1", elapsed)])).toEqual([]);
   });
 
   it("raises it once it is the grace past the expected finish", () => {
-    const elapsed = 15 + OVERRUN_ALERT_AFTER_MINUTES;
+    const grace = overrunAlertAfterMinutes(15);
+    const elapsed = 15 + grace;
     expect(actionsOf([live("m", "c1", elapsed)])).toEqual([
       expect.objectContaining({
         kind: "overrun",
         elapsedMinutes: elapsed,
-        overByMinutes: OVERRUN_ALERT_AFTER_MINUTES,
+        overByMinutes: grace,
         nextLateMinutes: null,
       }),
     ]);

@@ -56,14 +56,34 @@ The first five are drawn and the rest fold behind "Show N more". Derived in
 | --- | --- | --- | --- |
 | Court N, M min late; A vs B, ready to start | A free court's next match is past its start and can start | Do this now (accent) | Start |
 | Court N, M min late; A vs B. Waiting: (the tile's readiness words) | The same, but a player is busy, resting or not known | Warning | Open match |
-| Court N, M min on court; A vs B, K min past the expected finish | K ≥ 10, or the match behind it is already late | Warning | Enter result |
+| Court N, M min on court; A vs B, K min past the expected finish | K ≥ max(5, ⅓ of the slot), or the match behind it is already late | Warning | Enter result |
 | CODE — Pool X, results incomplete; M min past scheduled finish | More than 15 min past the pool's finish | Warning | Enter results |
 | Court N is ready; A vs B | A free court with a ready match, free for 3 min or more | Do this now (accent) | Start |
 | All clear. Nothing needs action right now. | Nothing above | — | — |
 
-The thresholds are `OVERRUN_ALERT_AFTER_MINUTES` (10) and `READY_ALERT_AFTER_MINUTES` (3). The
-tile turns amber the moment a match passes its slot; the row waits, because a long rally is not
-yet worth walking over for, and a court that freed a minute ago is a moment between matches.
+The tile turns amber the moment a match passes its slot; the row waits, because a long match
+is not yet worth walking over for, and a court that freed a minute ago is a moment between
+matches.
+
+### The thresholds are assumptions
+
+No tournament has run on the app yet, so none of these numbers is measured. Each is chosen from
+the shape of the sport and from which mistake is cheaper: a spare row costs the moderator a
+glance, a missed one costs court time. Where unsure, they lean towards raising the row early.
+
+| Threshold | Value | Why |
+| --- | --- | --- |
+| Late start | 1 min | Past the published time is late, and the row always carries an action |
+| Ready court | 3 min free (`READY_ALERT_AFTER_MINUTES`) | Roughly the time players take to walk on; a late match never waits for it |
+| Overrun | max(5 min, ⅓ of the slot) (`overrunAlertAfterMinutes`), or at once when the next match is late | A third game adds about a third of a best-of-three; past that, a finished match with no result entered is the likelier story |
+
+**Check them at the first real tournament.** The app already stores every match's scheduled,
+start and end times, and `deskActions` is a pure function of them, so the day can be replayed
+afterwards with no extra tracking: how often each row fired, and how that changes under other
+thresholds. Look at the spread of actual length minus slot - an overrun row raised for much more
+than one match in five is noise - and ask the moderators which rows they ignored and what they
+noticed before the panel did. Do not tune these against fixtures or simulated schedules: those
+are built from the same assumptions and can only agree with them.
 
 An overdue result is an omission, not a danger, so it is amber.
 

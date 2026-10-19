@@ -29,7 +29,7 @@ const MINUTE = 60_000;
  *     slot before the close, no courts, a first build or rebuild), and the Schedule page
  *     names the cause. The board's idle tile is where a moderator can still dispatch it.
  *   - **A match running a little long.** The tile turns amber at the slot; the alert waits
- *     for `OVERRUN_ALERT_AFTER_MINUTES` more, because a long rally is not yet something to
+ *     for `overrunAlertAfterMinutes` more, because a long match is not yet something to
  *     walk over and ask about.
  *   - **A court that has just freed.** The moderator who entered the result is still at the
  *     desk; the tile says Ready, and the row follows once the court has been free for
@@ -39,10 +39,35 @@ const MINUTE = 60_000;
  * disagree with the tiles, and introduces no second readiness or slot rule.
  */
 
-/** How far past its expected finish a match runs before the desk asks someone to look. */
-export const OVERRUN_ALERT_AFTER_MINUTES = 10;
+/*
+ * The thresholds below are assumptions, not measurements: no tournament has run on the app
+ * yet. They are chosen from the shape of the sport and from which mistake is cheaper - a
+ * spare row costs a glance, a missed one costs court time - and are to be checked against
+ * the first real tournament by replaying its match times through `deskActions`.
+ */
 
-/** How long a court with a ready match stands free before the desk asks for it to start. */
+/** The shortest overrun the desk asks about, whatever the slot. */
+export const OVERRUN_ALERT_MIN_MINUTES = 5;
+
+/**
+ * The share of a slot a match may run over before the desk asks about it.
+ *
+ * A third because the natural long match is one that goes to a third game, which adds about
+ * a third of a best-of-three's length. Past that, the likelier story is a match that has
+ * finished with nobody entering the result - a court that looks busy and is not. A fixed
+ * number of minutes would be half a short slot and a routine overrun of a long one.
+ */
+export const OVERRUN_ALERT_SLOT_SHARE = 1 / 3;
+
+/** How far past its expected finish a match with this slot runs before the desk asks. */
+export function overrunAlertAfterMinutes(slotMinutes: number): number {
+  return Math.max(OVERRUN_ALERT_MIN_MINUTES, Math.ceil(slotMinutes * OVERRUN_ALERT_SLOT_SHARE));
+}
+
+/**
+ * How long a court with a ready match stands free before the desk asks for it to start:
+ * roughly the time players take to walk on and get ready. A late match never waits for it.
+ */
 export const READY_ALERT_AFTER_MINUTES = 3;
 
 /** Rows shown before the rest are folded behind a "show more". */
@@ -151,8 +176,9 @@ export function deskActions<TMatch extends DeskMatchModel, TPool = unknown>({
 
     if (playing) {
       if (court.state !== "overrun" || court.elapsedMinutes == null) continue;
-      const overByMinutes = court.elapsedMinutes - slotMinutesFor(playing);
-      if (overByMinutes < OVERRUN_ALERT_AFTER_MINUTES && nextLate == null) continue;
+      const slotMinutes = slotMinutesFor(playing);
+      const overByMinutes = court.elapsedMinutes - slotMinutes;
+      if (overByMinutes < overrunAlertAfterMinutes(slotMinutes) && nextLate == null) continue;
       actions.push({
         kind: "overrun",
         courtId,
