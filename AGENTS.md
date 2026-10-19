@@ -13,7 +13,8 @@ wifi, by people who cannot reload a page mid-match.
 Three audiences share the app and their needs differ:
 
 - **Tournament organiser** — tournament-wide planning. Lives on the Schedule tab.
-- **Moderator** — a single court, a single day, in real time. Lives on the Desk.
+- **Moderator** — every court in the hall, a single day, in real time. Lives on the Desk,
+  which is the main place matches are called from and started.
 - **Participant** — registers from a tournament's public page, and sees the state of
   their own request. Never an operator: being approved grants no operating right.
 
