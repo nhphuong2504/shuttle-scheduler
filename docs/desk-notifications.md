@@ -116,6 +116,35 @@ players will be free by then. Derived in `src/lib/tournament/desk-up-next.ts`.
 - Not a live region: it re-ranks every 30 seconds, and reading each change aloud would bury the
   alerts above it.
 
+## Lists that move
+
+Needs action and Up next re-rank on every thirty-second tick and on every live update. Two
+rules keep that from costing a wrong click or a missed alert. The ordering rule is
+`holdDeskList` in `src/lib/tournament/desk-hold.ts`; `desk.tsx` wires the pointer, the
+keyboard and the ten-second cue.
+
+- **The order holds under the pointer and the keyboard.** While the pointer is over either
+  list, or focus is inside it, rows keep the order they had when the hold began. Numbers and
+  wording still update in place. A row that should leave stays, dimmed, until the hold ends; a
+  row that has arrived is appended at the end. When the pointer leaves or focus moves out, the
+  list settles into its new order in one move. The panel header says "Order held while you
+  point here" while it is held.
+- **A row keeps one identity.** The match is the row, whatever kind it currently is: a
+  `blocked-late` match that becomes `start-late` is the same row changing its words, not one
+  row leaving and another arriving. The pool row is keyed by its pool.
+- **What is new gets one bounded cue.** A row that was not in the list a moment ago carries a
+  "New" tag and a tinted left edge for 10 seconds (`NEW_ROW_MS`), then looks like any other
+  row. No blinking row, and no sound.
+- **The tab title carries the count.** `(3) Control desk`, dropping to `Control desk` when the
+  list is clear, so a moderator on another tab sees that a court is waiting. It is set only for
+  a caller who may edit: a reader has no Needs action panel.
+
+## Day bar
+
+The selected day is the dark one - foreground fill, surface text - rather than the accent:
+purple means "act", and choosing which day to look at is navigation. The rest of the bar is the
+day's pace: expected finish, closing time, and matches done.
+
 ## Court board
 
 Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
@@ -125,7 +154,11 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
   no `+N over slot` and no `started N min late/early` arithmetic beside it.
 - **Waiting** is neutral. It asks nothing of the moderator; the line beneath it gives the
   specific reason ("A. Nguyen, ready in 4 min", "A. Nguyen, on Court 2", "Teams not assigned").
-  Its chip is a deeper grey than Idle so the two stay distinct fills.
+  Its chip is a deeper grey than Idle so the two stay distinct fills. A player busy elsewhere
+  is amber, not red: a delay is not a danger, and it is the ink Needs action and Up next use
+  for the same fact.
+- **Idle** is dimmed by colour, not opacity: a muted wash on the tile, so "nothing here" reads
+  at a glance while the court name and the pill keep full contrast.
 - **Playing and Overrun name the next pairing and stop there** — no "Ready now", no reason it
   is not ready. That line answers "can the queued match start now", which a court that still
   has a match on it cannot honestly answer; it is drawn on Ready and Waiting only.

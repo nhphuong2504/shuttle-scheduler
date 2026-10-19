@@ -139,7 +139,7 @@
      The court tile. Utility classes from desk.tsx reproduced by hand:
        rounded-xl border p-4 text-left shadow-panel transition-all
        enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise
-       disabled:cursor-default disabled:opacity-80
+       disabled:cursor-default
      --------------------------------------------------------------------------- */
   .tile {
     display: block; width: 100%; text-align: left; font: inherit; color: inherit;
@@ -154,14 +154,14 @@
     border-color: color-mix(in oklab, var(--primary) 60%, transparent);
     box-shadow: var(--elev-2);
   }
-  .tile.disabled { cursor: default; opacity: 0.8; }
+  .tile.disabled { cursor: default; }
 
   /* COURT_STATE_TILE */
   .tile.playing     { border-color: var(--play);        background: rgb(214 241 227 / 0.40); }
   .tile.overrun     { border-color: var(--warn-border); background: rgb(250 240 225 / 0.40); }
   .tile.free-ready  { border-color: rgb(91 79 199 / 0.40); background: rgb(91 79 199 / 0.05); }
   .tile.free-blocked{ border-color: var(--hairline);    background: var(--surface); }
-  .tile.idle        { border-color: var(--hairline);    background: var(--surface); }
+  .tile.idle        { border-color: var(--hairline);    background: rgb(237 239 238 / 0.60); }
 
   .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .tile-court { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 18px; font-weight: 700; }
@@ -191,7 +191,7 @@
   .q-none { margin: 0; font-size: 14px; }
   .ready-now { font-size: 16px; font-weight: 600; color: var(--primary-ink); }
   .ready-rest { color: var(--warn-foreground); }
-  .ready-busy { color: var(--danger-foreground); }
+  .ready-busy { color: var(--warn-foreground); }
 
   .tile-foot { margin: 12px 0 0; font-size: 14px; font-weight: 600; color: var(--primary-ink); }
 
@@ -709,7 +709,7 @@
               <p class="tile-primary"><span>Idle</span></p>
               <div class="tile-queue"><p class="q-none">Nothing queued</p></div>
             </div>
-            <figcaption><b>Idle with no target — the disabled tile.</b> Nothing on this court and nothing waiting anywhere. The button is <code>disabled</code>: 80% opacity, a default cursor, and the hover lift and border swap switched off. No footer action.
+            <figcaption><b>Idle with no target — the disabled tile.</b> Nothing on this court and nothing waiting anywhere. The button is <code>disabled</code>: a muted wash instead of the surface white, a default cursor, and the hover lift and border swap switched off. Dimmed by colour rather than opacity, so the label and the pill stay at full contrast. No footer action.
               <span class="aria">aria-label="Court 3: idle"</span></figcaption>
           </figure>
 
@@ -738,7 +738,7 @@
       <thead><tr><th style="width:140px">Readiness</th><th style="width:250px">Rendered text</th><th style="width:150px">Ink</th><th>Predicate</th></tr></thead>
       <tbody>
         <tr><td><b>teams-missing</b></td><td>Teams not assigned</td><td>muted (inherited)</td><td>1st — the queued match has no player ids at all</td></tr>
-        <tr><td><b>player-busy</b></td><td><span class="ready-busy">An Nguyen, on Court 2</span></td><td>danger foreground</td><td>2nd — one of its players is <code>in-progress</code> elsewhere; the court is &quot;?&quot; when unknown</td></tr>
+        <tr><td><b>player-busy</b></td><td><span class="ready-busy">An Nguyen, on Court 2</span></td><td>warn foreground</td><td>2nd — one of its players is <code>in-progress</code> elsewhere; the court is &quot;?&quot; when unknown. Amber, not red: a delay is not a danger, and it is the ink Needs action and Up next use for the same fact.</td></tr>
         <tr><td><b>resting</b></td><td><span class="ready-rest">An Nguyen, ready in 4 min</span></td><td>warn foreground</td><td>3rd — a player's last finished match ended fewer than the rest-gap minutes ago</td></tr>
         <tr><td><b>ready</b></td><td><span class="ready-now">Ready now</span></td><td>primary ink, semibold</td><td>4th — none of the above</td></tr>
       </tbody>
@@ -807,7 +807,7 @@
         <tr><td>Day selector</td><td>Only when the tournament has playing days. Each day is a toggle; the right side states the day's plan — &quot;Last match scheduled to finish 18:20; Day closes 17:30&quot;, adding &quot;; Scheduled 42 min past the day's close&quot; in warn ink when the plan overruns.</td></tr>
         <tr><td>Tile grid</td><td>One column, two at <code>sm</code>, four at <code>lg</code>. A day's courts come from its day-court rows; a day with no rows means every court in the venue.</td></tr>
         <tr><td>Untimed note</td><td>Above the board, when any match has no usable time: &quot;3 matches have no scheduled time, so they are not counted on any day.&quot; Deliberately neutral — a plan fact, not an operational metric.</td></tr>
-        <tr><td>Who sees it</td><td>Everyone with access. Only Needs action, Next transitions and Court progress are withheld from a read-only session.</td></tr>
+        <tr><td>Who sees it</td><td>Everyone with access. Only the operator's work column - Needs action and Up next - is withheld from a read-only session.</td></tr>
         <tr><td>A day with no courts</td><td>The grid is empty and <b>no</b> empty-state panel is drawn — the header still reads &quot;, 0 courts&quot;. Emptying a day in the schedule is the way to see it.</td></tr>
         <tr><td>What the board does not read</td><td>The legacy <code>courts.status</code> column (<code>free</code> / <code>in-progress</code> / <code>finished</code>). Every tile's state is derived from matches; nothing on the desk paints the stored court status.</td></tr>
       </tbody>
@@ -1311,15 +1311,17 @@
       truth — the app is the only thing that renders.
     </div>
     <p class="lede" style="margin-top:16px">
-      Adjacent but deliberately separate: the <b>Next transitions</b> panel answers &quot;which courts are
-      about to change hands&quot;, with two kinds of its own — <em>Expected finish</em> (projected, its Due
-      cell prefixed <code>~</code>) and <em>Scheduled start</em>. It is derived from these court states, so
-      it cannot disagree with the board, and an already-overrun court is excluded from it.
+      Adjacent but deliberately separate: the <b>Up next</b> panel answers &quot;who do I call next&quot;,
+      with one row per court that Needs action does not already name. It is derived from these court
+      states and the same slot and rest rules, so it cannot disagree with the board.
     </p>
     <div class="note" style="margin-top:16px">
-      <strong>The Desk's layout is being redesigned.</strong> <code>desk-layout.html</code> is the agreed design:
-      Needs action and a new <b>Up next</b> panel in one work column beside the board, replacing Next transitions
-      and Court progress. This page keeps describing what ships today until that lands.
+      <strong>The Desk these tiles belong to has shipped.</strong> The console layout - Needs action and
+      <b>Up next</b> in one work column beside the board, one viewport tall, with the clock and connection in
+      the bar - is the live Desk, and so are <b>Up next</b> and the offline pause
+      (<code>docs/desk-notifications.md</code>). This page mirrors the tile as it ships, including the idle
+      wash and the amber &quot;on Court N&quot; line. <code>desk-layout.html</code> is the design canvas for
+      the frame around it, and section 4e of it holds the rules for lists that move under the pointer.
     </div>
   </section>
 
