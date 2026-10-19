@@ -901,9 +901,15 @@ function Desk() {
                   <div className="mt-2 border-t border-hairline pt-2 text-muted-foreground">
                     {state.next ? (
                       <>
+                        {/*
+                          A busy court names its next pairing without a time: Up next gives
+                          when the court frees, and two different times for one match side by
+                          side would make the moderator choose between them. A free court keeps
+                          the published time, which is the one that applies to it.
+                        */}
                         <p className="text-t2">
-                          Next {timeLabel(state.next.scheduled)}: {label(state.next.teams[0])} vs{" "}
-                          {label(state.next.teams[1])}
+                          {state.playing ? "Next" : `Next ${timeLabel(state.next.scheduled)}`}:{" "}
+                          {label(state.next.teams[0])} vs {label(state.next.teams[1])}
                         </p>
                         {/*
                           A court with a match on it names its next pairing and nothing

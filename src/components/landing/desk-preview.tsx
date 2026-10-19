@@ -91,7 +91,7 @@ export function DeskPreview() {
               tag="WS R2"
               names="Hannah Kim vs Grace Lowe"
               timer="12′ on court"
-              next="Next 14:50: Tom Hughes / Dev Patel vs Sam Okafor / Luke Reid"
+              next="Next: Tom Hughes / Dev Patel vs Sam Okafor / Luke Reid"
               readiness={{ text: "Ready now", tone: "ready" }}
             />
             <PreviewTile
@@ -100,7 +100,7 @@ export function DeskPreview() {
               tag="MD R2 crossover"
               names="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks"
               timer="37′ on court"
-              next="Next 14:25: Ryan Lewis / Adam Grant vs Chris Bell / Dan Ortiz"
+              next="Next: Ryan Lewis / Adam Grant vs Chris Bell / Dan Ortiz"
               readiness={{ text: "Ready now", tone: "ready" }}
             />
             <PreviewTile
