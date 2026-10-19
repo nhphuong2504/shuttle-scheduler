@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Page, Panel } from "@/components/app-shell";
@@ -531,10 +531,8 @@ function Desk() {
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
     : null;
 
-  const actionsScrollRef = useRef<HTMLDivElement>(null);
-  const boardScrollRef = useRef<HTMLDivElement>(null);
-  const actionsCue = useScrollCue(actionsScrollRef);
-  const boardCue = useScrollCue(boardScrollRef);
+  const [actionsScrollRef, actionsCue] = useScrollCue();
+  const [boardScrollRef, boardCue] = useScrollCue();
   const hiddenCourts = boardCue.hidden;
 
   return (
@@ -1872,16 +1870,21 @@ const SCROLL_FADE = "[mask-image:linear-gradient(to_bottom,#000_calc(100%-40px),
  * `scrollable` makes it focusable - a region that scrolls must be reachable from the keyboard -
  * and `more` fades its bottom edge while there is content below. `hidden` lists the court
  * numbers of tiles (`data-court-number`) whose top is out of view, so the board can name them.
- * Re-measured on scroll, on a size change of the region or its content, and on window resize.
+ * Re-measured on scroll, on a size change of the region or its content, when its content is
+ * replaced, and on window resize.
+ *
+ * It hands back a callback ref rather than reading a ref object, because the work column only
+ * mounts once the access read says the caller may edit: a ref read on the first render would be
+ * empty and the region never measured.
  */
-function useScrollCue(ref: RefObject<HTMLElement | null>) {
+function useScrollCue() {
+  const [el, setEl] = useState<HTMLElement | null>(null);
   const [cue, setCue] = useState<{ scrollable: boolean; more: boolean; hidden: number[] }>({
     scrollable: false,
     more: false,
     hidden: [],
   });
   useEffect(() => {
-    const el = ref.current;
     if (!el) return;
     const measure = () => {
       const scrollable = el.scrollHeight > el.clientHeight + 1;
@@ -1909,13 +1912,17 @@ function useScrollCue(ref: RefObject<HTMLElement | null>) {
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     if (el.firstElementChild) observer.observe(el.firstElementChild);
+    // Rows come and go as the day moves; a new list replaces the empty line inside the region.
+    const mutations = new MutationObserver(measure);
+    mutations.observe(el, { childList: true, subtree: true });
     return () => {
       el.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
       observer.disconnect();
+      mutations.disconnect();
     };
-  }, [ref]);
-  return cue;
+  }, [el]);
+  return [setEl, cue] as const;
 }
 
 function ReadinessText({
