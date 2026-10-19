@@ -558,6 +558,26 @@ for (const cell of MATRIX_CELLS) {
       );
     });
 
+    test("Up next lists each court's next match once, with the bell inactive", async ({ page }) => {
+      // The preset's queue: Court 3 is ready and so belongs to Needs action; Court 4's player
+      // is resting from a match on that court; Court 5's player is on Court 2 right now.
+      await installAppMock(page, { preset: "states", role: "user" });
+      await openCell(page, routes.desk, cell);
+      const panel = page.getByRole("heading", { name: "Up next" }).locator("xpath=ancestor::section[1]");
+      const row = (court: number) =>
+        panel.getByRole("button", { name: `Open the next match on Court ${court}`, exact: true });
+
+      await expect(row(4)).toContainText("resting until");
+      await expect(row(5)).toContainText("on Court 2");
+      await expect(row(3), "a match Needs action names was listed again").toHaveCount(0);
+
+      // Drawn now, inert until notifications exist, and out of the Tab order.
+      const bell = panel.getByRole("button", { name: "Notify the players on Court 4: coming soon" });
+      await expect(bell).toHaveAttribute("aria-disabled", "true");
+      await expect(bell).toHaveAttribute("tabindex", "-1");
+      await expect(panel.getByText("Notify players: coming soon")).toBeVisible();
+    });
+
     test("the state chips survive grayscale and deuteranopia", async ({ page }) => {
       await installAppMock(page, { preset: "states" });
       await openCell(page, routes.desk, cell);
