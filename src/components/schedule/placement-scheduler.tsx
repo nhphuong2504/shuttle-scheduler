@@ -223,9 +223,9 @@ function ConflictOverview({
                         className="text-sm text-warn-foreground"
                       >
                         <span className="font-medium">{matchLabel(conflict.match_id)}</span>
-                        {court ? <span> · {court}</span> : null}
+                        {court ? <span>, {court}</span> : null}
                         {conflict.scheduled_time ? (
-                          <span> · {timeLabel(conflict.scheduled_time)}</span>
+                          <span>, {timeLabel(conflict.scheduled_time)}</span>
                         ) : null}
                       </li>
                     );
@@ -1031,7 +1031,7 @@ export function PlacementScheduler() {
           // The round is named from the bracket size, the one input every view of a draw
           // shares. Falls back to the raw round number if the draw has not loaded, since
           // the size is what the name is derived from.
-          stage: `Draw ${draw?.tier ?? "?"} · ${
+          stage: `Draw ${draw?.tier ?? "?"}, ${
             draw ? roundName(draw.bracket_size, match.round) : `R${match.round}`
           }`,
           categoryCode: draw ? (categoryMap.get(draw.category_id)?.code ?? "") : "",
@@ -1696,7 +1696,7 @@ export function PlacementScheduler() {
             {rows.length} match{rows.length === 1 ? "" : "es"} scheduled
           </span>
           <span>
-            {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"} ·{" "}
+            {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"},{" "}
             {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
           </span>
           <ScheduledFinish finishMs={scheduledFinishMs} closeMs={officialCloseMs} />
@@ -1877,14 +1877,13 @@ export function PlacementScheduler() {
                       <div key={day.id}>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                           <h4 className="min-w-[8.5rem] font-display text-sm font-semibold">
-                            Day {day.day_number} · {dayDateLabel(day.date.slice(0, 10))}
+                            Day {day.day_number} — {dayDateLabel(day.date.slice(0, 10))}
                           </h4>
                           <p className="min-w-0 flex-1 text-sm text-muted-foreground">
                             <span className="font-score">
                               {day.start_time.slice(0, 5)} – {day.end_time.slice(0, 5)}
-                            </span>{" "}
-                            · {courtsFor(day).length} of {courtCount} court
-                            {courtCount === 1 ? "" : "s"} · {breakCount} break
+                            </span>, {courtsFor(day).length} of {courtCount} court
+                            {courtCount === 1 ? "" : "s"}, {breakCount} break
                             {breakCount === 1 ? "" : "s"}
                           </p>
                           {differs ? (
@@ -2220,7 +2219,7 @@ export function PlacementScheduler() {
             title="Stage progress"
             right={
               <span className="text-t4 text-muted-foreground">
-                matches completed / total · next step
+                matches completed / total, next step
               </span>
             }
           >
@@ -2234,7 +2233,7 @@ export function PlacementScheduler() {
             <span className="font-score text-t4 text-muted-foreground">
               {result
                 ? `${result.summary.placed} placed this session`
-                : `${rows.length} scheduled · ${daySlices.length} day${daySlices.length === 1 ? "" : "s"}`}
+                : `${rows.length} scheduled, ${daySlices.length} day${daySlices.length === 1 ? "" : "s"}`}
             </span>
           }
           bodyClassName={rows.length || daySlices.length ? "p-0" : "p-4"}
@@ -2397,8 +2396,8 @@ export function PlacementScheduler() {
               <div className="space-y-3 overflow-y-auto pr-1">
                 <div className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm">
                   <p className="font-score">
-                    {preview.plan.summary.anchorCount} anchors kept · {preview.plan.summary.placed}{" "}
-                    matches replanned · {preview.plan.diff.movedCount} moving
+                    {preview.plan.summary.anchorCount} anchors kept, {preview.plan.summary.placed}{" "}
+                    matches replanned, {preview.plan.diff.movedCount} moving
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     The table below shows how each day's finish changes.

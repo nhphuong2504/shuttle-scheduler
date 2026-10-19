@@ -141,7 +141,7 @@ function SignedInHome() {
         mark: "!",
         title: reminder,
         role: mine.ownedIds.has(row.id) ? "You run this" : "You help run this",
-        where: [shortDays(row.starts_at, row.ends_at), row.venue_name].filter(Boolean).join(" · "),
+        where: [shortDays(row.starts_at, row.ends_at), row.venue_name].filter(Boolean).join(", "),
         action:
           phase === "not_started"
             ? { label: "Open the Desk", id: row.id, to: "desk" }
@@ -156,7 +156,7 @@ function SignedInHome() {
         mark: "",
         title: `${row.name} is live`,
         role: mine.ownedIds.has(row.id) ? "You run this" : "You help run this",
-        where: [shortDays(row.starts_at, row.ends_at), row.venue_name].filter(Boolean).join(" · "),
+        where: [shortDays(row.starts_at, row.ends_at), row.venue_name].filter(Boolean).join(", "),
         action: { label: "Open the Desk", id: row.id, to: "desk" },
       });
     }
@@ -240,7 +240,7 @@ function SignedInHome() {
                         <p className="break-words text-sm text-muted-foreground">
                           {[shortDays(row.starts_at, row.ends_at), row.venue_name]
                             .filter(Boolean)
-                            .join(" · ")}
+                            .join(", ")}
                         </p>
                       </div>
                       <RegisterAction summary={row} signedIn />
@@ -407,7 +407,7 @@ function HomeCard({ summary, role }: { summary: TournamentSummary; role: "owner"
   const setup = role === "owner" && isConfigurable(status);
   const meta = [shortDays(summary.starts_at, summary.ends_at), summary.venue_name]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
   return (
     <article className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border border-hairline bg-surface p-5 shadow-panel">
       <div className="flex">
@@ -424,7 +424,7 @@ function HomeCard({ summary, role }: { summary: TournamentSummary; role: "owner"
       </h3>
       {meta ? <p className="break-words text-sm text-muted-foreground">{meta}</p> : null}
       <p className="text-sm text-muted-foreground tabular-nums">
-        {countText(summary.entry_count, "entry", "entries")} ·{" "}
+        {countText(summary.entry_count, "entry", "entries")},{" "}
         {countText(summary.category_count, "event", "events")}
       </p>
       <div className="mt-auto flex flex-wrap gap-2 pt-2">

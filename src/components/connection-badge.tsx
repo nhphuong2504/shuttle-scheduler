@@ -51,9 +51,9 @@ export function ConnectionBadge({
     status === "live"
       ? "Live"
       : status === "offline"
-        ? "Offline · live updates paused"
+        ? "Offline, live updates paused"
         : status === "error"
-          ? "Connection problem · live updates paused"
+          ? "Connection problem, live updates paused"
           : "Connecting";
   // The age is a second, quiet fact: a connected screen with nothing new to report is healthy,
   // so it is kept out of the chip and never recolours it. Only a healthy connection shows it.
@@ -72,9 +72,7 @@ export function ConnectionBadge({
         {label}
       </span>
       {quiet ? (
-        <span className="text-sm text-muted-foreground">
-          <span aria-hidden="true">· </span>last change {ageMinutes} min ago
-        </span>
+        <span className="text-sm text-muted-foreground">last change {ageMinutes} min ago</span>
       ) : null}
     </span>
   );

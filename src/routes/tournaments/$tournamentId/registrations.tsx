@@ -326,9 +326,10 @@ function RequestEntries({
               {entry.partnerName ? ` with ${entry.partnerName}` : ""}
             </span>
             <span className="text-muted-foreground">
-              {" · "}
+              {" ("}
               {entryTypeLabel(entry.entryType)}
-              {usageLine ? ` · ${usageLine}` : ""}
+              {usageLine ? `, ${usageLine}` : ""}
+              {")"}
             </span>
           </li>
         );

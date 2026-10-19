@@ -286,7 +286,7 @@ function CategorySection({
         <h2 className="font-display text-lg font-bold">
           {category.code} — {category.name}
           <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
-            {view.active.length} entrants · {view.matches.length} matches · {stageLabel(view.stage)}
+            {view.active.length} entrants, {view.matches.length} matches, {stageLabel(view.stage)}
           </span>
         </h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -650,9 +650,9 @@ function SeedingPanel({
         </div>
 
         <p className="text-t4 text-muted-foreground">
-          Blocks: {counts.advanced} advanced · {counts.intermediate} intermediate ·{" "}
+          Blocks: {counts.advanced} advanced, {counts.intermediate} intermediate,{" "}
           {counts.beginner} beginner
-          {view.excluded.length > 0 ? ` · ${view.excluded.length} waived` : ""}
+          {view.excluded.length > 0 ? `, ${view.excluded.length} waived` : ""}
         </p>
 
         {canReorder && !orderFollowsBlocks ? (

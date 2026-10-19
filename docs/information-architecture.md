@@ -55,7 +55,7 @@ mounts `WorkspaceShell` around the child page.
 
 | Address | Surface | Audience |
 | --- | --- | --- |
-| `…/desk` | The Desk: one day, one court at a time, live. Read-only board for a caller without `can_edit` | Operator (full), anyone (read-only) |
+| `…/desk` | The Desk: one day, every court, live. Read-only board for a caller without `can_edit` | Operator (full), anyone (read-only) |
 | `…/entries` | Who is in the tournament, and the walk-in roster | Operator |
 | `…/registrations` | The queue of requests awaiting a decision, with a nav badge when work is waiting | Editor |
 | `…/placement` | Seeding and the placement stage | Operator |

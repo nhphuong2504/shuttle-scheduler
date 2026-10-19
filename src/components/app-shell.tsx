@@ -756,7 +756,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const meta = summary
     ? [shortDays(summary.starts_at, summary.ends_at), summary.venue_name]
         .filter(Boolean)
-        .join(" · ")
+        .join(", ")
     : null;
   const pendingRegistrations = registrationQueue.data?.pending.length ?? 0;
 

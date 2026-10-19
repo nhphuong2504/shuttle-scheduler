@@ -179,7 +179,7 @@ export function ExploreCard({
         <li className="break-words">{dateRangeText(summary.starts_at, summary.ends_at)}</li>
         <li className="break-words">{summary.venue_name || "Venue not set"}</li>
         <li className="font-score tabular-nums">
-          {countText(summary.entry_count, "entry", "entries")} ·{" "}
+          {countText(summary.entry_count, "entry", "entries")},{" "}
           {countText(summary.category_count, "event", "events")}
         </li>
       </ul>

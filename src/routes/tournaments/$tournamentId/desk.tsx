@@ -130,6 +130,7 @@ import {
   transitionOverdueBy,
   type CourtTransition,
 } from "@/lib/tournament/desk-transitions";
+import { deskActions, splitActions, type DeskAction } from "@/lib/tournament/desk-actions";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
   attributeMatchesToDays,
@@ -246,6 +247,8 @@ function Desk() {
   // derived value survives days loading late, and a click wins from then on.
   const { data: dayCourts } = useTournamentDayCourts(tournament?.id);
   const [pickedDayId, setPickedDayId] = useState<string | null>(null);
+  // Whether "Needs action" draws every row or only the most urgent ones.
+  const [showAllActions, setShowAllActions] = useState(false);
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -519,9 +522,18 @@ function Desk() {
     });
   }, [pools, poolMatches, poolEntries, orderedDays, selectedDayId, now]);
 
-  const overCap = dayMatches.filter(
-    (m) => m.status === "in-progress" && (minutesSince(m.startedAt, now) ?? 0) > slotMinutesFor(m),
-  );
+  /** "Needs action", ranked by `deskActions` from the board's own court states. */
+  const actions = deskActions({
+    courtStates: courtStates.map(({ state }) => state),
+    matches: dayMatches,
+    slotMinutesFor,
+    latePools: latePools.map((pool) => ({
+      pool,
+      scheduledEndMs: new Date(pool.scheduled_end!).getTime(),
+    })),
+    now,
+  });
+  const { shown: shownActions, folded: foldedActions } = splitActions(actions);
 
   const courtProgress = courtStates.map(({ court, state }) => {
     const courtMatches = dayMatches.filter((match) => match.courtId === court.id);
@@ -649,104 +661,68 @@ function Desk() {
           right={
             <span className="text-sm text-muted-foreground">
               {clockAdopted
-                ? `${timeLabel(new Date(now))} · updates every 30s`
+                ? `${timeLabel(new Date(now))} (updates every 30s)`
                 : "updates every 30s"}
             </span>
           }
         >
           <div aria-live="polite">
-            {latePools.length ||
-            overCap.length ||
-            readyUnassigned.length ||
-            courtStates.some(({ state }) => state.state === "free-ready") ? (
-              <ul className="space-y-2 text-base">
-                {courtStates
-                  .filter(({ state }) => state.state === "free-ready" && state.next)
-                  .map(({ court, state }) => (
-                    <ActionRow
-                      key={`ready-${court.id}`}
-                      tone="go"
-                      title={`Court ${court.number} is ready`}
-                      detail={
-                        state.next
-                          ? `${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`
-                          : "Next match is ready"
+            {actions.length ? (
+              <>
+                <ul className="space-y-2 text-base">
+                  {(showAllActions ? actions : shownActions).map((action) => (
+                    <NeedsActionRow
+                      key={
+                        action.kind === "results-late"
+                          ? `pool-${action.pool.id}`
+                          : `${action.kind}-${action.match.id}`
                       }
-                      action={
-                        <Button
-                          size="sm"
-                          className="h-11 px-4 text-sm"
-                          onClick={() => {
-                            setOperationCourtId(court.id);
-                            setOpenMatch(state.next);
-                          }}
-                        >
-                          Start
-                        </Button>
+                      action={action}
+                      courtNumber={(id) => courtMap.get(id)?.number ?? "?"}
+                      pairing={(m) => `${label(m.teams[0])} vs ${label(m.teams[1])}`}
+                      reason={(readiness) => readinessReason(readiness, courtMap, playerMap)}
+                      poolTitle={(p) =>
+                        catMap.get(p.category_id)?.code
+                          ? `${catMap.get(p.category_id)?.code} — ${p.name}, results incomplete`
+                          : `${p.name}, results incomplete`
                       }
+                      onOpen={(courtId, m) => {
+                        setOperationCourtId(courtId);
+                        setOpenMatch(m);
+                      }}
+                      tournamentId={tournamentId}
                     />
                   ))}
-                {overCap.map((m) => (
-                  <ActionRow
-                    key={m.id}
-                    tone="warn"
-                    title={`${label(m.teams[0])} vs ${label(m.teams[1])} · ${minutesSince(m.startedAt, now)} min on court`}
-                    detail={`Court ${courtMap.get(m.courtId ?? "")?.number ?? "?"} · past the expected finish`}
-                    action={
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-11 px-4 text-sm"
-                        onClick={() => {
-                          setOperationCourtId(m.courtId);
-                          setOpenMatch(m);
-                        }}
-                      >
-                        Open score desk
-                      </Button>
-                    }
-                  />
-                ))}
-                {latePools.map((p) => (
-                  <ActionRow
-                    key={p.id}
-                    tone="warn"
-                    title={`${p.name} · ${catMap.get(p.category_id)?.code} — results incomplete`}
-                    detail="Over 15 min past scheduled finish"
-                    action={
-                      <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
-                        <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
-                          Enter results
-                        </Link>
-                      </Button>
-                    }
-                  />
-                ))}
-                {readyUnassigned.length ? (
-                  <ActionRow
-                    tone="info"
-                    title={`${readyUnassigned.length} match${
-                      readyUnassigned.length === 1 ? " needs" : "es need"
-                    } a court`}
-                    detail="Not placed on the schedule yet"
-                    action={
-                      /*
-                        One link, not two. The old pair pointed at `/placement-schedule` and
-                        `/schedule` because those were two routes; they are one route now, and
-                        it reads the format itself. Asking the desk to choose would be the desk
-                        re-deciding something the route already knows.
-                      */
-                      <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
-                        <Link to="/tournaments/$tournamentId/schedule" params={{ tournamentId }}>
-                          Open Schedule
-                        </Link>
-                      </Button>
-                    }
-                  />
+                  {/*
+                    No row for ready matches without a court. Every way a match ends up there is
+                    either transient (a result just unlocked it and place-ready is about to slot
+                    it) or the organiser's call (no slot before the close, no courts, a first
+                    build or a rebuild not yet made), and the Schedule page already names the
+                    cause. The one thing a moderator can do about it - put the match on a court
+                    that is free now - is the idle tile's "Ready to place", so the board keeps it.
+                  */}
+                </ul>
+                {foldedActions.length ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-2 h-11 px-4 text-sm"
+                    aria-expanded={showAllActions}
+                    onClick={() => setShowAllActions((open) => !open)}
+                  >
+                    {showAllActions ? "Show fewer" : `Show ${foldedActions.length} more`}
+                  </Button>
                 ) : null}
-              </ul>
+              </>
             ) : (
-              <EmptyState title="All clear" hint="Nothing needs action right now." />
+              /*
+                One line rather than an empty-state block: when nothing needs doing, the panel
+                should cost the board as little height as possible.
+              */
+              <p className="text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">All clear.</span> Nothing needs
+                action right now.
+              </p>
             )}
           </div>
         </Panel>
@@ -757,7 +733,7 @@ function Desk() {
           right={
             selectedDay ? (
               <span className="text-sm text-muted-foreground">
-                {dayDateLabel(selectedDay.date)} · {courtsOnSelectedDay.length} court
+                {dayDateLabel(selectedDay.date)}, {courtsOnSelectedDay.length} court
                 {courtsOnSelectedDay.length === 1 ? "" : "s"}
               </span>
             ) : null
@@ -781,30 +757,6 @@ function Desk() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 font-display text-lg font-bold">
-                      {/*
-                        The badge is `foreground`-tinted rather than `primary`-tinted, and
-                        that is a correctness fix rather than a style preference.
-
-                        `--primary-ink` is solved against `bg-primary/10` over a *surface*.
-                        This badge sits on a court tile, whose background is not a surface -
-                        it is `COURT_STATE_TILE[state]`, so it is a green live wash, an
-                        amber tint, a primary wash or a plain surface depending on the state. An
-                        ink solved against a *surface* therefore has no fixed pair to clear
-                        here: the same badge sits on five different fills, so whether it
-                        passes or not is decided by the tile underneath it - a fact that was
-                        only visible at all once the fixture put a real match on a court.
-
-                        An ink is only valid against the fill it was solved for, so an
-                        element that can sit on five different backgrounds cannot use one.
-                        `foreground` on a `foreground/10` wash is backdrop-agnostic and
-                        clears the requirement on every tile, and it also
-                        respects the system's own rule that hue is reserved for state -
-                        a violet chip inside a state-coloured tile was already the one
-                        place that broke it.
-                      */}
-                      <span className="grid size-9 place-items-center rounded-lg bg-foreground/10 font-score text-lg font-bold text-foreground">
-                        {court.number}
-                      </span>
                       Court {court.number}
                     </span>
                     <CourtStatePill state={state.state} />
@@ -831,13 +783,15 @@ function Desk() {
                           }`}
                         >
                           {state.elapsedMinutes}′ on court
-                          {state.state === "overrun" &&
-                          state.elapsedMinutes != null &&
-                          state.elapsedMinutes > slotMinutesFor(state.playing)
-                            ? ` · +${state.elapsedMinutes - slotMinutesFor(state.playing)} over slot`
-                            : ""}
-                          {state.varianceMinutes
-                            ? ` · started ${Math.abs(state.varianceMinutes)} min ${
+                          {/*
+                            An overrun says only how long the match has been on, never how far
+                            past its slot that is or how it started. The amber tile is already
+                            the statement "this is running long", and the arithmetic beside it
+                            ("+7 over slot, started 4 min early") was three numbers competing
+                            with the one a moderator needs: how long the court has been held.
+                          */}
+                          {state.state !== "overrun" && state.varianceMinutes
+                            ? `, started ${Math.abs(state.varianceMinutes)} min ${
                                 state.varianceMinutes > 0 ? "late" : "early"
                               }`
                             : ""}
@@ -846,9 +800,9 @@ function Desk() {
                     ) : (
                       <span className="font-medium">
                         {state.state === "free-ready"
-                          ? "Free · next match ready"
+                          ? "Free, next match ready"
                           : state.state === "free-blocked"
-                            ? "Free · next match not ready"
+                            ? "Free, next match not ready"
                             : "Idle"}
                       </span>
                     )}
@@ -861,20 +815,35 @@ function Desk() {
                     {state.next ? (
                       <>
                         <p className="text-t2">
-                          Next: {timeLabel(state.next.scheduled)} · {label(state.next.teams[0])} vs{" "}
+                          Next {timeLabel(state.next.scheduled)}: {label(state.next.teams[0])} vs{" "}
                           {label(state.next.teams[1])}
                         </p>
-                        <ReadinessText
-                          readiness={state.readiness}
-                          courts={courtMap}
-                          players={playerMap}
-                        />
+                        {/*
+                          A court with a match on it names its next pairing and nothing
+                          more - no "Ready now", no reason it is not ready yet.
+
+                          The readiness line answers "can the queued match start", which is
+                          the question a *free* court is asked: free-ready is exactly "yes",
+                          free-blocked is exactly "not yet, and here is why". While a match is
+                          in progress the question is premature - the court cannot take it
+                          until the current match ends, whatever the clock says about rest -
+                          so the line would be an answer to a question nobody has asked yet.
+                          It also goes stale in a way that reads as a fault: a two-minute
+                          countdown on a court with twenty minutes left is noise, not a plan.
+                        */}
+                        {state.playing ? null : (
+                          <ReadinessText
+                            readiness={state.readiness}
+                            courts={courtMap}
+                            players={playerMap}
+                          />
+                        )}
                       </>
                     ) : nextReadyLabel ? (
                       <p className="text-t2">
-                        No match scheduled · ready to place: {nextReadyLabel}
+                        No match scheduled. Ready to place: {nextReadyLabel}
                         {readyUnassigned.length > 1
-                          ? ` · ${readyUnassigned.length - 1} more waiting`
+                          ? `, ${readyUnassigned.length - 1} more waiting`
                           : ""}
                       </p>
                     ) : (
@@ -1369,8 +1338,8 @@ export function MatchOperationsDialog({
           {nameA} <span className="text-muted-foreground">vs</span> {nameB}
         </DialogTitle>
         <DialogDescription className="text-sm">
-          {match.tag} · {scoringRuleLabel(scoringRule)}
-          {courtNumber ? ` · Court ${courtNumber}` : ""} ·{" "}
+          {match.tag}, {scoringRuleLabel(scoringRule)}
+          {courtNumber ? `, Court ${courtNumber}` : ""},{" "}
           {match.status === "in-progress"
             ? `${minutesSince(match.startedAt)}′ on court`
             : isReported
@@ -1791,9 +1760,129 @@ const ACTION_TONE = {
     icon: "bg-warn-foreground text-warn-surface",
     glyph: "!",
   },
-  // State of the plan that the desk cannot fix itself.
-  info: { row: "bg-muted text-foreground", icon: "bg-muted-foreground text-surface", glyph: "i" },
 } as const;
+
+type DeskPool = NonNullable<ReturnType<typeof usePools>["data"]>[number];
+
+/**
+ * One ranked "Needs action" row, worded from `deskActions`.
+ *
+ * Every row leads with the court, so a moderator scanning the hall reads it the way the board
+ * is laid out, then names the match, then the one number that put it here. A late match that
+ * cannot start says who it is waiting for in the board's own readiness words, because chasing
+ * that person is the action.
+ */
+function NeedsActionRow({
+  action,
+  courtNumber,
+  pairing,
+  reason,
+  poolTitle,
+  onOpen,
+  tournamentId,
+}: {
+  action: DeskAction<DeskMatch, DeskPool>;
+  courtNumber: (courtId: string) => number | string;
+  pairing: (match: DeskMatch) => string;
+  reason: (readiness: MatchReadiness) => string;
+  poolTitle: (pool: DeskPool) => string;
+  onOpen: (courtId: string, match: DeskMatch) => void;
+  tournamentId: string;
+}) {
+  const button = (text: string, primary = false) =>
+    action.kind === "results-late" ? null : (
+      <Button
+        size="sm"
+        variant={primary ? "default" : "outline"}
+        className="h-11 px-4 text-sm"
+        onClick={() => onOpen(action.courtId, action.match)}
+      >
+        {text}
+      </Button>
+    );
+
+  switch (action.kind) {
+    case "ready":
+      return (
+        <ActionRow
+          tone="go"
+          title={`Court ${courtNumber(action.courtId)} is ready`}
+          detail={pairing(action.match)}
+          action={button("Start", true)}
+        />
+      );
+    case "start-late":
+      return (
+        <ActionRow
+          tone="go"
+          title={`Court ${courtNumber(action.courtId)}, ${action.lateMinutes} min late`}
+          detail={`${pairing(action.match)}, ready to start`}
+          action={button("Start", true)}
+        />
+      );
+    case "blocked-late":
+      return (
+        <ActionRow
+          tone="warn"
+          title={`Court ${courtNumber(action.courtId)}, ${action.lateMinutes} min late`}
+          detail={`${pairing(action.match)}. Waiting: ${reason(action.readiness)}`}
+          action={button("Open match")}
+        />
+      );
+    case "overrun":
+      return (
+        <ActionRow
+          tone="warn"
+          title={`Court ${courtNumber(action.courtId)}, ${action.elapsedMinutes} min on court`}
+          detail={`${pairing(action.match)}, ${action.overByMinutes} min past the expected finish${
+            action.nextLateMinutes != null
+              ? `. The next match is ${action.nextLateMinutes} min late`
+              : ""
+          }`}
+          action={button("Enter result")}
+        />
+      );
+    case "results-late":
+      return (
+        <ActionRow
+          tone="warn"
+          title={poolTitle(action.pool)}
+          detail={`${action.lateMinutes} min past scheduled finish`}
+          action={
+            <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
+              <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
+                Enter results
+              </Link>
+            </Button>
+          }
+        />
+      );
+  }
+}
+
+/**
+ * The words for why a queued match can or cannot start, shared by the tile and the
+ * "Needs action" row so the two can never name a different reason.
+ */
+function readinessReason(
+  readiness: MatchReadiness,
+  courts: ReadonlyMap<string, { number: number }>,
+  players: ReadonlyMap<string, Player>,
+): string {
+  const who = readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"}, ` : "";
+  switch (readiness.state) {
+    case "ready":
+      return "Ready now";
+    case "resting":
+      return `${who}ready in ${readiness.remainingMinutes} min`;
+    case "player-busy":
+      return `${who}on Court ${
+        readiness.blockingCourtId ? (courts.get(readiness.blockingCourtId)?.number ?? "?") : "?"
+      }`;
+    case "teams-missing":
+      return "Teams not assigned";
+  }
+}
 
 /**
  * One row of "Needs action": a short title, one line of detail, and the button that clears it.
@@ -2047,26 +2136,13 @@ function ReadinessText({
   players: ReadonlyMap<string, Player>;
 }) {
   if (!readiness) return null;
+  const text = readinessReason(readiness, courts, players);
   if (readiness.state === "ready")
-    return <span className="text-base font-semibold text-primary-ink">Ready now</span>;
-  if (readiness.state === "resting") {
-    return (
-      <span className="text-warn-foreground">
-        {readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"} · ` : ""}
-        ready in {readiness.remainingMinutes} min
-      </span>
-    );
-  }
-  if (readiness.state === "player-busy") {
-    return (
-      <span className="text-danger-foreground">
-        {readiness.playerId ? `${players.get(readiness.playerId)?.name ?? "Player"} · ` : ""}
-        on Court{" "}
-        {readiness.blockingCourtId ? (courts.get(readiness.blockingCourtId)?.number ?? "?") : "?"}
-      </span>
-    );
-  }
-  return <span>Teams not assigned</span>;
+    return <span className="text-base font-semibold text-primary-ink">{text}</span>;
+  if (readiness.state === "resting") return <span className="text-warn-foreground">{text}</span>;
+  if (readiness.state === "player-busy")
+    return <span className="text-danger-foreground">{text}</span>;
+  return <span>{text}</span>;
 }
 
 function impactMessage(prefix: string, impact: ScheduleImpact): string {

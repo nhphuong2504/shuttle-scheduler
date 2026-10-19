@@ -490,7 +490,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
           <div className="lg:hidden">
             <p className="flex justify-between gap-3 text-sm text-muted-foreground">
               <strong className="text-foreground">
-                Step {currentIndex + 1} of {steps.length} · {steps[currentIndex]?.label}
+                Step {currentIndex + 1} of {steps.length} — {steps[currentIndex]?.label}
               </strong>
               <span>{isNew ? "Kept on this device" : "Saved as you go"}</span>
             </p>

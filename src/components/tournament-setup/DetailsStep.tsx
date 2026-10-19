@@ -180,7 +180,7 @@ export function DetailsStep({
           <div>
             {span ? (
               <p className="inline-flex rounded-full bg-info-surface px-3.5 py-1.5 text-sm font-semibold text-info-foreground">
-                {span} day{span === 1 ? "" : "s"} · {dayLabel(start)}
+                {span} day{span === 1 ? "" : "s"}, {dayLabel(start)}
                 {end && end !== start ? ` – ${dayLabel(end)}` : ""}
               </p>
             ) : (

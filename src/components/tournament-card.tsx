@@ -106,7 +106,7 @@ export function TournamentCard({
         <li className="truncate">{dateRangeText(summary.starts_at, summary.ends_at)}</li>
         <li className="truncate">{summary.venue_name || "Venue not set"}</li>
         <li className="truncate">
-          {countText(summary.entry_count, "entry", "entries")} ·{" "}
+          {countText(summary.entry_count, "entry", "entries")},{" "}
           {countText(summary.category_count, "event", "events")}
         </li>
         {footnote ? <li className="truncate">{footnote}</li> : null}

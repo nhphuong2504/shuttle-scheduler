@@ -111,7 +111,7 @@ function HowItRuns({ format }: { format: CompetitionFormat }) {
       </span>
       <span className="mt-3 grid items-stretch gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.5fr)]">
         <span className="block rounded-xl border border-hairline bg-surface p-4">
-          <span className="block text-base font-bold">Stage 1 · Placement</span>
+          <span className="block text-base font-bold">Stage 1 — Placement</span>
           <span className="mt-2.5 flex flex-col gap-2 text-sm text-muted-foreground">
             <Step n={1}>Round one: entrants are paired.</Step>
             <Step n={2}>Round two: winners play winners, losers play losers.</Step>
@@ -124,12 +124,12 @@ function HowItRuns({ format }: { format: CompetitionFormat }) {
           <ArrowRight className="size-6" />
         </span>
         <span className="block rounded-xl border border-hairline bg-surface p-4">
-          <span className="block text-base font-bold">Stage 2 · Knockout draws</span>
+          <span className="block text-base font-bold">Stage 2 — Knockout draws</span>
           <span className="mt-2.5 grid grid-cols-2 gap-2 text-sm">
             {format.tiers.map((tier) => (
               <span key={tier.tier} className="block rounded-lg bg-background px-3 py-2">
                 <span className="block">
-                  <strong>{tier.label}</strong> · {tier.title}
+                  <strong>{tier.label}</strong>, {tier.title}
                 </span>
                 <span className="block text-sm text-muted-foreground">{tier.detail}</span>
               </span>

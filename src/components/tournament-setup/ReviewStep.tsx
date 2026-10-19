@@ -143,8 +143,8 @@ export function ReviewStep({
           <Row
             label="Tournament dates"
             value={`${windowLabel(form.startsOn, form.endsOn)}${
-              days ? ` · ${days} day${days === 1 ? "" : "s"}` : ""
-            } · ${form.basics.venueTimezone || "no timezone"}`}
+              days ? `, ${days} day${days === 1 ? "" : "s"}` : ""
+            }, ${form.basics.venueTimezone || "no timezone"}`}
           />
           <Row
             label="Venue"
@@ -163,7 +163,7 @@ export function ReviewStep({
                 form.basics.organizerPhone.trim(),
               ]
                 .filter(Boolean)
-                .join(" · ") || "Not set"
+                .join(", ") || "Not set"
             }
           />
           <div className="min-w-0">
@@ -209,7 +209,7 @@ export function ReviewStep({
             <dd className="mt-2 flex flex-wrap gap-2 text-sm">
               {PLACEMENT_TIERS.map((tier) => (
                 <span key={tier.tier} className="rounded-full bg-secondary px-3 py-0.5">
-                  <span className="font-score">{tier.record}</span> → {tier.label} · {tier.title}
+                  <span className="font-score">{tier.record}</span> → {tier.label}, {tier.title}
                 </span>
               ))}
             </dd>

@@ -44,7 +44,7 @@ export function ReaderPreview() {
           court={2}
           state="overrun"
           names="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks"
-          timer="37′ on court · +12 over slot"
+          timer="37′ on court"
         />
       </Phone>
 
@@ -73,11 +73,11 @@ export function ReaderPreview() {
           <ul className="flex flex-col gap-1 border-t border-hairline pt-1.5 text-xs">
             <li>
               Men&rsquo;s Doubles with Leo Nguyen
-              <span className="text-muted-foreground"> · {entryTypeLabel("pair")}</span>
+              <span className="text-muted-foreground"> ({entryTypeLabel("pair")})</span>
             </li>
             <li>
               Mixed Doubles with Amy Young
-              <span className="text-muted-foreground"> · {entryTypeLabel("pair")}</span>
+              <span className="text-muted-foreground"> ({entryTypeLabel("pair")})</span>
             </li>
           </ul>
         </div>

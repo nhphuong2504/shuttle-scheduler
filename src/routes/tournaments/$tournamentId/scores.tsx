@@ -145,7 +145,7 @@ function MatchRow({
       </span>
       <span className="font-score text-t2 text-muted-foreground">
         {timeLabel(match.scheduled)}
-        {match.courtId ? ` · C${courtMap.get(match.courtId)?.number ?? "?"}` : ""}
+        {match.courtId ? `, C${courtMap.get(match.courtId)?.number ?? "?"}` : ""}
       </span>
       <StatusPill status={match.status} />
       {/* A game score is a number, so it must never be broken across lines. The fixed
@@ -495,7 +495,7 @@ function MatchesPage() {
             {placementGroups.map(([catId, list]) => (
               <Panel
                 key={`placement-${catId}`}
-                title={`${catMap.get(catId)?.code ?? "Placement"} · two placement rounds`}
+                title={`${catMap.get(catId)?.code ?? "Placement"} — two placement rounds`}
                 right={
                   <span className="font-score text-t4 text-muted-foreground">
                     {list.filter((m) => m.status === "reported").length}/{list.length} reported
@@ -527,7 +527,7 @@ function MatchesPage() {
               return (
                 <Panel
                   key={pool.id}
-                  title={`${catMap.get(pool.category_id)?.code ?? ""} · ${pool.name}`}
+                  title={`${catMap.get(pool.category_id)?.code ?? ""} — ${pool.name}`}
                   right={
                     <span className="font-score text-t4 text-muted-foreground">
                       {reported}/{list.length} reported
@@ -550,7 +550,7 @@ function MatchesPage() {
                         </span>
                         <span className="font-score text-t2 text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
-                          {m.court_id ? ` · C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
+                          {m.court_id ? `, C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
                         </span>
                         <StatusPill status={m.status} />
                         <span className="w-20 text-right font-score text-t2">
@@ -597,7 +597,7 @@ function MatchesPage() {
               return (
                 <Panel
                   key={`tier-${drawId}`}
-                  title={`${catMap.get(draw?.category_id ?? "")?.code ?? ""} · Draw ${draw?.tier ?? "?"}`}
+                  title={`${catMap.get(draw?.category_id ?? "")?.code ?? ""} — Draw ${draw?.tier ?? "?"}`}
                   right={
                     <span className="font-score text-t4 text-muted-foreground">
                       {list.filter((m) => m.status === "reported").length}/{list.length} reported
@@ -629,10 +629,10 @@ function MatchesPage() {
               return (
                 <Panel
                   key={draw.id}
-                  title={`${catMap.get(draw.category_id)?.code ?? ""} · Draw ${draw.tier}`}
+                  title={`${catMap.get(draw.category_id)?.code ?? ""} — Draw ${draw.tier}`}
                   right={
                     <span className="font-score text-t4 text-muted-foreground">
-                      {draw.entrant_count} entrants · bracket {draw.bracket_size}
+                      {draw.entrant_count} entrants, bracket {draw.bracket_size}
                     </span>
                   }
                   bodyClassName="p-2"
@@ -652,7 +652,7 @@ function MatchesPage() {
                         </span>
                         <span className="font-score text-t2 text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
-                          {m.court_id ? ` · C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
+                          {m.court_id ? `, C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
                         </span>
                         {isByeMatch(m) ? <ByeMarker /> : <StatusPill status={m.status} />}
                         <span className="w-24 text-right font-score text-sm">

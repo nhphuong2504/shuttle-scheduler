@@ -345,7 +345,7 @@ export function DayPlanner() {
       subtitle="Build each day of the running order, or safely rebuild the remaining group matches from the current time."
       actions={
         <span className="text-sm text-muted-foreground">
-          {tournament ? `${tournament.name} · ${dayCount} day${dayCount === 1 ? "" : "s"}` : ""}
+          {tournament ? `${tournament.name}, ${dayCount} day${dayCount === 1 ? "" : "s"}` : ""}
         </span>
       }
     >
@@ -399,7 +399,7 @@ export function DayPlanner() {
             return (
               <Panel
                 key={day.id}
-                title={`Day ${day.day_number} · ${stageTitle(day.day_number, dayCount)}`}
+                title={`Day ${day.day_number} — ${stageTitle(day.day_number, dayCount)}`}
               >
                 <div className="space-y-3">
                   {canEdit ? (
@@ -518,7 +518,7 @@ export function DayPlanner() {
                       <div key={target.key} className="space-y-1 text-sm">
                         <p className="font-score">
                           <span className="capitalize">{stageLabel(target.stage)}</span>: {s.placed}{" "}
-                          matches placed · {s.anchorCount} anchors kept · {util}% of the {utilLabel}
+                          matches placed, {s.anchorCount} anchors kept, {util}% of the {utilLabel}
                         </p>
                         {s.movedCount > 0 ? (
                           <p className="text-sm text-muted-foreground">
@@ -529,7 +529,7 @@ export function DayPlanner() {
                           <p className="text-sm text-muted-foreground">
                             Projected finish {timeLabel(s.projectedFinish)}
                             {s.overrunMinutes > 0
-                              ? ` · ${s.overrunMinutes} min past ${window.end}`
+                              ? `, ${s.overrunMinutes} min past ${window.end}`
                               : ""}
                           </p>
                         ) : null}
@@ -655,22 +655,22 @@ export function DayPlanner() {
               <div className="space-y-3 overflow-y-auto pr-1">
                 <div className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm">
                   <p className="font-score">
-                    {previewPlan.plan.summary.anchorCount} anchors kept ·{" "}
-                    {previewPlan.plan.summary.placed} matches replanned ·{" "}
+                    {previewPlan.plan.summary.anchorCount} anchors kept,{" "}
+                    {previewPlan.plan.summary.placed} matches replanned,{" "}
                     {previewPlan.plan.diff.movedCount} moving
                   </p>
                   {previewPlan.plan.summary.projectedFinish ? (
                     <p className="mt-1 text-sm text-muted-foreground">
                       Projected finish {timeLabel(previewPlan.plan.summary.projectedFinish)}
                       {previewPlan.plan.summary.overrunMinutes > 0
-                        ? ` · ${previewPlan.plan.summary.overrunMinutes} min past ${previewWindow?.end ?? "day end"}`
+                        ? `, ${previewPlan.plan.summary.overrunMinutes} min past ${previewWindow?.end ?? "day end"}`
                         : ""}
                       {previewPlan.plan.summary.remainingUtilization != null
-                        ? ` · ${Math.round(previewPlan.plan.summary.remainingUtilization * 100)}% of remaining window`
+                        ? `, ${Math.round(previewPlan.plan.summary.remainingUtilization * 100)}% of remaining window`
                         : ""}
                       {previewPlan.plan.summary.projectedFinishDeltaMinutes != null ? (
                         <>
-                          {" · "}
+                          {", "}
                           {formatProjectedFinishDelta(
                             previewPlan.plan.summary.projectedFinishDeltaMinutes,
                           )}

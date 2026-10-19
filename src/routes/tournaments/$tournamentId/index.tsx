@@ -183,7 +183,7 @@ function TournamentPage() {
   return (
     <Page
       title={name}
-      subtitle={[venue || "Venue not set", range].filter(Boolean).join(" · ")}
+      subtitle={[venue || "Venue not set", range].filter(Boolean).join(", ")}
       actions={
         summary ? (
           <TournamentStatusPill
@@ -269,8 +269,9 @@ function TournamentPage() {
                     {entry.categoryName ?? "Event"}
                     {entry.partnerName ? ` with ${entry.partnerName}` : ""}
                     <span className="text-muted-foreground">
-                      {" · "}
+                      {" ("}
                       {entryTypeLabel(entry.entryType)}
+                      {")"}
                     </span>
                   </li>
                 ))}
@@ -465,8 +466,8 @@ function RegisterForm({
                     {event.name}
                   </span>
                   <span className="mt-0.5 block text-t4 text-muted-foreground">
-                    {entryTypeLabel(event.entry_type)} · {capacityText(usage.get(event.id))}
-                    {reason ? ` · ${reason}` : ""}
+                    {entryTypeLabel(event.entry_type)}, {capacityText(usage.get(event.id))}
+                    {reason ? `. ${reason}` : ""}
                   </span>
                 </span>
               </button>
@@ -526,7 +527,7 @@ function RegisterForm({
             : partnerIncomplete
               ? "A doubles event needs your partner's name and email."
               : `${countText(entries.length, "event", "events")} selected${
-                  cap === null ? "" : ` · up to ${cap} per player`
+                  cap === null ? "" : `, up to ${cap} per player`
                 }`}
         </p>
       </div>

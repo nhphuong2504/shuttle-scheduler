@@ -252,19 +252,19 @@ describe("capacityText", () => {
 
   it("says both numbers when a cap exists and there is room", () => {
     expect(capacityText({ taken: 2, cap: 5, remaining: 3, full: false })).toBe(
-      "2 of 5 taken · 3 places left",
+      "2 of 5 taken, 3 places left",
     );
   });
 
   it("says a full event is full rather than showing zero places", () => {
     expect(capacityText({ taken: 5, cap: 5, remaining: 0, full: true })).toBe(
-      "Full · 5 of 5 taken",
+      "Full, 5 of 5 taken",
     );
   });
 
   it("uses the singular for one place", () => {
     expect(capacityText({ taken: 4, cap: 5, remaining: 1, full: false })).toBe(
-      "4 of 5 taken · 1 place left",
+      "4 of 5 taken, 1 place left",
     );
   });
 

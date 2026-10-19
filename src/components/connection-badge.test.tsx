@@ -37,8 +37,8 @@ describe("ConnectionBadge gives every connection state its own word", () => {
     expect(words).toEqual([
       "Connecting",
       "Live",
-      "Offline · live updates paused",
-      "Connection problem · live updates paused",
+      "Offline, live updates paused",
+      "Connection problem, live updates paused",
     ]);
     expect(new Set(words).size).toBe(words.length);
   });
@@ -54,7 +54,7 @@ describe("ConnectionBadge gives every connection state its own word", () => {
     // "Live" alone sat in a stats strip beside "13 matches scheduled", where it could be
     // read as a match being live - the meaning `--state-live-*` is reserved for. Both
     // non-live failure words carry their consequence so the word never stands alone.
-    expect(badge("offline").textContent).toBe("Offline · live updates paused");
+    expect(badge("offline").textContent).toBe("Offline, live updates paused");
   });
 
   it("keeps connection health apart from the time of the last change", () => {

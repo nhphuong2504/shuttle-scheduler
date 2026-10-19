@@ -485,9 +485,9 @@ for (const cell of MATRIX_CELLS) {
       expect(failures, "state chips under the 4.5:1 bar").toEqual([]);
     });
 
-    test("the four urgency treatments all render and separate", async ({ page }) => {
+    test("the three urgency treatments all render and separate", async ({ page }) => {
       // "Needs action" is the operator's panel: the Desk withholds it from a caller without
-      // `can_edit`, so the four treatments are only reachable in an editor session.
+      // `can_edit`, so the three treatments are only reachable in an editor session.
       await installAppMock(page, { preset: "states", role: "user" });
       await openCell(page, routes.desk, cell);
 
@@ -512,9 +512,10 @@ for (const cell of MATRIX_CELLS) {
           // The primary dispatch prompt: the one action the desk wants taken.
           dispatch: text.includes("is ready"),
           dispatchSurface: surfaceOf("is ready"),
-          // Two attention alerts, from different causes.
+          // A ready match with no court is the organiser's to place, not the desk's to chase,
+          // so the panel carries no row for it even though the preset plants one.
           unplaced: text.includes("a court"),
-          unplacedSurface: surfaceOf("a court"),
+          // Two attention alerts, from different causes.
           overrun: text.includes("min on court"),
           overrunSurface: surfaceOf("min on court"),
           // The destructive one: a result that is overdue.
@@ -527,24 +528,22 @@ for (const cell of MATRIX_CELLS) {
 
       for (const [what, present] of [
         ["the primary dispatch prompt", report.dispatch],
-        ["the unplaced-pairing alert", report.unplaced],
         ["the over-cap alert", report.overrun],
         ["the overdue-results alert", report.overdue],
       ] as const) {
         expect(present, `${what} did not render`).toBe(true);
       }
+      expect(report.unplaced, "the unplaced-pairing row came back to the panel").toBe(false);
 
       // The surfaces must separate, and the severity scale is what they separate by.
       //
-      // Four treatments, three surfaces, and that is deliberate: the overrun and the overdue
+      // Three treatments, two surfaces, and that is deliberate: the overrun and the overdue
       // result are both warnings (a delay and an omission, neither a danger), so they share the
-      // warning surface. The primary action must not look like a warning, and the plan note the
-      // desk cannot fix itself (a match with no court) is neutral information, so it must not
-      // look like either. Stated as relationships rather than a count of tints - a count alone
-      // would pass if two warnings became two arbitrary new colours.
+      // warning surface, and the primary action must not look like a warning. Stated as
+      // relationships rather than a count of tints - a count alone would pass if two warnings
+      // became two arbitrary new colours.
       for (const [what, surface] of [
         ["the primary dispatch prompt", report.dispatchSurface],
-        ["the unplaced-pairing note", report.unplacedSurface],
         ["the over-cap alert", report.overrunSurface],
         ["the overdue-results alert", report.overdueSurface],
       ] as const) {
@@ -557,14 +556,6 @@ for (const cell of MATRIX_CELLS) {
       expect(report.dispatchSurface, "the primary action resolved to the warning surface").not.toBe(
         report.overrunSurface,
       );
-      expect(
-        report.unplacedSurface,
-        "the neutral plan note resolved to the warning surface",
-      ).not.toBe(report.overrunSurface);
-      expect(
-        report.unplacedSurface,
-        "the neutral plan note resolved to the primary action's surface",
-      ).not.toBe(report.dispatchSurface);
     });
 
     test("the state chips survive grayscale and deuteranopia", async ({ page }) => {
