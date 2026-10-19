@@ -548,14 +548,15 @@ function Desk() {
 
   /**
    * The tab title carries the Needs-action count, so a moderator on the Schedule tab or in
-   * another window still sees that a court is waiting. It drops the count when the list is
-   * clear, and gives the route its own title back when the Desk is left.
+   * another window still sees that a court is waiting. The count drops when the list is
+   * clear and the tab reads "Control desk"; leaving the Desk gives the route its own title
+   * back.
    */
   const baseTitle = useRef<string | null>(null);
   useEffect(() => {
     baseTitle.current ??= document.title;
     const base = baseTitle.current ?? "";
-    const title = canEdit && actions.length ? `(${actions.length}) Control desk` : base;
+    const title = canEdit && actions.length ? `(${actions.length}) Control desk` : "Control desk";
     document.title = title;
     return () => {
       // Only take our own title back. A route change may already have set the next page's,
