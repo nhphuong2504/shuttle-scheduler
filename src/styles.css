@@ -3,6 +3,13 @@
 @import "tw-animate-css";
 
 /*
+ * The Desk's console layout: a laptop or larger, held as one viewport-tall screen with its
+ * columns scrolling inside themselves. Below 1200px wide or 600px high the panels stack and the
+ * page scrolls instead. The thresholds and why are in desk-layout.html, section 4d.
+ */
+@custom-variant desk-console (@media (min-width: 1200px) and (min-height: 600px));
+
+/*
  * Tournova design tokens. The principles live in docs/design-principles.md;
  * this file is the implementation. Semantic tokens only: never hardcode a colour in a
  * component. Core palette: ground, surface, ink, violet (interaction), green (live).

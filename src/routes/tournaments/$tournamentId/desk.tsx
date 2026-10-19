@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
 
 import { Page, Panel } from "@/components/app-shell";
@@ -531,6 +531,12 @@ function Desk() {
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
     : null;
 
+  const actionsScrollRef = useRef<HTMLDivElement>(null);
+  const boardScrollRef = useRef<HTMLDivElement>(null);
+  const actionsCue = useScrollCue(actionsScrollRef);
+  const boardCue = useScrollCue(boardScrollRef);
+  const hiddenCourts = boardCue.hidden;
+
   return (
     <Page
       title="Control desk"
@@ -563,9 +569,23 @@ function Desk() {
         </>
       }
     >
-      <div className="space-y-5">
+      {/*
+        The console. For an operator on a laptop or larger it is exactly one viewport tall and
+        sits under the workspace header, which scrolls away: one scroll and the window is the
+        Desk. Its two columns - the moderator's work on the left, the hall on the right - share
+        that height and scroll inside themselves, so their bottoms always line up and a long
+        board can never push an alert off the screen. Narrower or shorter, it stacks and the
+        page scrolls. A reader gets the board alone, in the page's own flow.
+      */}
+      <div
+        className={
+          canEdit
+            ? "space-y-5 desk-console:flex desk-console:h-dvh desk-console:flex-col desk-console:gap-4 desk-console:space-y-0 desk-console:py-3"
+            : "space-y-5"
+        }
+      >
         {orderedDays.length ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline bg-surface px-3 py-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline bg-surface px-3 py-2 text-xs desk-console:flex-none">
             <span className="font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               Day
             </span>
@@ -602,14 +622,35 @@ function Desk() {
           </div>
         ) : null}
 
+        <div
+          className={
+            canEdit
+              ? "grid gap-5 desk-console:min-h-0 desk-console:flex-1 desk-console:grid-cols-[minmax(360px,1fr)_minmax(0,1.7fr)] desk-console:gap-4"
+              : ""
+          }
+        >
         {/*
-          The operator's alerts are for whoever runs the day. A reader gets the board, which
-          answers "what is on court" without asking them to chase anything they cannot act on. Hidden rather than disabled,
-          and hidden while the access read is still in flight, so nothing that can start a
-          match is ever drawn for someone who may not.
+          The operator's work column is for whoever runs the day. A reader gets the board, which
+          answers "what is on court" without asking them to chase anything they cannot act on.
+          Hidden rather than disabled, and hidden while the access read is still in flight, so
+          nothing that can start a match is ever drawn for someone who may not.
         */}
         {canEdit ? (
-        <Panel title="Needs action">
+        <div className="flex min-h-0 flex-col gap-4">
+        <Panel
+          title="Needs action"
+          className="flex min-h-0 flex-col desk-console:flex-1"
+          bodyClassName="flex min-h-0 flex-1 flex-col p-0"
+        >
+          <div
+            ref={actionsScrollRef}
+            tabIndex={actionsCue.scrollable ? 0 : undefined}
+            role={actionsCue.scrollable ? "region" : undefined}
+            aria-label={actionsCue.scrollable ? "Needs action" : undefined}
+            className={`min-h-0 flex-1 overflow-auto p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${
+              actionsCue.more ? SCROLL_FADE : ""
+            }`}
+          >
           <div aria-live="polite">
             {actions.length ? (
               <>
@@ -669,20 +710,49 @@ function Desk() {
               </p>
             )}
           </div>
+          </div>
         </Panel>
+        </div>
         ) : null}
 
         <Panel
           title="Court board"
+          className={canEdit ? "flex min-h-0 flex-col" : ""}
+          bodyClassName={canEdit ? "flex min-h-0 flex-1 flex-col p-0" : ""}
           right={
             selectedDay ? (
               <span className="text-sm text-muted-foreground">
                 {dayDateLabel(selectedDay.date)}, {courtsOnSelectedDay.length} court
                 {courtsOnSelectedDay.length === 1 ? "" : "s"}
+                {/*
+                  Courts never move, so the ones out of view are named, not counted: "Courts
+                  9–14 below" says exactly where to look.
+                */}
+                {hiddenCourts.length ? (
+                  <span className="font-semibold text-foreground">
+                    {", "}
+                    {hiddenCourts.length === 1
+                      ? `Court ${hiddenCourts[0]} below`
+                      : `Courts ${Math.min(...hiddenCourts)}–${Math.max(...hiddenCourts)} below`}
+                  </span>
+                ) : null}
               </span>
             ) : null
           }
         >
+          <div
+            ref={boardScrollRef}
+            tabIndex={boardCue.scrollable ? 0 : undefined}
+            role={boardCue.scrollable ? "region" : undefined}
+            aria-label={boardCue.scrollable ? "Court board" : undefined}
+            className={
+              canEdit
+                ? `min-h-0 flex-1 overflow-auto p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${
+                    boardCue.more ? SCROLL_FADE : ""
+                  }`
+                : ""
+            }
+          >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {courtStates.map(({ court, state }) => {
               const target = state.playing ?? state.next ?? readyUnassigned[0];
@@ -690,6 +760,7 @@ function Desk() {
                 <button
                   key={court.id}
                   type="button"
+                  data-court-number={court.number}
                   disabled={!target}
                   aria-label={`Court ${court.number}: ${state.state.replace("-", " ")}`}
                   onClick={() => {
@@ -697,7 +768,7 @@ function Desk() {
                     setOperationCourtId(court.id);
                     setOpenMatch(target);
                   }}
-                  className={`rounded-xl border p-4 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default disabled:opacity-80 ${COURT_STATE_TILE[state.state]}`}
+                  className={`flex flex-col rounded-xl border p-4 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default disabled:opacity-80 ${COURT_STATE_TILE[state.state]}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 font-display text-lg font-bold">
@@ -809,8 +880,9 @@ function Desk() {
               );
             })}
           </div>
+          </div>
         </Panel>
-
+        </div>
       </div>
 
       <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>
@@ -1789,6 +1861,61 @@ function CourtStatePill({ state }: { state: CourtState }) {
       {COURT_STATE_LABEL[state]}
     </span>
   );
+}
+
+/** The bottom fade a scroll region carries while it has more below. */
+const SCROLL_FADE = "[mask-image:linear-gradient(to_bottom,#000_calc(100%-40px),transparent)]";
+
+/**
+ * What a scroll region is hiding, measured from the region itself.
+ *
+ * `scrollable` makes it focusable - a region that scrolls must be reachable from the keyboard -
+ * and `more` fades its bottom edge while there is content below. `hidden` lists the court
+ * numbers of tiles (`data-court-number`) whose top is out of view, so the board can name them.
+ * Re-measured on scroll, on a size change of the region or its content, and on window resize.
+ */
+function useScrollCue(ref: RefObject<HTMLElement | null>) {
+  const [cue, setCue] = useState<{ scrollable: boolean; more: boolean; hidden: number[] }>({
+    scrollable: false,
+    more: false,
+    hidden: [],
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const scrollable = el.scrollHeight > el.clientHeight + 1;
+      const more = el.scrollHeight - el.scrollTop - el.clientHeight > 4;
+      const edge = el.getBoundingClientRect().bottom;
+      const hidden = more
+        ? [...el.querySelectorAll<HTMLElement>("[data-court-number]")]
+            // Out of view means its top is below the fold, or all but a sliver of it is: a
+            // tile whose name and state show is on screen, even if its foot is cut off.
+            .filter((tile) => tile.getBoundingClientRect().top > edge - 48)
+            .map((tile) => Number(tile.dataset["courtNumber"]))
+        : [];
+      setCue((prev) =>
+        prev.scrollable === scrollable &&
+        prev.more === more &&
+        prev.hidden.length === hidden.length &&
+        prev.hidden.every((n, i) => n === hidden[i])
+          ? prev
+          : { scrollable, more, hidden },
+      );
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+      observer.disconnect();
+    };
+  }, [ref]);
+  return cue;
 }
 
 function ReadinessText({
