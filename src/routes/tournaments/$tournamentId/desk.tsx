@@ -531,15 +531,6 @@ function Desk() {
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
     : null;
 
-  /**
-   * Matches with no usable time at all.
-   *
-   * They cannot be attributed to a day without a guess, so the desk reports them as a neutral
-   * plan-level fact instead of filing them under one. This is the only tournament-wide number
-   * on the page, and it is deliberately not an operational metric.
-   */
-  const untimedCount = attribution.untimed.length;
-
   return (
     <Page
       title="Control desk"
@@ -550,6 +541,16 @@ function Desk() {
       }
       actions={
         <>
+          {/*
+            The venue's time, once this browser's clock has been adopted - never in the server
+            render, for the reason `clockAdopted` gives. It sits beside the connection badge
+            because it is the whole page's clock, not one panel's.
+          */}
+          {clockAdopted ? (
+            <time data-desk-clock className="font-score text-sm font-semibold tabular-nums text-foreground">
+              {timeLabel(new Date(now))}
+            </time>
+          ) : null}
           <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
           <Button
             size="sm"
@@ -585,17 +586,20 @@ function Desk() {
                 </button>
               ))}
             </div>
-            <span className="ml-auto">
+            <span className="ml-auto flex flex-wrap items-baseline gap-x-4 gap-y-1">
               <DayScheduleStatus latestFinishMs={dayCounts.latestFinishMs} closeMs={dayCloseMs} />
+              {/*
+                The day's pace as one count, in place of the per-court progress bars: those led
+                to no action, and the moderator only needs to read how far through the day is.
+              */}
+              <span className="text-muted-foreground">
+                <b className="font-semibold tabular-nums text-foreground">
+                  {dayCounts.completed} of {dayCounts.completed + dayCounts.remaining}
+                </b>{" "}
+                matches done
+              </span>
             </span>
           </div>
-        ) : null}
-
-        {untimedCount ? (
-          <p className="text-xs text-muted-foreground">
-            {untimedCount} match{untimedCount === 1 ? " has" : "es have"} no scheduled time, so
-            {untimedCount === 1 ? " it is" : " they are"} not counted on any day.
-          </p>
         ) : null}
 
         {/*
@@ -605,16 +609,7 @@ function Desk() {
           match is ever drawn for someone who may not.
         */}
         {canEdit ? (
-        <Panel
-          title="Needs action"
-          right={
-            <span className="text-sm text-muted-foreground">
-              {clockAdopted
-                ? `${timeLabel(new Date(now))} (updates every 30s)`
-                : "updates every 30s"}
-            </span>
-          }
-        >
+        <Panel title="Needs action">
           <div aria-live="polite">
             {actions.length ? (
               <>

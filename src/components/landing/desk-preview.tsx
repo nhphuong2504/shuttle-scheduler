@@ -38,6 +38,7 @@ export function DeskPreview() {
           <span className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">Sat 18 Oct</span>
         </span>
         <span className="ml-auto flex items-center gap-2.5">
+          <span className="font-score text-sm font-semibold tabular-nums">14:37</span>
           <span className="rounded-full bg-state-live-chip px-2.5 py-1 text-sm font-semibold text-state-live-ink">
             Live
           </span>
@@ -50,7 +51,6 @@ export function DeskPreview() {
       <div className="flex flex-col gap-3 p-3.5 sm:p-4">
         <Panel
           title="Needs action"
-          right={<span className="text-sm text-muted-foreground tabular-nums">14:37 (updates every 30s)</span>}
           className="min-w-0"
           bodyClassName="p-3"
         >
