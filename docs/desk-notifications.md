@@ -49,7 +49,8 @@ the Block rows above. Organiser headline: "N matches need schedule review".
 Each row leads with the court, then names the match, the one number that put it there, what is
 in the way when something is, and the single button that clears it. Rows are ranked by how
 late they are, whatever their kind; ready courts that are not late come last, soonest first.
-The first five are drawn and the rest fold behind "Show N more". Derived in
+The first five are drawn and the rest fold behind "Show N more" - three, each on one line,
+on a short console (a laptop viewport under 760px tall), so Up next keeps room for its queue. Derived in
 `src/lib/tournament/desk-actions.ts`.
 
 | Row | When | Level | Action |
@@ -140,6 +141,10 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 The chip says whether live updates are arriving: Live, Connecting, Offline, live updates
 paused, Connection problem, live updates paused. The age of the last change is a separate
 muted note, shown only while connected, and never changes the chip.
+
+On the console the page header scrolls away, so the clock, the badge and Refresh move into the
+console's own bar beside the day picker; the header's copy is `display: none` there, so the
+badge's live region is never announced twice.
 
 ## Recording a result: when did it finish?
 

@@ -124,7 +124,12 @@ import {
   conflictKindLabels,
   groupConflictsByMatch,
 } from "@/lib/tournament/schedule-conflicts";
-import { deskActions, splitActions, type DeskAction } from "@/lib/tournament/desk-actions";
+import {
+  MAX_ACTION_ROWS,
+  deskActions,
+  splitActions,
+  type DeskAction,
+} from "@/lib/tournament/desk-actions";
 import { upNext, type UpNextRow } from "@/lib/tournament/desk-up-next";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
@@ -501,7 +506,15 @@ function Desk() {
     })),
     now,
   });
-  const { shown: shownActions, folded: foldedActions } = splitActions(actions);
+  /**
+   * On a short console (a 1366×768 laptop) Needs action draws three rows, each on one line, so
+   * Up next keeps room to show its queue. The query matches the `desk-console-short` variant.
+   */
+  const shortConsole = useMediaQuery(SHORT_CONSOLE_QUERY);
+  const { shown: shownActions, folded: foldedActions } = splitActions(
+    actions,
+    shortConsole ? SHORT_CONSOLE_ACTION_ROWS : MAX_ACTION_ROWS,
+  );
 
   /**
    * Up next: each court's next match to call, when its court frees, and whether its players
@@ -555,6 +568,32 @@ function Desk() {
   const [boardScrollRef, boardCue] = useScrollCue();
   const hiddenCourts = boardCue.hidden;
 
+  /*
+    The venue's time, once this browser's clock has been adopted - never in the server render,
+    for the reason `clockAdopted` gives - then the connection and Refresh. They belong to the
+    whole page, not one panel.
+  */
+  const controls = (
+    <>
+      {clockAdopted ? (
+        <time data-desk-clock className="font-score text-sm font-semibold tabular-nums text-foreground">
+          {timeLabel(new Date(now))}
+        </time>
+      ) : null}
+      <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-11 px-4 text-sm"
+        onClick={() => void qc.invalidateQueries()}
+      >
+        Refresh
+      </Button>
+    </>
+  );
+  /** Whether the day bar doubles as the console's bar, carrying `controls`. */
+  const consoleBar = canEdit && orderedDays.length > 0;
+
   return (
     <Page
       title="Control desk"
@@ -564,27 +603,12 @@ function Desk() {
           : "A live view of one tournament day: what is on each court."
       }
       actions={
-        <>
-          {/*
-            The venue's time, once this browser's clock has been adopted - never in the server
-            render, for the reason `clockAdopted` gives. It sits beside the connection badge
-            because it is the whole page's clock, not one panel's.
-          */}
-          {clockAdopted ? (
-            <time data-desk-clock className="font-score text-sm font-semibold tabular-nums text-foreground">
-              {timeLabel(new Date(now))}
-            </time>
-          ) : null}
-          <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-11 px-4 text-sm"
-            onClick={() => void qc.invalidateQueries()}
-          >
-            Refresh
-          </Button>
-        </>
+        /*
+          On the console the page header scrolls away, so these move into the console's own bar
+          (below) and are hidden here - `display: none`, so the badge's live region is never
+          announced twice.
+        */
+        <span className={consoleBar ? "contents desk-console:hidden" : "contents"}>{controls}</span>
       }
     >
       {/*
@@ -603,7 +627,7 @@ function Desk() {
         }
       >
         {orderedDays.length ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline bg-surface px-3 py-2 text-xs desk-console:flex-none">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-hairline bg-surface px-3 py-2 text-xs desk-console:flex-none desk-console-short:py-1">
             <span className="font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               Day
             </span>
@@ -637,6 +661,9 @@ function Desk() {
                 matches done
               </span>
             </span>
+            {consoleBar ? (
+              <span className="hidden items-center gap-2 desk-console:flex">{controls}</span>
+            ) : null}
           </div>
         ) : null}
 
@@ -1913,16 +1940,17 @@ function ActionRow({
 }) {
   const style = ACTION_TONE[tone];
   return (
-    <li className={`flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 ${style.row}`}>
+    <li className={`flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 desk-console-short:py-1 ${style.row}`}>
       <span
         aria-hidden="true"
         className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-extrabold ${style.icon}`}
       >
         {style.glyph}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-semibold leading-snug">{title}</span>
-        <span className="block text-sm">{detail}</span>
+      {/* On a short console each row is one line; the full text stays in its tooltip. */}
+      <span className="min-w-0 flex-1" title={`${title}. ${detail}`}>
+        <span className="block font-semibold leading-snug desk-console-short:truncate">{title}</span>
+        <span className="block text-sm desk-console-short:truncate">{detail}</span>
       </span>
       {action}
     </li>
@@ -1939,6 +1967,24 @@ function CourtStatePill({ state }: { state: CourtState }) {
       {COURT_STATE_LABEL[state]}
     </span>
   );
+}
+
+/** Matches the `desk-console-short` variant in styles.css. */
+const SHORT_CONSOLE_QUERY = "(min-width: 1200px) and (min-height: 600px) and (max-height: 759px)";
+/** Needs-action rows drawn before the fold on a short console. */
+const SHORT_CONSOLE_ACTION_ROWS = 3;
+
+/** Whether a media query matches, after mount; false in the server render and the first paint. */
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [query]);
+  return matches;
 }
 
 /** The bottom fade a scroll region carries while it has more below. */
