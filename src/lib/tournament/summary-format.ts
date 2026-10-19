@@ -33,6 +33,29 @@ export function instantText(value: string): string {
 }
 
 /**
+ * The last instant a tournament window includes.
+ *
+ * `tournament_ends_at` is the *exclusive* end of the window - midnight after `ends_on`, which
+ * is the boundary a `[start, end)` range needs for filtering. Printing it as a day turns every
+ * one-day tournament into a two-day range: a window of 19 Oct to 19 Oct ends at 20 Oct 00:00,
+ * so a card read "Oct 19 – 20" and a host saw a date they never chose. The last instant that
+ * is actually inside the window is one millisecond earlier.
+ *
+ * Only a midnight is treated this way. Any other end instant is already inclusive - the
+ * playing-day span (`tournament_play_ends_at`) ends at the venue's closing time - and is left
+ * exactly as the row says.
+ */
+function windowEnd(value: string): Date {
+  const end = new Date(value);
+  const midnight =
+    end.getHours() === 0 &&
+    end.getMinutes() === 0 &&
+    end.getSeconds() === 0 &&
+    end.getMilliseconds() === 0;
+  return midnight ? new Date(end.getTime() - 1) : end;
+}
+
+/**
  * The start and end instants as one readable range.
  *
  * An em dash rather than a blank when there are no playing days yet: an upcoming tournament
@@ -45,7 +68,7 @@ export function dateRangeText(startsAt: string | null, endsAt: string | null): s
   const start = instantText(startsAt);
   if (!endsAt) return `Starts ${start}`;
 
-  const end = new Date(endsAt);
+  const end = windowEnd(endsAt);
   const sameDay = end.toDateString() === new Date(startsAt).toDateString();
   const endText = sameDay
     ? new Intl.DateTimeFormat(undefined, {
@@ -53,7 +76,7 @@ export function dateRangeText(startsAt: string | null, endsAt: string | null): s
         minute: "2-digit",
         timeZoneName: "short",
       }).format(end)
-    : instantText(endsAt);
+    : instantText(end.toISOString());
   return `${start} → ${endText}`;
 }
 
@@ -67,13 +90,15 @@ export function countText(value: number, singular: string, plural: string): stri
  *
  * The line under a tournament's name wants *when*, not the hour it opens, and the zone
  * abbreviation that `dateRangeText` prints beside every time is noise on a line that has no
- * times. Both ends are read in the reader's own zone, as every other date on the page is.
+ * times. Both ends are read in the reader's own zone, as every other date on the page is, and
+ * the window's exclusive midnight end is read as the day it closes (`windowEnd`), so a
+ * one-day tournament prints one date rather than two.
  */
 export function shortDays(startsAt: string | null, endsAt: string | null): string | null {
   if (!startsAt) return null;
   const month = new Intl.DateTimeFormat(undefined, { month: "short" });
   const start = new Date(startsAt);
-  const end = endsAt ? new Date(endsAt) : start;
+  const end = endsAt ? windowEnd(endsAt) : start;
   const from = `${month.format(start)} ${start.getDate()}`;
   if (end.toDateString() === start.toDateString()) return from;
   const to =

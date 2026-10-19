@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countText, dateRangeText, instantText } from "./summary-format";
+import { countText, dateRangeText, instantText, shortDays } from "./summary-format";
 
 /**
  * How a summary row reads, in words.
@@ -57,6 +57,60 @@ describe("dateRangeText", () => {
     // And the two branches are genuinely two: a cross-day range is not the same sentence as
     // a same-day one whatever the zone does to those instants.
     expect(dateRangeText(START, OTHER_DAY_END)).not.toBe(dateRangeText(START, SAME_DAY_END));
+  });
+
+  it("reads a one-day window as that one day, not as the midnight after it", () => {
+    /**
+     * The window end the database returns is exclusive: `tournament_ends_at` is midnight
+     * after `ends_on`, because a `[start, end)` boundary is what the filters need. Printed
+     * as-is it turned a tournament set up for one day into a two-day range - "Oct 19 – 20"
+     * on every card - so the end is read one millisecond earlier, the last instant that is
+     * inside the window.
+     *
+     * Built in the runner's own zone on purpose: the defect is about a local midnight, and an
+     * instant written in UTC would only be a midnight in some zones.
+     */
+    const day = new Date(2026, 9, 19, 0, 0, 0, 0);
+    const dayAfter = new Date(2026, 9, 20, 0, 0, 0, 0);
+    const lastInstant = new Date(dayAfter.getTime() - 1);
+
+    expect(dateRangeText(day.toISOString(), dayAfter.toISOString())).toBe(
+      `${instantText(day.toISOString())} → ${timeOnly(lastInstant.toISOString())}`,
+    );
+    // Not the "→ Oct 20" sentence the raw value produced.
+    expect(dateRangeText(day.toISOString(), dayAfter.toISOString())).not.toContain("Oct 20");
+  });
+});
+
+describe("shortDays", () => {
+  const month = new Intl.DateTimeFormat(undefined, { month: "short" });
+  const label = (date: Date) => `${month.format(date)} ${date.getDate()}`;
+
+  it("says nothing at all when there is no start", () => {
+    expect(shortDays(null, null)).toBeNull();
+  });
+
+  it("prints one day for a tournament that plays one day", () => {
+    // The exact complaint this fixes: 19 Oct to 19 Oct is stored as an end of 20 Oct 00:00.
+    const day = new Date(2026, 9, 19, 0, 0, 0, 0);
+    const dayAfter = new Date(2026, 9, 20, 0, 0, 0, 0);
+    expect(shortDays(day.toISOString(), dayAfter.toISOString())).toBe(label(day));
+  });
+
+  it("prints both dates for a window that really crosses a day, naming the last day it covers", () => {
+    const first = new Date(2026, 9, 19, 0, 0, 0, 0);
+    // Two playing days - 19 and 20 - so the exclusive end is 21 Oct 00:00.
+    const afterLast = new Date(2026, 9, 21, 0, 0, 0, 0);
+    // Same month, so the end prints as the day number alone, which is the format's own rule.
+    expect(shortDays(first.toISOString(), afterLast.toISOString())).toBe("Oct 19 – 20");
+  });
+
+  it("leaves an inclusive end alone", () => {
+    // The playing-day span ends at a venue's closing time, not at midnight; that instant is
+    // already the last one and must not be moved back a day.
+    const first = new Date(2026, 9, 19, 0, 0, 0, 0);
+    const close = new Date(2026, 9, 19, 18, 30, 0, 0);
+    expect(shortDays(first.toISOString(), close.toISOString())).toBe(label(first));
   });
 });
 
