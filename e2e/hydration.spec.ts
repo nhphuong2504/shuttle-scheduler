@@ -97,11 +97,10 @@ test.describe("the desk clock is client-owned", () => {
     await page.route(/\.(js|mjs|tsx|ts)(\?|$)/, (route) => route.abort());
     const response = await page.goto(routes.desk, { waitUntil: "domcontentloaded" });
 
-    // The clock hangs off the operator's "Needs action" panel, which the Desk withholds from
-    // anyone it cannot yet place - and on the server that is everyone: there are no loaders,
-    // so `can_edit` reads false and the panel is not server-rendered at all. Reading the whole
-    // document rather than one locator keeps the assertion true whatever the gating does, since
-    // an HH:MM anywhere in the server HTML still fails.
+    // The clock sits in the Desk's header and is drawn only once the browser's clock has been
+    // adopted, so the server never renders one. Reading the whole document rather than one
+    // locator keeps the assertion true wherever the clock lives, since an HH:MM anywhere in the
+    // server HTML still fails.
     const html = (await response?.text()) ?? "";
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -114,12 +113,11 @@ test.describe("the desk clock is client-owned", () => {
   });
 
   test("the clock appears once React has taken over", async ({ page }) => {
-    // The clock is only reachable where its panel is, which is an editor's Desk: a reader
-    // never gets "Needs action", so the session is installed before the navigation.
+    // The clock is in the Desk's header, drawn once this browser's clock is adopted.
     await installAppMock(page, { role: "user" });
     await openCell(page, routes.desk, MATRIX_CELLS[0]!);
-    const panel = page.locator("text=updates every 30s").first();
-    await expect(panel).toHaveText(/\d{1,2}:\d{2}/);
+    const clock = page.locator("[data-desk-clock]").first();
+    await expect(clock).toHaveText(/^\d{1,2}:\d{2}$/);
   });
 });
 

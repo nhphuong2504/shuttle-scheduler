@@ -125,9 +125,8 @@ offering the trip; the pages themselves still refuse, since the nav is presentat
 
 A read-only reader — a signed-in viewer or an anonymous visitor — gets the six operational
 sections, **the Desk included, in a read-only form**. For a caller without `can_edit` the Desk
-shows the day picker and the court board, and withholds the operator's "Needs action",
-"Next transitions" and "Court progress" panels and every control that starts, scores or moves a
-match; a court tile opens the match to read, not to run. The list is the operational one itself
+shows the day picker and the court board, and withholds the operator's work column ("Needs
+action") and every control that starts, scores or moves a match; a court tile opens the match to read, not to run. The list is the operational one itself
 rather than a restated copy, so a section added later is offered to everyone reading the
 tournament by default. A read-only workspace still opens on `entries` (the logo points at
 Entries for a reader and at the Desk for an operator), and the tournament's participant page at
