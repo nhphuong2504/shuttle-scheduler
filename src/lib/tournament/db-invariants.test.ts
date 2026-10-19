@@ -1861,7 +1861,11 @@ function functionSource(source: string, name: string): string {
  */
 describe("tournament window migration", () => {
   const dir = join(__dirname, "../../../supabase/migrations");
-  const sql = readFileSync(join(dir, "20261008000000_tournament_window.sql"), "utf8");
+  const sql = readFileSync(join(dir, "20261008000000_tournament_window.sql"), "utf8")
+    // Normalised, because the assertions below match multi-line SQL as it is written in the
+    // file. A Windows checkout with `core.autocrlf` converts the file to CRLF, and a `\n` in a
+    // search string then matches nothing - a failure about the checkout, not the migration.
+    .replace(/\r\n/g, "\n");
   const executable = sql
     .split("\n")
     .filter((line) => !line.trim().startsWith("--"))
