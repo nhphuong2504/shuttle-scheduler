@@ -150,7 +150,9 @@ badge's live region is never announced twice.
 moments of a reconnect), the Desk holds its numbers at the moment the connection dropped
 (`desk-paused.ts`): lateness, overruns and when a court frees are computed at that instant, since
 the data is that old, while the clock keeps running. A bar under the day bar says "No updates since
-14:37", each panel carries "as of 14:37", and those minutes and times go grey.
+14:37", each panel carries "as of 14:37", and those minutes and times go grey. In the match dialog
+every control that writes - start, score, walkover, void, move, clear - is locked, with the reason
+at the top; Cancel stays usable. Opening a match is still allowed: it is a read.
 
 ## Recording a result: when did it finish?
 

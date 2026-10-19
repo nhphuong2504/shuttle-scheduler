@@ -700,8 +700,9 @@ function Desk() {
         {paused ? (
           <p className="rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger-foreground desk-console:flex-none">
             <span className="font-semibold">No updates since {timeLabel(new Date(pausedSince))}.</span>{" "}
-            Minutes and times below are as of then and may be out of date. Retrying on its own;
-            Refresh tries now.
+            Minutes and times below are as of then and may be out of date
+            {canEdit ? ", and starting, scoring and moving matches is paused" : ""}. Retrying on its
+            own; Refresh tries now.
           </p>
         ) : null}
 
@@ -1057,6 +1058,7 @@ function Desk() {
               scoringRule={ruleFor(current.kind)}
               tournamentId={tournament?.id ?? null}
               timezone={tournament?.venue_timezone}
+              pausedSince={pausedSince}
               onDone={() => {
                 refresh();
                 setOpenMatch(null);
@@ -1085,6 +1087,7 @@ export function MatchOperationsDialog({
   scoringRule,
   tournamentId,
   timezone,
+  pausedSince = null,
   onDone,
 }: {
   match: DeskMatch;
@@ -1119,6 +1122,12 @@ export function MatchOperationsDialog({
   /** Needed by the placement path, which snapshots the day to report its ripple. */
   tournamentId: string | null;
   timezone?: string | undefined;
+  /**
+   * When live updates stopped, or null while they arrive. While set, every control that writes
+   * is locked and the dialog says why: a write made against data that may be out of date could
+   * start a match that has already started, or score one twice.
+   */
+  pausedSince?: number | null;
   onDone: () => void;
 }) {
   /** After a result: draw what it unlocked and slot newly ready matches, never moving a time. */
@@ -1127,7 +1136,9 @@ export function MatchOperationsDialog({
   const [values, setValues] = useState(() =>
     scoreFormValues(rows, match.status, match.initialGames),
   );
-  const [busy, setBusy] = useState(false);
+  const [working, setBusy] = useState(false);
+  /** Every write is off while one is in flight, and while live updates are paused. */
+  const busy = working || pausedSince != null;
   const [confirmRestOpen, setConfirmRestOpen] = useState(false);
   const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
@@ -1429,6 +1440,13 @@ export function MatchOperationsDialog({
       </DialogHeader>
 
       <div className="space-y-4">
+        {pausedSince != null && canEdit ? (
+          <p className="rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
+            <span className="font-semibold">No connection since {timeLabel(new Date(pausedSince))}.</span>{" "}
+            Starting, scoring and moving matches is paused until it is back, so nothing is written
+            against data that may be out of date.
+          </p>
+        ) : null}
         <div className="flex justify-center pt-1">
           <span
             className={`rounded-full px-3.5 py-1.5 text-sm font-semibold uppercase tracking-wide ${
@@ -1646,7 +1664,7 @@ export function MatchOperationsDialog({
               </ul>
             ) : null}
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy}>Don't start</AlertDialogCancel>
+              <AlertDialogCancel disabled={working}>Don't start</AlertDialogCancel>
               <AlertDialogAction
                 disabled={busy}
                 onClick={(e) => {
@@ -1808,7 +1826,7 @@ export function MatchOperationsDialog({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy}>Keep the result</AlertDialogCancel>
+              <AlertDialogCancel disabled={working}>Keep the result</AlertDialogCancel>
               <AlertDialogAction
                 disabled={busy}
                 onClick={(event) => {
