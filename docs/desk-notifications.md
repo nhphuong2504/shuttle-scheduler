@@ -44,12 +44,13 @@ court tile; a moderator only meets a conflict in the start confirmation dialog. 
 These are planning conflicts. They do not mean the match is physically impossible; that is
 the Block rows above. Organiser headline: "N matches need schedule review".
 
-## Needs action (top of the Desk)
+## Needs action (top of the work column)
 
 Each row leads with the court, then names the match, the one number that put it there, what is
 in the way when something is, and the single button that clears it. Rows are ranked by how
 late they are, whatever their kind; ready courts that are not late come last, soonest first.
-The first five are drawn and the rest fold behind "Show N more". Derived in
+The first five are drawn and the rest fold behind "Show N more" - three, each on one line,
+on a short console (a laptop viewport under 760px tall), so Up next keeps room for its queue. Derived in
 `src/lib/tournament/desk-actions.ts`.
 
 | Row | When | Level | Action |
@@ -92,6 +93,29 @@ automatically, or it is waiting on an organiser's decision (no slot before the c
 courts, a first build or a rebuild), and the Schedule page names that cause. What a moderator
 can do - put it on a court that is free now - is the idle tile's "Ready to place".
 
+## Up next (under Needs action)
+
+The call queue: for each court, the match to call next, when its court frees and whether its
+players will be free by then. Derived in `src/lib/tournament/desk-up-next.ts`.
+
+- **No match twice.** A match Needs action names is left out, and so is one past its scheduled
+  start (Needs action's, from the same one-minute line).
+- **One time per row, and it says which.** "~14:45" is when the court frees: the playing match's
+  start plus its slot. "Now" for a free court, "Overrun" for one past its expected end - never a
+  time in the past. The published time sits under it ("sched. 14:50") only when it differs. A busy
+  court's tile names its next pairing without a time, so the two never disagree.
+- **Players are judged when the court frees, not now.** A player is free at the end of their rest,
+  or at the end of their match elsewhere plus the rest gap. The row warns when that is at least
+  `UP_NEXT_RISK_MARGIN_MINUTES` (3) after the court frees, naming the player: "resting until
+  14:58", "on Court 2, free ~14:52", or "still on Court 2, running over" when that match is past
+  its own expected end. Under the margin it reads "✓ Players free". "Players not known yet" when
+  a side is still TBC.
+- **The row is the button** that opens the match. The bell beside it is **Notify players**, drawn
+  now and inactive until player notifications exist: `aria-disabled`, out of the Tab order, and
+  explained once in the panel header ("Notify players: coming soon").
+- Not a live region: it re-ranks every 30 seconds, and reading each change aloud would bury the
+  alerts above it.
+
 ## Court board
 
 Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
@@ -117,6 +141,10 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 The chip says whether live updates are arriving: Live, Connecting, Offline, live updates
 paused, Connection problem, live updates paused. The age of the last change is a separate
 muted note, shown only while connected, and never changes the chip.
+
+On the console the page header scrolls away, so the clock, the badge and Refresh move into the
+console's own bar beside the day picker; the header's copy is `display: none` there, so the
+badge's live region is never announced twice.
 
 ## Recording a result: when did it finish?
 
