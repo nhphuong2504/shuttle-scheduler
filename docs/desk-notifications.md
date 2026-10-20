@@ -112,6 +112,13 @@ day's pace: expected finish, closing time, and matches done.
 
 Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 
+- **Playing** is the normal state, so it is quiet: a white tile with the resting hairline, and
+  the green lives in the chip alone. Only Overrun and Ready, the states that ask for a hand,
+  tint the whole tile, so on a day when most courts are playing they still stand out. The tile
+  gives the elapsed minutes against the slot - "7′ of 15′ on court" - so a moderator reads how
+  far through the match is, and roughly when the court frees, without arithmetic; it does not
+  say how the match started.
+
 - **Overrun** is amber with a ring, and the tile says how long the match has been on: "52′ on
   court". The state is the whole statement that it is running long, so the elapsed line carries
   no `+N over slot` and no `started N min late/early` arithmetic beside it.
@@ -124,6 +131,8 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 - **Every tile gives its next match's published time**: "Next 14:50: A vs B", on a busy court
   as on a free one. On a busy court that time may already have passed; the match waits for the
   court to clear.
+- **A busy court with nothing queued says "Nothing queued".** The "Ready to place" pairing - a
+  ready match with no court - is offered on free courts only: a busy court cannot take it.
 - **Playing and Overrun name the next match and stop there** — no "Ready now", no reason it
   is not ready. That line answers "can the queued match start now", which a court that still
   has a match on it cannot honestly answer; it is drawn on Ready and Waiting only.

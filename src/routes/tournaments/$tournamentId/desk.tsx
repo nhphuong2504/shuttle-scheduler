@@ -775,19 +775,21 @@ function Desk() {
                               : "text-muted-foreground"
                           }`}
                         >
-                          <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
                           {/*
-                            An overrun says only how long the match has been on, never how far
-                            past its slot that is or how it started. The amber tile is already
-                            the statement "this is running long", and the arithmetic beside it
-                            ("+7 over slot, started 4 min early") was three numbers competing
-                            with the one a moderator needs: how long the court has been held.
+                            Playing gives the elapsed minutes against the slot, so a moderator reads
+                            how far through the match is - and roughly when the court frees - without
+                            arithmetic. Overrun gives only how long the court has been held: the
+                            amber tile already says it is past its slot, and "48′ of 15′" would be a
+                            second statement of that. Neither says how the match started.
                           */}
-                          {state.state !== "overrun" && state.varianceMinutes
-                            ? `, started ${Math.abs(state.varianceMinutes)} min ${
-                                state.varianceMinutes > 0 ? "late" : "early"
-                              }`
-                            : ""}
+                          {state.state === "overrun" ? (
+                            <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
+                          ) : (
+                            <>
+                              <span data-desk-derived>{state.elapsedMinutes}′</span> of{" "}
+                              {slotMinutesFor(state.playing)}′ on court
+                            </>
+                          )}
                         </span>
                       </>
                     ) : (
@@ -837,7 +839,9 @@ function Desk() {
                           />
                         )}
                       </>
-                    ) : nextReadyLabel ? (
+                    ) : !state.playing && nextReadyLabel ? (
+                      // Only a free court can take a match with no court; a busy one shows nothing
+                      // queued rather than a pairing it cannot start.
                       <p className="text-t2">
                         No match scheduled. Ready to place: {nextReadyLabel}
                         {readyUnassigned.length > 1

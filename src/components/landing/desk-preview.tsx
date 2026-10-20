@@ -58,14 +58,14 @@ export function DeskPreview() {
             <span className="text-sm text-muted-foreground tabular-nums">Sat 18 Oct, 4 courts</span>
           }
         >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <PreviewTile
               number={1}
               phone={false}
               state="playing"
               tag="WS R2"
               names="Hannah Kim vs Grace Lowe"
-              timer="12′ on court"
+              timer="12′ of 25′ on court"
               next="Next 14:50: Tom Hughes / Dev Patel vs Sam Okafor / Luke Reid"
             />
             <PreviewTile

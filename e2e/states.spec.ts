@@ -431,13 +431,18 @@ for (const cell of MATRIX_CELLS) {
       // came out equal or what they resolved to, and the raw computed border colours
       // are distinct in every cell, so the answer had to be in the flattening.
       const edges = new Map(chips.map((chip) => [chip.state, key(chip.tileBorder)]));
-      expect(
-        edges.get("free-blocked"),
-        `waiting ${edges.get("free-blocked")} vs idle ${edges.get("idle")} - the two ` +
-          `states that ask for nothing are supposed to share the resting hairline`,
-      ).toBe(edges.get("idle"));
+      // Playing, Waiting and Idle ask for nothing, so they share the resting hairline and
+      // leave a tinted edge to the two states that need a hand.
+      const resting = ["playing", "free-blocked", "idle"] as const;
+      for (const state of resting) {
+        expect(
+          edges.get(state),
+          `${state} ${edges.get(state)} vs idle ${edges.get("idle")} - the states that ask ` +
+            `for nothing are supposed to share the resting hairline`,
+        ).toBe(edges.get("idle"));
+      }
       const actionable = COURT_STATES.filter(
-        (state) => state !== "free-blocked" && state !== "idle",
+        (state) => !(resting as readonly string[]).includes(state),
       );
       const collapsed = actionable.filter(
         (state, i) => actionable.findIndex((other) => edges.get(other) === edges.get(state)) !== i,

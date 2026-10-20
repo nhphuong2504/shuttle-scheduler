@@ -85,11 +85,13 @@ Rules:
 ## Court state
 
 The five derived states in `src/lib/tournament/court-state.ts`. Each has a label, a glyph and
-a colour, so a wall of eight courts can be read without reading any of them.
+a colour, so a wall of eight courts can be read without reading any of them. Only the states that
+ask for a hand - Overrun and Ready - tint the whole tile; on a live day most courts are playing,
+and a board of green washes would bury them.
 
 | State | Reads as | Colour |
 | --- | --- | --- |
-| Playing | A match is on | Green chip with ring, green wash |
+| Playing | A match is on | Green chip with ring on a white tile: the normal state, so it does not tint the tile |
 | Overrun | On court past its slot | Amber chip with ring, amber wash: a delay, not a danger |
 | Ready | Free, next match can start | Violet wash |
 | Waiting | Free, next match not ready yet | Neutral, a deeper grey than Idle; the line beneath says why |
