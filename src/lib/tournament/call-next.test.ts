@@ -59,32 +59,32 @@ describe("call next: whether a court offers it", () => {
 });
 
 describe("call next: the context line", () => {
-  const base = { tag: "MD R2", courtNumber: 2, dueMs: BASE, dueLabel: "14:25" };
+  const base = { tag: "MD R2", courtNumber: 2, scheduledMs: BASE, scheduledLabel: "14:25" };
 
   it("reads as comma-separated facts on a busy court", () => {
     expect(
       callNextContext({ ...base, court: { kind: "busy", elapsedMinutes: 37 }, now: BASE + 20 * 60_000 }),
-    ).toBe("MD R2, due 14:25, Court 2 still playing, 37′ on court");
+    ).toBe("MD R2, scheduled 14:25, Court 2 still playing, 37′ on court");
   });
 
   it("says how late a free court's match is, once a whole minute has passed", () => {
     expect(callNextContext({ ...base, court: { kind: "free" }, now: BASE + 7 * 60_000 })).toBe(
-      "MD R2, due 14:25 (7 min ago), Court 2 free now",
+      "MD R2, scheduled 14:25 (7 min ago), Court 2 free now",
     );
     expect(callNextContext({ ...base, court: { kind: "free" }, now: BASE + 30_000 })).toBe(
-      "MD R2, due 14:25, Court 2 free now",
+      "MD R2, scheduled 14:25, Court 2 free now",
     );
   });
 });
 
 describe("call next: the proposed message", () => {
   it("asks the players of a court that is not Ready to be ready, not to come", () => {
-    const text = callNextMessage({ tag: "MD R2", courtNumber: 2, dueLabel: "14:25", courtReady: false });
-    expect(text).toBe("Tournova: your match is next on Court 2, due 14:25 (MD R2). Please be ready near the court.");
+    const text = callNextMessage({ tag: "MD R2", courtNumber: 2, scheduledLabel: "14:25", courtReady: false });
+    expect(text).toBe("Tournova: your match is next on Court 2 at 14:25 (MD R2). Please be ready near the court.");
   });
 
   it("asks a Ready court's players to come now", () => {
-    expect(callNextMessage({ tag: "MS R1", courtNumber: 4, dueLabel: "14:30", courtReady: true })).toBe(
+    expect(callNextMessage({ tag: "MS R1", courtNumber: 4, scheduledLabel: "14:30", courtReady: true })).toBe(
       "Tournova: your match is ready on Court 4 (MS R1). Please come to the court now.",
     );
   });

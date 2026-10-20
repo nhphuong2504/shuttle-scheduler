@@ -49,7 +49,7 @@ test.describe("Call next", () => {
     const dialog = page.getByRole("dialog", { name: "Notify the next match on Court 3" });
     await expect(dialog).toBeVisible();
     // The match dialog's own wording: comma-separated facts.
-    await expect(dialog.getByText(/, due \d{1,2}:\d{2}.*, Court 3 free now$/)).toBeVisible();
+    await expect(dialog.getByText(/, scheduled \d{1,2}:\d{2}.*, Court 3 free now$/)).toBeVisible();
     // A doubles match: one row per player, all four free, since nobody here has played yet.
     await expect(dialog.getByRole("rowheader")).toHaveCount(4);
     await expect(dialog.getByRole("cell", { name: "Free" })).toHaveCount(4);

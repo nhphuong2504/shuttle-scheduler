@@ -902,8 +902,8 @@ function Desk() {
               ? callNextContext({
                   tag: callMatch.tag,
                   courtNumber: callCourt.court.number,
-                  dueMs: callMatch.scheduled ? new Date(callMatch.scheduled).getTime() : null,
-                  dueLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
+                  scheduledMs: callMatch.scheduled ? new Date(callMatch.scheduled).getTime() : null,
+                  scheduledLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
                   court: callCourt.state.playing
                     ? { kind: "busy", elapsedMinutes: callCourt.state.elapsedMinutes }
                     : { kind: "free" },
@@ -924,7 +924,7 @@ function Desk() {
               ? callNextMessage({
                   tag: callMatch.tag,
                   courtNumber: callCourt.court.number,
-                  dueLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
+                  scheduledLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
                   // Only a Ready court asks players to come now; a busy or Waiting one asks
                   // them to be ready, since its match cannot start yet.
                   courtReady: callCourt.state.state === "free-ready",

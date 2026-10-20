@@ -37,12 +37,12 @@ function renderDialog(over: Partial<Parameters<typeof CallNextDialog>[0]> = {}) 
       matchId="m2"
       courtNumber={2}
       courtId="c2"
-      context="MD R2, due 14:25, Court 2 still playing, 37′ on court"
+      context="MD R2, scheduled 14:25, Court 2 still playing, 37′ on court"
       players={players}
       courtNumberFor={(id) => (id === "c5" ? 5 : "?")}
       reach={reach}
       notifiedAt={null}
-      initialMessage="Tournova: your MD R2 match is next on Court 2 (due 14:25)."
+      initialMessage="Tournova: your match is next on Court 2 at 14:25 (MD R2)."
       paused={false}
       onSend={onSend}
       returnFocusTo={null}

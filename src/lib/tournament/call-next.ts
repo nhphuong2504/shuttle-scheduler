@@ -53,28 +53,29 @@ export type CallNextCourt =
 
 /**
  * The dialog's context line, worded as the match dialog words its own: comma-separated facts,
- * no other separator. "MD R2, due 14:25, Court 2 still playing, 37′ on court".
+ * no other separator. "MD R2, scheduled 14:25, Court 2 still playing, 37′ on court".
  */
 export function callNextContext({
   tag,
   courtNumber,
-  dueMs,
-  dueLabel,
+  scheduledMs,
+  scheduledLabel,
   court,
   now,
 }: {
   tag: string;
   courtNumber: number | string;
-  dueMs: number | null;
-  dueLabel: string | null;
+  scheduledMs: number | null;
+  scheduledLabel: string | null;
   court: CallNextCourt;
   now: number;
 }): string {
   const parts: string[] = [];
   if (tag) parts.push(tag);
-  if (dueLabel) {
-    const late = dueMs != null && court.kind === "free" ? Math.floor((now - dueMs) / MINUTE) : 0;
-    parts.push(late >= 1 ? `due ${dueLabel} (${late} min ago)` : `due ${dueLabel}`);
+  if (scheduledLabel) {
+    const late =
+      scheduledMs != null && court.kind === "free" ? Math.floor((now - scheduledMs) / MINUTE) : 0;
+    parts.push(late >= 1 ? `scheduled ${scheduledLabel} (${late} min ago)` : `scheduled ${scheduledLabel}`);
   }
   if (court.kind === "busy") {
     parts.push(`Court ${courtNumber} still playing`);
@@ -94,12 +95,12 @@ export function callNextContext({
 export function callNextMessage({
   tag,
   courtNumber,
-  dueLabel,
+  scheduledLabel,
   courtReady,
 }: {
   tag: string;
   courtNumber: number | string;
-  dueLabel: string | null;
+  scheduledLabel: string | null;
   courtReady: boolean;
 }): string {
   // The event goes in brackets: a tag can be a whole phrase ("MD - Draw A, Round of 16"), which
@@ -108,8 +109,8 @@ export function callNextMessage({
   if (courtReady) {
     return `Tournova: your match is ready on Court ${courtNumber}${event}. Please come to the court now.`;
   }
-  const due = dueLabel ? `, due ${dueLabel}` : "";
-  return `Tournova: your match is next on Court ${courtNumber}${due}${event}. Please be ready near the court.`;
+  const at = scheduledLabel ? ` at ${scheduledLabel}` : "";
+  return `Tournova: your match is next on Court ${courtNumber}${at}${event}. Please be ready near the court.`;
 }
 
 /** How many of the players at least one channel reaches. */
