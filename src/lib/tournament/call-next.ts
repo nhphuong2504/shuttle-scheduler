@@ -86,25 +86,26 @@ export function callNextContext({
 }
 
 /**
- * The message the dialog proposes, which the moderator may edit before sending. A busy court
- * asks the players to be ready; only a free court asks them to come to it, so a call made
- * ahead never pulls four players onto a court that is still being played on.
+ * The message the dialog proposes, which the moderator may edit before sending. Only a Ready
+ * court - free, with its match able to start - asks the players to come to it. A busy court,
+ * or a free one still waiting on a player, asks them to be ready, so a call never pulls four
+ * players onto a court whose match cannot start yet.
  */
 export function callNextMessage({
   tag,
   courtNumber,
   dueLabel,
-  courtFree,
+  courtReady,
 }: {
   tag: string;
   courtNumber: number | string;
   dueLabel: string | null;
-  courtFree: boolean;
+  courtReady: boolean;
 }): string {
   // The event goes in brackets: a tag can be a whole phrase ("MD - Draw A, Round of 16"), which
   // reads badly inside "your ... match".
   const event = tag ? ` (${tag})` : "";
-  if (courtFree) {
+  if (courtReady) {
     return `Tournova: your match is ready on Court ${courtNumber}${event}. Please come to the court now.`;
   }
   const due = dueLabel ? `, due ${dueLabel}` : "";

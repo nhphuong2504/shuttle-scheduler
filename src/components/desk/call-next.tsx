@@ -109,6 +109,7 @@ export interface CallNextPlayer {
 export function CallNextDialog({
   open,
   onOpenChange,
+  matchId,
   courtNumber,
   courtId,
   context,
@@ -123,6 +124,8 @@ export function CallNextDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The match being notified; a different match starts from its own proposed message. */
+  matchId: string | null;
   courtNumber: number | string;
   /** The court the match is queued on, so a player still on it reads as "on this court". */
   courtId: string | null;
@@ -150,9 +153,10 @@ export function CallNextDialog({
           returnFocusTo.focus();
         }}
       >
-        {/* Keyed on the opening, so each one starts from the proposed message. */}
+        {/* Keyed on the match, so each one starts from its own proposed message. */}
         {open ? (
           <CallNextBody
+            key={matchId ?? ""}
             courtNumber={courtNumber}
             courtId={courtId}
             context={context}

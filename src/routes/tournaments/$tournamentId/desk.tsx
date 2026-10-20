@@ -181,8 +181,12 @@ function Desk() {
   const live = useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);
-  // The court whose next match the Call next dialog is open for.
-  const [callCourtId, setCallCourtId] = useState<string | null>(null);
+  /**
+   * The match the Call next dialog is open for, and its court. Held as the match, not the
+   * court: if that match starts or moves while the dialog is open, the court's next match
+   * changes, and the dialog closes rather than quietly showing another match's players.
+   */
+  const [callTarget, setCallTarget] = useState<{ courtId: string; matchId: string } | null>(null);
   const callOpener = useRef<HTMLElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   /**
@@ -532,10 +536,17 @@ function Desk() {
   const offerCallNext = NOTIFY_PLAYERS_ENABLED && canEdit;
   const playerReach = usePlayerReach();
   const notifiedAtFor = useCallNextRecords();
-  const callCourt = callCourtId
-    ? (courtStates.find(({ court }) => court.id === callCourtId) ?? null)
+  const callCourt = callTarget
+    ? (courtStates.find(({ court }) => court.id === callTarget.courtId) ?? null)
     : null;
-  const callMatch = callCourt?.state.next ?? null;
+  const callMatch =
+    callCourt?.state.next && callCourt.state.next.id === callTarget?.matchId
+      ? callCourt.state.next
+      : null;
+  // The match moved on while the dialog was open: let the target go too, so it cannot come back.
+  useEffect(() => {
+    if (callTarget && !callMatch) setCallTarget(null);
+  }, [callTarget, callMatch]);
 
   /** The pairing the idle courts offer, named once so the card cannot drift. */
   const nextReadyLabel = readyUnassigned[0]
@@ -866,7 +877,7 @@ function Desk() {
                       paused={paused}
                       onOpen={(opener) => {
                         callOpener.current = opener;
-                        setCallCourtId(court.id);
+                        if (state.next) setCallTarget({ courtId: court.id, matchId: state.next.id });
                       }}
                     />
                   </span>
@@ -882,7 +893,8 @@ function Desk() {
       {offerCallNext ? (
         <CallNextDialog
           open={callMatch != null}
-          onOpenChange={(open) => !open && setCallCourtId(null)}
+          onOpenChange={(open) => !open && setCallTarget(null)}
+          matchId={callMatch?.id ?? null}
           courtNumber={callCourt?.court.number ?? "?"}
           courtId={callMatch?.courtId ?? null}
           context={
@@ -913,13 +925,15 @@ function Desk() {
                   tag: callMatch.tag,
                   courtNumber: callCourt.court.number,
                   dueLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
-                  courtFree: !callCourt.state.playing,
+                  // Only a Ready court asks players to come now; a busy or Waiting one asks
+                  // them to be ready, since its match cannot start yet.
+                  courtReady: callCourt.state.state === "free-ready",
                 })
               : ""
           }
           paused={paused}
           // Nothing sends yet: Send is disabled while `reach` is null, so this only closes.
-          onSend={() => setCallCourtId(null)}
+          onSend={() => setCallTarget(null)}
           returnFocusTo={callOpener.current}
         />
       ) : null}

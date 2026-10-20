@@ -34,6 +34,7 @@ function renderDialog(over: Partial<Parameters<typeof CallNextDialog>[0]> = {}) 
     <CallNextDialog
       open
       onOpenChange={() => {}}
+      matchId="m2"
       courtNumber={2}
       courtId="c2"
       context="MD R2, due 14:25, Court 2 still playing, 37′ on court"

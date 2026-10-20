@@ -78,13 +78,13 @@ describe("call next: the context line", () => {
 });
 
 describe("call next: the proposed message", () => {
-  it("asks a busy court's players to be ready, not to come", () => {
-    const text = callNextMessage({ tag: "MD R2", courtNumber: 2, dueLabel: "14:25", courtFree: false });
+  it("asks the players of a court that is not Ready to be ready, not to come", () => {
+    const text = callNextMessage({ tag: "MD R2", courtNumber: 2, dueLabel: "14:25", courtReady: false });
     expect(text).toBe("Tournova: your match is next on Court 2, due 14:25 (MD R2). Please be ready near the court.");
   });
 
-  it("asks a free court's players to come now", () => {
-    expect(callNextMessage({ tag: "MS R1", courtNumber: 4, dueLabel: "14:30", courtFree: true })).toBe(
+  it("asks a Ready court's players to come now", () => {
+    expect(callNextMessage({ tag: "MS R1", courtNumber: 4, dueLabel: "14:30", courtReady: true })).toBe(
       "Tournova: your match is ready on Court 4 (MS R1). Please come to the court now.",
     );
   });

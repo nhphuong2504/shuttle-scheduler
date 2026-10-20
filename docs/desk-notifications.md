@@ -85,9 +85,11 @@ would shout over the state pills.
 - An amber note for each player on another court: they are reached anyway, mid-match.
 - One row per player: name, how they can be reached (SMS, email, or "No contact"), and where they
   are now in the tile's words - Free, Resting until 14:41, On Court 5, On this court.
-- The proposed message, editable. A busy court's asks the players to be ready near the court;
-  only a free court's asks them to come now, so a call made ahead never pulls them onto a court
-  still in play.
+- The proposed message, editable. Only a Ready court's asks the players to come now; a busy
+  court's, or a Waiting one's, asks them to be ready near the court, so a call never pulls them
+  onto a court whose match cannot start yet.
+- The dialog belongs to the match it was opened for. If that match starts or moves while it is
+  open, the court's next match changes and the dialog closes.
 - "Sends to 3 of 4 players", Cancel, Send - "Send again" once notified.
 
 **Until sending exists** the Desk has no contact details (`usePlayerReach` returns null) and no

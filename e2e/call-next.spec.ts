@@ -87,6 +87,8 @@ test.describe("Call next", () => {
       dialog.getByText(/is playing on Court 2 right now and will get this on court\./),
     ).toHaveCount(2);
     await expect(dialog.getByText("On Court 2", { exact: true })).toHaveCount(2);
+    // A Waiting court's match cannot start yet, so the players are asked to be ready, not to come.
+    await expect(dialog.getByLabel("Message")).toHaveValue(/Please be ready near the court\.$/);
   });
 
   test("the open dialog introduces no a11y violation", async ({ page }) => {
