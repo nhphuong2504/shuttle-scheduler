@@ -598,15 +598,6 @@ describe("the live surfaces list only the format the tournament runs", () => {
       expect(scores).toMatch(new RegExp(`const ${list} = useMemo\\([\\s\\S]{0,160}?roundRobin`));
     }
   });
-
-  it("leaves the desk's overdue-result alert alone", () => {
-    // The single destructive treatment the Act-now panel defines, and the one row list
-    // that is deliberately not gated: it chases a missing result rather than showing one,
-    // so gating it on the format took the destructive tier away from the format this app
-    // runs. It is asserted here because the gate is the obvious "consistency" edit.
-    expect(desk).not.toMatch(/if \(isSupportedFormat\(tournament\?\.format\)\) return \[\]/);
-    expect(desk).toMatch(/const latePools = useMemo/);
-  });
 });
 
 /**
@@ -685,11 +676,10 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     expect(shell).toMatch(/READ_ONLY_SECTIONS = SECTIONS;/);
     expect(shell).toMatch(/homeSection = access\.can_edit \? DESK_PATH : READER_HOME_PATH/);
     const desk = readFileSync(join(src, deskFile), "utf8");
-    // The operator's work column, Needs action included, is withheld as one block. The
-    // hold wrapper around each panel (section 4e) sits inside that branch, not outside it.
-    expect(desk).toMatch(
-      /\{canEdit \? \(\s*<div[^>]*>[\s\S]{0,1200}?<Panel\s+title="Needs action"/,
-    );
+    // The board is the whole read-only Desk: what a tile opens says it is for reading, and
+    // the score desk's writes are hidden from a caller without `can_edit`.
+    expect(desk).toMatch(/canEdit\s*\?\s*"Open score desk"\s*:\s*"View match"/);
+    expect(desk).toMatch(/className=\{canEdit \? "flex gap-2" : "hidden"\}/);
     expect(shell).toMatch(
       /access\.can_edit \? \[\.\.\.SECTIONS, \.\.\.EDITOR_SECTIONS\][\s\S]{0,40}?READ_ONLY_SECTIONS/,
     );

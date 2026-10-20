@@ -87,8 +87,7 @@ test.describe("no route discards its server render", () => {
  * to tick during the load - which is the only reason the bug went unnoticed for so long.
  *
  * The clock is expected to *appear*, so the test also proves the fix did not simply delete
- * the time from the interface. It is read from an editor's Desk, because the panel it lives
- * on - "Needs action" - is one the read-only Desk withholds.
+ * the time from the interface. It is read from an editor's Desk, whose console bar carries it.
  */
 test.describe("the desk clock is client-owned", () => {
   test("the server render carries no wall-clock time", async ({ page }) => {

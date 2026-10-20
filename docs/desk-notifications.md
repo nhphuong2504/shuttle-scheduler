@@ -44,100 +44,15 @@ court tile; a moderator only meets a conflict in the start confirmation dialog. 
 These are planning conflicts. They do not mean the match is physically impossible; that is
 the Block rows above. Organiser headline: "N matches need schedule review".
 
-## Needs action (top of the work column)
+## Removed: Needs action and Up next
 
-Each row leads with the court, then names the match, the one number that put it there, what is
-in the way when something is, and the single button that clears it. Rows are ranked by how
-late they are, whatever their kind; ready courts that are not late come last, soonest first.
-The first five are drawn and the rest fold behind "Show N more" - three, each on one line,
-on a short console (a laptop viewport under 760px tall), so Up next keeps room for its queue. Derived in
-`src/lib/tournament/desk-actions.ts`.
-
-| Row | When | Level | Action |
-| --- | --- | --- | --- |
-| Court N, M min late; A vs B, ready to start | A free court's next match is past its start and can start | Do this now (accent) | Start |
-| Court N, M min late; A vs B. Waiting: (the tile's readiness words) | The same, but a player is busy, resting or not known | Warning | Open match |
-| Court N, M min on court; A vs B, K min past the expected finish | K ≥ max(5, ⅓ of the slot), or the match behind it is already late | Warning | Enter result |
-| CODE — Pool X, results incomplete; M min past scheduled finish | More than 15 min past the pool's finish | Warning | Enter results |
-| Court N is ready; A vs B | A free court with a ready match, free for 3 min or more | Do this now (accent) | Start |
-| All clear. Nothing needs action right now. | Nothing above | — | — |
-
-The tile turns amber the moment a match passes its slot; the row waits, because a long match
-is not yet worth walking over for, and a court that freed a minute ago is a moment between
-matches.
-
-### The thresholds are assumptions
-
-No tournament has run on the app yet, so none of these numbers is measured. Each is chosen from
-the shape of the sport and from which mistake is cheaper: a spare row costs the moderator a
-glance, a missed one costs court time. Where unsure, they lean towards raising the row early.
-
-| Threshold | Value | Why |
-| --- | --- | --- |
-| Late start | 1 min | Past the published time is late, and the row always carries an action |
-| Ready court | 3 min free (`READY_ALERT_AFTER_MINUTES`) | Roughly the time players take to walk on; a late match never waits for it |
-| Overrun | max(5 min, ⅓ of the slot) (`overrunAlertAfterMinutes`), or at once when the next match is late | A third game adds about a third of a best-of-three; past that, a finished match with no result entered is the likelier story |
-
-**Check them at the first real tournament.** The app already stores every match's scheduled,
-start and end times, and `deskActions` is a pure function of them, so the day can be replayed
-afterwards with no extra tracking: how often each row fired, and how that changes under other
-thresholds. Look at the spread of actual length minus slot - an overrun row raised for much more
-than one match in five is noise - and ask the moderators which rows they ignored and what they
-noticed before the panel did. Do not tune these against fixtures or simulated schedules: those
-are built from the same assumptions and can only agree with them.
-
-An overdue result is an omission, not a danger, so it is amber.
-
-There is no row for a ready match without a court. It is either about to be placed
-automatically, or it is waiting on an organiser's decision (no slot before the close, no
-courts, a first build or a rebuild), and the Schedule page names that cause. What a moderator
-can do - put it on a court that is free now - is the idle tile's "Ready to place".
-
-## Up next (under Needs action)
-
-The call queue: for each court, the match to call next, when its court frees and whether its
-players will be free by then. Derived in `src/lib/tournament/desk-up-next.ts`.
-
-- **No match twice.** A match Needs action names is left out, and so is one past its scheduled
-  start (Needs action's, from the same one-minute line).
-- **One time per row, and it says which.** "~14:45" is when the court frees: the playing match's
-  start plus its slot. "Now" for a free court, "Overrun" for one past its expected end - never a
-  time in the past. The published time sits under it ("sched. 14:50") only when it differs. A busy
-  court's tile names its next pairing without a time, so the two never disagree.
-- **Players are judged when the court frees, not now.** A player is free at the end of their rest,
-  or at the end of their match elsewhere plus the rest gap. The row warns when that is at least
-  `UP_NEXT_RISK_MARGIN_MINUTES` (3) after the court frees, naming the player: "resting until
-  14:58", "on Court 2, free ~14:52", or "still on Court 2, running over" when that match is past
-  its own expected end. Under the margin it reads "✓ Players free". "Players not known yet" when
-  a side is still TBC.
-- **The row is the button** that opens the match. The bell beside it is **Notify players**, drawn
-  now and inactive until player notifications exist: `aria-disabled`, out of the Tab order, and
-  explained once in the panel header ("Notify players: coming soon").
-- Not a live region: it re-ranks every 30 seconds, and reading each change aloud would bury the
-  alerts above it.
-
-## Lists that move
-
-Needs action and Up next re-rank on every thirty-second tick and on every live update. Two
-rules keep that from costing a wrong click or a missed alert. The ordering rule is
-`holdDeskList` in `src/lib/tournament/desk-hold.ts`; `desk.tsx` wires the pointer, the
-keyboard and the ten-second cue.
-
-- **The order holds under the pointer and the keyboard.** While the pointer is over either
-  list, or focus is inside it, rows keep the order they had when the hold began. Numbers and
-  wording still update in place. A row that should leave stays, dimmed, until the hold ends; a
-  row that has arrived is appended at the end. When the pointer leaves or focus moves out, the
-  list settles into its new order in one move. The panel header says "Order held while you
-  point here" while it is held.
-- **A row keeps one identity.** The match is the row, whatever kind it currently is: a
-  `blocked-late` match that becomes `start-late` is the same row changing its words, not one
-  row leaving and another arriving. The pool row is keyed by its pool.
-- **What is new gets one bounded cue.** A row that was not in the list a moment ago carries a
-  "New" tag and a tinted left edge for 10 seconds (`NEW_ROW_MS`), then looks like any other
-  row. No blinking row, and no sound.
-- **The tab title carries the count.** `(3) Control desk`, dropping to `Control desk` when the
-  list is clear, so a moderator on another tab sees that a court is waiting. It is set only for
-  a caller who may edit: a reader has no Needs action panel.
+The Desk used to carry a work column beside the board: **Needs action** (once "Act now"), the
+ranked list of late starts, ready courts, overruns and pools with overdue results, and **Up
+next**, the call queue of each court's next match. Both were removed, together with the order
+hold and "New" cue that kept them still under the pointer and the `(N) Control desk` tab count.
+The board is now the whole Desk: a tile's state and readiness line say what a court needs, and
+the tile opens the match to start or score it. The tab reads "Control desk" while the Desk is
+open.
 
 ## Day bar
 
@@ -155,11 +70,13 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 - **Waiting** is neutral. It asks nothing of the moderator; the line beneath it gives the
   specific reason ("A. Nguyen, ready in 4 min", "A. Nguyen, on Court 2", "Teams not assigned").
   Its chip is a deeper grey than Idle so the two stay distinct fills. A player busy elsewhere
-  is amber, not red: a delay is not a danger, and it is the ink Needs action and Up next use
-  for the same fact.
+  is amber, not red: a delay is not a danger.
 - **Idle** is dimmed by colour, not opacity: a muted wash on the tile, so "nothing here" reads
   at a glance while the court name and the pill keep full contrast.
-- **Playing and Overrun name the next pairing and stop there** — no "Ready now", no reason it
+- **Every tile gives its next match's published time**: "Next 14:50: A vs B", on a busy court
+  as on a free one. On a busy court that time may already have passed; the match waits for the
+  court to clear.
+- **Playing and Overrun name the next match and stop there** — no "Ready now", no reason it
   is not ready. That line answers "can the queued match start now", which a court that still
   has a match on it cannot honestly answer; it is drawn on Ready and Waiting only.
 
@@ -183,7 +100,7 @@ badge's live region is never announced twice.
 moments of a reconnect), the Desk holds its numbers at the moment the connection dropped
 (`desk-paused.ts`): lateness, overruns and when a court frees are computed at that instant, since
 the data is that old, while the clock keeps running. A bar under the day bar says "No updates since
-14:37", each panel carries "as of 14:37", and those minutes and times go grey. In the match dialog
+14:37", the board carries "as of 14:37", and those minutes and times go grey. In the match dialog
 every control that writes - start, score, walkover, void, move, clear - is locked, with the reason
 at the top; Cancel stays usable. Opening a match is still allowed: it is a read.
 

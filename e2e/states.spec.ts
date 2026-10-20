@@ -485,137 +485,22 @@ for (const cell of MATRIX_CELLS) {
       expect(failures, "state chips under the 4.5:1 bar").toEqual([]);
     });
 
-    test("the three urgency treatments all render and separate", async ({ page }) => {
-      // "Needs action" is the operator's panel: the Desk withholds it from a caller without
-      // `can_edit`, so the three treatments are only reachable in an editor session.
-      await installAppMock(page, { preset: "states", role: "user" });
-      await openCell(page, routes.desk, cell);
-
-      const report = await page.evaluate(() => {
-        const live = document.querySelector('[aria-live="polite"]');
-        const text = (live?.textContent ?? "").replace(/\s+/g, " ");
-        const items = live ? [...live.querySelectorAll("li")] : [];
-        const surfaceOf = (needle: string) => {
-          const item = items.find((li) => (li.textContent ?? "").includes(needle));
-          if (!item) return null;
-          // The tinted box is the <li> itself for the alerts and the inner button for
-          // the dispatch prompt, so the first background that is not transparent wins.
-          const candidates: Element[] = [item, ...item.querySelectorAll("*")];
-          for (const el of candidates) {
-            const bg = getComputedStyle(el).backgroundColor;
-            if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
-          }
-          return null;
-        };
-        return {
-          allClear: text.includes("All clear"),
-          // The primary dispatch prompt: the one action the desk wants taken.
-          dispatch: text.includes("is ready"),
-          dispatchSurface: surfaceOf("is ready"),
-          // A ready match with no court is the organiser's to place, not the desk's to chase,
-          // so the panel carries no row for it even though the preset plants one.
-          unplaced: text.includes("a court"),
-          // Two attention alerts, from different causes.
-          overrun: text.includes("min on court"),
-          overrunSurface: surfaceOf("min on court"),
-          // The destructive one: a result that is overdue.
-          overdue: text.includes("past scheduled finish"),
-          overdueSurface: surfaceOf("past scheduled finish"),
-        };
-      });
-
-      expect(report.allClear, "the Act now panel fell back to its empty state").toBe(false);
-
-      for (const [what, present] of [
-        ["the primary dispatch prompt", report.dispatch],
-        ["the over-cap alert", report.overrun],
-        ["the overdue-results alert", report.overdue],
-      ] as const) {
-        expect(present, `${what} did not render`).toBe(true);
-      }
-      expect(report.unplaced, "the unplaced-pairing row came back to the panel").toBe(false);
-
-      // The surfaces must separate, and the severity scale is what they separate by.
-      //
-      // Three treatments, two surfaces, and that is deliberate: the overrun and the overdue
-      // result are both warnings (a delay and an omission, neither a danger), so they share the
-      // warning surface, and the primary action must not look like a warning. Stated as
-      // relationships rather than a count of tints - a count alone would pass if two warnings
-      // became two arbitrary new colours.
-      for (const [what, surface] of [
-        ["the primary dispatch prompt", report.dispatchSurface],
-        ["the over-cap alert", report.overrunSurface],
-        ["the overdue-results alert", report.overdueSurface],
-      ] as const) {
-        expect(surface, `${what} carries no measurable surface`).not.toBeNull();
-      }
-      expect(
-        report.overdueSurface,
-        "the overdue result stopped sharing the warning surface with the overrun",
-      ).toBe(report.overrunSurface);
-      expect(report.dispatchSurface, "the primary action resolved to the warning surface").not.toBe(
-        report.overrunSurface,
-      );
-    });
-
-    test("Up next lists each court's next match once, with the bell inactive", async ({ page }) => {
-      // The preset's queue: Court 3 is ready and so belongs to Needs action; Court 4's player
-      // is resting from a match on that court; Court 5's player is on Court 2 right now.
-      await installAppMock(page, { preset: "states", role: "user" });
-      await openCell(page, routes.desk, cell);
-      const panel = page.getByRole("heading", { name: "Up next" }).locator("xpath=ancestor::section[1]");
-      const row = (court: number) =>
-        panel.getByRole("button", { name: `Open the next match on Court ${court}`, exact: true });
-
-      await expect(row(4)).toContainText("resting until");
-      await expect(row(5)).toContainText("on Court 2");
-      await expect(row(3), "a match Needs action names was listed again").toHaveCount(0);
-
-      // Drawn now, inert until notifications exist, and out of the Tab order.
-      const bell = panel.getByRole("button", { name: "Notify the players on Court 4: coming soon" });
-      await expect(bell).toHaveAttribute("aria-disabled", "true");
-      await expect(bell).toHaveAttribute("tabindex", "-1");
-      await expect(panel.getByText("Notify players: coming soon")).toBeVisible();
-    });
-
-    test("hovering a list holds its order and says so; the tab carries the count", async ({
+    test("going offline pauses the Desk: says since when, marks the board, locks writes", async ({
       page,
     }) => {
       await installAppMock(page, { preset: "states", role: "user" });
       await openCell(page, routes.desk, cell);
-
-      // The count is in the tab title, so a moderator on another tab sees that a court waits.
-      await expect(page).toHaveTitle(/^\(\d+\) Control desk$/);
-
-      const needsAction = page
-        .getByRole("heading", { name: "Needs action" })
-        .locator("xpath=ancestor::section[1]");
-      const note = page.getByText("Order held while you point here");
-      await expect(note).toHaveCount(0);
-
-      // The hold covers the panel header too: the note that explains it lives there.
-      await needsAction.hover();
-      await expect(note).toBeVisible();
-
-      await page.mouse.move(0, 0);
-      await expect(note).toHaveCount(0);
-    });
-
-    test("going offline pauses the Desk: says since when, marks the panels, locks writes", async ({
-      page,
-    }) => {
-      await installAppMock(page, { preset: "states", role: "user" });
-      await openCell(page, routes.desk, cell);
-      await expect(page.getByRole("heading", { name: "Up next" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Court board" })).toBeVisible();
 
       await page.context().setOffline(true);
 
       await expect(page.getByText(/No updates since \d{1,2}:\d{2}\./)).toBeVisible();
-      // Each of the three panels says what moment its numbers are from.
-      await expect(page.getByText(/^as of \d{1,2}:\d{2}$/)).toHaveCount(3);
+      // The board says what moment its numbers are from.
+      await expect(page.getByText(/^as of \d{1,2}:\d{2}$/)).toHaveCount(1);
 
-      // Opening a match still works - it is a read - but nothing in it writes.
-      await page.getByRole("button", { name: "Start", exact: true }).first().click();
+      // Opening a match still works - it is a read - but nothing in it writes. Court 3 is the
+      // preset's free court with a ready match, so its tile opens a match that could start.
+      await page.getByRole("button", { name: "Court 3: free ready", exact: true }).click();
       const dialog = page.getByRole("dialog");
       await expect(dialog.getByText(/No connection since/)).toBeVisible();
       await expect(dialog.getByRole("button", { name: /Start match/ })).toBeDisabled();

@@ -106,8 +106,8 @@ the pictures of the Desk on that page. The same page uses violet for "moved late
 scheduling diagram: an exception to "violet is for interaction", kept because it is the
 scheduler's action being shown, and confined to that illustration.
 
-- **Body and controls: 14px minimum, 16px for what is read on the move.** Names on a court tile,
-  rows in Act now and match names in dialogs are 16px. 12px is for tertiary detail only
+- **Body and controls: 14px minimum, 16px for what is read on the move.** Names on a court tile
+  and match names in dialogs are 16px. 12px is for tertiary detail only
   (a timestamp, a footnote) and never for navigation, labels or buttons.
 - **Labels are sentence case.** Do not set labels in uppercase with wide tracking. It is slower to
   read and the old 12px uppercase labels were the smallest text on the Desk.
