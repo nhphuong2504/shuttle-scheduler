@@ -54,6 +54,48 @@ The board is now the whole Desk: a tile's state and readiness line say what a co
 the tile opens the match to start or score it. The tab reads "Control desk" while the Desk is
 open.
 
+## Call next (layout built, sending not yet)
+
+A button on each court tile to notify the players of that court's next match, by SMS or email.
+The layout is built; sending is not, so it is held behind `VITE_FEATURE_NOTIFY_PLAYERS`
+(`src/lib/feature-flags.ts`): off in every build that does not set it, on in the browser suite.
+Logic in `src/lib/tournament/call-next.ts`, UI in `src/components/desk/call-next.tsx`.
+
+This reverses an older rule, that the Desk does not track who has been called: once sending
+exists, the tile shows when a match's players were last notified.
+
+**The button** sits at the tile's bottom right, beside the control that opens the match (two
+controls, never one inside the other). Neutral outline, not the accent: fourteen coloured buttons
+would shout over the state pills.
+
+| Court | Button |
+| --- | --- |
+| Playing, Overrun, Ready, Waiting, with a match queued | Call next. Calling ahead on a busy court is allowed |
+| A player of that match on another court | Call next with an amber dot; the reason is in its name, and the dialog says it |
+| A side not known yet | Locked: nobody to notify |
+| Offline | Locked, like every other write |
+| Nothing queued, or a reader | No button |
+| Already notified (once sending exists) | "Notified 14:32", which reopens the dialog |
+
+**The dialog** opens on the button; opening it sends nothing, Send does.
+
+- Title "Notify the next match on Court N", then the context line in the match dialog's own
+  wording, comma-separated: "MD R2, due 14:25, Court 2 still playing, 37′ on court", or "MS R1,
+  due 14:30 (7 min ago), Court 4 free now".
+- An amber note for each player on another court: they are reached anyway, mid-match.
+- One row per player: name, how they can be reached (SMS, email, or "No contact"), and where they
+  are now in the tile's words - Free, Resting until 14:41, On Court 5, On this court.
+- The proposed message, editable. A busy court's asks the players to be ready near the court;
+  only a free court's asks them to come now, so a call made ahead never pulls them onto a court
+  still in play.
+- "Sends to 3 of 4 players", Cancel, Send - "Send again" once notified.
+
+**Until sending exists** the Desk has no contact details (`usePlayerReach` returns null) and no
+record of a send (`useCallNextRecords`). The dialog therefore leaves out the reach column, says
+"Sending is not connected yet." and keeps Send disabled; it never claims to have notified anyone.
+The reach and notified states are drawn in `call-next.test.tsx` from injected data. When the
+feature lands, reach comes from the server as booleans, never an address or a number.
+
 ## Day bar
 
 The selected day is the dark one - foreground fill, surface text - rather than the accent:

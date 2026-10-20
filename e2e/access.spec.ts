@@ -379,6 +379,7 @@ test.describe("a signed-out visitor", () => {
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Court board" })).toBeVisible();
     await expect(page.getByRole("button", { name: /^start$/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^(Call next|Notified)/ })).toHaveCount(0);
   });
 
   test("can tell which tournament the page is about without signing in", async ({ page }) => {

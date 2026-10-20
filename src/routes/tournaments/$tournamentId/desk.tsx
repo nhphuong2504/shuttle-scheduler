@@ -105,6 +105,7 @@ import {
   deskKindTable,
   getMatchReadiness,
   isPlacementKind,
+  playerStatus,
   type DeskMatchModel,
   type MatchReadiness,
 } from "@/lib/tournament/desk";
@@ -121,6 +122,18 @@ import {
   groupConflictsByMatch,
 } from "@/lib/tournament/schedule-conflicts";
 import { nextPausedSince } from "@/lib/tournament/desk-paused";
+import {
+  callNextAvailability,
+  callNextContext,
+  callNextMessage,
+} from "@/lib/tournament/call-next";
+import { NOTIFY_PLAYERS_ENABLED } from "@/lib/feature-flags";
+import {
+  CallNextButton,
+  CallNextDialog,
+  useCallNextRecords,
+  usePlayerReach,
+} from "@/components/desk/call-next";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
   attributeMatchesToDays,
@@ -168,6 +181,9 @@ function Desk() {
   const live = useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);
+  // The court whose next match the Call next dialog is open for.
+  const [callCourtId, setCallCourtId] = useState<string | null>(null);
+  const callOpener = useRef<HTMLElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   /**
    * Whether the displayed clock has been adopted from this browser yet.
@@ -509,6 +525,18 @@ function Desk() {
       return at(a) === at(b) ? 0 : at(a) < at(b) ? -1 : 1;
     });
 
+  /**
+   * Call next: notify a court's next match's players. Only for someone who may edit, and only
+   * once the feature is offered - until sending exists the flag keeps the button off the board.
+   */
+  const offerCallNext = NOTIFY_PLAYERS_ENABLED && canEdit;
+  const playerReach = usePlayerReach();
+  const notifiedAtFor = useCallNextRecords();
+  const callCourt = callCourtId
+    ? (courtStates.find(({ court }) => court.id === callCourtId) ?? null)
+    : null;
+  const callMatch = callCourt?.state.next ?? null;
+
   /** The pairing the idle courts offer, named once so the card cannot drift. */
   const nextReadyLabel = readyUnassigned[0]
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
@@ -681,11 +709,25 @@ function Desk() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {courtStates.map(({ court, state }) => {
               const target = state.playing ?? state.next ?? readyUnassigned[0];
+              // The button is about the court's queued match, never `target`: on a busy court
+              // that is the match being played, and on an idle one a match with no court yet.
+              const callNext = offerCallNext
+                ? callNextAvailability(state.next, dayMatches)
+                : ({ kind: "none" } as const);
               return (
-                <button
+                /*
+                  The tile is two controls side by side, not one inside the other: the button that
+                  opens the match fills the tile, and Call next sits over its bottom-right corner.
+                */
+                <div
                   key={court.id}
-                  type="button"
                   data-court-number={court.number}
+                  className={`relative flex flex-col ${
+                    target ? "transition-transform hover:-translate-y-0.5" : ""
+                  }`}
+                >
+                <button
+                  type="button"
                   disabled={!target}
                   aria-label={`Court ${court.number}: ${state.state.replace("-", " ")}`}
                   onClick={() => {
@@ -693,7 +735,7 @@ function Desk() {
                     setOperationCourtId(court.id);
                     setOpenMatch(target);
                   }}
-                  className={`flex flex-col rounded-xl border p-4 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default ${COURT_STATE_TILE[state.state]}`}
+                  className={`flex flex-1 flex-col rounded-xl border p-4 text-left shadow-panel transition-all enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default ${COURT_STATE_TILE[state.state]}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 font-display text-lg font-bold">
@@ -795,7 +837,15 @@ function Desk() {
                       <p className="text-sm">Nothing queued</p>
                     )}
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-primary-ink">
+                  {/*
+                    Pinned to the tile's foot, so it lines up across a row and with Call next,
+                    which sits over the right of this line.
+                  */}
+                  <p
+                    className={`mt-auto flex min-h-11 items-center pt-3 text-sm font-semibold text-primary-ink ${
+                      callNext.kind === "none" ? "" : "pr-40"
+                    }`}
+                  >
                     {state.playing
                       ? canEdit
                         ? "Open score desk"
@@ -807,12 +857,72 @@ function Desk() {
                         : ""}
                   </p>
                 </button>
+                {callNext.kind !== "none" && state.next ? (
+                  <span className="absolute bottom-4 right-4 z-10">
+                    <CallNextButton
+                      availability={callNext}
+                      courtNumber={court.number}
+                      notifiedAt={notifiedAtFor(state.next.id)}
+                      paused={paused}
+                      onOpen={(opener) => {
+                        callOpener.current = opener;
+                        setCallCourtId(court.id);
+                      }}
+                    />
+                  </span>
+                ) : null}
+                </div>
               );
             })}
           </div>
           </div>
         </Panel>
       </div>
+
+      {offerCallNext ? (
+        <CallNextDialog
+          open={callMatch != null}
+          onOpenChange={(open) => !open && setCallCourtId(null)}
+          courtNumber={callCourt?.court.number ?? "?"}
+          courtId={callMatch?.courtId ?? null}
+          context={
+            callMatch && callCourt
+              ? callNextContext({
+                  tag: callMatch.tag,
+                  courtNumber: callCourt.court.number,
+                  dueMs: callMatch.scheduled ? new Date(callMatch.scheduled).getTime() : null,
+                  dueLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
+                  court: callCourt.state.playing
+                    ? { kind: "busy", elapsedMinutes: callCourt.state.elapsedMinutes }
+                    : { kind: "free" },
+                  now: viewNow,
+                })
+              : ""
+          }
+          players={(callMatch?.playerIds ?? []).map((id) => ({
+            id,
+            name: playerMap.get(id)?.name ?? "A player",
+            status: playerStatus(id, callMatch!, dayMatches, restMinutesFor(callMatch!), viewNow),
+          }))}
+          courtNumberFor={(id) => (id ? (courtMap.get(id)?.number ?? "?") : "?")}
+          reach={playerReach}
+          notifiedAt={callMatch ? notifiedAtFor(callMatch.id) : null}
+          initialMessage={
+            callMatch && callCourt
+              ? callNextMessage({
+                  tag: callMatch.tag,
+                  courtNumber: callCourt.court.number,
+                  dueLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
+                  courtFree: !callCourt.state.playing,
+                })
+              : ""
+          }
+          paused={paused}
+          // Nothing sends yet: Send is disabled while `reach` is null, so this only closes.
+          onSend={() => setCallCourtId(null)}
+          returnFocusTo={callOpener.current}
+        />
+      ) : null}
 
       <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>
         <DialogContent className="sm:max-w-md">

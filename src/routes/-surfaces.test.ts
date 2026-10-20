@@ -680,6 +680,8 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     // the score desk's writes are hidden from a caller without `can_edit`.
     expect(desk).toMatch(/canEdit\s*\?\s*"Open score desk"\s*:\s*"View match"/);
     expect(desk).toMatch(/className=\{canEdit \? "flex gap-2" : "hidden"\}/);
+    // Call next is an operator's control, and a held-back one: both gates, in one place.
+    expect(desk).toMatch(/const offerCallNext = NOTIFY_PLAYERS_ENABLED && canEdit;/);
     expect(shell).toMatch(
       /access\.can_edit \? \[\.\.\.SECTIONS, \.\.\.EDITOR_SECTIONS\][\s\S]{0,40}?READ_ONLY_SECTIONS/,
     );
