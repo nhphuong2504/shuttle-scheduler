@@ -204,6 +204,13 @@ function CallNextBody({
   const elsewhere = players.filter(
     (player) => player.status.kind === "on-court" && player.status.courtId !== courtId,
   );
+  const elsewhereByCourt: { courtId: string | null; names: string[] }[] = [];
+  for (const player of elsewhere) {
+    const busyCourtId = player.status.kind === "on-court" ? player.status.courtId : null;
+    const group = elsewhereByCourt.find((entry) => entry.courtId === busyCourtId);
+    if (group) group.names.push(player.name);
+    else elsewhereByCourt.push({ courtId: busyCourtId, names: [player.name] });
+  }
   const reachable = reach ? reachableCount(players.map((player) => player.id), reach) : 0;
   const canSend = reach != null && reachable > 0 && !paused && message.trim().length > 0;
 
@@ -222,14 +229,16 @@ function CallNextBody({
         </p>
       ) : null}
 
-      {/* Allowed, but they will get it mid-match: said once here rather than asked twice. */}
-      {elsewhere.length ? (
+      {/*
+        Allowed, but they are mid-match: one short line per court, since a pair on the same court
+        is one fact. The rows below say the same per player.
+      */}
+      {elsewhereByCourt.length ? (
         <ul className="space-y-1 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-sm text-warn-foreground">
-          {elsewhere.map((player) => (
-            <li key={player.id}>
-              <span className="font-semibold">{player.name}</span> is playing on Court{" "}
-              {player.status.kind === "on-court" ? courtNumberFor(player.status.courtId) : "?"}{" "}
-              right now and will get this on court.
+          {elsewhereByCourt.map(({ courtId: busyCourtId, names }) => (
+            <li key={busyCourtId ?? "?"}>
+              <span className="font-semibold">{joinNames(names)}</span>{" "}
+              {names.length === 1 ? "is" : "are"} on Court {courtNumberFor(busyCourtId)}.
             </li>
           ))}
         </ul>
@@ -372,4 +381,10 @@ function StatusCell({
         </span>
       );
   }
+}
+
+/** "A", "A and B", "A, B and C". */
+function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }

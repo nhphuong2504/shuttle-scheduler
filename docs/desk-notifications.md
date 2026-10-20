@@ -82,7 +82,8 @@ would shout over the state pills.
 - Title "Notify the next match on Court N", then the context line in the match dialog's own
   wording, comma-separated: "MD R2, scheduled 14:25, Court 2 still playing, 37′ on court", or
   "MS R1, scheduled 14:30 (7 min ago), Court 4 free now".
-- An amber note for each player on another court: they are reached anyway, mid-match.
+- An amber note for players on another court, one short line per court: "Do Tuyet is on Court
+  3.", or "A and B are on Court 2." They are reached anyway, mid-match.
 - One row per player: name, how they can be reached (SMS, email, or "No contact"), and where they
   are now in the tile's words - Free, Resting until 14:41, On Court 5, On this court.
 - The proposed message, editable. Only a Ready court's asks the players to come now; a busy

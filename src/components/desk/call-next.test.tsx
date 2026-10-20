@@ -69,7 +69,7 @@ describe("CallNextDialog", () => {
     expect(within(dialog).getByText(/^Resting until \d{1,2}:\d{2}$/)).toBeTruthy();
     expect(within(dialog).getByText("On Court 5")).toBeTruthy();
     expect(within(dialog).getAllByText("Free")).toHaveLength(2);
-    expect(within(dialog).getByText(/will get this on court/).textContent).toContain("Chris Bell");
+    expect(within(dialog).getByText(/is on Court 5\.$/).textContent).toBe("Chris Bell is on Court 5.");
   });
 
   it("sends the edited message, trimmed", () => {

@@ -82,10 +82,8 @@ test.describe("Call next", () => {
 
     await button.click();
     const dialog = page.getByRole("dialog");
-    // Both players of the pair on Court 2 are named, each once, and the rows agree.
-    await expect(
-      dialog.getByText(/is playing on Court 2 right now and will get this on court\./),
-    ).toHaveCount(2);
+    // The pair on Court 2 is one short line, and each row agrees.
+    await expect(dialog.getByText(/ and .+ are on Court 2\.$/)).toHaveCount(1);
     await expect(dialog.getByText("On Court 2", { exact: true })).toHaveCount(2);
     // A Waiting court's match cannot start yet, so the players are asked to be ready, not to come.
     await expect(dialog.getByLabel("Message")).toHaveValue(/Please be ready near the court\.$/);
