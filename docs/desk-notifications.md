@@ -64,9 +64,12 @@ Logic in `src/lib/tournament/call-next.ts`, UI in `src/components/desk/call-next
 This reverses an older rule, that the Desk does not track who has been called: once sending
 exists, the tile shows when a match's players were last notified.
 
-**The button** sits at the tile's bottom right, beside the control that opens the match (two
-controls, never one inside the other). Neutral outline, not the accent: fourteen coloured buttons
-would shout over the state pills.
+**The button** sits at the tile's bottom right, level with "Open next match" and beside the
+control that opens the match (two controls, never one inside the other). It is the tile's
+secondary action, so it is the quieter one: a bell and muted words, no border, fill or shadow
+until hovered, while "Open next match" keeps the interaction colour. An outlined chip there was
+the heaviest object on the tile, and the state pill is meant to be the loudest. The hit area is
+still 44px tall.
 
 | Court | Button |
 | --- | --- |

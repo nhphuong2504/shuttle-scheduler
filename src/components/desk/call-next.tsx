@@ -39,9 +39,12 @@ export function useCallNextRecords(): (matchId: string) => number | null {
  * The tile's Call next button. It sits on the tile beside the control that opens the match,
  * never inside it, so there is no button within a button.
  *
- * Neutral rather than accent: a board of fourteen tiles with fourteen coloured buttons would
- * shout over the state pills, which are what a moderator scans. A player on another court
- * adds an amber dot - allowed, but worth a look - and the dialog says why.
+ * The tile's secondary action, so it is quieter than the tile's primary one ("Open next
+ * match", in the interaction colour): muted ink, no border, no fill, no shadow - it reads as a
+ * labelled icon until hovered or focused. A filled or outlined chip here was the heaviest object
+ * on the tile, and on an Operate screen the state pill is meant to be the loudest thing. The hit
+ * area stays 44px tall. A player on another court adds an amber dot on the bell - allowed, but
+ * worth a look - and the dialog says why.
  */
 export function CallNextButton({
   availability,
@@ -72,22 +75,24 @@ export function CallNextButton({
     <Button
       type="button"
       size="sm"
-      variant="outline"
+      variant="ghost"
       disabled={locked}
       onClick={(event) => onOpen(event.currentTarget)}
       // The visible words lead the name, so a voice user can say what they see.
       aria-label={`${text}, Court ${courtNumber}${note ? `, ${note}` : ""}`}
       title={note ? `${text}: ${note}` : undefined}
-      className="relative h-11 gap-1.5 bg-surface px-3 text-sm"
+      className="h-11 gap-1.5 px-3 text-sm font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
     >
-      <Bell aria-hidden="true" className="size-4" />
+      <span className="relative inline-flex">
+        <Bell aria-hidden="true" className="size-4" />
+        {availability.kind === "warn" && !locked ? (
+          <span
+            aria-hidden="true"
+            className="absolute -right-1 -top-1 size-2 rounded-full bg-warn-foreground"
+          />
+        ) : null}
+      </span>
       {text}
-      {availability.kind === "warn" && !locked ? (
-        <span
-          aria-hidden="true"
-          className="absolute -right-1 -top-1 size-3 rounded-full border-2 border-surface bg-warn-foreground"
-        />
-      ) : null}
     </Button>
   );
 }

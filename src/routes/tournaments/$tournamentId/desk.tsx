@@ -849,27 +849,30 @@ function Desk() {
                     )}
                   </div>
                   {/*
-                    Pinned to the tile's foot, so it lines up across a row and with Call next,
-                    which sits over the right of this line.
+                    Pinned to the tile's foot, so it lines up across a row. The spacer sits above the
+                    44px line rather than inside it, so the words are level with Call next, which
+                    sits over the right of this line.
                   */}
-                  <p
-                    className={`mt-auto flex min-h-11 items-center pt-3 text-sm font-semibold text-primary-ink ${
-                      callNext.kind === "none" ? "" : "pr-40"
-                    }`}
-                  >
-                    {state.playing
-                      ? canEdit
-                        ? "Open score desk"
-                        : "View match"
-                      : target
+                  <div className="mt-auto pt-3">
+                    <p
+                      className={`flex min-h-11 items-center text-sm font-semibold text-primary-ink ${
+                        callNext.kind === "none" ? "" : "pr-36"
+                      }`}
+                    >
+                      {state.playing
                         ? canEdit
-                          ? "Open next match"
-                          : "View next match"
-                        : ""}
-                  </p>
+                          ? "Open score desk"
+                          : "View match"
+                        : target
+                          ? canEdit
+                            ? "Open next match"
+                            : "View next match"
+                          : ""}
+                    </p>
+                  </div>
                 </button>
                 {callNext.kind !== "none" && state.next ? (
-                  <span className="absolute bottom-4 right-4 z-10">
+                  <span className="absolute bottom-4 right-1 z-10">
                     <CallNextButton
                       availability={callNext}
                       courtNumber={court.number}
