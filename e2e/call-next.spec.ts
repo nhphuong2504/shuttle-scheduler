@@ -93,6 +93,11 @@ test.describe("Call next", () => {
     await openDesk(page);
     await callButton(page, 5).click();
     await expect(page.getByRole("dialog")).toBeVisible();
+    // Measured once the open animation has settled: mid-fade the surface is still blending into
+    // the overlay, and axe read its muted text at 4.42:1 against a grey that never stays painted.
+    await page
+      .getByRole("dialog")
+      .evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
     const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).include('[role="dialog"]').analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
