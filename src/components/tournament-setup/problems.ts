@@ -88,7 +88,7 @@ export function problemsForStep(step: SetupStep, form: DraftForm, now: Date = ne
       if (event.gender === "mixed" && event.entryType !== "pair") {
         issues.push(`${event.code} is mixed, so it must be a doubles event.`);
       }
-      if (event.maxEntries != null && event.maxEntries < 2) {
+      if (event.maxEntries != null && !(Number.isInteger(event.maxEntries) && event.maxEntries >= 2)) {
         issues.push(`${event.code} needs an entry cap of 2 or more, or no cap.`);
       }
     }

@@ -1,11 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
+import { UnsavedDialog } from "@/components/tournament-setup/UnsavedDialog";
+import { markStepSaved, stepDirty } from "@/components/tournament-setup/dirty";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
 import { StructureStep } from "@/components/tournament-setup/StructureStep";
@@ -73,7 +75,10 @@ import { cn } from "@/lib/utils";
  *
  * ## Setting up: each step saves itself
  *
- * Once the tournament exists the steps write straight to it, and the database refuses every
+ * Once the tournament exists the steps write straight to it - on "Save and continue", and on
+ * any other way out of an edited step (the rail, "Back", Review's links), so "Saved as you go"
+ * is true however the host moves. Leaving the page with an edit asks first (`UnsavedDialog`).
+ * The database refuses every
  * write from a tournament that is no longer upcoming. A tournament that has started cannot
  * change its events, caps or format, so the wizard shows what can still change (its name,
  * venue and last day) and the end of it, and says why the rest is gone.
@@ -171,6 +176,13 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
   const [draftRead, setDraftRead] = useState(false);
   const hydratedFor = useRef<string | null>(null);
   const origin = useRef<RegistrationOrigin | null>(null);
+  /**
+   * The answers as the database last held them, so an edited step can be told from an
+   * untouched one. Null while creating: nothing is stored, so nothing is unsaved.
+   */
+  const [savedForm, setSavedForm] = useState<DraftForm | null>(null);
+  /** Set just before the wizard navigates away on purpose, so its own exits are not blocked. */
+  const leaving = useRef(false);
 
   const currentIndex = setupStepIndex(step);
   const steps = setupSteps(!isNew);
@@ -197,7 +209,9 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
     }
     if (hydratedFor.current === tournamentId) return;
     if (draftData.isLoading || !draftData.tournament) return;
-    setForm(hydrateForm(draftData.tournament, draftData.categories));
+    const hydrated = hydrateForm(draftData.tournament, draftData.categories);
+    setForm(hydrated);
+    setSavedForm(hydrated);
     origin.current = registrationOrigin(draftData.tournament);
     hydratedFor.current = tournamentId;
   }, [tournamentId, draftData]);
@@ -220,6 +234,49 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
 
   const refresh = () => qc.invalidateQueries();
 
+  /**
+   * The step whose answers are on screen. Once the configuration is frozen only the details
+   * form is shown, whatever the address says.
+   */
+  const editingStep: SetupStep = configEditable ? step : "details";
+  const dirty = !isNew && stepDirty(editingStep, form, savedForm);
+
+  /**
+   * Saves the step on screen if it was edited. False when it could not be saved - a problem
+   * on the step, which is then drawn beside its field, or a refusal from the database - and
+   * the caller keeps the host where they are.
+   */
+  const saveCurrent = async (): Promise<boolean> => {
+    if (!tournamentId || !savedForm || !dirty) return true;
+    if (problemsForStep(editingStep, form).length) {
+      setAttempted(true);
+      return false;
+    }
+    setBusy(true);
+    try {
+      if (configEditable) {
+        await saveStep(editingStep, tournamentId, form, origin.current);
+      } else {
+        await saveLive(tournamentId, form, String(draftData.tournament?.ends_on).slice(0, 10));
+      }
+      setSavedForm(markStepSaved(editingStep, form, savedForm));
+      await refresh();
+      toast.success("Saved");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Every move between steps: the rail, "Back", Review's links. An edited step is saved first. */
+  const leaveTo = async (next: SetupStep) => {
+    if (next === step) return;
+    if (await saveCurrent()) goTo(next);
+  };
+
   /** Continues. While creating that only moves on; once it exists it saves the step first. */
   const saveAndContinue = async () => {
     if (problems.length) {
@@ -227,25 +284,21 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
       return;
     }
     const next = SETUP_STEPS[Math.min(currentIndex + 1, SETUP_STEPS.length - 1)];
-    const nextStep: SetupStep = next ? next.id : "review";
-
-    if (!tournamentId) {
-      goTo(nextStep);
-      return;
-    }
-
-    setBusy(true);
-    try {
-      await saveStep(step, tournamentId, form, origin.current);
-      await refresh();
-      goTo(nextStep);
-      toast.success("Saved");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save");
-    } finally {
-      setBusy(false);
-    }
+    await leaveTo(next ? next.id : "review");
   };
+
+  /**
+   * Leaving the page - not the step - with an edit asks first. The step moves themselves only
+   * change the search string, so they pass; so do the wizard's own exits (`leaving`).
+   */
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const blocker = useBlocker({
+    shouldBlockFn: ({ current, next }) =>
+      !leaving.current && dirtyRef.current && current.pathname !== next.pathname,
+    enableBeforeUnload: () => !leaving.current && dirtyRef.current,
+    withResolver: true,
+  });
 
   /**
    * Creates the tournament: everything at once, or nothing.
@@ -333,6 +386,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
       await discardTournament(tournamentId);
       await refresh();
       toast.success("Tournament discarded");
+      leaving.current = true;
       void navigate({ to: "/me/tournaments", replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not discard the tournament");
@@ -341,29 +395,6 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
     }
   };
 
-  /** After the tournament has started: what can still change, saved on its own. */
-  const saveLiveDetails = async () => {
-    if (!tournamentId) return;
-    const found = problemsForStep("details", form);
-    if (found.length) {
-      setAttempted(true);
-      return;
-    }
-    setBusy(true);
-    try {
-      // The last date first: it is the one the database may refuse, and it names why.
-      if (form.endsOn !== String(draftData.tournament?.ends_on).slice(0, 10)) {
-        await updateTournamentWindow(tournamentId, form.startsOn, form.endsOn);
-      }
-      await updateTournamentDetails(tournamentId, toDraftInput(form));
-      await refresh();
-      toast.success("Saved");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   /**
    * The review step's checks: the form's own while the tournament does not exist, the
@@ -391,7 +422,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
     onCreate: () => void create(),
     onComplete: () => setCompleting(true),
     onDiscard: () => void discard(),
-    onGoToStep: configEditable ? goTo : undefined,
+    onGoToStep: configEditable ? (next: SetupStep) => void leaveTo(next) : undefined,
   };
 
   const registrationOpened = Boolean(
@@ -409,6 +440,15 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
         error={completion.error instanceof Error ? completion.error.message : null}
         busy={busy}
         onConfirm={() => void complete()}
+      />
+      <UnsavedDialog
+        open={blocker.status === "blocked"}
+        busy={busy}
+        onStay={() => blocker.reset?.()}
+        onDiscard={() => blocker.proceed?.()}
+        onSave={() =>
+          void saveCurrent().then((saved) => (saved ? blocker.proceed?.() : blocker.reset?.()))
+        }
       />
       {configEditable ? (
         <div className="grid items-start gap-6 lg:grid-cols-[16.25rem_minmax(0,1fr)] lg:gap-10">
@@ -431,7 +471,8 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
                   <li key={entry.id}>
                     <button
                       type="button"
-                      onClick={() => goTo(entry.id)}
+                      disabled={busy}
+                      onClick={() => void leaveTo(entry.id)}
                       aria-current={isCurrent ? "step" : undefined}
                       className={cn(
                         "flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors",
@@ -483,7 +524,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
                 aria-hidden="true"
                 className={cn("size-2 rounded-full", isNew ? "bg-border-control" : "bg-success")}
               />
-              {isNew ? "Kept on this device. Created at the end." : "Saved as you go."}
+              {isNew ? "Kept if you reload this tab. Created at the end." : "Saved as you go."}
             </p>
           </nav>
 
@@ -492,7 +533,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
               <strong className="text-foreground">
                 Step {currentIndex + 1} of {steps.length} — {steps[currentIndex]?.label}
               </strong>
-              <span>{isNew ? "Kept on this device" : "Saved as you go"}</span>
+              <span>{isNew ? "Kept if you reload" : "Saved as you go"}</span>
             </p>
             <div aria-hidden="true" className="mt-2 grid grid-cols-4 gap-1.5">
               {steps.map((entry, index) => (
@@ -555,7 +596,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
                   disabled={busy}
                   onClick={() => {
                     const previous = SETUP_STEPS[currentIndex - 1];
-                    if (previous) goTo(previous.id);
+                    if (previous) void leaveTo(previous.id);
                   }}
                 >
                   ← Back
@@ -602,7 +643,9 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
           />
           {tournamentStatus === "completed" ? null : (
             <div className="flex justify-end">
-              <Button className="h-12 px-7 text-base" disabled={busy} onClick={saveLiveDetails}>
+              <Button className="h-12 px-7 text-base" disabled={busy}
+                onClick={() => (dirty ? void saveCurrent() : toast("No changes to save"))}
+              >
                 {busy ? "Saving…" : "Save details"}
               </Button>
             </div>
@@ -638,6 +681,15 @@ async function saveStep(
       await saveTournamentConfig(id, toDraftInput(form));
       return;
   }
+}
+
+/** After the tournament has started: what can still change, saved on its own. */
+async function saveLive(id: string, form: DraftForm, storedEndsOn: string): Promise<void> {
+  // The last date first: it is the one the database may refuse, and it names why.
+  if (form.endsOn !== storedEndsOn) {
+    await updateTournamentWindow(id, form.startsOn, form.endsOn);
+  }
+  await updateTournamentDetails(id, toDraftInput(form));
 }
 
 /** Writes the registration window if the host changed it, and only then. */

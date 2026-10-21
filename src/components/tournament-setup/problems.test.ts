@@ -146,6 +146,18 @@ describe("problemsForStep", () => {
     );
   });
 
+  it("refuses a cap that is not a whole number", () => {
+    const form = filled();
+    form.events = [{ ...form.events[0]!, maxEntries: Number.NaN }];
+    expect(problemsForStep("events", form, NOW)).toContain(
+      "MS needs an entry cap of 2 or more, or no cap.",
+    );
+    form.events = [{ ...form.events[0]!, maxEntries: 2.5 }];
+    expect(problemsForStep("events", form, NOW)).toContain(
+      "MS needs an entry cap of 2 or more, or no cap.",
+    );
+  });
+
   it("puts the registration problems on the events step, where the field is", () => {
     const form = filled({
       registration: { enabled: true, opensAt: "2026-10-08T09:00", closesAt: "2026-10-25T09:00" },

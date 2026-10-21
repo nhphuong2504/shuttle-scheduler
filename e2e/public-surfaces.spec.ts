@@ -755,6 +755,41 @@ test.describe("Configuring one tournament", () => {
   });
 });
 
+test.describe("Editing a step of an upcoming tournament", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
+
+  test("saves an edited step when the host leaves it by the rail", async ({ page }) => {
+    await page.goto(`${routes.settings}?step=details`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const name = page.getByRole("textbox", { name: "Name", exact: true });
+    await name.fill("Renamed Open");
+
+    // The page says "Saved as you go", so the rail cannot be a way to lose an edit.
+    const saved = page.waitForRequest(
+      (r) => r.url().includes("/rpc/save_tournament_config") && r.method() === "POST",
+    );
+    await page.getByRole("navigation", { name: "Setup steps" }).getByRole("button", { name: /Events/ }).click();
+    expect(JSON.stringify((await saved).postDataJSON())).toContain("Renamed Open");
+    await expect(page).toHaveURL(/step=events/);
+  });
+
+  test("asks before leaving the page with an edit, and stays when told to", async ({ page }) => {
+    await page.goto(`${routes.settings}?step=details`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill("Renamed Open");
+    await page.getByRole("main").getByRole("link", { name: /my tournaments/i }).click();
+
+    const dialog = page.getByRole("alertdialog", { name: "Save your changes?" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Stay here" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(/\/settings/);
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Renamed Open");
+  });
+});
+
 test.describe("Setting up a tournament that has started", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "in_progress" } });
 
