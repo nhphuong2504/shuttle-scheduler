@@ -16,25 +16,52 @@ import { countIsoDays, type BasicsForm, type DraftForm } from "./types";
 /** Matches the check constraint on `tournaments.notes`. */
 const NOTES_MAX_LENGTH = 2000;
 
-/** A short, curated list of IANA zones. Any valid zone is accepted by the database. */
+/**
+ * A curated list of IANA zones, grouped west to east. Any valid zone is accepted by the
+ * database, and a stored zone that is not listed is added to the menu rather than shown blank
+ * (`zoneOptions`); a new tournament starts in the browser's own zone (see the wizard).
+ */
 const TIMEZONE_OPTIONS = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Phoenix",
-  "America/Los_Angeles",
-  "America/Anchorage",
   "Pacific/Honolulu",
+  "America/Anchorage",
+  "America/Los_Angeles",
+  "America/Phoenix",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Toronto",
+  "America/Sao_Paulo",
+  "UTC",
   "Europe/London",
   "Europe/Paris",
   "Europe/Berlin",
+  "Europe/Madrid",
+  "Europe/Rome",
+  "Africa/Johannesburg",
+  "Asia/Dubai",
+  "Asia/Karachi",
   "Asia/Kolkata",
+  "Asia/Bangkok",
+  "Asia/Ho_Chi_Minh",
+  "Asia/Jakarta",
   "Asia/Singapore",
-  "Asia/Tokyo",
+  "Asia/Kuala_Lumpur",
+  "Asia/Manila",
+  "Asia/Hong_Kong",
   "Asia/Shanghai",
+  "Asia/Taipei",
+  "Asia/Seoul",
+  "Asia/Tokyo",
   "Australia/Sydney",
-  "UTC",
+  "Pacific/Auckland",
 ];
+
+/** The menu's zones, with the current one included even when it is not in the list. */
+function zoneOptions(current: string): string[] {
+  return current && !TIMEZONE_OPTIONS.includes(current)
+    ? [current, ...TIMEZONE_OPTIONS]
+    : TIMEZONE_OPTIONS;
+}
 
 /**
  * A `YYYY-MM-DD` date as "Sat, Oct 24".
@@ -210,7 +237,7 @@ export function DetailsStep({
                 <SelectValue placeholder="Choose a timezone" />
               </SelectTrigger>
               <SelectContent>
-                {TIMEZONE_OPTIONS.map((zone) => (
+                {zoneOptions(basics.venueTimezone).map((zone) => (
                   <SelectItem key={zone} value={zone}>
                     {zone}
                   </SelectItem>
