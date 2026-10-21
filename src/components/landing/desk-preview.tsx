@@ -55,7 +55,7 @@ export function DeskPreview() {
           className="min-w-0"
           bodyClassName="p-3"
           right={
-            <span className="text-sm text-muted-foreground tabular-nums">Sat 18 Oct, 4 courts</span>
+            <span className="text-sm text-muted-foreground tabular-nums">4 courts</span>
           }
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -79,14 +79,16 @@ export function DeskPreview() {
             <PreviewTile
               number={3}
               state="free-blocked"
-              next="Next 14:35: Ben Carter / Amy Young vs Sam Lee / Ella Fox"
+              tag="Next 14:35 · XD R1"
+              names="Ben Carter / Amy Young vs Sam Lee / Ella Fox"
               readiness={{ text: "Ben Carter, on Court 2", tone: "busy" }}
             />
             <PreviewTile
               number={4}
               phone={false}
               state="free-ready"
-              next="Next 14:30: Jack Evans vs Liam Murphy"
+              tag="Next 14:30 · MS R2"
+              names="Jack Evans vs Liam Murphy"
               readiness={{ text: "Ready now", tone: "ready" }}
             />
           </div>
@@ -116,10 +118,12 @@ function PreviewTile({
   /** Shown on a phone too. The phone keeps only the two courts the story is about. */
   phone?: boolean;
   state: CourtState;
-  tag?: string;
-  names?: string;
+  /** The tag line: the match's tag, and on a free court its due time before it. */
+  tag: string;
+  names: string;
   timer?: string;
-  next: string;
+  /** A busy court's next pairing. A free court's queued match is `tag` and `names`. */
+  next?: string;
   /** Only a free court answers "can the queued match start": a busy one names its next match. */
   readiness?: { text: string; tone: keyof typeof READINESS_TONE };
 }) {
@@ -137,31 +141,34 @@ function PreviewTile({
           {COURT_STATE_LABEL[state]}
         </span>
       </div>
-      <p className="mt-2 text-[15px] font-semibold leading-snug">
-        {names ? (
-          <>
-            <span className="font-score text-sm font-medium text-muted-foreground">{tag}</span>
-            <br />
-            {names}
-            <br />
-            <span
-              className={`font-score text-base tabular-nums ${
-                state === "overrun" ? "font-semibold text-warn-foreground" : "text-muted-foreground"
-              }`}
-            >
-              {timer}
-            </span>
-          </>
-        ) : (
-          <span className="font-medium">
-            {state === "free-ready" ? "Free, next match ready" : "Free, next match not ready"}
-          </span>
-        )}
-      </p>
-      <div className="mt-2 border-t border-hairline pt-2 text-muted-foreground">
-        <p className="text-[13px] leading-snug tabular-nums">{next}</p>
-        {readiness ? <span className={READINESS_TONE[readiness.tone]}>{readiness.text}</span> : null}
+      {/*
+        The Desk's tile: the tag line, the names, then the one value a moderator acts on - the
+        timer on a busy court, the readiness line on a free one. A busy court also names its next
+        pairing under a rule; a free court's queued match is already the tile's subject.
+      */}
+      <div className="mt-2 leading-snug">
+        <p className="font-score text-sm font-medium text-muted-foreground">{tag}</p>
+        <p className="text-[15px] font-semibold">{names}</p>
+        {timer ? (
+          <p
+            className={`font-score text-base tabular-nums ${
+              state === "overrun" ? "font-semibold text-warn-foreground" : "text-muted-foreground"
+            }`}
+          >
+            {timer}
+          </p>
+        ) : null}
+        {readiness ? (
+          <p className="mt-1">
+            <span className={READINESS_TONE[readiness.tone]}>{readiness.text}</span>
+          </p>
+        ) : null}
       </div>
+      {next ? (
+        <p className="mt-2 border-t border-hairline pt-2 text-[13px] leading-snug text-muted-foreground tabular-nums">
+          {next}
+        </p>
+      ) : null}
     </div>
   );
 }

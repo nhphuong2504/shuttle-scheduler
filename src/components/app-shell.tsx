@@ -292,7 +292,8 @@ function SessionBlock() {
 
   return (
     <>
-      <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-t4 text-muted-foreground sm:inline-flex">
+      {/* From `lg` only: on a tablet the chip pushed Sign out onto a second header row. */}
+      <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-t4 text-muted-foreground lg:inline-flex">
         <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
         {session?.userEmail}
       </span>
@@ -701,7 +702,8 @@ function PrimaryNav({ signedIn, marked }: { signedIn: boolean; marked: boolean }
       {signedIn ? (
         <Link to="/tournaments/new" className={NEW_TOURNAMENT_CLASS}>
           <Plus aria-hidden="true" className="size-4" />
-          New tournament
+          {/* The icon alone below `lg`, so a tablet's bar stays one row; the name stays whole. */}
+          <span className="max-lg:sr-only">New tournament</span>
         </Link>
       ) : null}
     </>

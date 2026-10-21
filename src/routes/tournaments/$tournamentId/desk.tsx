@@ -684,8 +684,9 @@ function Desk() {
             selectedDay ? (
               <span className="flex flex-wrap items-center justify-end gap-x-2 text-sm text-muted-foreground">
                 {asOf}
+                {/* The day is the day bar's to say; this names only what the board holds. */}
                 <span>
-                {dayDateLabel(selectedDay.date)}, {courtsOnSelectedDay.length} court
+                {courtsOnSelectedDay.length} court
                 {courtsOnSelectedDay.length === 1 ? "" : "s"}
                 {/*
                   Courts never move, so the ones out of view are named, not counted: "Courts
@@ -755,103 +756,116 @@ function Desk() {
                     <CourtStatePill state={state.state} />
                   </div>
 
-                  {/* The names of the match on court are the tile's primary
-                      content, so they take the read tier. The tag above is a
-                      reference code and the timer below is the value that needs to
-                      be comparable across courts. */}
-                  <p className="mt-3 text-base font-semibold leading-snug">
-                    {state.playing ? (
-                      <>
-                        <span className="font-score text-sm font-medium text-muted-foreground">
-                          {state.playing.tag}
-                        </span>
-                        <br />
-                        {label(state.playing.teams[0])} vs {label(state.playing.teams[1])}
-                        <br />
-                        <span
-                          className={`font-score text-base tabular-nums ${
-                            state.state === "overrun"
-                              ? "font-semibold text-warn-foreground"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {/*
-                            Playing gives the elapsed minutes against the slot, so a moderator reads
-                            how far through the match is - and roughly when the court frees - without
-                            arithmetic. Overrun gives only how long the court has been held: the
-                            amber tile already says it is past its slot, and "48′ of 15′" would be a
-                            second statement of that. Neither says how the match started.
-                          */}
-                          {state.state === "overrun" ? (
-                            <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
-                          ) : (
-                            <>
-                              <span data-desk-derived>{state.elapsedMinutes}′</span> of{" "}
-                              {slotMinutesFor(state.playing)}′ on court
-                            </>
-                          )}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="font-medium">
-                        {state.state === "free-ready"
-                          ? "Free, next match ready"
-                          : state.state === "free-blocked"
-                            ? "Free, next match not ready"
-                            : "Idle"}
-                      </span>
-                    )}
-                  </p>
-                  {/* The queued pairing is a name, so it takes the identify tier;
-                      the readiness detail under it is reference text. They were one
-                      12px line before, which put the next players' names below the
-                      playing names at the same size as the detail. */}
-                  <div className="mt-2 border-t border-hairline pt-2 text-muted-foreground">
-                    {state.next ? (
-                      <>
-                        {/*
-                          Every court gives its next match's published time, busy or free, so a
-                          moderator reads when it is due without opening it. On a busy court that
-                          time can already have passed: the match waits for the court to clear.
-                        */}
-                        <p className="text-t2">
-                          Next {timeLabel(state.next.scheduled)}:{" "}
-                          {label(state.next.teams[0])} vs {label(state.next.teams[1])}
-                        </p>
-                        {/*
-                          A court with a match on it names its next pairing and nothing
-                          more - no "Ready now", no reason it is not ready yet.
+                  {/*
+                    The tile answers one question per state, in the same three lines: what the
+                    match is (its tag, and on a free court when it is due), who plays it, and the
+                    one number or reason a moderator acts on. The chip above already says the
+                    state, so the body does not say it a second time in words.
 
-                          The readiness line answers "can the queued match start", which is
-                          the question a *free* court is asked: free-ready is exactly "yes",
-                          free-blocked is exactly "not yet, and here is why". While a match is
-                          in progress the question is premature - the court cannot take it
-                          until the current match ends, whatever the clock says about rest -
-                          so the line would be an answer to a question nobody has asked yet.
-                          It also goes stale in a way that reads as a fault: a two-minute
-                          countdown on a court with twenty minutes left is noise, not a plan.
-                        */}
-                        {state.playing ? null : (
-                          <ReadinessText
-                            readiness={state.readiness}
-                            courts={courtMap}
-                            players={playerMap}
-                          />
-                        )}
-                      </>
-                    ) : !state.playing && nextReadyLabel ? (
-                      // Only a free court can take a match with no court; a busy one shows nothing
-                      // queued rather than a pairing it cannot start.
-                      <p className="text-t2">
-                        No match scheduled. Ready to place: {nextReadyLabel}
-                        {readyUnassigned.length > 1
-                          ? `, ${readyUnassigned.length - 1} more waiting`
-                          : ""}
+                    Names are clamped. A doubles pairing with long names ran to six lines and
+                    pushed the timer or the readiness line below the fold of a 720px console; the
+                    full names are one click away in the match's own dialog, and on hover here.
+                  */}
+                  {state.playing ? (
+                    <div className="mt-3 leading-snug">
+                      <p className="font-score text-sm font-medium text-muted-foreground">
+                        {state.playing.tag}
                       </p>
-                    ) : (
-                      <p className="text-sm">Nothing queued</p>
-                    )}
-                  </div>
+                      <p
+                        className="line-clamp-3 text-base font-semibold"
+                        title={`${label(state.playing.teams[0])} vs ${label(state.playing.teams[1])}`}
+                      >
+                        {label(state.playing.teams[0])} vs {label(state.playing.teams[1])}
+                      </p>
+                      <p
+                        className={`font-score text-base tabular-nums ${
+                          state.state === "overrun"
+                            ? "font-semibold text-warn-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {/*
+                          Playing gives the elapsed minutes against the slot, so a moderator reads
+                          how far through the match is - and roughly when the court frees - without
+                          arithmetic. Overrun gives only how long the court has been held: the
+                          amber tile already says it is past its slot, and "48′ of 15′" would be a
+                          second statement of that. Neither says how the match started.
+                        */}
+                        {state.state === "overrun" ? (
+                          <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
+                        ) : (
+                          <>
+                            <span data-desk-derived>{state.elapsedMinutes}′</span> of{" "}
+                            {slotMinutesFor(state.playing)}′ on court
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  ) : state.next ? (
+                    /*
+                      A free court's queued match is the thing it is about, so it takes the place
+                      the playing match has on a busy tile: due time and tag, the names, and the
+                      readiness line - which answers "can it start", the question a free court is
+                      asked. Free-ready is exactly "yes"; Waiting is "not yet, and here is why".
+                    */
+                    <div className="mt-3 leading-snug">
+                      <p className="font-score text-sm font-medium text-muted-foreground">
+                        Next {timeLabel(state.next.scheduled)} · {state.next.tag}
+                      </p>
+                      <p
+                        className="line-clamp-3 text-base font-semibold"
+                        title={`${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`}
+                      >
+                        {label(state.next.teams[0])} vs {label(state.next.teams[1])}
+                      </p>
+                      <p className="mt-1 line-clamp-2">
+                        <ReadinessText
+                          readiness={state.readiness}
+                          courts={courtMap}
+                          players={playerMap}
+                        />
+                      </p>
+                    </div>
+                  ) : nextReadyLabel ? (
+                    /*
+                      Only a free court can take a match with no court, so every idle tile offers
+                      the same one: it is a shared pool, and opening it from a tile places it on
+                      that court. The pairing is clamped to keep three idle courts from reading as
+                      three copies of a schedule.
+                    */
+                    <p className="mt-3 line-clamp-3 text-t2 text-muted-foreground" title={nextReadyLabel}>
+                      Ready to place: {nextReadyLabel}
+                      {readyUnassigned.length > 1
+                        ? `, ${readyUnassigned.length - 1} more waiting`
+                        : ""}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-sm text-muted-foreground">Nothing queued</p>
+                  )}
+
+                  {/*
+                    A busy court names its next pairing and nothing more - no "Ready now", no
+                    reason it is not ready yet. While a match is in progress the question is
+                    premature: the court cannot take it until the current match ends, whatever
+                    the clock says about rest, and a two-minute countdown on a court with twenty
+                    minutes left is noise, not a plan. Its time is the published one, which can
+                    already have passed: the match waits for the court to clear.
+                  */}
+                  {state.playing ? (
+                    <p className="mt-2 border-t border-hairline pt-2 text-t2 text-muted-foreground">
+                      {state.next ? (
+                        <span
+                          className="line-clamp-2"
+                          title={`${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`}
+                        >
+                          Next {timeLabel(state.next.scheduled)}: {label(state.next.teams[0])} vs{" "}
+                          {label(state.next.teams[1])}
+                        </span>
+                      ) : (
+                        "Nothing queued"
+                      )}
+                    </p>
+                  ) : null}
                   {/*
                     Pinned to the tile's foot, so it lines up across a row. The spacer sits above the
                     44px line rather than inside it, so the words are level with Call next, which
@@ -860,7 +874,7 @@ function Desk() {
                   <div className="mt-auto pt-3">
                     <p
                       className={`flex min-h-11 items-center text-sm font-semibold text-primary-ink ${
-                        callNext.kind === "none" ? "" : "pr-36"
+                        callNext.kind === "none" ? "" : "pr-32"
                       }`}
                     >
                       {state.playing
@@ -869,7 +883,12 @@ function Desk() {
                           : "View match"
                         : target
                           ? canEdit
-                            ? "Open next match"
+                            ? // An idle court's target is the shared pool's match, which opening
+                              // here places on this court: say so, rather than "next match",
+                              // which three idle tiles would otherwise all claim.
+                              state.next
+                              ? "Open next match"
+                              : "Place on this court"
                             : "View next match"
                           : ""}
                     </p>
