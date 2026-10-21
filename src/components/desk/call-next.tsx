@@ -313,13 +313,19 @@ function CallNextBody({
             ? `Sends to ${reachable} of ${players.length} player${players.length === 1 ? "" : "s"}`
             : "Sending is not connected yet."}
         </p>
-        <span className="flex gap-2">
-          <Button type="button" variant="outline" className="h-11 px-4" onClick={onCancel}>
+        {/* On a phone the two buttons share the dialog's width and Send is 48px tall. */}
+        <span className="flex w-full gap-2 sm:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 flex-1 px-4 sm:h-11 sm:flex-none"
+            onClick={onCancel}
+          >
             Cancel
           </Button>
           <Button
             type="button"
-            className="h-11 px-4"
+            className="h-12 flex-1 px-4 sm:h-11 sm:flex-none"
             disabled={!canSend}
             onClick={() => onSend(message.trim())}
           >
@@ -381,7 +387,7 @@ function StatusCell({
       );
     case "on-court":
       return (
-        <span className="font-semibold text-warn-foreground">
+        <span className="whitespace-nowrap font-semibold text-warn-foreground">
           {status.courtId === courtId ? "On this court" : `On Court ${courtNumberFor(status.courtId)}`}
         </span>
       );
