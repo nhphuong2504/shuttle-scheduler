@@ -178,7 +178,11 @@ export function TournamentSwitcher({ currentId }: { currentId: string | null }) 
         disabled={busy}
         onClick={() => setOpen((was) => !was)}
       >
-        Switch tournament
+        {/*
+          "Switch" alone below `lg`, where the full label took the room the section tabs need;
+          the rest stays in the accessible name, which therefore still contains what is shown.
+        */}
+        Switch<span className="max-lg:sr-only"> tournament</span>
         <ChevronDown aria-hidden className={cn("transition-transform", open && "rotate-180")} />
       </Button>
 
