@@ -161,11 +161,11 @@ test.describe("Explore", () => {
     await expect(page.getByText(TOURNAMENT_NAME)).toBeVisible();
 
     // A card opens the tournament's read-only workspace rather than the participant page:
-    // Browse is where somebody reads an event, and Entries is the first of the five sections
-    // a reader without the edit right is offered.
+    // Browse is where somebody reads an event. This one is in progress, so it opens on Scores;
+    // an upcoming one opens on Entries (`readerHomeFor`).
     await expect(page.getByRole("link", { name: TOURNAMENT_NAME })).toHaveAttribute(
       "href",
-      routes.entries,
+      routes.scores,
     );
 
     // A visitor is offered the trip that changes what they can do, once, in the header bar; creating a tournament is

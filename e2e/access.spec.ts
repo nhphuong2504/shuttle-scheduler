@@ -218,18 +218,20 @@ test.describe("a viewer", () => {
     await expect(header.getByRole("link", { name: /create tournament/i })).toHaveCount(0);
   });
 
-  test("sends the brand to Entries, the roster a reader came for", async ({
+  test("sends the brand where a card opens the tournament", async ({
     page,
   }) => {
-    await page.goto(routes.scores, { waitUntil: "load" });
+    // The logo is the one link outside the nav, and for a read-only reader it goes where a card
+    // opens the tournament: Scores, since this one is in progress (`readerHomeFor`).
+    await page.goto(routes.entries, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
-
-    // The logo is the one link outside the nav, and for a read-only reader it has to point
-    // somewhere they are offered: Entries, the first of their five, rather than the Desk the
-    // row above deliberately leaves out.
+    // The reader's sections lead with what a reader came for, in the reader's order.
+    await expect(
+      page.getByRole("navigation", { name: "Tournament sections" }).getByRole("link"),
+    ).toHaveText(["Scores", "Schedule", "Knockout", "Entries", "Placement", "Desk"]);
     const header = page.getByRole("banner");
     await header.getByRole("link", { name: /tournova/i }).click();
-    await expect(page).toHaveURL(new RegExp(`${routes.entries}$`));
+    await expect(page).toHaveURL(new RegExp(`${routes.scores}$`));
   });
 });
 
@@ -404,7 +406,8 @@ test.describe("a signed-out visitor", () => {
     // must not spend the header's public slot on something else - and it has to be in the
     // same place the list they left had it: beside the brand, not in the section row.
     await page.getByRole("link", { name: TOURNAMENT_NAME }).first().click();
-    await expect(page).toHaveURL(new RegExp(`${routes.entries}$`));
+    // An in-progress tournament opens on Scores (`readerHomeFor`).
+    await expect(page).toHaveURL(new RegExp(`${routes.scores}$`));
 
     const header = page.getByRole("banner");
     const back = header.getByRole("link", { name: "Browse tournaments" });

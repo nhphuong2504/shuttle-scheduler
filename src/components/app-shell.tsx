@@ -36,6 +36,7 @@ import {
   MATCH_DISPLAY_TIER,
 } from "@/lib/tournament/match-status";
 import { cn } from "@/lib/utils";
+import { readerHomeFor } from "@/lib/tournament/reader-home";
 
 /**
  * Page chrome, split by audience.
@@ -116,13 +117,26 @@ const SECTIONS = [
  * read-only variant for readers - the day's court board and progress, with none of the acts and
  * none of the operator's alerts - so the nav no longer needs to hide it. Derived from `SECTIONS`
  * rather than restated, so a section added later is offered to everyone reading the tournament
- * by default. The read-only workspace still *opens* on Entries (`READER_HOME_PATH`), because a
- * card in Explore is a trip to read the event, not to watch a court.
+ * by default.
+ *
+ * The order is the reader's, not the operator's. A reader comes to find a match and see its
+ * score, so Scores and Schedule lead; on a phone the row scrolls, and in the operator's order
+ * those two were the ones pushed off the screen. A section with no rank here keeps its place
+ * after the ranked ones. Where a reader *opens* is `readerHomeFor`.
  */
-const READ_ONLY_SECTIONS = SECTIONS;
-
-/** Where the logo takes a reader: the roster, not the live board. */
-const READER_HOME_PATH = "/tournaments/$tournamentId/entries" as const;
+const READER_RANK: Partial<Record<(typeof SECTIONS)[number]["label"], number>> = {
+  Scores: 0,
+  Schedule: 1,
+  Knockout: 2,
+  Entries: 3,
+  Placement: 4,
+  Desk: 5,
+};
+const READ_ONLY_SECTIONS = [...SECTIONS].sort(
+  (a, b) =>
+    (READER_RANK[a.label] ?? Number.MAX_SAFE_INTEGER) -
+    (READER_RANK[b.label] ?? Number.MAX_SAFE_INTEGER),
+);
 
 /**
  * The entries that belong to the people who run the tournament.
@@ -732,9 +746,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : READ_ONLY_SECTIONS;
   /**
    * Where the logo goes. For an editor that is the Desk, which is where the work is. For
-   * anyone else it is Entries: they came to read the event, and both are in their nav.
+   * anyone else it is where a card in Explore opens the tournament, so the two agree.
    */
-  const homeSection = access.can_edit ? DESK_PATH : READER_HOME_PATH;
+  const homeSection = access.can_edit ? DESK_PATH : readerHomeFor(tournament?.status);
   const readOnly = !accessLoading && !access.can_edit;
   /**
    * How much is waiting on the Registrations queue.

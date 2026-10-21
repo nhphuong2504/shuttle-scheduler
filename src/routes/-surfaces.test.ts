@@ -673,8 +673,10 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     // panels from a caller without `can_edit`; the nav split stays on `can_edit`, not on a
     // session, so a signed-in viewer and a visitor meet the same board.
     const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
-    expect(shell).toMatch(/READ_ONLY_SECTIONS = SECTIONS;/);
-    expect(shell).toMatch(/homeSection = access\.can_edit \? DESK_PATH : READER_HOME_PATH/);
+    // Still derived: sorted into the reader's order, never restated, so a new section reaches
+    // readers by default. The logo and the Explore cards share one answer for where to open.
+    expect(shell).toMatch(/READ_ONLY_SECTIONS = \[\.\.\.SECTIONS\]\.sort\(/);
+    expect(shell).toMatch(/homeSection = access\.can_edit \? DESK_PATH : readerHomeFor\(/);
     const desk = readFileSync(join(src, deskFile), "utf8");
     // The board is the whole read-only Desk: what a tile opens says it is for reading, and
     // the score desk's writes are hidden from a caller without `can_edit`.

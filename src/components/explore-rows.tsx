@@ -4,6 +4,7 @@ import { DemoPill, RegistrationStatePill } from "@/components/app-shell";
 import { EXPLORE_ACTION_OUTLINE, RegisterAction } from "@/components/explore-card";
 import type { TournamentSummary } from "@/lib/tournament/data";
 import { countText, dateRangeText } from "@/lib/tournament/summary-format";
+import { readerHomeFor } from "@/lib/tournament/reader-home";
 
 /**
  * The compact shapes Explore uses once a list is long.
@@ -86,7 +87,7 @@ export function ExploreRow({
         <div className="min-w-0">
           <h4 className="break-words font-display text-lg font-bold leading-snug">
             <Link
-              to="/tournaments/$tournamentId/entries"
+              to={readerHomeFor(summary.status)}
               params={{ tournamentId: summary.id }}
               className="rounded-sm hover:text-primary-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
@@ -119,7 +120,7 @@ export function ExploreRow({
       <div className="flex flex-wrap items-center gap-2">
         <RegisterAction summary={summary} signedIn={signedIn} />
         <Link
-          to="/tournaments/$tournamentId/entries"
+          to={readerHomeFor(summary.status)}
           params={{ tournamentId: summary.id }}
           className={EXPLORE_ACTION_OUTLINE}
         >
@@ -166,7 +167,7 @@ export function CompletedList({ rows }: { rows: TournamentSummary[] }) {
               <tr key={row.id}>
                 <td className="px-4 py-3 font-semibold">
                   <Link
-                    to="/tournaments/$tournamentId/entries"
+                    to={readerHomeFor(row.status)}
                     params={{ tournamentId: row.id }}
                     className="rounded-sm hover:text-primary-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
@@ -183,7 +184,7 @@ export function CompletedList({ rows }: { rows: TournamentSummary[] }) {
                 <td className="py-3 pr-4 text-right tabular-nums">{row.entry_count}</td>
                 <td className="py-3 pr-4 text-right">
                   <Link
-                    to="/tournaments/$tournamentId/entries"
+                    to={readerHomeFor(row.status)}
                     params={{ tournamentId: row.id }}
                     className="inline-flex min-h-11 items-center font-semibold text-primary-ink hover:underline"
                   >
@@ -200,7 +201,7 @@ export function CompletedList({ rows }: { rows: TournamentSummary[] }) {
         {rows.map((row) => (
           <li key={row.id} className="px-4 py-3">
             <Link
-              to="/tournaments/$tournamentId/entries"
+              to={readerHomeFor(row.status)}
               params={{ tournamentId: row.id }}
               className="block min-h-11 rounded-sm"
             >
