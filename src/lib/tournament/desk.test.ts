@@ -8,6 +8,7 @@ import {
   finishStatusLabel,
   getMatchReadiness,
   isPlacementKind,
+  playerStatus,
   projectedFinishFromRemaining,
   scheduleVarianceMinutes,
   type DeskMatchKind,
@@ -204,5 +205,42 @@ describe("desk match kinds", () => {
     for (const kind of ["pool", "placement", "draw", "tier"] as DeskMatchKind[]) {
       expect(deskKindPhase(kind) === "group").toBe(deskKindScoringStage(kind) !== "knockout");
     }
+  });
+});
+
+describe("playerStatus: each player's own answer", () => {
+  const T0 = Date.parse("2026-10-18T14:00:00Z");
+  const iso = (minutes: number) => new Date(T0 + minutes * 60_000).toISOString();
+  const model = (over: Partial<DeskMatchModel> & Pick<DeskMatchModel, "id" | "playerIds">) => ({
+    kind: "tier" as const,
+    courtId: "c1",
+    status: "scheduled",
+    startedAt: null,
+    endedAt: null,
+    scheduled: iso(10),
+    ...over,
+  });
+  const next = model({ id: "n", playerIds: ["a", "b", "c"] });
+  const all = [
+    next,
+    model({ id: "busy", courtId: "c2", status: "in-progress", startedAt: iso(-5), playerIds: ["a"] }),
+    model({ id: "done", status: "completed", endedAt: iso(-10), playerIds: ["b"] }),
+  ];
+
+  it("reports every player, where readiness stops at the first in the way", () => {
+    expect(playerStatus("a", next, all, 30, T0)).toEqual({ kind: "on-court", matchId: "busy", courtId: "c2" });
+    expect(playerStatus("b", next, all, 30, T0)).toEqual({ kind: "resting", readyAt: T0 + 20 * 60_000 });
+    expect(playerStatus("c", next, all, 30, T0)).toEqual({ kind: "free" });
+  });
+
+  it("agrees with readiness about the first player in the way", () => {
+    const readiness = getMatchReadiness(next, all, 30, T0);
+    expect(readiness.state).toBe("player-busy");
+    expect(readiness.playerId).toBe("a");
+    expect(playerStatus(readiness.playerId!, next, all, 30, T0).kind).toBe("on-court");
+  });
+
+  it("is free once the rest has run out", () => {
+    expect(playerStatus("b", next, all, 30, T0 + 21 * 60_000)).toEqual({ kind: "free" });
   });
 });

@@ -85,11 +85,13 @@ Rules:
 ## Court state
 
 The five derived states in `src/lib/tournament/court-state.ts`. Each has a label, a glyph and
-a colour, so a wall of eight courts can be read without reading any of them.
+a colour, so a wall of eight courts can be read without reading any of them. Only the states that
+ask for a hand - Overrun and Ready - tint the whole tile; on a live day most courts are playing,
+and a board of green washes would bury them.
 
 | State | Reads as | Colour |
 | --- | --- | --- |
-| Playing | A match is on | Green chip with ring, green wash |
+| Playing | A match is on | Green chip with ring on a white tile: the normal state, so it does not tint the tile |
 | Overrun | On court past its slot | Amber chip with ring, amber wash: a delay, not a danger |
 | Ready | Free, next match can start | Violet wash |
 | Waiting | Free, next match not ready yet | Neutral, a deeper grey than Idle; the line beneath says why |
@@ -106,8 +108,8 @@ the pictures of the Desk on that page. The same page uses violet for "moved late
 scheduling diagram: an exception to "violet is for interaction", kept because it is the
 scheduler's action being shown, and confined to that illustration.
 
-- **Body and controls: 14px minimum, 16px for what is read on the move.** Names on a court tile,
-  rows in Act now and match names in dialogs are 16px. 12px is for tertiary detail only
+- **Body and controls: 14px minimum, 16px for what is read on the move.** Names on a court tile
+  and match names in dialogs are 16px. 12px is for tertiary detail only
   (a timestamp, a footnote) and never for navigation, labels or buttons.
 - **Labels are sentence case.** Do not set labels in uppercase with wide tracking. It is slower to
   read and the old 12px uppercase labels were the smallest text on the Desk.

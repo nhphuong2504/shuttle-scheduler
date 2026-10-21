@@ -114,6 +114,70 @@ export function scheduleVarianceMinutes(match: DeskMatchModel): number | null {
   return Math.round((started - scheduled) / MINUTE);
 }
 
+/**
+ * The match a player is on court in right now, other than `matchId`, if any.
+ *
+ * One of the two per-player facts behind readiness. The tile's readiness line and the
+ * call dialog's player rows both read it, so the two cannot name a different reason.
+ */
+export function playerOnCourt<TMatch extends DeskMatchModel>(
+  playerId: string,
+  matchId: string,
+  allMatches: readonly TMatch[],
+): TMatch | null {
+  return (
+    allMatches.find(
+      (other) =>
+        other.id !== matchId && other.status === "in-progress" && other.playerIds.includes(playerId),
+    ) ?? null
+  );
+}
+
+/**
+ * When a player's rest after their latest finished match ends, and which match that was.
+ * Null when they have finished nothing else, so they have nothing to rest from.
+ */
+export function playerRestEnd(
+  playerId: string,
+  matchId: string,
+  allMatches: readonly DeskMatchModel[],
+  restGapMinutes: number,
+): { readyAt: number; matchId: string } | null {
+  const latest = allMatches
+    .filter(
+      (other) => other.id !== matchId && other.endedAt != null && other.playerIds.includes(playerId),
+    )
+    .sort((a, b) => (asTime(b.endedAt) ?? 0) - (asTime(a.endedAt) ?? 0))[0];
+  const ended = asTime(latest?.endedAt ?? null);
+  if (latest == null || ended == null) return null;
+  return { readyAt: ended + restGapMinutes * MINUTE, matchId: latest.id };
+}
+
+/** Where one player of a queued match stands right now. */
+export type PlayerStatus =
+  | { kind: "on-court"; matchId: string; courtId: string | null }
+  | { kind: "resting"; readyAt: number }
+  | { kind: "free" };
+
+/**
+ * Every player's own answer to "can they play now", in the order readiness asks it: on
+ * court elsewhere first, then resting. `getMatchReadiness` reports only the first player
+ * in the way; this reports each of them.
+ */
+export function playerStatus(
+  playerId: string,
+  match: DeskMatchModel,
+  allMatches: readonly DeskMatchModel[],
+  restGapMinutes: number,
+  now: number,
+): PlayerStatus {
+  const onCourt = playerOnCourt(playerId, match.id, allMatches);
+  if (onCourt) return { kind: "on-court", matchId: onCourt.id, courtId: onCourt.courtId };
+  const rest = playerRestEnd(playerId, match.id, allMatches, restGapMinutes);
+  if (rest && rest.readyAt > now) return { kind: "resting", readyAt: rest.readyAt };
+  return { kind: "free" };
+}
+
 export function getMatchReadiness(
   match: DeskMatchModel,
   allMatches: DeskMatchModel[],
@@ -132,12 +196,7 @@ export function getMatchReadiness(
   }
 
   for (const playerId of match.playerIds) {
-    const conflict = allMatches.find(
-      (other) =>
-        other.id !== match.id &&
-        other.status === "in-progress" &&
-        other.playerIds.includes(playerId),
-    );
+    const conflict = playerOnCourt(playerId, match.id, allMatches);
     if (conflict) {
       return {
         state: "player-busy",
@@ -154,19 +213,11 @@ export function getMatchReadiness(
   let restingPlayer: string | null = null;
   let previousMatchId: string | null = null;
   for (const playerId of match.playerIds) {
-    const latest = allMatches
-      .filter(
-        (other) =>
-          other.id !== match.id && other.endedAt != null && other.playerIds.includes(playerId),
-      )
-      .sort((a, b) => (asTime(b.endedAt) ?? 0) - (asTime(a.endedAt) ?? 0))[0];
-    const ended = asTime(latest?.endedAt ?? null);
-    if (ended == null) continue;
-    const readyAt = ended + restGapMinutes * MINUTE;
-    if (readyAt > latestReadyAt) {
-      latestReadyAt = readyAt;
+    const rest = playerRestEnd(playerId, match.id, allMatches, restGapMinutes);
+    if (rest && rest.readyAt > latestReadyAt) {
+      latestReadyAt = rest.readyAt;
       restingPlayer = playerId;
-      previousMatchId = latest?.id ?? null;
+      previousMatchId = rest.matchId;
     }
   }
 

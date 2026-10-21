@@ -39,7 +39,7 @@ export function ReaderPreview() {
             Sun, Oct 19
           </span>
         </div>
-        <PhoneTile court={1} state="playing" names="Hannah Kim vs Grace Lowe" timer="12′ on court" />
+        <PhoneTile court={1} state="playing" names="Hannah Kim vs Grace Lowe" timer="12′ of 25′ on court" />
         <PhoneTile
           court={2}
           state="overrun"

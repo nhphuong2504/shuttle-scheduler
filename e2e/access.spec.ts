@@ -372,14 +372,14 @@ test.describe("a signed-out visitor", () => {
     await expect(page.getByRole("button", { name: /add entry/i })).toHaveCount(0);
     await expect(page.locator("main input")).toHaveCount(0);
 
-    // And the Desk is offered, as a board: no operator alerts, nothing that starts a match.
+    // And the Desk is offered, as a board: nothing that starts a match.
     const nav = page.getByRole("navigation", { name: /tournament sections/i });
     await expect(nav.getByRole("link", { name: "Desk", exact: true })).toBeVisible();
     await page.goto(routes.desk, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Court board" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Needs action" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^start$/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^(Call next|Notified)/ })).toHaveCount(0);
   });
 
   test("can tell which tournament the page is about without signing in", async ({ page }) => {

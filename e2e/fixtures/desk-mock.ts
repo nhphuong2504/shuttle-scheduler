@@ -471,11 +471,10 @@ const STATE_MATCH_SPECS: MatchSpec[] = [
   // Court 5 -> free-blocked, player busy. Entrant 3 is on court 2 right now, and busy
   // is checked before rest, so this stays busy rather than becoming resting.
   match(6, drawA, 1, 6, 3, 5, "scheduled", 5, 20, null),
-  // A ready pairing with no court, which the Desk no longer raises as a row: the states
-  // spec asserts it stays out of "Needs action". Its two entrants appear nowhere else in
-  // this set on purpose - sharing a player with a finished match made this read as
-  // resting, which is the other blocked state, and that is a silent failure rather than
-  // a loud one.
+  // A ready pairing with no court, which an idle tile offers as "Ready to place". Its two
+  // entrants appear nowhere else in this set on purpose - sharing a player with a finished
+  // match made this read as resting, which is the other blocked state, and that is a
+  // silent failure rather than a loud one.
   match(7, drawC, 1, 7, 11, 12, "scheduled", null, 25, null),
   // Courts 6, 7 and 8 have no rows at all, which is the idle state - and the only way
   // to reach it, since a court with anything live or scheduled is one of the others.
@@ -486,11 +485,8 @@ const STATE_MATCH_SPECS: MatchSpec[] = [
 ];
 
 /**
- * The late pool behind the one destructive alert.
- *
- * `poolIsComplete` returns false below four teams, so a four-team pool with nothing
- * played is incomplete by the same rule the real desk uses, and a scheduled end an
- * hour ago is more than the 15 minutes of grace the alert allows.
+ * A late pool: four teams, nothing played, and a scheduled end an hour ago, so the
+ * pages that read pools see one whose results are overdue.
  */
 const STATE_POOLS = [
   {

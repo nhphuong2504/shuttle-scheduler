@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FocusEvent, type ReactNode } from "react";
-import { Bell } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Page, Panel } from "@/components/app-shell";
@@ -60,9 +59,7 @@ import {
   usePlacementEntrants,
   usePlacementMatches,
   usePlayers,
-  usePoolEntries,
   usePoolMatches,
-  usePools,
   useRealtimeRefresh,
   useScheduleConflicts,
   useTeams,
@@ -108,6 +105,7 @@ import {
   deskKindTable,
   getMatchReadiness,
   isPlacementKind,
+  playerStatus,
   type DeskMatchModel,
   type MatchReadiness,
 } from "@/lib/tournament/desk";
@@ -117,30 +115,28 @@ import {
   COURT_STATE_TILE,
   type CourtState,
 } from "@/lib/tournament/court-state";
-import { poolIsComplete } from "@/lib/tournament/standings";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
 import {
   conflictedMatchCount,
   conflictKindLabels,
   groupConflictsByMatch,
 } from "@/lib/tournament/schedule-conflicts";
-import {
-  MAX_ACTION_ROWS,
-  deskActions,
-  splitActions,
-  type DeskAction,
-} from "@/lib/tournament/desk-actions";
-import { upNext, type UpNextRow } from "@/lib/tournament/desk-up-next";
-import {
-  deskActionKey,
-  holdDeskList,
-  NEW_ROW_MS,
-} from "@/lib/tournament/desk-hold";
 import { nextPausedSince } from "@/lib/tournament/desk-paused";
+import {
+  callNextAvailability,
+  callNextContext,
+  callNextMessage,
+} from "@/lib/tournament/call-next";
+import { NOTIFY_PLAYERS_ENABLED } from "@/lib/feature-flags";
+import {
+  CallNextButton,
+  CallNextDialog,
+  useCallNextRecords,
+  usePlayerReach,
+} from "@/components/desk/call-next";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
   attributeMatchesToDays,
-  dayIdForTime,
   dayOperationalCounts,
   resolveSelectedDay,
 } from "@/lib/tournament/day-scope";
@@ -153,13 +149,13 @@ export const Route = createFileRoute("/tournaments/$tournamentId/desk")({
       {
         name: "description",
         content:
-          "Live control desk for one tournament day: its court board, its matches, and the operational alerts that need someone chasing.",
+          "Live control desk for one tournament day: its court board and its matches.",
       },
       { property: "og:title", content: "Tournova Control Desk | Live Badminton Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Live control desk for one tournament day: its court board, its matches, and the operational alerts that need someone chasing.",
+          "Live control desk for one tournament day: its court board and its matches.",
       },
     ],
   }),
@@ -185,6 +181,13 @@ function Desk() {
   const live = useRealtimeRefresh();
   const [openMatch, setOpenMatch] = useState<DeskMatch | null>(null);
   const [operationCourtId, setOperationCourtId] = useState<string | null>(null);
+  /**
+   * The match the Call next dialog is open for, and its court. Held as the match, not the
+   * court: if that match starts or moves while the dialog is open, the court's next match
+   * changes, and the dialog closes rather than quietly showing another match's players.
+   */
+  const [callTarget, setCallTarget] = useState<{ courtId: string; matchId: string } | null>(null);
+  const callOpener = useRef<HTMLElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   /**
    * Whether the displayed clock has been adopted from this browser yet.
@@ -210,7 +213,6 @@ function Desk() {
   const { data: courts } = useCourts();
   const { data: teams } = useTeams();
   const { data: players } = usePlayers();
-  const { data: pools } = usePools();
   const { data: poolMatches } = usePoolMatches();
   const { data: draws } = useDraws();
   const { data: drawMatches } = useDrawMatches();
@@ -237,11 +239,7 @@ function Desk() {
   const conflictsQuery = useScheduleConflicts();
   const conflicts = conflictsQuery.data ?? [];
   const conflictsByMatch = useMemo(() => groupConflictsByMatch(conflicts), [conflicts]);
-  // Every alert below links to another page of *this* tournament, so the desk takes the
-  // id from the route rather than from a global - the same id the layout resolved.
-  const { tournamentId } = Route.useParams();
   const { data: tournamentDays } = useTournamentDays();
-  const { data: poolEntries } = usePoolEntries();
   // The two-round placement format keeps its own tables, so the desk reads them
   // alongside the round-robin ones rather than instead of them.
   const { data: placementEntrants } = usePlacementEntrants();
@@ -253,8 +251,6 @@ function Desk() {
   // derived value survives days loading late, and a click wins from then on.
   const { data: dayCourts } = useTournamentDayCourts(tournament?.id);
   const [pickedDayId, setPickedDayId] = useState<string | null>(null);
-  // Whether "Needs action" draws every row or only the most urgent ones.
-  const [showAllActions, setShowAllActions] = useState(false);
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
@@ -491,98 +487,22 @@ function Desk() {
   }));
 
   /**
-   * Pools past their scheduled finish with results still missing.
-   *
-   * Deliberately left ungated while the row lists are not: this alert names no result, it
-   * chases one that is missing, and it is the only destructive treatment the Act-now panel
-   * defines. Gating it on the format removed the destructive tier from the format this app
-   * runs, which `states.spec.ts` caught by driving that treatment through a pool planted
-   * inside a placement tournament. Whether the placement stage should raise an overdue-result
-   * alert of its own is a design question rather than a rendering one, so the alert stays.
-   */
-  const latePools = useMemo(() => {
-    return (pools ?? []).filter((pool) => {
-      if (!pool.scheduled_end) return false;
-      // A pool belongs to the day its scheduled end falls on, by the same rule as a match.
-      if (dayIdForTime(orderedDays, new Date(pool.scheduled_end).getTime()) !== selectedDayId) {
-        return false;
-      }
-      const matches = (poolMatches ?? []).filter((m) => m.pool_id === pool.id);
-      const teamIds = (poolEntries ?? [])
-        .filter((e) => e.pool_id === pool.id)
-        .map((e) => e.team_id);
-      if (poolIsComplete(teamIds, matches)) return false;
-      return viewNow > new Date(pool.scheduled_end).getTime() + 15 * 60000;
-    });
-  }, [pools, poolMatches, poolEntries, orderedDays, selectedDayId, viewNow]);
-
-  /** "Needs action", ranked by `deskActions` from the board's own court states. */
-  const actions = deskActions({
-    courtStates: courtStates.map(({ state }) => state),
-    matches: dayMatches,
-    slotMinutesFor,
-    latePools: latePools.map((pool) => ({
-      pool,
-      scheduledEndMs: new Date(pool.scheduled_end!).getTime(),
-    })),
-    now: viewNow,
-  });
-  /**
-   * On a short console (a 1366×768 laptop) Needs action draws three rows, each on one line, so
-   * Up next keeps room to show its queue. The query matches the `desk-console-short` variant.
-   */
-  const shortConsole = useMediaQuery(SHORT_CONSOLE_QUERY);
-  const actionKey = useCallback(
-    (action: DeskAction<DeskMatch, DeskPool>) => deskActionKey(action),
-    [],
-  );
-  /**
-   * The list a moderator is pointing at does not re-sort under a click. The ranking is still
-   * computed above; this only decides the order it is drawn in, and what arrived (4e).
-   */
-  const heldActions = useHeldList(actions, actionKey);
-  const { shown: shownActions, folded: foldedActions } = splitActions(
-    heldActions.rows,
-    shortConsole ? SHORT_CONSOLE_ACTION_ROWS : MAX_ACTION_ROWS,
-  );
-
-  /**
-   * The tab title carries the Needs-action count, so a moderator on the Schedule tab or in
-   * another window still sees that a court is waiting. The count drops when the list is
-   * clear and the tab reads "Control desk"; leaving the Desk gives the route its own title
-   * back.
+   * The tab reads "Control desk" while the Desk is open, rather than the route's long head
+   * title; leaving the Desk gives the route its own title back.
    */
   const baseTitle = useRef<string | null>(null);
   useEffect(() => {
     baseTitle.current ??= document.title;
     const base = baseTitle.current ?? "";
-    const title = canEdit && actions.length ? `(${actions.length}) Control desk` : "Control desk";
+    const title = "Control desk";
     document.title = title;
     return () => {
       // Only take our own title back. A route change may already have set the next page's,
       // and restoring ours on top of it would leave the tab naming a page you have left.
       if (base && document.title === title) document.title = base;
     };
-  }, [actions.length, canEdit]);
+  }, []);
 
-  /**
-   * Up next: each court's next match to call, when its court frees, and whether its players
-   * will be free by then. A match Needs action already names is not repeated, and a late one
-   * is Needs action's by the same one-minute line, so no match is listed twice.
-   */
-  const upNextRows = upNext({
-    courtStates: courtStates.map(({ state }) => state),
-    matches: dayMatches,
-    slotMinutesFor,
-    restMinutesFor,
-    listedElsewhere: new Set(
-      actions.flatMap((action) => (action.kind === "results-late" ? [] : [action.match.id])),
-    ),
-    playersKnown: (match) => match.teams[0] != null && match.teams[1] != null,
-    now: viewNow,
-  });
-  const upNextKey = useCallback((row: UpNextRow<DeskMatch>) => row.match.id, []);
-  const heldUpNext = useHeldList(upNextRows, upNextKey);
 
   /**
    * Matches on this day that are ready to play but hold no court: generated by a build that
@@ -609,13 +529,30 @@ function Desk() {
       return at(a) === at(b) ? 0 : at(a) < at(b) ? -1 : 1;
     });
 
+  /**
+   * Call next: notify a court's next match's players. Only for someone who may edit, and only
+   * once the feature is offered - until sending exists the flag keeps the button off the board.
+   */
+  const offerCallNext = NOTIFY_PLAYERS_ENABLED && canEdit;
+  const playerReach = usePlayerReach();
+  const notifiedAtFor = useCallNextRecords();
+  const callCourt = callTarget
+    ? (courtStates.find(({ court }) => court.id === callTarget.courtId) ?? null)
+    : null;
+  const callMatch =
+    callCourt?.state.next && callCourt.state.next.id === callTarget?.matchId
+      ? callCourt.state.next
+      : null;
+  // The match moved on while the dialog was open: let the target go too, so it cannot come back.
+  useEffect(() => {
+    if (callTarget && !callMatch) setCallTarget(null);
+  }, [callTarget, callMatch]);
+
   /** The pairing the idle courts offer, named once so the card cannot drift. */
   const nextReadyLabel = readyUnassigned[0]
     ? `${label(readyUnassigned[0].teams[0])} vs ${label(readyUnassigned[0].teams[1])}`
     : null;
 
-  const [actionsScrollRef, actionsCue] = useScrollCue();
-  const [upNextScrollRef, upNextCue] = useScrollCue();
   const [boardScrollRef, boardCue] = useScrollCue();
   const hiddenCourts = boardCue.hidden;
 
@@ -658,7 +595,7 @@ function Desk() {
       title="Control desk"
       subtitle={
         canEdit
-          ? "Live operations for one tournament day: its courts, its matches and the alerts that need someone chasing."
+          ? "Live operations for one tournament day: its courts and its matches."
           : "A live view of one tournament day: what is on each court."
       }
       actions={
@@ -673,10 +610,8 @@ function Desk() {
       {/*
         The console. For an operator on a laptop or larger it is exactly one viewport tall and
         sits under the workspace header, which scrolls away: one scroll and the window is the
-        Desk. Its two columns - the moderator's work on the left, the hall on the right - share
-        that height and scroll inside themselves, so their bottoms always line up and a long
-        board can never push an alert off the screen. Narrower or shorter, it stacks and the
-        page scrolls. A reader gets the board alone, in the page's own flow.
+        Desk. The board takes the height left under the day bar and scrolls inside itself.
+        Narrower or shorter, the page scrolls. A reader gets the board in the page's own flow.
       */}
       <div
         data-desk-paused={paused ? "" : undefined}
@@ -741,195 +676,9 @@ function Desk() {
           </p>
         ) : null}
 
-        <div
-          className={
-            canEdit
-              ? "grid gap-5 desk-console:min-h-0 desk-console:flex-1 desk-console:grid-cols-[minmax(360px,1fr)_minmax(0,1.7fr)] desk-console:gap-4"
-              : ""
-          }
-        >
-        {/*
-          The operator's work column is for whoever runs the day. A reader gets the board, which
-          answers "what is on court" without asking them to chase anything they cannot act on.
-          Hidden rather than disabled, and hidden while the access read is still in flight, so
-          nothing that can start a match is ever drawn for someone who may not.
-        */}
-        {canEdit ? (
-        <div className="flex min-h-0 flex-col gap-4">
-        {/*
-          The hold is on the whole panel, header included: the note that explains it lives in
-          the header, and moving the pointer up to read it must not release the list.
-        */}
-        <div
-          className="flex min-h-0 flex-col desk-console:max-h-[55%] desk-console:flex-none"
-          onPointerEnter={heldActions.holdPointer}
-          onPointerLeave={heldActions.releasePointer}
-          onFocusCapture={heldActions.holdFocus}
-          onBlurCapture={heldActions.releaseFocus}
-        >
-        <Panel
-          title="Needs action"
-          right={
-            <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-              {heldActions.held ? (
-                <span className="text-xs text-muted-foreground">
-                  Order held while you point here
-                </span>
-              ) : null}
-              {asOf}
-            </span>
-          }
-          className="flex min-h-0 flex-1 flex-col"
-          bodyClassName="flex min-h-0 flex-1 flex-col p-0"
-        >
-          <div
-            ref={actionsScrollRef}
-            tabIndex={actionsCue.scrollable ? 0 : undefined}
-            role={actionsCue.scrollable ? "region" : undefined}
-            aria-label={actionsCue.scrollable ? "Needs action" : undefined}
-            className={`min-h-0 flex-1 overflow-auto p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${
-              actionsCue.more ? SCROLL_FADE : ""
-            }`}
-          >
-          <div aria-live="polite">
-            {heldActions.rows.length ? (
-              <>
-                <ul className="space-y-2 text-base">
-                  {(showAllActions ? heldActions.rows : shownActions).map((action) => {
-                    const rowKey = actionKey(action);
-                    return (
-                    <NeedsActionRow
-                      key={rowKey}
-                      action={action}
-                      leaving={heldActions.leaving.has(rowKey)}
-                      isNew={heldActions.isNew(rowKey)}
-                      courtNumber={(id) => courtMap.get(id)?.number ?? "?"}
-                      pairing={(m) => `${label(m.teams[0])} vs ${label(m.teams[1])}`}
-                      reason={(readiness) => readinessReason(readiness, courtMap, playerMap)}
-                      poolTitle={(p) =>
-                        catMap.get(p.category_id)?.code
-                          ? `${catMap.get(p.category_id)?.code} — ${p.name}, results incomplete`
-                          : `${p.name}, results incomplete`
-                      }
-                      onOpen={(courtId, m) => {
-                        setOperationCourtId(courtId);
-                        setOpenMatch(m);
-                      }}
-                      tournamentId={tournamentId}
-                    />
-                    );
-                  })}
-                  {/*
-                    No row for ready matches without a court. Every way a match ends up there is
-                    either transient (a result just unlocked it and place-ready is about to slot
-                    it) or the organiser's call (no slot before the close, no courts, a first
-                    build or a rebuild not yet made), and the Schedule page already names the
-                    cause. The one thing a moderator can do about it - put the match on a court
-                    that is free now - is the idle tile's "Ready to place", so the board keeps it.
-                  */}
-                </ul>
-                {foldedActions.length ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="mt-2 h-11 px-4 text-sm"
-                    aria-expanded={showAllActions}
-                    onClick={() => setShowAllActions((open) => !open)}
-                  >
-                    {showAllActions ? "Show fewer" : `Show ${foldedActions.length} more`}
-                  </Button>
-                ) : null}
-              </>
-            ) : (
-              /*
-                One line rather than an empty-state block: when nothing needs doing, the panel
-                should cost the board as little height as possible.
-              */
-              <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">All clear.</span> Nothing needs
-                action right now.
-              </p>
-            )}
-          </div>
-          </div>
-        </Panel>
-        </div>
-        {/*
-          Up next is the call queue, so it takes the rest of the work column and scrolls. Not a
-          live region: it re-ranks every 30 seconds, and a screen reader reading each change
-          would bury the alerts above it. The bell is drawn now and does nothing yet; it is out
-          of the Tab order, and the header says once what it is.
-        */}
-        <div
-          className="flex min-h-0 flex-col desk-console:flex-1"
-          onPointerEnter={heldUpNext.holdPointer}
-          onPointerLeave={heldUpNext.releasePointer}
-          onFocusCapture={heldUpNext.holdFocus}
-          onBlurCapture={heldUpNext.releaseFocus}
-        >
-        <Panel
-          title="Up next"
-          className="flex min-h-0 flex-1 flex-col"
-          bodyClassName="flex min-h-0 flex-1 flex-col p-0"
-          right={
-            <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-              {heldUpNext.held ? (
-                <span className="text-xs text-muted-foreground">
-                  Order held while you point here
-                </span>
-              ) : null}
-              {asOf}
-              {upNextCue.hiddenCount ? (
-                <span className="text-sm font-semibold text-foreground">
-                  {upNextCue.hiddenCount} more below
-                </span>
-              ) : null}
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Bell aria-hidden="true" className="size-3.5" />
-                Notify players: coming soon
-              </span>
-            </span>
-          }
-        >
-          <div
-            ref={upNextScrollRef}
-            tabIndex={upNextCue.scrollable ? 0 : undefined}
-            role={upNextCue.scrollable ? "region" : undefined}
-            aria-label={upNextCue.scrollable ? "Up next" : undefined}
-            className={`min-h-0 flex-1 overflow-auto px-2 py-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${
-              upNextCue.more ? SCROLL_FADE : ""
-            }`}
-          >
-            {heldUpNext.rows.length ? (
-              <ul className="divide-y divide-hairline">
-                {heldUpNext.rows.map((row) => (
-                  <UpNextItem
-                    key={row.match.id}
-                    row={row}
-                    leaving={heldUpNext.leaving.has(row.match.id)}
-                    isNew={heldUpNext.isNew(row.match.id)}
-                    courtNumber={(id) => courtMap.get(id ?? "")?.number ?? "?"}
-                    pairing={(m) => `${label(m.teams[0])} vs ${label(m.teams[1])}`}
-                    playerName={(id) => playerMap.get(id)?.name ?? "A player"}
-                    onOpen={(courtId, m) => {
-                      setOperationCourtId(courtId);
-                      setOpenMatch(m);
-                    }}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="px-2 py-2 text-sm text-muted-foreground">No more matches queued today.</p>
-            )}
-          </div>
-        </Panel>
-        </div>
-        </div>
-        ) : null}
-
         <Panel
           title="Court board"
-          className={canEdit ? "flex min-h-0 flex-col" : ""}
+          className={canEdit ? "flex min-h-0 flex-col desk-console:flex-1" : ""}
           bodyClassName={canEdit ? "flex min-h-0 flex-1 flex-col p-0" : ""}
           right={
             selectedDay ? (
@@ -971,11 +720,25 @@ function Desk() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {courtStates.map(({ court, state }) => {
               const target = state.playing ?? state.next ?? readyUnassigned[0];
+              // The button is about the court's queued match, never `target`: on a busy court
+              // that is the match being played, and on an idle one a match with no court yet.
+              const callNext = offerCallNext
+                ? callNextAvailability(state.next, dayMatches)
+                : ({ kind: "none" } as const);
               return (
-                <button
+                /*
+                  The tile is two controls side by side, not one inside the other: the button that
+                  opens the match fills the tile, and Call next sits over its bottom-right corner.
+                */
+                <div
                   key={court.id}
-                  type="button"
                   data-court-number={court.number}
+                  className={`relative flex flex-col ${
+                    target ? "transition-transform hover:-translate-y-0.5" : ""
+                  }`}
+                >
+                <button
+                  type="button"
                   disabled={!target}
                   aria-label={`Court ${court.number}: ${state.state.replace("-", " ")}`}
                   onClick={() => {
@@ -983,7 +746,7 @@ function Desk() {
                     setOperationCourtId(court.id);
                     setOpenMatch(target);
                   }}
-                  className={`flex flex-col rounded-xl border p-4 text-left shadow-panel transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default ${COURT_STATE_TILE[state.state]}`}
+                  className={`flex flex-1 flex-col rounded-xl border p-4 text-left shadow-panel transition-all enabled:hover:border-primary/60 enabled:hover:shadow-raise disabled:cursor-default ${COURT_STATE_TILE[state.state]}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 font-display text-lg font-bold">
@@ -1012,19 +775,21 @@ function Desk() {
                               : "text-muted-foreground"
                           }`}
                         >
-                          <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
                           {/*
-                            An overrun says only how long the match has been on, never how far
-                            past its slot that is or how it started. The amber tile is already
-                            the statement "this is running long", and the arithmetic beside it
-                            ("+7 over slot, started 4 min early") was three numbers competing
-                            with the one a moderator needs: how long the court has been held.
+                            Playing gives the elapsed minutes against the slot, so a moderator reads
+                            how far through the match is - and roughly when the court frees - without
+                            arithmetic. Overrun gives only how long the court has been held: the
+                            amber tile already says it is past its slot, and "48′ of 15′" would be a
+                            second statement of that. Neither says how the match started.
                           */}
-                          {state.state !== "overrun" && state.varianceMinutes
-                            ? `, started ${Math.abs(state.varianceMinutes)} min ${
-                                state.varianceMinutes > 0 ? "late" : "early"
-                              }`
-                            : ""}
+                          {state.state === "overrun" ? (
+                            <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
+                          ) : (
+                            <>
+                              <span data-desk-derived>{state.elapsedMinutes}′</span> of{" "}
+                              {slotMinutesFor(state.playing)}′ on court
+                            </>
+                          )}
                         </span>
                       </>
                     ) : (
@@ -1045,13 +810,12 @@ function Desk() {
                     {state.next ? (
                       <>
                         {/*
-                          A busy court names its next pairing without a time: Up next gives
-                          when the court frees, and two different times for one match side by
-                          side would make the moderator choose between them. A free court keeps
-                          the published time, which is the one that applies to it.
+                          Every court gives its next match's published time, busy or free, so a
+                          moderator reads when it is due without opening it. On a busy court that
+                          time can already have passed: the match waits for the court to clear.
                         */}
                         <p className="text-t2">
-                          {state.playing ? "Next" : `Next ${timeLabel(state.next.scheduled)}`}:{" "}
+                          Next {timeLabel(state.next.scheduled)}:{" "}
                           {label(state.next.teams[0])} vs {label(state.next.teams[1])}
                         </p>
                         {/*
@@ -1075,7 +839,9 @@ function Desk() {
                           />
                         )}
                       </>
-                    ) : nextReadyLabel ? (
+                    ) : !state.playing && nextReadyLabel ? (
+                      // Only a free court can take a match with no court; a busy one shows nothing
+                      // queued rather than a pairing it cannot start.
                       <p className="text-t2">
                         No match scheduled. Ready to place: {nextReadyLabel}
                         {readyUnassigned.length > 1
@@ -1086,25 +852,98 @@ function Desk() {
                       <p className="text-sm">Nothing queued</p>
                     )}
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-primary-ink">
-                    {state.playing
-                      ? canEdit
-                        ? "Open score desk"
-                        : "View match"
-                      : target
+                  {/*
+                    Pinned to the tile's foot, so it lines up across a row. The spacer sits above the
+                    44px line rather than inside it, so the words are level with Call next, which
+                    sits over the right of this line.
+                  */}
+                  <div className="mt-auto pt-3">
+                    <p
+                      className={`flex min-h-11 items-center text-sm font-semibold text-primary-ink ${
+                        callNext.kind === "none" ? "" : "pr-36"
+                      }`}
+                    >
+                      {state.playing
                         ? canEdit
-                          ? "Open next match"
-                          : "View next match"
-                        : ""}
-                  </p>
+                          ? "Open score desk"
+                          : "View match"
+                        : target
+                          ? canEdit
+                            ? "Open next match"
+                            : "View next match"
+                          : ""}
+                    </p>
+                  </div>
                 </button>
+                {callNext.kind !== "none" && state.next ? (
+                  <span className="absolute bottom-4 right-1 z-10">
+                    <CallNextButton
+                      availability={callNext}
+                      courtNumber={court.number}
+                      notifiedAt={notifiedAtFor(state.next.id)}
+                      paused={paused}
+                      onOpen={(opener) => {
+                        callOpener.current = opener;
+                        if (state.next) setCallTarget({ courtId: court.id, matchId: state.next.id });
+                      }}
+                    />
+                  </span>
+                ) : null}
+                </div>
               );
             })}
           </div>
           </div>
         </Panel>
-        </div>
       </div>
+
+      {offerCallNext ? (
+        <CallNextDialog
+          open={callMatch != null}
+          onOpenChange={(open) => !open && setCallTarget(null)}
+          matchId={callMatch?.id ?? null}
+          courtNumber={callCourt?.court.number ?? "?"}
+          courtId={callMatch?.courtId ?? null}
+          context={
+            callMatch && callCourt
+              ? callNextContext({
+                  tag: callMatch.tag,
+                  courtNumber: callCourt.court.number,
+                  scheduledMs: callMatch.scheduled ? new Date(callMatch.scheduled).getTime() : null,
+                  scheduledLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
+                  court: callCourt.state.playing
+                    ? { kind: "busy", elapsedMinutes: callCourt.state.elapsedMinutes }
+                    : { kind: "free" },
+                  now: viewNow,
+                })
+              : ""
+          }
+          players={(callMatch?.playerIds ?? []).map((id) => ({
+            id,
+            name: playerMap.get(id)?.name ?? "A player",
+            status: playerStatus(id, callMatch!, dayMatches, restMinutesFor(callMatch!), viewNow),
+          }))}
+          courtNumberFor={(id) => (id ? (courtMap.get(id)?.number ?? "?") : "?")}
+          reach={playerReach}
+          notifiedAt={callMatch ? notifiedAtFor(callMatch.id) : null}
+          initialMessage={
+            callMatch && callCourt
+              ? callNextMessage({
+                  tag: callMatch.tag,
+                  courtNumber: callCourt.court.number,
+                  scheduledLabel: callMatch.scheduled ? timeLabel(callMatch.scheduled) : null,
+                  // Only a Ready court asks players to come now; a busy or Waiting one asks
+                  // them to be ready, since its match cannot start yet.
+                  courtReady: callCourt.state.state === "free-ready",
+                })
+              : ""
+          }
+          paused={paused}
+          // Nothing sends yet: Send is disabled while `reach` is null, so this only closes.
+          onSend={() => setCallTarget(null)}
+          returnFocusTo={callOpener.current}
+        />
+      ) : null}
 
       <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>
         <DialogContent className="sm:max-w-md">
@@ -1921,134 +1760,8 @@ export function MatchOperationsDialog({
   );
 }
 
-const ACTION_TONE = {
-  // The one thing the desk wants done: the accent, and always a button.
-  go: { row: "bg-primary/10 text-foreground", icon: "bg-primary text-primary-foreground", glyph: "▶" },
-  // Allowed, but someone should look. Amber, never red: a delay is not a danger.
-  warn: {
-    row: "border border-warn-border bg-warn-surface text-warn-foreground",
-    icon: "bg-warn-foreground text-warn-surface",
-    glyph: "!",
-  },
-} as const;
-
-type DeskPool = NonNullable<ReturnType<typeof usePools>["data"]>[number];
-
 /**
- * One ranked "Needs action" row, worded from `deskActions`.
- *
- * Every row leads with the court, so a moderator scanning the hall reads it the way the board
- * is laid out, then names the match, then the one number that put it here. A late match that
- * cannot start says who it is waiting for in the board's own readiness words, because chasing
- * that person is the action.
- */
-function NeedsActionRow({
-  action,
-  leaving,
-  isNew,
-  courtNumber,
-  pairing,
-  reason,
-  poolTitle,
-  onOpen,
-  tournamentId,
-}: {
-  action: DeskAction<DeskMatch, DeskPool>;
-  /** The row has left the ranking but is held while the pointer is in the list. */
-  leaving: boolean;
-  /** The row was not in the list a moment ago; it carries the bounded "New" tag. */
-  isNew: boolean;
-  courtNumber: (courtId: string) => number | string;
-  pairing: (match: DeskMatch) => string;
-  reason: (readiness: MatchReadiness) => string;
-  poolTitle: (pool: DeskPool) => string;
-  onOpen: (courtId: string, match: DeskMatch) => void;
-  tournamentId: string;
-}) {
-  const button = (text: string, primary = false) =>
-    action.kind === "results-late" ? null : (
-      <Button
-        size="sm"
-        variant={primary ? "default" : "outline"}
-        className="h-11 px-4 text-sm"
-        onClick={() => onOpen(action.courtId, action.match)}
-      >
-        {text}
-      </Button>
-    );
-
-  switch (action.kind) {
-    case "ready":
-      return (
-        <ActionRow
-          leaving={leaving}
-          isNew={isNew}
-          tone="go"
-          title={`Court ${courtNumber(action.courtId)} is ready`}
-          detail={pairing(action.match)}
-          action={button("Start", true)}
-        />
-      );
-    case "start-late":
-      return (
-        <ActionRow
-          leaving={leaving}
-          isNew={isNew}
-          tone="go"
-          title={`Court ${courtNumber(action.courtId)}, ${action.lateMinutes} min late`}
-          detail={`${pairing(action.match)}, ready to start`}
-          action={button("Start", true)}
-        />
-      );
-    case "blocked-late":
-      return (
-        <ActionRow
-          leaving={leaving}
-          isNew={isNew}
-          tone="warn"
-          title={`Court ${courtNumber(action.courtId)}, ${action.lateMinutes} min late`}
-          detail={`${pairing(action.match)}. Waiting: ${reason(action.readiness)}`}
-          action={button("Open match")}
-        />
-      );
-    case "overrun":
-      return (
-        <ActionRow
-          leaving={leaving}
-          isNew={isNew}
-          tone="warn"
-          title={`Court ${courtNumber(action.courtId)}, ${action.elapsedMinutes} min on court`}
-          detail={`${pairing(action.match)}, ${action.overByMinutes} min past the expected finish${
-            action.nextLateMinutes != null
-              ? `. The next match is ${action.nextLateMinutes} min late`
-              : ""
-          }`}
-          action={button("Enter result")}
-        />
-      );
-    case "results-late":
-      return (
-        <ActionRow
-          leaving={leaving}
-          isNew={isNew}
-          tone="warn"
-          title={poolTitle(action.pool)}
-          detail={`${action.lateMinutes} min past scheduled finish`}
-          action={
-            <Button asChild size="sm" variant="outline" className="h-11 px-4 text-sm">
-              <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
-                Enter results
-              </Link>
-            </Button>
-          }
-        />
-      );
-  }
-}
-
-/**
- * The words for why a queued match can or cannot start, shared by the tile and the
- * "Needs action" row so the two can never name a different reason.
+ * The words for why a queued match can or cannot start, as the tile's readiness line says them.
  */
 function readinessReason(
   readiness: MatchReadiness,
@@ -2070,72 +1783,6 @@ function readinessReason(
   }
 }
 
-/**
- * The bounded cue that a row has just appeared.
- *
- * One word and a tinted edge, drawn for `NEW_ROW_MS`; never a blink, which would compete
- * with every alert after it. Ink and surface are the neutral pair, because "new" is not a
- * severity - the row's own amber or accent already says how urgent it is.
- */
-function NewTag() {
-  return (
-    <span className="ml-1.5 inline-block rounded bg-foreground px-1.5 py-0.5 align-[2px] text-[11px] font-bold uppercase tracking-[0.04em] text-surface">
-      New
-    </span>
-  );
-}
-
-/**
- * One row of "Needs action": a short title, one line of detail, and the button that clears it.
- *
- * The glyph and the title are the channels besides colour; the button means the row's text
- * never has to explain how to act. `aria-hidden` on the glyph because the title already says it.
- *
- * `leaving` and `isNew` are the two states only a held list has (section 4e): a row that has
- * left the ranking stays, dimmed, until the hold ends, and one that has just arrived carries
- * the "New" tag and a tinted edge.
- */
-function ActionRow({
-  tone,
-  title,
-  detail,
-  action,
-  leaving = false,
-  isNew = false,
-}: {
-  tone: keyof typeof ACTION_TONE;
-  title: string;
-  detail: string;
-  action: React.ReactNode;
-  leaving?: boolean;
-  isNew?: boolean;
-}) {
-  const style = ACTION_TONE[tone];
-  return (
-    <li
-      className={`flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 desk-console-short:py-1 ${style.row} ${
-        leaving ? "opacity-[0.45]" : ""
-      } ${isNew ? "shadow-[inset_4px_0_0_var(--warn-foreground)]" : ""}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-extrabold ${style.icon}`}
-      >
-        {style.glyph}
-      </span>
-      {/* On a short console each row is one line; the full text stays in its tooltip. */}
-      <span className="min-w-0 flex-1" title={`${title}. ${detail}`}>
-        <span data-desk-derived className="block font-semibold leading-snug desk-console-short:truncate">
-          {title}
-          {isNew ? <NewTag /> : null}
-        </span>
-        <span className="block text-sm desk-console-short:truncate">{detail}</span>
-      </span>
-      {action}
-    </li>
-  );
-}
-
 function CourtStatePill({ state }: { state: CourtState }) {
   // The label, the fill and the ink all come from `court-state.ts`, so the sweep in
   // `e2e/states.spec.ts` and this component read one vocabulary rather than two.
@@ -2148,103 +1795,6 @@ function CourtStatePill({ state }: { state: CourtState }) {
   );
 }
 
-/** Matches the `desk-console-short` variant in styles.css. */
-const SHORT_CONSOLE_QUERY = "(min-width: 1200px) and (min-height: 600px) and (max-height: 759px)";
-/** Needs-action rows drawn before the fold on a short console. */
-const SHORT_CONSOLE_ACTION_ROWS = 3;
-
-/** Whether a media query matches, after mount; false in the server render and the first paint. */
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const update = () => setMatches(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, [query]);
-  return matches;
-}
-
-/**
- * A ranked list that holds still under the pointer, and remembers which rows are new.
- *
- * The rule itself is `holdDeskList` in `desk-hold.ts`; this owns the two facts a pure
- * function cannot: what the pointer and the keyboard are doing, and when a "New" tag has
- * aged out. The order the list drew last time is the order it holds, so a hold begins from
- * exactly what the moderator was looking at.
- *
- * `isNew` and the handlers are separate from the order because the rows need the first and
- * the panel needs the second.
- */
-function useHeldList<T>(ranked: readonly T[], key: (row: T) => string) {
-  // The two ways in are tracked apart: a keyboard user tabbing out of the list must not
-  // release it while the pointer is still over it, and vice versa.
-  const [pointerInside, setPointerInside] = useState(false);
-  const [focusInside, setFocusInside] = useState(false);
-  const held = pointerInside || focusInside;
-  const heldRef = useRef<readonly T[] | null>(null);
-  const seenRef = useRef<ReadonlySet<string> | null>(null);
-  const [newUntil, setNewUntil] = useState<ReadonlyMap<string, number>>(() => new Map());
-
-  const order = useMemo(
-    () => holdDeskList({ ranked, key, held: held ? heldRef.current : null, seen: seenRef.current }),
-    [ranked, key, held],
-  );
-
-  // What this pass drew becomes the order to hold and the list the next pass compares to.
-  useEffect(() => {
-    heldRef.current = held ? order.rows : null;
-    seenRef.current = new Set(order.keys);
-  }, [held, order]);
-
-  // A row that has just appeared gets one bounded cue, then looks like any other row.
-  useEffect(() => {
-    if (!order.added.size) return;
-    const until = Date.now() + NEW_ROW_MS;
-    setNewUntil((prev) => {
-      const next = new Map(prev);
-      for (const rowKey of order.added) next.set(rowKey, until);
-      return next;
-    });
-  }, [order]);
-
-  // Re-render when the earliest tag expires, and drop the tags that have.
-  useEffect(() => {
-    if (newUntil.size === 0) return;
-    const now = Date.now();
-    let soonest = Number.POSITIVE_INFINITY;
-    for (const until of newUntil.values()) if (until > now) soonest = Math.min(soonest, until);
-    if (soonest === Number.POSITIVE_INFINITY) {
-      setNewUntil(new Map());
-      return;
-    }
-    const timer = setTimeout(() => {
-      const at = Date.now();
-      setNewUntil((prev) => {
-        const next = new Map([...prev].filter(([, until]) => until > at));
-        return next.size === prev.size ? prev : next;
-      });
-    }, soonest - now + 50);
-    return () => clearTimeout(timer);
-  }, [newUntil]);
-
-  const now = Date.now();
-  return {
-    rows: order.rows,
-    leaving: order.leaving,
-    held,
-    isNew: (rowKey: string) => (newUntil.get(rowKey) ?? 0) > now,
-    holdPointer: () => setPointerInside(true),
-    releasePointer: () => setPointerInside(false),
-    holdFocus: () => setFocusInside(true),
-    /** Release only when focus has really left, not when it moves between rows. */
-    releaseFocus: (event: FocusEvent<HTMLElement>) => {
-      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocusInside(false);
-    },
-  };
-}
-
 /** The bottom fade a scroll region carries while it has more below. */
 const SCROLL_FADE = "[mask-image:linear-gradient(to_bottom,#000_calc(100%-40px),transparent)]";
 
@@ -2253,14 +1803,13 @@ const SCROLL_FADE = "[mask-image:linear-gradient(to_bottom,#000_calc(100%-40px),
  *
  * `scrollable` makes it focusable - a region that scrolls must be reachable from the keyboard -
  * and `more` fades its bottom edge while there is content below. `hidden` lists the court
- * numbers of tiles (`data-court-number`) whose top is out of view, so the board can name them;
- * `hiddenCount` counts those and list rows (`data-scroll-item`) alike, for "N more below".
+ * numbers of tiles (`data-court-number`) whose top is out of view, so the board can name them.
  * Re-measured on scroll, on a size change of the region or its content, when its content is
  * replaced, and on window resize.
  *
- * It hands back a callback ref rather than reading a ref object, because the work column only
- * mounts once the access read says the caller may edit: a ref read on the first render would be
- * empty and the region never measured.
+ * It hands back a callback ref rather than reading a ref object, because the board's scroll
+ * region only becomes one once the access read says the caller may edit: a ref read on the first
+ * render would be empty and the region never measured.
  */
 function useScrollCue() {
   const [el, setEl] = useState<HTMLElement | null>(null);
@@ -2268,32 +1817,27 @@ function useScrollCue() {
     scrollable: boolean;
     more: boolean;
     hidden: number[];
-    hiddenCount: number;
-  }>({ scrollable: false, more: false, hidden: [], hiddenCount: 0 });
+  }>({ scrollable: false, more: false, hidden: [] });
   useEffect(() => {
     if (!el) return;
     const measure = () => {
       const scrollable = el.scrollHeight > el.clientHeight + 1;
       const more = el.scrollHeight - el.scrollTop - el.clientHeight > 4;
       const edge = el.getBoundingClientRect().bottom;
-      const out = more
-        ? [...el.querySelectorAll<HTMLElement>("[data-court-number], [data-scroll-item]")]
+      const hidden = more
+        ? [...el.querySelectorAll<HTMLElement>("[data-court-number]")]
             // Out of view means its top is below the fold, or all but a sliver of it is: a
             // tile whose name and state show is on screen, even if its foot is cut off.
             .filter((item) => item.getBoundingClientRect().top > edge - 48)
+            .map((item) => Number(item.dataset["courtNumber"]))
         : [];
-      const hidden = out
-        .filter((item) => item.dataset["courtNumber"] != null)
-        .map((item) => Number(item.dataset["courtNumber"]));
-      const hiddenCount = out.length;
       setCue((prev) =>
         prev.scrollable === scrollable &&
         prev.more === more &&
-        prev.hiddenCount === hiddenCount &&
         prev.hidden.length === hidden.length &&
         prev.hidden.every((n, i) => n === hidden[i])
           ? prev
-          : { scrollable, more, hidden, hiddenCount },
+          : { scrollable, more, hidden },
       );
     };
     measure();
@@ -2313,110 +1857,6 @@ function useScrollCue() {
     };
   }, [el]);
   return [setEl, cue] as const;
-}
-
-/**
- * One Up next row, on one grid so every kind of fact is always in the same place:
- *
- *   time     when the court frees - the sort key, so the times line up - and, muted under it,
- *            the published time when it says something the free time does not
- *   content  the court and its event; the names to call, the one bold line; and one status
- *            line, always the third, whatever it says
- *
- * The row is the button that opens the match. The bell beside it is inactive until player
- * notifications exist: `aria-disabled` and out of the Tab order, so it costs a keyboard user
- * nothing, while its name still says what it will be.
- */
-function UpNextItem({
-  row,
-  leaving = false,
-  isNew = false,
-  courtNumber,
-  pairing,
-  playerName,
-  onOpen,
-}: {
-  row: UpNextRow<DeskMatch>;
-  /** The row has left the queue but is held while the pointer is in the list. */
-  leaving?: boolean;
-  /** The row was not in the queue a moment ago; it carries the bounded "New" tag. */
-  isNew?: boolean;
-  courtNumber: (courtId: string | null) => number | string;
-  pairing: (match: DeskMatch) => string;
-  playerName: (playerId: string) => string;
-  onOpen: (courtId: string, match: DeskMatch) => void;
-}) {
-  const { free, status, match } = row;
-  const court = `Court ${courtNumber(row.courtId)}`;
-  const time =
-    free.kind === "now" ? "Now" : free.kind === "over" ? "Overrun" : `~${timeLabel(new Date(free.ms))}`;
-  const known = status.kind !== "unknown";
-  const statusLine =
-    status.kind === "free"
-      ? "✓ Players free"
-      : status.kind === "unknown"
-        ? "Players not known yet"
-        : status.kind === "resting"
-          ? `! ${playerName(status.playerId)}: resting until ${timeLabel(new Date(status.readyAtMs))}`
-          : status.readyAtMs == null
-            ? `! ${playerName(status.playerId)}: still on Court ${courtNumber(status.courtId)}, running over`
-            : `! ${playerName(status.playerId)}: on Court ${courtNumber(status.courtId)}, free ~${timeLabel(new Date(status.readyAtMs))}`;
-  const statusTone =
-    status.kind === "free"
-      ? "text-play-foreground"
-      : status.kind === "unknown"
-        ? "text-muted-foreground"
-        : "font-semibold text-warn-foreground";
-
-  return (
-    <li
-      data-scroll-item
-      className={`flex items-start gap-1 ${leaving ? "opacity-[0.45]" : ""} ${
-        isNew ? "shadow-[inset_4px_0_0_var(--warn-foreground)]" : ""
-      }`}
-    >
-      <button
-        type="button"
-        onClick={() => onOpen(row.courtId, match)}
-        aria-label={`Open the next match on ${court}`}
-        className="my-0.5 grid min-w-0 flex-1 grid-cols-[76px_minmax(0,1fr)] gap-x-2.5 rounded-lg px-2 py-2.5 text-left hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-primary"
-      >
-        <span
-          data-desk-derived
-          className={`row-span-3 font-score text-[15px] font-semibold leading-5 tabular-nums ${
-            free.kind === "over" ? "text-warn-foreground" : known ? "text-foreground" : "text-muted-foreground"
-          }`}
-        >
-          {time}
-          {row.scheduledMs != null ? (
-            <span className="block text-xs font-normal leading-4 text-muted-foreground">
-              sched. {timeLabel(new Date(row.scheduledMs))}
-            </span>
-          ) : null}
-        </span>
-        <span className="flex min-w-0 items-center gap-1.5 text-sm leading-5 text-muted-foreground">
-          <span className="min-w-0 truncate">
-            <span className={`mr-1.5 font-semibold ${known ? "text-foreground" : ""}`}>{court}</span>
-            {match.tag}
-          </span>
-          {isNew ? <NewTag /> : null}
-        </span>
-        {known ? <span className="text-[15px] font-bold leading-[21px]">{pairing(match)}</span> : null}
-        <span className={`mt-0.5 text-[13px] leading-[18px] ${statusTone}`}>{statusLine}</span>
-      </button>
-      {known ? (
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-disabled="true"
-          aria-label={`Notify the players on ${court}: coming soon`}
-          className="mt-1.5 grid size-11 flex-none cursor-not-allowed place-items-center rounded-md text-muted-foreground/60"
-        >
-          <Bell aria-hidden="true" className="size-[18px]" />
-        </button>
-      ) : null}
-    </li>
-  );
 }
 
 function ReadinessText({
