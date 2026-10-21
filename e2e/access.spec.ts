@@ -218,18 +218,20 @@ test.describe("a viewer", () => {
     await expect(header.getByRole("link", { name: /create tournament/i })).toHaveCount(0);
   });
 
-  test("sends the brand to Entries, the roster a reader came for", async ({
+  test("sends the brand where a card opens the tournament", async ({
     page,
   }) => {
-    await page.goto(routes.scores, { waitUntil: "load" });
+    // The logo is the one link outside the nav, and for a read-only reader it goes where a card
+    // opens the tournament: Scores, since this one is in progress (`readerHomeFor`).
+    await page.goto(routes.entries, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
-
-    // The logo is the one link outside the nav, and for a read-only reader it has to point
-    // somewhere they are offered: Entries, the first of their five, rather than the Desk the
-    // row above deliberately leaves out.
+    // The reader's sections lead with what a reader came for, in the reader's order.
+    await expect(
+      page.getByRole("navigation", { name: "Tournament sections" }).getByRole("link"),
+    ).toHaveText(["Scores", "Schedule", "Knockout", "Entries", "Placement", "Desk"]);
     const header = page.getByRole("banner");
     await header.getByRole("link", { name: /tournova/i }).click();
-    await expect(page).toHaveURL(new RegExp(`${routes.entries}$`));
+    await expect(page).toHaveURL(new RegExp(`${routes.scores}$`));
   });
 });
 
@@ -362,6 +364,41 @@ test.describe("a signed-out visitor", () => {
     await expect(page.getByText(/running this tournament\? sign in to operate it/i).first()).toBeVisible();
   });
 
+  test("finds one player's matches across both stages, in a link that keeps the search", async ({
+    page,
+  }) => {
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByPlaceholder("Search a player or pair…").fill("Kristinsson");
+
+    // One list while a search is typed: the stage tabs split a player's matches in two.
+    await expect(page.getByRole("heading", { name: 'Matches for "Kristinsson"' })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /group stage/i })).toHaveCount(0);
+    await expect(page).toHaveURL(/[?&]q=Kristinsson/);
+
+    // And the address alone brings the same list back.
+    await page.reload({ waitUntil: "load" });
+    await expect(page.getByRole("heading", { name: 'Matches for "Kristinsson"' })).toBeVisible();
+  });
+
+  test("reads the running order on a phone as cards, with played matches folded away", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The table is for a wider screen; a phone gets one card per match.
+    await expect(page.locator("table.data-table").first()).toBeHidden();
+    const toggle = page.getByRole("button", { name: /^Show \d+ played match/ });
+    await expect(toggle).toBeVisible();
+    const cards = page.locator("li", { hasText: " vs " });
+    const before = await cards.filter({ visible: true }).count();
+    await toggle.click();
+    await expect(page.getByRole("button", { name: "Hide played matches" })).toBeVisible();
+    expect(await cards.filter({ visible: true }).count()).toBeGreaterThan(before);
+  });
+
   test("meets the same read-only surface a signed-in viewer does", async ({ page }) => {
     // A visitor has no edit right to withhold, so the pages must not read as a form they
     // are failing to fill in. Entries is the workspace a card opens them on.
@@ -404,7 +441,8 @@ test.describe("a signed-out visitor", () => {
     // must not spend the header's public slot on something else - and it has to be in the
     // same place the list they left had it: beside the brand, not in the section row.
     await page.getByRole("link", { name: TOURNAMENT_NAME }).first().click();
-    await expect(page).toHaveURL(new RegExp(`${routes.entries}$`));
+    // An in-progress tournament opens on Scores (`readerHomeFor`).
+    await expect(page).toHaveURL(new RegExp(`${routes.scores}$`));
 
     const header = page.getByRole("banner");
     const back = header.getByRole("link", { name: "Browse tournaments" });

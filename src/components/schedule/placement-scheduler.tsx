@@ -246,6 +246,63 @@ function ConflictOverview({
   );
 }
 
+interface RunningOrderRow {
+  id: string;
+  start: Date;
+  courtNumber: number;
+  categoryCode: string;
+  stage: string;
+  status: string;
+  label: string;
+}
+
+const isPlayed = (status: string) => status === "reported" || status === "walkover";
+
+/** The running order on a phone: a card per match, with the played ones folded away. */
+function PhoneRunningOrder({ rows }: { rows: RunningOrderRow[] }) {
+  const [showPlayed, setShowPlayed] = useState(false);
+  const played = rows.filter((row) => isPlayed(row.status)).length;
+  const allPlayed = played === rows.length;
+  const visible = showPlayed || allPlayed ? rows : rows.filter((row) => !isPlayed(row.status));
+  return (
+    <div className="sm:hidden">
+      {played > 0 && !allPlayed ? (
+        <div className="px-3 pb-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-11 w-full"
+            aria-pressed={showPlayed}
+            onClick={() => setShowPlayed((was) => !was)}
+          >
+            {showPlayed ? "Hide played matches" : `Show ${played} played match${played === 1 ? "" : "es"}`}
+          </Button>
+        </div>
+      ) : null}
+      <ul className="divide-y divide-hairline border-t border-hairline">
+        {visible.map((row) => (
+          <li key={row.id} className="flex gap-3 px-3 py-2.5">
+            <div className="w-12 shrink-0">
+              <p className="font-score text-sm font-semibold tabular-nums">{timeLabel(row.start)}</p>
+              <p className="font-score text-t4 text-muted-foreground">C{row.courtNumber || "—"}</p>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium leading-snug">{row.label}</p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-t4 text-muted-foreground">
+                <span>
+                  {row.categoryCode} · {row.stage}
+                </span>
+                <StatusPill status={row.status} />
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function PlacementScheduler() {
   const qc = useQueryClient();
   // Looks again at any ready match without a time, so there is nothing to press for it.
@@ -2298,7 +2355,16 @@ export function PlacementScheduler() {
                       />
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <>
+                    {/*
+                      A phone gets one card per match instead of the six-column table, which it
+                      squeezed until the status read "COMPLE" and the day ran to 23,000px. A
+                      match already played is folded away while some are still to come, since
+                      a reader on a phone is looking for what is next; when none are left the
+                      played ones are the day, so they show.
+                    */}
+                    <PhoneRunningOrder rows={slice.rows} />
+                    <div className="hidden overflow-x-auto sm:block">
                       <table className="data-table">
                         <thead>
                           <tr>
@@ -2333,6 +2399,7 @@ export function PlacementScheduler() {
                         </tbody>
                       </table>
                     </div>
+                    </>
                   )}
                 </TabsContent>
               ))}

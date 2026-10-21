@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { TournovaMark } from "@/components/brand/tournova-mark";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
@@ -36,6 +36,7 @@ import {
   MATCH_DISPLAY_TIER,
 } from "@/lib/tournament/match-status";
 import { cn } from "@/lib/utils";
+import { readerHomeFor } from "@/lib/tournament/reader-home";
 
 /**
  * Page chrome, split by audience.
@@ -116,13 +117,26 @@ const SECTIONS = [
  * read-only variant for readers - the day's court board and progress, with none of the acts and
  * none of the operator's alerts - so the nav no longer needs to hide it. Derived from `SECTIONS`
  * rather than restated, so a section added later is offered to everyone reading the tournament
- * by default. The read-only workspace still *opens* on Entries (`READER_HOME_PATH`), because a
- * card in Explore is a trip to read the event, not to watch a court.
+ * by default.
+ *
+ * The order is the reader's, not the operator's. A reader comes to find a match and see its
+ * score, so Scores and Schedule lead; on a phone the row scrolls, and in the operator's order
+ * those two were the ones pushed off the screen. A section with no rank here keeps its place
+ * after the ranked ones. Where a reader *opens* is `readerHomeFor`.
  */
-const READ_ONLY_SECTIONS = SECTIONS;
-
-/** Where the logo takes a reader: the roster, not the live board. */
-const READER_HOME_PATH = "/tournaments/$tournamentId/entries" as const;
+const READER_RANK: Partial<Record<(typeof SECTIONS)[number]["label"], number>> = {
+  Scores: 0,
+  Schedule: 1,
+  Knockout: 2,
+  Entries: 3,
+  Placement: 4,
+  Desk: 5,
+};
+const READ_ONLY_SECTIONS = [...SECTIONS].sort(
+  (a, b) =>
+    (READER_RANK[a.label] ?? Number.MAX_SAFE_INTEGER) -
+    (READER_RANK[b.label] ?? Number.MAX_SAFE_INTEGER),
+);
 
 /**
  * The entries that belong to the people who run the tournament.
@@ -193,6 +207,53 @@ const NAV_ACTIVE_CLASS =
  * tournament's name, with the open one marked by a line on the row's own edge. The pill
  * treatment above stays for the public bar, where the entries are separate destinations.
  */
+/**
+ * The section row on a screen too narrow for it: the current section kept in view, and a fade
+ * on the edge that has more.
+ *
+ * On a phone the row scrolls sideways, and nothing said so - the sections past the edge were
+ * simply absent, and opening one left its own tab, the one that says where you are, out of
+ * sight. The row is scrolled with `scrollLeft` rather than `scrollIntoView`, which can move the
+ * page as well, and only after mount, so the server render is the plain row.
+ */
+function useSectionRowScroll(pathname: string, sectionCount: number) {
+  const ref = useRef<HTMLElement>(null);
+  const [more, setMore] = useState<{ start: boolean; end: boolean }>({ start: false, end: false });
+  useEffect(() => {
+    const row = ref.current;
+    if (!row) return;
+    const current = row.querySelector<HTMLElement>('[aria-current="page"]');
+    if (current) {
+      const left = current.offsetLeft - row.offsetLeft;
+      const right = left + current.offsetWidth;
+      if (left < row.scrollLeft || right > row.scrollLeft + row.clientWidth) {
+        row.scrollLeft = Math.max(0, left - 16);
+      }
+    }
+    const measure = () =>
+      setMore({
+        start: row.scrollLeft > 1,
+        end: row.scrollLeft + row.clientWidth < row.scrollWidth - 1,
+      });
+    measure();
+    row.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      row.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, [pathname, sectionCount]);
+  const fade =
+    more.start && more.end
+      ? "[mask-image:linear-gradient(to_right,transparent,#000_32px,#000_calc(100%-32px),transparent)]"
+      : more.end
+        ? "[mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)]"
+        : more.start
+          ? "[mask-image:linear-gradient(to_right,transparent,#000_32px)]"
+          : "";
+  return { ref, fade };
+}
+
 const TAB_ITEM_CLASS =
   "inline-flex min-h-12 shrink-0 items-center border-b-[3px] border-transparent px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground";
 /**
@@ -734,9 +795,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const sections = access.can_edit ? [...SECTIONS, ...EDITOR_SECTIONS] : READ_ONLY_SECTIONS;
   /**
    * Where the logo goes. For an editor that is the Desk, which is where the work is. For
-   * anyone else it is Entries: they came to read the event, and both are in their nav.
+   * anyone else it is where a card in Explore opens the tournament, so the two agree.
    */
-  const homeSection = access.can_edit ? DESK_PATH : READER_HOME_PATH;
+  const homeSection = access.can_edit ? DESK_PATH : readerHomeFor(tournament?.status);
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const sectionRow = useSectionRowScroll(pathname, sections.length);
   const readOnly = !accessLoading && !access.can_edit;
   /**
    * How much is waiting on the Registrations queue.
@@ -846,8 +909,13 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         */}
         <div className="relative mx-auto flex max-w-[1400px] items-center gap-2 border-t border-hairline px-4">
           <nav
+            ref={sectionRow.ref}
             aria-label="Tournament sections"
-            className="-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            className={cn(
+              // The fade says the row scrolls, so the bar under it is only noise.
+              "-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              sectionRow.fade,
+            )}
           >
             {tournamentId
               ? sections.map((item) => {

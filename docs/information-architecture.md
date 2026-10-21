@@ -30,7 +30,7 @@ Three audiences, and the address says which one it belongs to:
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me**. A visitor is sent to `/auth` first, as on the create flow |
 | `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call. A visitor is sent to `/auth` first, carrying this address back and the `create` errand, rather than being shown a form whose submit the database would refuse |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
-| `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card on `…/entries` instead, so a visitor who only came to read never sees this page |
+| `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card in the read-only workspace instead (see `readerHomeFor` below), so a visitor who only came to read never sees this page |
 
 These are the only addresses that can be reached without naming a tournament. Each draws
 `PublicShell`, because there is no tournament for a header to describe. `/tournaments/new` is a
@@ -44,8 +44,11 @@ address they came from, rather than shown a sentence about a page they cannot us
 one arrangement ([`useSignInRedirect`](../src/hooks/useSignInRedirect.ts)) rather than two that
 agree.
 
-`…/entries` is where reading a tournament begins: a card in `/explore` links there, and it is
-the first of the five sections the read-only workspace offers (see [The shells](#3-the-shells)).
+Reading a tournament begins where [`readerHomeFor`](../src/lib/tournament/reader-home.ts) says:
+`…/entries` while the tournament is upcoming, because there are no scores yet and the question is
+who is playing, and `…/scores` once it is in progress or completed, because a reader comes to find
+a match and its result. It reads the stored status, not the clock, so the server and the browser
+agree. A card in `/explore` and the workspace logo both link there (see [The shells](#3-the-shells)).
 
 ### Tournament-scoped
 
@@ -128,8 +131,11 @@ sections, **the Desk included, in a read-only form**. For a caller without `can_
 shows the day picker and the court board, and withholds every control that starts, scores or
 moves a match; a court tile opens the match to read, not to run. The list is the operational one itself
 rather than a restated copy, so a section added later is offered to everyone reading the
-tournament by default. A read-only workspace still opens on `entries` (the logo points at
-Entries for a reader and at the Desk for an operator), and the tournament's participant page at
+tournament by default. It is sorted into the reader's order - Scores, Schedule, Knockout, Entries,
+Placement, Desk - because on a phone the row scrolls and the operator's order pushed the two
+sections a reader came for off the screen; a section without a reader rank keeps its place after
+the ranked ones. A read-only workspace opens where `readerHomeFor` says (the logo points there for
+a reader, and at the Desk for an operator), and the tournament's participant page at
 `/tournaments/$tournamentId/` is not part of that experience.
 
 The header's own line — brand, then the tournament's name and status — carries one more entry
@@ -150,8 +156,8 @@ another.
 flowchart LR
   visitor["Visitor"] --> landing["/" ]
   landing --> explore["/explore"]
-  explore --> card["/tournaments/:id/entries"]
-  card --> sections["the read-only five:<br/>entries, placement,<br/>knockout, schedule, scores"]
+  explore --> card["/tournaments/:id/entries (upcoming)<br/>or /scores (in progress, completed)"]
+  card --> sections["the read-only six:<br/>scores, schedule, knockout,<br/>entries, placement, desk"]
 ```
 
 The participant page at `/tournaments/:id/` — the card and the Register panel — is no longer one
