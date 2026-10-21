@@ -86,7 +86,7 @@ describe("stepForCheck", () => {
     expect(stepForCheck("window")).toBe("details");
     expect(stepForCheck("categories")).toBe("events");
     expect(stepForCheck("category_caps")).toBe("events");
-    expect(stepForCheck("registration")).toBe("events");
+    expect(stepForCheck("registration")).toBe("details");
   });
 
   it("sends a check it does not know nowhere, rather than guessing", () => {

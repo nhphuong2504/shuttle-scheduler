@@ -11,13 +11,14 @@ import type { DraftForm, SetupStep } from "./types";
 export function stepSlice(step: SetupStep, form: DraftForm): Partial<DraftForm> {
   switch (step) {
     case "details":
-      return { basics: form.basics, startsOn: form.startsOn, endsOn: form.endsOn };
-    case "events":
       return {
-        events: form.events,
-        maxCategoriesPerPlayer: form.maxCategoriesPerPlayer,
+        basics: form.basics,
+        startsOn: form.startsOn,
+        endsOn: form.endsOn,
         registration: form.registration,
       };
+    case "events":
+      return { events: form.events, maxCategoriesPerPlayer: form.maxCategoriesPerPlayer };
     default:
       return {};
   }

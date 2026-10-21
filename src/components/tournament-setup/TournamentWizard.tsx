@@ -1,12 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
-import { UnsavedDialog } from "@/components/tournament-setup/UnsavedDialog";
+import { DiscardDialog, UnsavedDialog } from "@/components/tournament-setup/setup-dialogs";
 import { markStepSaved, stepDirty } from "@/components/tournament-setup/dirty";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
@@ -53,7 +53,7 @@ import {
   type TournamentDraftInput,
 } from "@/lib/tournament/actions";
 import { useTournamentDraftData, useTournamentReadiness } from "@/lib/tournament/data";
-import { zonedToInstant } from "@/lib/tournament/zoned-time";
+import { isValidTimeZone, zonedToInstant } from "@/lib/tournament/zoned-time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -77,7 +77,7 @@ import { cn } from "@/lib/utils";
  *
  * Once the tournament exists the steps write straight to it - on "Save and continue", and on
  * any other way out of an edited step (the rail, "Back", Review's links), so "Saved as you go"
- * is true however the host moves. Leaving the page with an edit asks first (`UnsavedDialog`).
+ * is true however the host moves. Leaving the page with an edit asks first (`UnsavedDialog` in `setup-dialogs.tsx`).
  * The database refuses every
  * write from a tournament that is no longer upcoming. A tournament that has started cannot
  * change its events, caps or format, so the wizard shows what can still change (its name,
@@ -96,6 +96,11 @@ export interface TournamentWizardProps {
   /** Which step to show. Owned by the caller so it can live in the URL. */
   step: SetupStep;
   onStepChange: (step: SetupStep) => void;
+  /**
+   * Settings that are not configuration - they stay usable while the tournament plays, so
+   * they are not a step. Shown on Review, and at the top of a started tournament's page.
+   */
+  extra?: ReactNode;
 }
 
 /**
@@ -123,6 +128,18 @@ function toDraftInput(form: DraftForm): TournamentDraftInput {
   };
 }
 
+/**
+ * A blank form in the zone the host is in, which is usually the venue's. Browser-only: the
+ * zone is read from the browser, which is why this is not `defaultForm`, which also runs on
+ * the server.
+ */
+function freshForm(): DraftForm {
+  const form = defaultForm();
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (zone && isValidTimeZone(zone)) form.basics.venueTimezone = zone;
+  return form;
+}
+
 /** The registration window as instants, or null when it is switched off or unreadable. */
 function registrationInstants(
   form: DraftForm,
@@ -143,7 +160,12 @@ function registrationInstants(
   return opens && closes ? { opens, closes } : null;
 }
 
-export function TournamentWizard({ tournamentId, step, onStepChange }: TournamentWizardProps) {
+export function TournamentWizard({
+  tournamentId,
+  step,
+  onStepChange,
+  extra,
+}: TournamentWizardProps) {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
@@ -156,6 +178,8 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
   const [busy, setBusy] = useState(false);
   /** The Complete dialog, which counts what is left to play each time it opens. */
   const [completing, setCompleting] = useState(false);
+  /** The Discard confirmation, which says what discarding destroys before it does. */
+  const [discarding, setDiscarding] = useState(false);
   const completion = useQuery({
     queryKey: ["completion-check", tournamentId],
     queryFn: () => fetchCompletionCheck(tournamentId as string),
@@ -192,7 +216,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
   useEffect(() => {
     if (!isNew) return;
     const saved = loadLocalDraft();
-    if (saved) setForm(saved);
+    setForm(saved ?? freshForm());
     setDraftRead(true);
   }, [isNew]);
 
@@ -248,7 +272,12 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
    */
   const saveCurrent = async (): Promise<boolean> => {
     if (!tournamentId || !savedForm || !dirty) return true;
-    if (problemsForStep(editingStep, form).length) {
+    // Once the configuration is frozen the registration window is shown locked, so its checks
+    // cannot be answered here and must not hold up the name, venue or last day.
+    const checked = configEditable
+      ? form
+      : { ...form, registration: { ...form.registration, enabled: false } };
+    if (problemsForStep(editingStep, checked).length) {
       setAttempted(true);
       return false;
     }
@@ -372,15 +401,14 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
    * job is to destroy a live event does not belong in the flow that sets one up.
    */
   const discard = async () => {
+    setDiscarding(false);
     if (!tournamentId) {
-      if (!window.confirm("Discard these answers? Nothing has been created yet.")) return;
       clearLocalDraft();
-      setForm(defaultForm());
+      setForm(freshForm());
       goTo("details");
       toast.success("Answers discarded");
       return;
     }
-    if (!window.confirm("Discard this tournament? Everything configured so far is deleted.")) return;
     setBusy(true);
     try {
       await discardTournament(tournamentId);
@@ -421,7 +449,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
     status: tournamentStatus,
     onCreate: () => void create(),
     onComplete: () => setCompleting(true),
-    onDiscard: () => void discard(),
+    onDiscard: () => setDiscarding(true),
     onGoToStep: configEditable ? (next: SetupStep) => void leaveTo(next) : undefined,
   };
 
@@ -440,6 +468,13 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
         error={completion.error instanceof Error ? completion.error.message : null}
         busy={busy}
         onConfirm={() => void complete()}
+      />
+      <DiscardDialog
+        open={discarding}
+        existing={!isNew}
+        busy={busy}
+        onCancel={() => setDiscarding(false)}
+        onConfirm={() => void discard()}
       />
       <UnsavedDialog
         open={blocker.status === "blocked"}
@@ -550,18 +585,19 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
 
           <div className="min-w-0 max-w-3xl">
             {step === "details" ? (
-              <DetailsStep form={form} onChange={patchForm} isNew={isNew} showErrors={attempted} />
-            ) : null}
-            {step === "events" ? (
-              <EventsStep
+              <DetailsStep
                 form={form}
                 onChange={patchForm}
+                isNew={isNew}
                 showErrors={attempted}
                 registrationOpened={registrationOpened}
               />
             ) : null}
+            {step === "events" ? (
+              <EventsStep form={form} onChange={patchForm} showErrors={attempted} />
+            ) : null}
             {step === "structure" ? <StructureStep /> : null}
-            {step === "review" ? <ReviewStep {...reviewProps} /> : null}
+            {step === "review" ? <ReviewStep {...reviewProps} extra={extra} /> : null}
 
             {step !== "review" && attempted && problems.length ? (
               <div
@@ -611,7 +647,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
                   disabled={busy}
                   onClick={saveAndContinue}
                 >
-                  {busy ? "Saving…" : isNew ? "Continue →" : "Save and continue →"}
+                  {busy ? "Saving…" : isNew || step === "structure" ? "Continue →" : "Save and continue →"}
                 </Button>
               ) : null}
             </div>
@@ -630,11 +666,13 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
               ? "This tournament is completed, so nothing here can change."
               : "This tournament has started, so its events, entry caps and format are fixed, and so are its first day and timezone. Its name, venue and last day can still change. Playing days, courts and timings are adjusted on the Schedule page."}
           </div>
+          {extra}
           <DetailsStep
             form={form}
             onChange={patchForm}
             isNew={false}
             showErrors={attempted}
+            registrationOpened={registrationOpened}
             lock={{
               all: tournamentStatus === "completed",
               start: true,
@@ -670,11 +708,12 @@ async function saveStep(
       // day would fall outside it), and its message names the day.
       await updateTournamentWindow(id, form.startsOn, form.endsOn);
       await saveTournamentConfig(id, toDraftInput(form));
+      // After the window: the deadline is checked against the first date just written.
+      await saveRegistration(id, form, origin);
       return;
     case "events": {
       await saveTournamentConfig(id, toDraftInput(form));
       await saveTournamentEvents(id, form.events);
-      await saveRegistration(id, form, origin);
       return;
     }
     default:

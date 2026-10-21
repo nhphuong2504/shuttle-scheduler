@@ -9,31 +9,59 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RegistrationSection } from "./RegistrationSection";
 import { FieldError, FieldHeading, SetupSection } from "./section";
 import { countIsoDays, type BasicsForm, type DraftForm } from "./types";
 
 /** Matches the check constraint on `tournaments.notes`. */
 const NOTES_MAX_LENGTH = 2000;
 
-/** A short, curated list of IANA zones. Any valid zone is accepted by the database. */
+/**
+ * A curated list of IANA zones, grouped west to east. Any valid zone is accepted by the
+ * database, and a stored zone that is not listed is added to the menu rather than shown blank
+ * (`zoneOptions`); a new tournament starts in the browser's own zone (see the wizard).
+ */
 const TIMEZONE_OPTIONS = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Phoenix",
-  "America/Los_Angeles",
-  "America/Anchorage",
   "Pacific/Honolulu",
+  "America/Anchorage",
+  "America/Los_Angeles",
+  "America/Phoenix",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Toronto",
+  "America/Sao_Paulo",
+  "UTC",
   "Europe/London",
   "Europe/Paris",
   "Europe/Berlin",
+  "Europe/Madrid",
+  "Europe/Rome",
+  "Africa/Johannesburg",
+  "Asia/Dubai",
+  "Asia/Karachi",
   "Asia/Kolkata",
+  "Asia/Bangkok",
+  "Asia/Ho_Chi_Minh",
+  "Asia/Jakarta",
   "Asia/Singapore",
-  "Asia/Tokyo",
+  "Asia/Kuala_Lumpur",
+  "Asia/Manila",
+  "Asia/Hong_Kong",
   "Asia/Shanghai",
+  "Asia/Taipei",
+  "Asia/Seoul",
+  "Asia/Tokyo",
   "Australia/Sydney",
-  "UTC",
+  "Pacific/Auckland",
 ];
+
+/** The menu's zones, with the current one included even when it is not in the list. */
+function zoneOptions(current: string): string[] {
+  return current && !TIMEZONE_OPTIONS.includes(current)
+    ? [current, ...TIMEZONE_OPTIONS]
+    : TIMEZONE_OPTIONS;
+}
 
 /**
  * A `YYYY-MM-DD` date as "Sat, Oct 24".
@@ -52,11 +80,11 @@ function dayLabel(iso: string): string {
 }
 
 /**
- * The first step: a name, the tournament window and a timezone, then the venue, then the
- * contact details.
+ * The first step: a name, the tournament window and a timezone, then registration, then the
+ * venue, then the contact details.
  *
- * Three blocks in the order a host thinks of them. The first is the only one a tournament
- * cannot exist without; the venue is optional; the organiser's contact and a note are
+ * Blocks in the order a host thinks of them. The first is the only one a tournament cannot
+ * exist without; registration follows the dates it is measured from; the venue is optional; the organiser's contact and a note are
  * optional and folded away until asked for, because most hosts will not fill them in on
  * the first pass, and a long form of empty fields reads as work.
  *
@@ -87,12 +115,18 @@ export function DetailsStep({
   isNew,
   showErrors = false,
   lock = {},
+  registrationOpened = false,
 }: {
   form: DraftForm;
   onChange: (patch: Partial<DraftForm>) => void;
   isNew: boolean;
   showErrors?: boolean;
   lock?: DetailsLock;
+  /**
+   * True once a stored opening time has passed. The opening time is then fixed, because
+   * people have already relied on it.
+   */
+  registrationOpened?: boolean;
 }) {
   const basics = form.basics;
   const setBasics = (patch: Partial<BasicsForm>) => onChange({ basics: { ...basics, ...patch } });
@@ -203,7 +237,7 @@ export function DetailsStep({
                 <SelectValue placeholder="Choose a timezone" />
               </SelectTrigger>
               <SelectContent>
-                {TIMEZONE_OPTIONS.map((zone) => (
+                {zoneOptions(basics.venueTimezone).map((zone) => (
                   <SelectItem key={zone} value={zone}>
                     {zone}
                   </SelectItem>
@@ -218,6 +252,19 @@ export function DetailsStep({
           </div>
         </div>
       </SetupSection>
+
+      {/*
+        Beside the dates because its deadline is measured from the first one: a date that
+        breaks the deadline and the error that says so are on the same screen. Once the
+        tournament has started it is shown as it stands, read-only.
+      */}
+      <RegistrationSection
+        form={form}
+        onChange={onChange}
+        showErrors={showErrors}
+        opened={registrationOpened}
+        locked={Boolean(lock.start)}
+      />
 
       <SetupSection
         headingId="setup-venue"

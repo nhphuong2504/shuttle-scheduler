@@ -142,7 +142,7 @@ describe("the setup wizard asks only for what activation needs", () => {
     // Creating and configuring are the same four steps against the same row, so a second
     // copy of them is the drift this asserts against - and the reason the old page's
     // `?draft=` search param is gone: the address names the subject now.
-    expect(setup).toMatch(/<TournamentWizard tournamentId=\{tournamentId\}/);
+    expect(setup).toMatch(/<TournamentWizard[\s\S]{0,80}tournamentId=\{tournamentId\}/);
     expect(setup).not.toMatch(/DetailsStep|EventsStep|StructureStep|ReviewStep/);
     const create = read("tournaments/new.tsx");
     expect(create).toMatch(/<TournamentWizard[\s\S]{0,80}tournamentId=\{null\}/);

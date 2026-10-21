@@ -10,8 +10,8 @@ export type SetupStep = "details" | "events" | "structure" | "review";
  * exists, so it is named by `setupSteps(existing)` rather than read from here directly.
  */
 export const SETUP_STEPS: { id: SetupStep; label: string; hint: string }[] = [
-  { id: "details", label: "Details", hint: "Name, dates, venue" },
-  { id: "events", label: "Events", hint: "What is played, and who can register" },
+  { id: "details", label: "Details", hint: "Name, dates, registration" },
+  { id: "events", label: "Events", hint: "What is played" },
   { id: "structure", label: "Structure", hint: "How it is played" },
   { id: "review", label: "Review and create", hint: "Check, then create" },
 ];
@@ -36,10 +36,10 @@ export function stepForCheck(checkId: string): SetupStep | null {
     case "basics":
     case "timezone":
     case "window":
+    case "registration":
       return "details";
     case "categories":
     case "category_caps":
-    case "registration":
       return "events";
     default:
       return null;
