@@ -15,6 +15,9 @@ retain their IDs, results and published times.
 - Source correction/reset retracts unplayed children and times, with operator confirmation;
   started children and knockout generation protect their history. Unrelated sources remain
   editable. Direct placement-table writes are closed; supported operations use RPCs.
+- Once the event has been drawn, a placement record is final and the refusal names the
+  knockout draws rather than round two: retracting a feeder child would not undo a
+  seeding that already used the record. The draw check therefore runs first.
 - Completed source dependencies become end-plus-rest floors so they survive day slicing.
 - Schedule progress counts unopened slots and shows their sources. Both placement rounds
   may be active together. The Desk only receives actual matches.
@@ -59,10 +62,17 @@ covers actual RPC authorization, concurrent resolution, legacy preservation, odd
 void sources, source correction and a start-versus-correction race on local Supabase.
 
 This Windows host has neither Docker nor Podman: `npx supabase start` fails before starting
-any database. A separate PostgreSQL WASM harness executed the migration and exercised
-RPC/trigger/privilege checks with stubbed lifecycle/auth/reflow helpers. It confirms SQL
-execution and core transitions but does not replace the real Supabase integration gate.
-The integration CI workflow runs on pull requests touching migrations/integration tests.
+any database, so the suite runs on CI instead. The integration workflow's first run of this
+branch passed all nine `placement-feeders` tests and failed only a stale expectation in
+`simulation.test.ts`, which assumed the adaptive round-two wording for a field that now
+refuses with the knockout-draw guard once the event has been drawn; that assertion accepts
+either message, chooses neither, and now also checks that the refused correction left the
+row's winner and status alone. A separate PostgreSQL WASM harness executed the migration
+and exercised RPC/trigger/privilege checks with stubbed lifecycle/auth/reflow helpers. It
+confirms SQL execution and core transitions but does not replace the real Supabase
+integration gate.
+The integration CI workflow runs on pull requests touching migrations/integration tests, so
+it is the gate this branch relies on; treat a red run there as a real failure, not a flake.
 
 Apply the new migration before the client. No remote migration or deployment is performed
 by this implementation. Run full local/CI Supabase integration before releasing it.
@@ -72,6 +82,7 @@ category finishes; an older client assumes round two was created in a single bat
 Verification completed on this branch: typecheck; 1,119 unit/component tests; 211 hermetic
 Playwright tests; the final Playwright gate with 211 tests and zero skips; production build.
 Independent core review was performed and its findings on direct writes, lock order and
-published-time withdrawal confirmation were addressed. Full Supabase integration remains
-unrun for the container-runtime reason above. The Windows shard-plan invocation needs an
-npx-to-Node CLI mapping; no repository script was changed for that host-specific issue.
+published-time withdrawal confirmation were addressed. Supabase integration runs on CI's
+local stack rather than on this host, for the container-runtime reason above. The Windows
+shard-plan invocation needs an npx-to-Node CLI mapping; no repository script was changed for
+that host-specific issue.

@@ -593,8 +593,11 @@ Existing batch-generated round twos are not adopted; odd/crossover generation is
 
 A source correction withdraws only its unstarted children. Started children lock their
 sources; unrelated sources remain editable. Operator confirmation names the affected
-matches and times. The automatic reconciler also watches missing generations, so a lost
-request after a saved result can heal without a reload or an unrelated future result.
+matches and times. Once the event has been drawn the record is final and the refusal names
+the knockout draws rather than round two, because a seeding that already used the record
+cannot be undone by retracting a feeder child. The automatic reconciler also watches missing
+generations, so a lost request after a saved result can heal without a reload or an
+unrelated future result.
 
 The scheduling adapter converts decided round-one dependencies into end-plus-rest time
 floors. This keeps the dependency when the source is on a previous day and no longer part
