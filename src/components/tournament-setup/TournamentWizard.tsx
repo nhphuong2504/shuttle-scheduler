@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
-import { DiscardDialog, UnsavedDialog } from "@/components/tournament-setup/UnsavedDialog";
+import { DiscardDialog, UnsavedDialog } from "@/components/tournament-setup/setup-dialogs";
 import { markStepSaved, stepDirty } from "@/components/tournament-setup/dirty";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
@@ -77,7 +77,7 @@ import { cn } from "@/lib/utils";
  *
  * Once the tournament exists the steps write straight to it - on "Save and continue", and on
  * any other way out of an edited step (the rail, "Back", Review's links), so "Saved as you go"
- * is true however the host moves. Leaving the page with an edit asks first (`UnsavedDialog`).
+ * is true however the host moves. Leaving the page with an edit asks first (`UnsavedDialog` in `setup-dialogs.tsx`).
  * The database refuses every
  * write from a tournament that is no longer upcoming. A tournament that has started cannot
  * change its events, caps or format, so the wizard shows what can still change (its name,
