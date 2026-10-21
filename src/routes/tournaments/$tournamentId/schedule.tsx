@@ -8,13 +8,13 @@ import { useScopedTournament } from "@/lib/tournament/data";
 export const Route = createFileRoute("/tournaments/$tournamentId/schedule")({
   head: () => ({
     meta: [
-      { title: "Court Schedule | Tournova Tournament Ops" },
+      { title: "Schedule | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Build the court schedule day by day with stage-specific rest gaps and overrun forecasts.",
       },
-      { property: "og:title", content: "Court Schedule | Tournova Tournament Ops" },
+      { property: "og:title", content: "Schedule | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:

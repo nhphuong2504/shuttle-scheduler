@@ -27,6 +27,9 @@ const PLACEMENT_VIEW = "One running order for the whole tournament";
 const DAY_PLANNER_VIEW = "Build each day of the running order";
 
 test.describe("the placement format gets the placement scheduler", () => {
+  // The operator's subtitle is the marker; a reader is told only when and where matches are.
+  test.use({ appMock: { preset: "layout", role: "admin" } });
+
   test("renders the placement builder, and not the day-by-day planner", async ({ page }) => {
     await page.goto(routes.schedule, { waitUntil: "networkidle" });
 

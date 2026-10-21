@@ -50,13 +50,13 @@ import { MatchOperationsDialog } from "./desk";
 export const Route = createFileRoute("/tournaments/$tournamentId/scores")({
   head: () => ({
     meta: [
-      { title: "Score Entry | Tournova Tournament Ops" },
+      { title: "Scores | Tournova Tournament Ops" },
       {
         name: "description",
         content:
           "Enter live badminton results so pool standings and knockout draws update immediately.",
       },
-      { property: "og:title", content: "Score Entry | Tournova Tournament Ops" },
+      { property: "og:title", content: "Scores | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:
@@ -138,7 +138,7 @@ function MatchRow({
 }) {
   return (
     <li className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50">
-      <span className="w-28 font-score text-t2 font-semibold text-primary">{left}</span>
+      <span className="w-28 font-score text-t2 font-semibold text-foreground">{left}</span>
       <span className="min-w-[220px] flex-1">
         {label(match.teams[0])} <span className="text-muted-foreground">vs</span>{" "}
         {label(match.teams[1])}
@@ -358,6 +358,11 @@ function MatchesPage() {
   const doneCount = all.filter((m) => m.status === "reported" || m.status === "walkover").length;
   const liveCount = all.filter((m) => m.status === "in-progress").length;
   const pendingCount = all.length - doneCount - liveCount;
+  // Every match query is enabled with the tournament, so all four settle: until they do, the
+  // counts are unknown rather than zero.
+  const countsLoading =
+    !teams || !poolMatches || !drawMatches || !placementMatches || !tierDrawMatches;
+  const count = (value: number) => (countsLoading ? null : value);
 
   /**
    * The row the dialog operates on, resolved from the same list the board uses, so
@@ -417,14 +422,14 @@ function MatchesPage() {
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Matches shown" value={all.length} />
+          <StatTile label="Matches shown" value={count(all.length)} />
           <StatTile
             label={canEdit ? "Awaiting result" : "Still to play"}
-            value={pendingCount}
+            value={count(pendingCount)}
             tone={canEdit && pendingCount ? "warn" : "normal"}
           />
-          <StatTile label="On court" value={liveCount} />
-          <StatTile label="Completed" value={doneCount} tone="good" />
+          <StatTile label="On court" value={count(liveCount)} />
+          <StatTile label="Completed" value={count(doneCount)} tone="good" />
         </div>
 
         <Panel bodyClassName="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -541,7 +546,7 @@ function MatchesPage() {
                         key={m.id}
                         className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50"
                       >
-                        <span className="w-14 font-score text-t2 font-semibold text-primary">
+                        <span className="w-14 font-score text-t2 font-semibold text-foreground">
                           R{m.round}
                         </span>
                         <span className="min-w-[220px] flex-1">
@@ -643,7 +648,7 @@ function MatchesPage() {
                         key={m.id}
                         className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50"
                       >
-                        <span className="w-16 font-score text-t2 font-semibold text-primary">
+                        <span className="w-16 font-score text-t2 font-semibold text-foreground">
                           R{m.round}.{m.slot}
                         </span>
                         <span className="min-w-[220px] flex-1">
