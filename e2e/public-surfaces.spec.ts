@@ -596,7 +596,31 @@ test.describe("Creating a tournament", () => {
 });
 
 test.describe("Creating a tournament, signed in", () => {
-  test.use({ appMock: { preset: "layout", role: "user" } });
+  // A new tournament starts in the browser's own zone, so the browser's zone is fixed here:
+  // the payload assertions below are in Chicago time, and CI runners are on UTC.
+  test.use({ appMock: { preset: "layout", role: "user" }, timezoneId: "America/Chicago" });
+
+  test("starts in the host's own timezone, and discards only after asking", async ({ page }) => {
+    await page.goto(routes.newTournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("#t-tz")).toHaveText("America/Chicago");
+
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill("City Open");
+    await page.goto(`${routes.newTournament}?step=review`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "Discard these answers" }).click();
+
+    const dialog = page.getByRole("alertdialog", { name: "Discard these answers?" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Keep it" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText("City Open")).toBeVisible();
+
+    await page.getByRole("button", { name: "Discard these answers" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Discard answers" }).click();
+    await expect(page).toHaveURL(/step=details/);
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("");
+  });
 
   // The create flow suggests a registration deadline from "now", and the tests below pick
   // dates in December. Left to the real clock they would fail the day the deadline suggestion

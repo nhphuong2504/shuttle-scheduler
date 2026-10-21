@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
-import { UnsavedDialog } from "@/components/tournament-setup/UnsavedDialog";
+import { DiscardDialog, UnsavedDialog } from "@/components/tournament-setup/setup-dialogs";
 import { markStepSaved, stepDirty } from "@/components/tournament-setup/dirty";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
@@ -53,7 +53,7 @@ import {
   type TournamentDraftInput,
 } from "@/lib/tournament/actions";
 import { useTournamentDraftData, useTournamentReadiness } from "@/lib/tournament/data";
-import { zonedToInstant } from "@/lib/tournament/zoned-time";
+import { isValidTimeZone, zonedToInstant } from "@/lib/tournament/zoned-time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -77,7 +77,7 @@ import { cn } from "@/lib/utils";
  *
  * Once the tournament exists the steps write straight to it - on "Save and continue", and on
  * any other way out of an edited step (the rail, "Back", Review's links), so "Saved as you go"
- * is true however the host moves. Leaving the page with an edit asks first (`UnsavedDialog`).
+ * is true however the host moves. Leaving the page with an edit asks first (`UnsavedDialog` in `setup-dialogs.tsx`).
  * The database refuses every
  * write from a tournament that is no longer upcoming. A tournament that has started cannot
  * change its events, caps or format, so the wizard shows what can still change (its name,
@@ -128,6 +128,18 @@ function toDraftInput(form: DraftForm): TournamentDraftInput {
   };
 }
 
+/**
+ * A blank form in the zone the host is in, which is usually the venue's. Browser-only: the
+ * zone is read from the browser, which is why this is not `defaultForm`, which also runs on
+ * the server.
+ */
+function freshForm(): DraftForm {
+  const form = defaultForm();
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (zone && isValidTimeZone(zone)) form.basics.venueTimezone = zone;
+  return form;
+}
+
 /** The registration window as instants, or null when it is switched off or unreadable. */
 function registrationInstants(
   form: DraftForm,
@@ -166,6 +178,8 @@ export function TournamentWizard({
   const [busy, setBusy] = useState(false);
   /** The Complete dialog, which counts what is left to play each time it opens. */
   const [completing, setCompleting] = useState(false);
+  /** The Discard confirmation, which says what discarding destroys before it does. */
+  const [discarding, setDiscarding] = useState(false);
   const completion = useQuery({
     queryKey: ["completion-check", tournamentId],
     queryFn: () => fetchCompletionCheck(tournamentId as string),
@@ -202,7 +216,7 @@ export function TournamentWizard({
   useEffect(() => {
     if (!isNew) return;
     const saved = loadLocalDraft();
-    if (saved) setForm(saved);
+    setForm(saved ?? freshForm());
     setDraftRead(true);
   }, [isNew]);
 
@@ -387,15 +401,14 @@ export function TournamentWizard({
    * job is to destroy a live event does not belong in the flow that sets one up.
    */
   const discard = async () => {
+    setDiscarding(false);
     if (!tournamentId) {
-      if (!window.confirm("Discard these answers? Nothing has been created yet.")) return;
       clearLocalDraft();
-      setForm(defaultForm());
+      setForm(freshForm());
       goTo("details");
       toast.success("Answers discarded");
       return;
     }
-    if (!window.confirm("Discard this tournament? Everything configured so far is deleted.")) return;
     setBusy(true);
     try {
       await discardTournament(tournamentId);
@@ -436,7 +449,7 @@ export function TournamentWizard({
     status: tournamentStatus,
     onCreate: () => void create(),
     onComplete: () => setCompleting(true),
-    onDiscard: () => void discard(),
+    onDiscard: () => setDiscarding(true),
     onGoToStep: configEditable ? (next: SetupStep) => void leaveTo(next) : undefined,
   };
 
@@ -455,6 +468,13 @@ export function TournamentWizard({
         error={completion.error instanceof Error ? completion.error.message : null}
         busy={busy}
         onConfirm={() => void complete()}
+      />
+      <DiscardDialog
+        open={discarding}
+        existing={!isNew}
+        busy={busy}
+        onCancel={() => setDiscarding(false)}
+        onConfirm={() => void discard()}
       />
       <UnsavedDialog
         open={blocker.status === "blocked"}

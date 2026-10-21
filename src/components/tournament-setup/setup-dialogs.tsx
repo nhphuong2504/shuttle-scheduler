@@ -53,3 +53,47 @@ export function UnsavedDialog({
     </AlertDialog>
   );
 }
+
+/**
+ * Discarding: the answers while a tournament is being made, or the tournament itself while
+ * it is still upcoming. Both are final, so the dialog says which one this is.
+ */
+export function DiscardDialog({
+  open,
+  existing,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  /** Whether a stored tournament is deleted, rather than answers that were never saved. */
+  existing: boolean;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => (next ? null : onCancel())}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {existing ? "Discard this tournament?" : "Discard these answers?"}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {existing
+              ? "The tournament and everything configured so far are deleted. This cannot be undone."
+              : "Nothing has been created yet. What you typed is cleared from this tab."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="gap-2">
+          <Button variant="outline" disabled={busy} onClick={onCancel}>
+            Keep it
+          </Button>
+          <Button variant="destructive" disabled={busy} onClick={onConfirm}>
+            {existing ? "Discard tournament" : "Discard answers"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}

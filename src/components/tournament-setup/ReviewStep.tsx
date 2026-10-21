@@ -147,12 +147,16 @@ export function ReviewStep({
           />
           <Row
             label="Tournament dates"
+            editStep="details"
+            onGoToStep={onGoToStep}
             value={`${windowLabel(form.startsOn, form.endsOn)}${
               days ? `, ${days} day${days === 1 ? "" : "s"}` : ""
             }, ${form.basics.venueTimezone || "no timezone"}`}
           />
           <Row
             label="Venue"
+            editStep="details"
+            onGoToStep={onGoToStep}
             value={
               [form.basics.venueName.trim(), form.basics.venueAddress.trim()]
                 .filter(Boolean)
@@ -161,6 +165,8 @@ export function ReviewStep({
           />
           <Row
             label="Organiser"
+            editStep="details"
+            onGoToStep={onGoToStep}
             value={
               [
                 form.basics.organizerName.trim(),
@@ -174,7 +180,7 @@ export function ReviewStep({
           <div className="min-w-0">
             <dt className="flex items-center justify-between text-sm text-muted-foreground">
               <span>Events</span>
-              <EditLink step="events" onGoToStep={onGoToStep} />
+              <EditLink step="events" what="Events" onGoToStep={onGoToStep} />
             </dt>
             <dd className="mt-0.5 break-words text-base font-semibold">
               {activeEvents.length === 0 ? (
@@ -186,6 +192,8 @@ export function ReviewStep({
           </div>
           <Row
             label="Entries per player"
+            editStep="events"
+            onGoToStep={onGoToStep}
             value={`Up to ${
               activeEvents.length
                 ? Math.min(form.maxCategoriesPerPlayer, activeEvents.length)
@@ -195,7 +203,7 @@ export function ReviewStep({
           <div className="min-w-0">
             <dt className="flex items-center justify-between text-sm text-muted-foreground">
               <span>Registration</span>
-              <EditLink step="details" onGoToStep={onGoToStep} />
+              <EditLink step="details" what="Registration" onGoToStep={onGoToStep} />
             </dt>
             <dd className="mt-0.5 break-words text-base font-semibold">
               {form.registration.enabled
@@ -387,16 +395,20 @@ function Verdict({
 function EditLink({
   step,
   label = "Edit",
+  what,
   onGoToStep,
 }: {
   step: SetupStep;
   label?: string;
+  /** What the link edits, for its accessible name: a list of bare "Edit"s is unreadable. */
+  what?: string;
   onGoToStep?: ((step: SetupStep) => void) | undefined;
 }) {
   if (!onGoToStep) return null;
   return (
     <button
       type="button"
+      aria-label={what ? `${label} ${what.toLowerCase()}` : undefined}
       onClick={() => onGoToStep(step)}
       className="inline-flex min-h-11 items-center rounded-md px-1 text-sm font-semibold text-primary-ink hover:underline"
     >
@@ -420,7 +432,7 @@ function Row({
     <div className="min-w-0">
       <dt className="flex items-center justify-between text-sm text-muted-foreground">
         <span>{label}</span>
-        {editStep ? <EditLink step={editStep} onGoToStep={onGoToStep} /> : null}
+        {editStep ? <EditLink step={editStep} what={label} onGoToStep={onGoToStep} /> : null}
       </dt>
       <dd className="mt-0.5 break-words text-base font-semibold">{value}</dd>
     </div>
