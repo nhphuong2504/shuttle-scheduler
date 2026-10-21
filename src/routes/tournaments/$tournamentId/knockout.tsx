@@ -26,6 +26,7 @@ import {
   type TierDraw,
   type TierDrawMatch,
 } from "@/lib/tournament/data";
+import { PlacementTierLegend } from "@/components/placement-tier-legend";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/knockout")({
   head: () => ({
@@ -83,7 +84,7 @@ function KnockoutPage() {
   return (
     <Page
       title="Knockout"
-      subtitle="The four brackets the placement rounds sort entrants into. WW goes to Draw A, WL to B, LW to C, LL to D."
+      subtitle="The four brackets the placement rounds sort entrants into."
       actions={
         <Button size="sm" variant="outline" asChild>
           <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
@@ -92,6 +93,7 @@ function KnockoutPage() {
         </Button>
       }
     >
+      {wrongFormat ? null : <PlacementTierLegend />}
       {wrongFormat ? (
         <Panel>
           <EmptyState
@@ -257,9 +259,12 @@ function BracketSection({
                 key={tierMapping.tier}
                 title={`${tierMapping.label}, ${tierMapping.title}`}
                 right={
-                  <span className="font-score text-t2 text-muted-foreground">
+                  <abbr
+                    title={tierMapping.detail}
+                    className="font-score text-t2 text-muted-foreground no-underline"
+                  >
                     {tierMapping.record}
-                  </span>
+                  </abbr>
                 }
               >
                 {
