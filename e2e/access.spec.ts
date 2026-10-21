@@ -381,6 +381,24 @@ test.describe("a signed-out visitor", () => {
     await expect(page.getByRole("heading", { name: 'Matches for "Kristinsson"' })).toBeVisible();
   });
 
+  test("reads the running order on a phone as cards, with played matches folded away", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The table is for a wider screen; a phone gets one card per match.
+    await expect(page.locator("table.data-table").first()).toBeHidden();
+    const toggle = page.getByRole("button", { name: /^Show \d+ played match/ });
+    await expect(toggle).toBeVisible();
+    const cards = page.locator("li", { hasText: " vs " });
+    const before = await cards.filter({ visible: true }).count();
+    await toggle.click();
+    await expect(page.getByRole("button", { name: "Hide played matches" })).toBeVisible();
+    expect(await cards.filter({ visible: true }).count()).toBeGreaterThan(before);
+  });
+
   test("meets the same read-only surface a signed-in viewer does", async ({ page }) => {
     // A visitor has no edit right to withhold, so the pages must not read as a form they
     // are failing to fill in. Entries is the workspace a card opens them on.
