@@ -129,6 +129,21 @@ export function StageProgressList({ rows }: { rows: readonly StageProgressRow[] 
                       {row.note}
                     </div>
                   ) : null}
+                  {row.waitingMatches?.length ? (
+                    <details className="text-muted-foreground">
+                      <summary className="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                        {row.waitingMatches.length} awaiting opponents
+                      </summary>
+                      <ul className="mt-2 space-y-2">
+                        {row.waitingMatches.map((m) => (
+                          <li key={m.label}>
+                            <span className="font-medium">{m.label}: </span>
+                            {m.sourceA} vs {m.sourceB}
+                </li>
+              ))}
+            </ul>
+                    </details>
+                  ) : null}
                 </li>
               ))}
             </ul>

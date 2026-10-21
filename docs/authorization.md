@@ -69,6 +69,14 @@ the owner removes it. If you are adding a membership path, it goes through
 `add_tournament_editor` / `remove_tournament_editor`, and both are gated on
 `can_manage_tournament_access`.
 
+Placement match writes are also **RPC-only** as of
+`20261021000000_incremental_placement_round_two.sql`. `authenticated` has no direct
+`INSERT`, `UPDATE` or `DELETE` on `placement_matches`; the existing editor-gated RPCs
+retain those operations. This closes direct deletion/movement of feeder sources and
+ensures normal live writers take advisory locks before row locks. The internal
+`placement_round_two_slots` table has no client grants and no realtime publication:
+clients derive its read-only presentation from the public round-one rows.
+
 ### Registration never confers management
 
 Approval of a registration request is a decision about *participation*, not a grant of
@@ -288,7 +296,7 @@ pins this by asserting the classified list.
 - Scoring and results: `report_placement_result`, `report_tier_draw_result`, legacy
   `report_draw_result`, `report_pool_result`
 - Live rescheduling: `reschedule_placement_match`, legacy `reschedule_live_match`
-- Result-derived generation: `apply_placement_round_two`, `apply_tier_draws`
+- Result-derived generation: `apply_placement_round_two`, `open_ready_placement_round_two`, `apply_tier_draws`
 - Single-result resets: `reset_placement_result`, `reset_tier_draw_result`, legacy
   `reset_match_with_note`, `reset_and_repair_match`
 - Desk: `record_desk_match_activity` (the trigger behind the match tables), legacy

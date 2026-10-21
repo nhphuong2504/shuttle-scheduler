@@ -3408,3 +3408,31 @@ The `DO $verify$` block asserts the security-definer guard, the four conflict ki
 ### Rolling back
 
 Re-apply `20261009020000_schedule_conflicts.sql`; it restores the previous body and its grants.
+## Applying 20261021000000_incremental_placement_round_two.sql
+
+Adds private fixed-source definitions and the editor/live-gated
+`open_ready_placement_round_two(uuid)` RPC for fields divisible by four. Placement rows
+retain non-null entrants; the RPC materializes only decided sources and is additive and
+idempotent under the shared live-schedule/category locks. It does not backfill or replace
+an existing round two. Odd fields and crossover retain the batch path.
+
+Source correction/reset retracts only unstarted dependent matches; a started child blocks
+it. Legacy/adaptive round twos retain their whole-category correction guard. Direct client
+writes to placement_matches are revoked: all application writes already use guarded RPCs.
+Source definitions have RLS enabled, no client grants, and need no realtime events because
+the UI derives them from round-one rows. Actual match insertions/deletions still use the
+existing placement_matches publication.
+
+Apply as a new migration, before deploying the client. Do not edit older applied SQL.
+There is no data rewrite and no automatic conversion of an event already in round two.
+An old client cannot finish a partially materialized managed round two: it assumes any
+round-two row means the whole batch already exists. Roll back the client only before
+adoption, or keep a compatible resolver running until managed categories finish. Never
+delete source metadata under played children. A full reset remains the existing explicit
+destructive operation.
+
+Verify on local Supabase with integration/placement-feeders.test.ts (RPC privileges,
+concurrency, legacy preservation, correction/start races and completed events). Run the
+full integration suite when a container runtime is available. Additional reasoning and
+benchmark commands are in docs/incremental-placement.md. PostgreSQL WASM checks are useful
+for SQL execution but do not replace Supabase authentication/RLS/realtime integration.

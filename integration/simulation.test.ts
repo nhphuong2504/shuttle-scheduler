@@ -953,12 +953,27 @@ describe("a two-day placement tournament, played end to end", () => {
       return buildGames(winner, rule.gamesTo, rule.winBy, rule.bestOf);
     };
 
-    // Round one -> round two (placement).
+    // A placement record feeds every later stage, so its winner is frozen once that
+    // has happened. The tournament above is finished, so which guard answers depends
+    // on the field: a fixed-feeder category (a field divisible by four) names the
+    // knockout draws seeded from the record, while an adaptive one names the round
+    // two built from the whole result set. Both tell the desk the same thing - build
+    // the derived stage again before changing a result - and both come from the
+    // database, not from a check in the action layer.
     const roundOne = snap.placement.find((m) => m.stage === "round1" && m.status === "reported");
     expect(roundOne, "no reported round-one match").toBeTruthy();
     await expect(
       reportPlacementMatch((roundOne as PlacementMatch).id, flip(roundOne as PlacementMatch, "placement"), tournamentId as string),
-    ).rejects.toThrow(/round two was built from this result/i);
+    ).rejects.toThrow(
+      /round two was built from this result|Knockout draws depend on this placement result/i,
+    );
+    const refused = (await fetchPlacementMatches(tournamentId as string)).find(
+      (m) => m.id === (roundOne as PlacementMatch).id,
+    );
+    expect(refused?.winner_id, "a refused correction changed the winner").toBe(
+      (roundOne as PlacementMatch).winner_id,
+    );
+    expect(refused?.status, "a refused correction left reporting").toBe("reported");
 
     // Same winner, different score: a correction that changes nothing downstream.
     await expect(

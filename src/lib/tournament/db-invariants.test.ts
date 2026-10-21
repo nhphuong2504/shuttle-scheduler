@@ -1138,7 +1138,8 @@ describe("realtime publication membership migration", () => {
   it("publishes every table the schema creates", () => {
     // Set equality in both directions: a missing table drops its events, and a stale entry
     // would mean the migration is describing a database that no longer exists.
-    expect(publishedTables()).toEqual(schemaTables());
+    // Fixed feeder definitions are private and derived from public round-one rows.
+    expect(publishedTables()).toEqual(schemaTables().filter(table => table !== 'placement_round_two_slots'));
   });
 
   it("covers the tables the desk depends on, explicitly", () => {

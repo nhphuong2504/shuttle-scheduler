@@ -41,6 +41,28 @@ boundary rather than pitting the strongest against the weakest. With skill-based
 seeding, standard bracket pairing would make round one predictable and therefore
 uninformative.
 
+### Placement rounds can overlap for fields divisible by four
+
+For an active field of 4, 8, 12, ... entrants, round two has fixed winner/loser
+feeders. Round-one rows are ordered by their persisted `generation_key` (lexical,
+including `r1-10` before `r1-2`), the same order the existing batch generator reads.
+Half-splitting those sources defines the round-two pairings before any result is known.
+Only a slot whose two sources have a decided winner (`reported` or `walkover`) becomes
+an actual placement match. It may be scheduled while unrelated round-one matches remain.
+Both source finishes and the placement rest gap constrain its earliest time.
+
+Waiting definitions are stored separately from playable matches: placement rows still
+always have two entrants. Round-two progress includes unopened slots, and the Schedule
+page shows their winner/loser sources. The Desk only receives actual matches.
+
+Correcting or clearing a source withdraws its unstarted children, including their court
+and time; the operator is shown the affected matches before changing a winner or clearing
+a result. A child that has started locks the source. Unrelated sources remain editable.
+Knockout generation still waits for every active entrant's full placement record.
+
+An existing batch-generated round two is left unchanged. Odd fields and fields with
+crossover retain their full-round generation gate and current pairing rules.
+
 ### An odd entry count holds an entrant; it never issues a bye
 
 The placement stage has **no concept of a bye**. An odd entry count holds one

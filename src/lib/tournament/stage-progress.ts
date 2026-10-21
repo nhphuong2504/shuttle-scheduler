@@ -103,6 +103,8 @@ export interface StageProgressRow {
   action: StageAction | null;
   /** A short frame for a stage with nothing to count yet. Adapter-supplied. */
   note: string | null;
+  /** Known future slots that are waiting for their sources, rather than playable matches. */
+  waitingMatches?: readonly { label: string; sourceA: string; sourceB: string }[];
 }
 
 export interface StageProgressInput {
@@ -179,6 +181,7 @@ function stageRow(draft: {
   started?: boolean;
   action?: StageAction | null;
   note?: string | null;
+  waitingMatches?: StageProgressRow["waitingMatches"];
 }): Draft {
   const total = Math.max(0, draft.total);
   const completed = Math.min(Math.max(0, draft.completed), total);
@@ -197,6 +200,7 @@ function stageRow(draft: {
     remaining: total - completed,
     action: draft.action ?? null,
     note: draft.note ?? null,
+    ...(draft.waitingMatches?.length ? { waitingMatches: draft.waitingMatches } : {}),
   };
 }
 
@@ -251,10 +255,7 @@ function knockoutTotals(
  * rounds and no bracket, contributes nothing — and a draw whose entrants were not passed in
  * still reports itself rather than vanishing.
  */
-function placementRows(
-  input: StageProgressInput,
-  codeOf: (id: string) => string | null,
-): Draft[] {
+function placementRows(input: StageProgressInput, codeOf: (id: string) => string | null): Draft[] {
   const rows: Draft[] = [];
   const entrantsByCategory = groupBy(input.entrants ?? [], (row) => row.category_id);
   const matchesByCategory = groupBy(input.placementMatches ?? [], (row) => row.category_id);
@@ -315,6 +316,14 @@ function placementRows(
 
     if (view?.roundTwoExpected) {
       const generated = roundTwo.length > 0;
+      const existingKeys = new Set(view.roundTwo.map((m) => m.generation_key));
+      const waitingMatches = view.roundTwoSlots
+        .filter((s) => !existingKeys.has(s.key))
+        .map((s) => ({
+          label: `Match ${s.key.replace("r2-", "")}`,
+          sourceA: `${s.outcome === "winner" ? "Winner" : "Loser"} of Round 1 match ${s.sourceAKey.replace("r1-", "")}`,
+          sourceB: `${s.outcome === "winner" ? "Winner" : "Loser"} of Round 1 match ${s.sourceBKey.replace("r1-", "")}`,
+        }));
       let action: StageAction | null = null;
       let note: string | null = null;
       if (!generated) {
@@ -334,7 +343,9 @@ function placementRows(
           eventLabel,
           stageLabel: ROUND_TWO,
           order: ORDER.roundTwo,
-          total: roundTwo.length,
+          total: view.roundTwoSlots.length || roundTwo.length,
+          started: generated,
+          waitingMatches,
           completed: completion(roundTwo),
           done: placementDone,
           action,
@@ -349,8 +360,7 @@ function placementRows(
       // asking for a total would leave the event offering to generate a knockout it already has,
       // and no terminal stage would ever arrive.
       const generated = draws.length > 0;
-      const settled =
-        generated && (knockout.total === 0 || knockout.completed >= knockout.total);
+      const settled = generated && (knockout.total === 0 || knockout.completed >= knockout.total);
       let action: StageAction | null = null;
       let note: string | null = null;
       if (!generated) {
@@ -414,10 +424,7 @@ function placementRows(
  * The draw rounds report progress only. Their generation belongs to the Draws tab, so no action
  * is offered here.
  */
-function roundRobinRows(
-  input: StageProgressInput,
-  codeOf: (id: string) => string | null,
-): Draft[] {
+function roundRobinRows(input: StageProgressInput, codeOf: (id: string) => string | null): Draft[] {
   const rows: Draft[] = [];
   const entriesByPool = groupBy(input.poolEntries ?? [], (row) => row.pool_id);
   const matchesByPool = groupBy(input.poolMatches ?? [], (row) => row.pool_id);

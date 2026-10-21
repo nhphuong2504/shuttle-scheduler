@@ -288,7 +288,10 @@ function CategorySection({
         <h2 className="font-display text-lg font-bold">
           {category.code} — {category.name}
           <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
-            {view.active.length} entrants, {view.matches.length} matches, {stageLabel(view.stage)}
+            {view.active.length} entrants, {view.matches.length} matches,{" "}
+            {view.stage === "round1" && view.roundTwo.length > 0
+              ? "Rounds 1 & 2"
+              : stageLabel(view.stage)}
           </span>
         </h2>
         <div className="flex flex-wrap items-center gap-2">

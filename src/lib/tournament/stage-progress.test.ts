@@ -25,6 +25,30 @@ import { buildStageProgress, type StageProgressRow } from "./stage-progress";
 const TOURNAMENT_ID = "t1";
 const CATEGORY_ID = "cat1";
 
+it("counts unopened feeder slots while rounds one and two are both active", () => {
+  const field = Array.from({ length: 8 }, (_, i) => entrant(`e${i + 1}`, i + 1));
+  const r1 = Array.from({ length: 4 }, (_, i) =>
+    placementMatch(
+      `r1-${i + 1}`,
+      "round1",
+      `e${i + 1}`,
+      `e${i + 5}`,
+      i % 2 === 0 ? { status: "reported", winner_id: `e${i + 1}` } : {},
+    ),
+  );
+  const rows = buildStageProgress({
+    categories: [category()],
+    entrants: field,
+    placementMatches: [
+      ...r1,
+      placementMatch("r2-1", "round2", "e1", "e3", { status: "reported", winner_id: "e1" }),
+    ],
+  });
+  expect(rows.find((r) => r.key === "placement:cat1:r1")?.status).toBe("current");
+  const r2 = rows.find((r) => r.key === "placement:cat1:r2");
+  expect(r2).toMatchObject({ status: "current", total: 4, completed: 1, remaining: 3 });
+});
+
 function category(overrides: Partial<Category> = {}): Category {
   return {
     id: CATEGORY_ID,
@@ -198,12 +222,10 @@ const find = (rows: StageProgressRow[], key: string): StageProgressRow => {
 };
 
 /** A field of four with its seeds frozen, so round one can be generated. */
-const fourEntrants = [
-  entrant("e1", 1),
+const fourEntrants = [entrant("e1", 1),
   entrant("e2", 2),
   entrant("e3", 3),
-  entrant("e4", 4),
-];
+  entrant("e4", 4)];
 
 /** Round one decided, round two created but not played out. */
 const roundTwoInProgress = [
@@ -268,7 +290,7 @@ describe("placement pipeline", () => {
 
   it("offers round one once the seeds are locked", () => {
     const row = find(
-      buildStageProgress({ categories: [category()], entrants: fourEntrants, placementMatches: [] }),
+      buildStageProgress({ categories: [category()], entrants: fourEntrants, placementMatches: [], }),
       "placement:cat1:r1",
     );
 
@@ -300,7 +322,7 @@ describe("placement pipeline", () => {
     expect(roundTwo.total).toBe(2);
     expect(roundTwo.completed).toBe(1);
     expect(roundTwo.remaining).toBe(1);
-    expect(roundTwo.action).toEqual({ kind: "enter-results", label: "Enter Results", scopeId: null });
+    expect(roundTwo.action).toEqual({ kind: "enter-results", label: "Enter Results", scopeId: null, });
   });
 
   it("counts a running round in matches even when every undecided one involves two entrants", () => {
