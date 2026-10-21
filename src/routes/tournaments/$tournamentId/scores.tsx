@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Check } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -46,6 +47,7 @@ import {
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
 import { BYE_NOTE, isByeMatch } from "@/lib/tournament/match-status";
 import { MatchOperationsDialog } from "./desk";
+import { sideThatWon } from "@/lib/tournament/match-winner";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/scores")({
   head: () => ({
@@ -144,18 +146,34 @@ function MatchRow({
   canEdit: boolean;
   onOpen: () => void;
 }) {
+  /*
+    The side that won is marked the way the bracket marks it - bold, with a check - so a
+    result reads without working out which number belongs to whom. A reader is not shown
+    "Completed" beside it as well: the mark and the score already say so. The operator keeps
+    the pill, which is the status they act on.
+  */
+  const won = match.status === "reported" ? sideThatWon(match.initialGames) : null;
+  const side = (index: 0 | 1) => {
+    const winner = won === (index === 0 ? "a" : "b");
+    return (
+      <span className={winner ? "font-semibold" : undefined}>
+        {winner ? <Check aria-hidden className="mr-0.5 inline size-3.5 align-[-2px]" /> : null}
+        {label(match.teams[index])}
+        {winner ? <span className="sr-only"> (won)</span> : null}
+      </span>
+    );
+  };
   return (
     <li className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50">
       <span className="w-28 font-score text-t2 font-semibold text-foreground">{left}</span>
       <span className="min-w-[220px] flex-1">
-        {label(match.teams[0])} <span className="text-muted-foreground">vs</span>{" "}
-        {label(match.teams[1])}
+        {side(0)} <span className="text-muted-foreground">vs</span> {side(1)}
       </span>
       <span className="font-score text-t2 text-muted-foreground">
         {timeLabel(match.scheduled)}
         {match.courtId ? `, C${courtMap.get(match.courtId)?.number ?? "?"}` : ""}
       </span>
-      <StatusPill status={match.status} />
+      {canEdit || !won ? <StatusPill status={match.status} /> : null}
       {/* A game score is a number, so it must never be broken across lines. The fixed
           `w-24` this replaces was narrower than three games at the 30-point cap
           ("30-29, 29-30, 30-28"), and because the cell could not grow the value
@@ -423,7 +441,15 @@ function MatchesPage() {
   const placementGroups = useMemo(
     () =>
       groupByCategory(
-        [...visiblePlacement].sort((a, b) => (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0)),
+        // In playing order, round by round, rather than by tag: sorted by tag, 18:00 sat above
+        // 17:44 inside the same round.
+        [...visiblePlacement].sort((a, b) => {
+          const at = (m: DeskMatch) => (m.scheduled ? new Date(m.scheduled).getTime() : Infinity);
+          const x = at(a);
+          const y = at(b);
+          if (x !== y) return x < y ? -1 : 1;
+          return a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0;
+        }),
       ),
     [visiblePlacement],
   );
