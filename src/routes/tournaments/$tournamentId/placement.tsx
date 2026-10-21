@@ -44,6 +44,7 @@ import {
   type Team,
 } from "@/lib/tournament/data";
 import { mulberry32 } from "@/lib/tournament/rng";
+import { PlacementTierLegend } from "@/components/placement-tier-legend";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/placement")({
   head: () => ({
@@ -189,9 +190,10 @@ function PlacementPage() {
   return (
     <Page
       title="Placement"
-      subtitle="Every entrant plays two placement matches. The two results sort them into Draw A (WW), B (WL), C (LW) or D (LL)."
+      subtitle="Every entrant plays two placement matches. The two results sort them into four knockout brackets."
       actions={resetAction}
     >
+      {wrongFormat ? null : <PlacementTierLegend />}
       {wrongFormat ? (
         <div className="mb-4 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-sm font-medium text-warn-foreground">
           This tournament's stored format is{" "}
