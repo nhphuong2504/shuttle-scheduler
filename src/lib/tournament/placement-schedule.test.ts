@@ -2739,6 +2739,47 @@ describe("planning around a match that is on court", () => {
 });
 
 describe("place-ready when a held match is a prerequisite", () => {
+  it("places a ready round two alongside unrelated round-one matches and respects source rest", () => {
+    const field = fourTeams();
+    for (let i = 5; i <= 8; i++) {
+      field.teams.push(team(`team-${i}`, `p${i * 2 + 1}`, `p${i * 2 + 2}`));
+      field.entrants.push(entrant(`e${i}`, `team-${i}`, i));
+    }
+    const result = plan({
+      mode: "place-ready",
+      ...field,
+      placementMatches: [
+        placementMatch("source-a", "round1", "e1", "e2", {
+          status: "reported",
+          winner_id: "e1",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T09:30:00",
+        }),
+        placementMatch("source-b", "round1", "e3", "e4", {
+          status: "reported",
+          winner_id: "e3",
+          scheduled_time: "2026-09-17T09:00:00",
+          ended_at: "2026-09-17T09:40:00",
+        }),
+        placementMatch("ready-r2", "round2", "e1", "e3", {
+          prerequisite_ids: ["source-a", "source-b"],
+        }),
+        placementMatch("unrelated", "round1", "e5", "e6", {
+          court_id: "c1",
+          scheduled_time: "2026-09-17T11:00:00",
+        }),
+      ],
+    });
+    const child = result.placementNewPayload.find((s) => s.match_id === "ready-r2");
+    expect(child).toBeDefined();
+    expect(Date.parse(child!.scheduled_time)).toBeGreaterThanOrEqual(
+      new Date("2026-09-17T10:00:00").getTime(),
+    );
+    expect(Date.parse(child!.scheduled_time)).toBeLessThan(
+      new Date("2026-09-17T11:00:00").getTime(),
+    );
+    expect(result.placementNewPayload.some((s) => s.match_id === "unrelated")).toBe(false);
+  });
   it("does not fail the plan, and still keeps the dependent after the held match", () => {
     // `clash` is committed on top of a match that overran, so place-ready cannot hold it as an anchor and
     // takes it out of the problem. `followup` names it as a prerequisite (the held entrant's second

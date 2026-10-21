@@ -10,6 +10,7 @@ import {
   decidedWinners,
   heldEntrantId,
   planSeeds,
+  pendingPlacementGenerationKeys,
   scheduleImpactNote,
   scheduleResetNote,
   shuffleSeedFor,
@@ -22,11 +23,32 @@ import {
   toTierDrawPayload,
 } from "./placement-actions";
 import { buildTierBracket } from "./tier-draw";
+import { pairPlacementRoundOne } from "./placement";
 import { mulberry32 } from "./rng";
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
+
+describe("incremental round-two recovery", () => {
+  it("finds missing generations even when every existing match already holds a time", () => {
+    const field = Array.from({ length: 8 }, (_, i) => entrant(`e${i + 1}`, i + 1));
+    const r1 = pairPlacementRoundOne(toEntrantRefs(field)).matches.map((m) => ({
+      ...match(m.key, "round1", m.entrantAId.slice(1), m.entrantBId.slice(1)),
+      scheduled_time: "2026-09-17T09:00:00Z",
+      ...(m.key === "r1-1" || m.key === "r1-3"
+        ? { status: "reported", winner_id: m.entrantAId }
+        : {}),
+    }));
+    expect(pendingPlacementGenerationKeys(field, r1, [])).toEqual(["c1:r2-1", "c1:r2-3"]);
+    const opened = [match("r2-1", "round2", "1", "3"), match("r2-3", "round2", "5", "7")];
+    expect(pendingPlacementGenerationKeys(field, [...r1, ...opened], [])).toEqual([]);
+    const view = buildCategoryView(field, [...r1, ...opened]);
+    expect(view.stage).toBe("round1");
+    expect(view.roundTwoSlots).toHaveLength(4);
+    expect(view.gate.ready).toBe(false);
+  });
+});
 
 function entrant(
   id: string,
@@ -537,21 +559,23 @@ describe("stageResetBlockedBy", () => {
   });
 
   it("singularises a lone row", () => {
-    expect(stageResetBlockedBy({ ...cleared, placementMatches: 1 })).toContain("1 placement match ");
+    expect(stageResetBlockedBy({ ...cleared, placementMatches: 1 })).toContain(
+      "1 placement match ",
+    );
   });
 });
 
 describe("the reset notes", () => {
   it("says the seeding survived a schedule reset", () => {
     // The distinction the two resets exist for, restated where the host reads it.
-    expect(
-      scheduleResetNote({ placementMatches: 12, tierDraws: 2, tierMatches: 4 }),
-    ).toBe("Removed 12 placement matches, 4 knockout matches, 2 draws. The seed order and waivers are kept.");
+    expect(scheduleResetNote({ placementMatches: 12, tierDraws: 2, tierMatches: 4 })).toBe(
+      "Removed 12 placement matches, 4 knockout matches, 2 draws. The seed order and waivers are kept.",
+    );
   });
 
   it("says the seeding went with a stage reset", () => {
-    expect(
-      stageResetNote({ placementMatches: 0, tierDraws: 0, tierMatches: 0, entrants: 8 }),
-    ).toBe("Nothing had been played yet — the seeds were unlocked.");
+    expect(stageResetNote({ placementMatches: 0, tierDraws: 0, tierMatches: 0, entrants: 8 })).toBe(
+      "Nothing had been played yet — the seeds were unlocked.",
+    );
   });
 });

@@ -47,6 +47,7 @@ import {
   startTierDrawMatch,
 } from "@/lib/tournament/placement-actions";
 import {
+  fetchPlacementMatches,
   indexBy,
   teamLabel,
   teamPlayerIds,
@@ -1062,6 +1063,12 @@ export function MatchOperationsDialog({
 }) {
   /** After a result: draw what it unlocked and slot newly ready matches, never moving a time. */
   const autoSchedule = useAutoSchedule();
+  const { data: allPlacementMatches } = usePlacementMatches();
+  const dependentMatches = (allPlacementMatches ?? []).filter((m) =>
+    m.prerequisite_ids.includes(match.id),
+  );
+  const dependentLabel = (m: PlacementMatch) =>
+    `Round 2 match ${m.generation_key.replace("r2-", "")}${m.scheduled_time ? ` — ${timeLabel(new Date(m.scheduled_time), timezone)}` : " — no time assigned"}${m.court_id ? `, Court ${courts.find((c) => c.id === m.court_id)?.number ?? "TBC"}` : ""}`;
   const rows = scoringRule.bestOf;
   const [values, setValues] = useState(() =>
     scoreFormValues(rows, match.status, match.initialGames),
@@ -1215,6 +1222,24 @@ export function MatchOperationsDialog({
     setBusy(true);
     try {
       await assertMatchUnchanged(table, match.id, match.status);
+      if (
+        match.kind === "placement" &&
+        isReported &&
+        tournamentId &&
+        gamesWinnerFor(games, scoringRule) !==
+          gamesWinnerFor(parseGames(match.initialGames), scoringRule)
+      ) {
+        const affected = (await fetchPlacementMatches(tournamentId)).filter((m) =>
+          m.prerequisite_ids.includes(match.id),
+        );
+        if (
+          affected.length &&
+          !window.confirm(
+            `Changing the winner withdraws these dependent matches and their published times:\n${affected.map(dependentLabel).join("\n")}\nThey will be recreated from the corrected result. Continue?`,
+          )
+        )
+          return;
+      }
       if (match.kind === "placement" || match.kind === "tier") {
         if (!tournamentId) throw new Error("No active tournament.");
         const report = match.kind === "placement" ? reportPlacementMatch : reportTierDrawMatch;
@@ -1257,12 +1282,30 @@ export function MatchOperationsDialog({
   /**
    * Puts a reported placement or bracket match back to unplayed.
    *
-   * The database decides whether it is allowed — a round-one result is refused once
-   * round two exists — so this reports whatever it says rather than pre-judging it.
+   * The database refuses once a dependent has started; unplayed fixed-feeder
+   * children are withdrawn, while adaptive round twos retain their reset gate.
    */
   const clearResult = async () => {
     setBusy(true);
     try {
+      if (match.kind === "placement" && tournamentId) {
+        const fresh = (await fetchPlacementMatches(tournamentId)).filter((m) =>
+          m.prerequisite_ids.includes(match.id),
+        );
+        const signature = (rows: PlacementMatch[]) =>
+          rows
+            .map((m) => `${m.id}:${m.scheduled_time}:${m.court_id}`)
+            .sort()
+            .join("|");
+        if (
+          fresh.length &&
+          signature(fresh) !== signature(dependentMatches) &&
+          !window.confirm(
+            `Dependent matches changed since this dialog opened. Clearing the result withdraws:\n${fresh.map(dependentLabel).join("\n")}\nContinue?`,
+          )
+        )
+          return;
+      }
       if (match.kind === "placement") await resetPlacementResult(match.id);
       else await resetTierDrawResult(match.id);
       toast.success("Result cleared");
@@ -1740,9 +1783,10 @@ export function MatchOperationsDialog({
               Clear result
             </Button>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Sends this match back to unplayed so the score can be entered again. A round-one
-              result cannot be cleared once round two was built from it — regenerate round two
-              instead.
+              Sends this match back to unplayed so the score can be entered again. For fixed
+              round-two pairings, unplayed matches fed by this result are also withdrawn.
+              A dependent match that has started prevents clearing the result. Adaptive
+              round-two pairings still require a placement reset.
             </p>
           </div>
         ) : null}
@@ -1752,8 +1796,16 @@ export function MatchOperationsDialog({
               <AlertDialogTitle>Clear this result?</AlertDialogTitle>
               <AlertDialogDescription>
                 {nameA} vs {nameB} goes back to unplayed and the score is discarded. You can enter
-                it again afterwards.
+                it again afterwards. Any unplayed round-two matches fed by this result in a fixed
+                pairing are withdrawn with their court and time.
               </AlertDialogDescription>
+              {dependentMatches.length > 0 ? (
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {dependentMatches.map((m) => (
+                    <li key={m.id}>{dependentLabel(m)}</li>
+                  ))}
+                </ul>
+              ) : null}
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={working}>Keep the result</AlertDialogCancel>

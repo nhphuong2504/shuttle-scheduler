@@ -40,6 +40,7 @@ import {
 import { inProgressEnd } from "../in-progress";
 import { buildRebuildSuggestion, type RebuildSuggestion } from "../rebuild-suggestion";
 import { buildPlacementRoundTwo, pairPlacementRoundOne } from "../placement";
+import { resolvePlacementFeederSlots } from "../placement-feeders";
 import {
   buildCategoryView,
   decidedWinners,
@@ -84,6 +85,10 @@ export interface FieldSpec {
 
 export interface ReplayConfig {
   seed: number;
+  /** Compare old whole-round release with fixed feeders, using the real format builders. */
+  roundTwoRelease?: "whole-round" | "feeders";
+  /** Pin each match's outcome to its ID so release strategies see identical results. */
+  pairedOutcomes?: boolean;
   /** Entrants per event; each must be a multiple of four so every tier is filled. */
   events: readonly number[];
   /**
@@ -536,28 +541,48 @@ function winnerOf(world: World): boolean {
   return world.rng() < 0.5;
 }
 
-/** Creates round two and the draws as soon as the stage before them is fully reported. */
 /**
  * Round two and the draws for an event driven by the product's own builders, in the order
- * `generateMissingStages` would ask for them: round two once round one is settled, the draws once the
- * gate is ready. Odd fields, the held entrant's make-up matches, the crossover and uneven tiers all fall
- * out of the real code rather than of an approximation here.
+ * `generateMissingStages` would ask for them: fixed feeders open independently unless the
+ * comparison requests the old whole-round release. Adaptive fields retain their full-round
+ * gate, and knockout still needs complete placement records.
  */
-function generateRealStages(world: World, event: EventState): number {
+function generateRealStages(
+  world: World,
+  event: EventState,
+  release: ReplayConfig["roundTwoRelease"],
+): number {
   let created = 0;
   const entrants = world.entrants.filter((e) => e.category_id === event.categoryId);
-  const matches = world.placement.filter((m) => m.category_id === event.categoryId);
+  const matches = world.placement
+    .filter((m) => m.category_id === event.categoryId)
+    .sort((a, b) =>
+      a.generation_key < b.generation_key ? -1 : a.generation_key > b.generation_key ? 1 : 0,
+    );
   const view = buildCategoryView(entrants, matches);
 
-  if (view.stage === "round2" && view.roundTwo.length === 0 && view.roundTwoExpected) {
-    const planTwo = buildPlacementRoundTwo({
-      entrants: toEntrantRefs(view.active),
-      roundOne: toGeneratedMatches(view.roundOne),
-      roundOneWinners: decidedWinners(view.roundOne),
-      heldEntrantId: heldEntrantId(view.active, matches),
-    });
+  const fixedFeeders = release !== "whole-round" && view.roundTwoSlots.length > 0;
+
+  if (
+    fixedFeeders || (view.stage === "round2" && view.roundTwo.length === 0 && view.roundTwoExpected)
+  ) {
+    const planTwo = fixedFeeders
+      ? {
+          matches: resolvePlacementFeederSlots(
+            view.roundTwoSlots,
+            toGeneratedMatches(view.roundOne),
+            decidedWinners(view.roundOne),
+          ),
+        }
+      : buildPlacementRoundTwo({
+          entrants: toEntrantRefs(view.active),
+          roundOne: toGeneratedMatches(view.roundOne),
+          roundOneWinners: decidedWinners(view.roundOne),
+          heldEntrantId: heldEntrantId(view.active, matches),
+        });
     for (const m of planTwo.matches) {
       const id = `pm-${event.index}-${m.key}`;
+      if (world.placement.some((row) => row.id === id)) continue;
       const row = placementRow(id, event.categoryId, "round2", m.entrantAId, m.entrantBId);
       row.generation_key = m.key;
       row.is_makeup = m.isMakeup;
@@ -569,7 +594,10 @@ function generateRealStages(world: World, event: EventState): number {
       world.placement.push(row);
       created += 1;
     }
-    event.roundTwoMade = true;
+    event.roundTwoMade =
+      !fixedFeeders ||
+      world.placement.filter((m) => m.category_id === event.categoryId && m.stage === "round2")
+        .length === view.roundTwoSlots.length;
   }
 
   if (view.stage === "draws" && !event.drawsMade) {
@@ -599,7 +627,7 @@ function generateRealStages(world: World, event: EventState): number {
             is_bye: m.isBye,
             status: m.isBye ? "bye" : "scheduled",
             ...(m.round > 1
-              ? { parent_a_id: idOf(m.round - 1, 2 * m.slot - 1), parent_b_id: idOf(m.round - 1, 2 * m.slot) }
+              ? { parent_a_id: idOf(m.round - 1, 2 * m.slot - 1), parent_b_id: idOf(m.round - 1, 2 * m.slot), }
               : {}),
           }),
         );
@@ -611,11 +639,11 @@ function generateRealStages(world: World, event: EventState): number {
   return created;
 }
 
-function generateStages(world: World): number {
+function generateStages(world: World, release: ReplayConfig["roundTwoRelease"]): number {
   let created = 0;
   for (const event of world.events) {
     if (event.real) {
-      created += generateRealStages(world, event);
+      created += generateRealStages(world, event, release);
       continue;
     }
     const mine = world.placement.filter((m) => m.category_id === event.categoryId);
@@ -1566,6 +1594,11 @@ export function runReplay(
   // Dice for match lengths come from their own stream so a strategy that plays matches in a
   // different order still sees the same length for the same match.
   const lengthDice = (id: string) => mulberry32(config.seed * 7919 + [...id].reduce((a, c) => a + c.charCodeAt(0) * 31, 0))();
+  const outcomeDice = (id: string) => {
+    let hash = config.seed;
+    for (const c of id) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+    return mulberry32(hash)() < 0.5;
+  };
 
   trackReady(ctx);
   applyRebuild(ctx, plan(ctx, "rebuild"));
@@ -1651,7 +1684,7 @@ export function runReplay(
           players: playersOf(world, row),
         });
       }
-      const aWins = winnerOf(world);
+      const aWins = config.pairedOutcomes ? outcomeDice(row.id) : winnerOf(world);
       row.winner_id = aWins ? row.entrant_a_id : row.entrant_b_id;
       if (isTier(row)) {
         const child = childSlot(row.slot);
@@ -1672,7 +1705,7 @@ export function runReplay(
         }
       }
       if (row.court_id) cascadeCourt(ctx, row.court_id, end, row.id);
-      generateStages(world);
+      generateStages(world, config.roundTwoRelease);
       trackReady(ctx);
       react(ctx, row);
     } else if (nextStart) {

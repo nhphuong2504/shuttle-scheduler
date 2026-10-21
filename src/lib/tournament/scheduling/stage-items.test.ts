@@ -86,6 +86,29 @@ const EMPTY_COURTS = new Map<string, number>();
 const EMPTY_ORDER = new Map<string, number>();
 
 describe("placementItems stage identity", () => {
+  it("keeps decided round-one sources as end-plus-rest floors when their day is no longer in the problem", () => {
+    const source = {
+      ...placementMatch("source", "round1"),
+      status: "reported",
+      winner_id: "source-a",
+      ended_at: "2026-09-17T23:50:00Z",
+    };
+    const makeup = { ...placementMatch("makeup", "round2"), status: "reported" };
+    const child = { ...placementMatch("child", "round2"), prerequisite_ids: ["source", "makeup"] };
+    const items = placementItems({
+      matches: [source, makeup, child],
+      playerLookup,
+      courtNumberById: EMPTY_COURTS,
+      categoryOrder: EMPTY_ORDER,
+      slotMinutes: 30,
+      restGap: 20,
+      now: NOW,
+    });
+    expect(items.find((i) => i.id === "child")).toMatchObject({
+      dependencies: ["makeup"],
+      eligibleFrom: Date.parse("2026-09-18T00:10:00Z"),
+    });
+  });
   it("keys a match by its category and its own round", () => {
     const items = placementItems({
       matches: [placementMatch("m1", "round1"), placementMatch("m2", "round2")],

@@ -174,10 +174,34 @@ export function placementItems(input: {
   const inBatch = new Set(
     matches.filter((match) => match.status !== "void").map((match) => match.id),
   );
+  const byId = new Map(matches.map((match) => [match.id, match]));
 
   return matches
     .filter((match) => match.status !== "void")
     .map((match) => {
+      // Fixed round-one feeders have already finished before a round-two row exists.
+      // Represent them as a time floor: a prior day's fixed anchors may not be in
+      // today's solver problem, but their result/rest still binds this match.
+      const decidedSources = match.prerequisite_ids.flatMap((id) => {
+        const source = byId.get(id);
+        return source?.stage === "round1" &&
+          source.winner_id &&
+          (source.status === "reported" || source.status === "walkover")
+          ? [source]
+          : [];
+      });
+      const decidedIds = new Set(decidedSources.map((source) => source.id));
+      const feederFloor = decidedSources.reduce((floor, source) => {
+        const range = fixedRange({
+          status: source.status,
+          scheduledTime: source.scheduled_time,
+          startedAt: source.started_at,
+          endedAt: source.ended_at ?? source.reported_time,
+          slotMinutes,
+          now,
+        });
+        return range ? Math.max(floor, range.end + input.restGap * MINUTE) : floor;
+      }, 0);
       const { playerIds, playersKnown } = playerLookup([match.entrant_a_id, match.entrant_b_id]);
       const fixed = isFixed(match.status);
       const range = fixed
@@ -203,14 +227,12 @@ export function placementItems(input: {
         // queue slot but two milestones, and only round one releases anything.
         stageKey: `${match.category_id}:${match.stage}`,
         stageUnlocks: match.stage === "round1" && roundTwoCategories.has(match.category_id),
-        // Round one ranks before round two, but only as a late tie-break: the solver
-        // prioritises the most constrained participant first. That is sufficient here
-        // because round two is only generated once every round-one result is in,
-        // so a round-one match is always a fixed anchor by the time a round-two
-        // match is movable — and a fixed anchor constrains its participants directly.
+        // Rounds can overlap. Fixed-feeder round twos explicitly name their round-one
+        // prerequisites; participant anchors/rest still constrain both rounds.
         sequence: match.stage === "round1" ? 1 : 2,
         softOrder: categoryOrder.get(match.category_id) ?? 0,
-        dependencies: match.prerequisite_ids.filter((id) => inBatch.has(id)),
+        dependencies: match.prerequisite_ids.filter((id) => inBatch.has(id) && !decidedIds.has(id)),
+        ...(feederFloor ? { eligibleFrom: feederFloor } : {}),
         fixed,
         start: range?.start,
         end: range?.end,

@@ -579,3 +579,28 @@ forecast and the Schedule page's projected finish.
   court time for fewer premature publications; it would also be a second model beside the SQL one.
 - **Whole milliseconds.** The problem rejects two fixed matches on one court that overlap at all, so a
   fractional end followed by a truncated start can overlap by under a millisecond.
+## 30. Incremental placement round two
+
+Fields divisible by four now have fixed winner/loser sources in persisted generation-key
+order. This supersedes the whole-round generation assumption in sections 25 and 28 for
+those fields only. The slot planner and PostgreSQL resolver use the same ordering;
+exhaustive outcome tests through 24 entrants compare the final pairings with the batch engine.
+
+`open_ready_placement_round_two` stores source definitions privately and appends only
+slots whose two sources are decided. It is live/editor-gated and serializes with the live
+writers. Repeated or concurrent calls preserve existing IDs, court assignments and times.
+Existing batch-generated round twos are not adopted; odd/crossover generation is unchanged.
+
+A source correction withdraws only its unstarted children. Started children lock their
+sources; unrelated sources remain editable. Operator confirmation names the affected
+matches and times. The automatic reconciler also watches missing generations, so a lost
+request after a saved result can heal without a reload or an unrelated future result.
+
+The scheduling adapter converts decided round-one dependencies into end-plus-rest time
+floors. This keeps the dependency when the source is on a previous day and no longer part
+of the day's solver problem. Make-up dependencies remain explicit.
+
+Stage progress allows both placement rounds to be current, includes unopened fixed slots
+in the round-two total, and shows their winner/loser sources on the Schedule page. The Desk
+receives only materialized matches. Knockout seeding and the placement completeness gate
+are unchanged. Benchmark and rollout notes: `docs/incremental-placement.md`.

@@ -20,6 +20,8 @@ import {
   useCategories,
   useCourts,
   usePlacementMatches,
+  usePlacementEntrants,
+  useTierDraws,
   useScopedAccess,
   useTeams,
   useTierDrawMatches,
@@ -27,7 +29,10 @@ import {
   useTournamentDayCourts,
   useTournamentScope,
 } from "@/lib/tournament/data";
-import { generateMissingStages } from "@/lib/tournament/placement-actions";
+import {
+  generateMissingStages,
+  pendingPlacementGenerationKeys,
+} from "@/lib/tournament/placement-actions";
 import {
   applyPlaceReadyPlan,
   planPlacementSchedule,
@@ -38,7 +43,7 @@ import {
 export function autoScheduleMessage(outcome: AutoScheduleOutcome): string | null {
   const parts: string[] = [];
   const { roundTwo, draws } = outcome.generated;
-  if (roundTwo > 0) parts.push("Round 2 drawn");
+  if (roundTwo > 0) parts.push(`${roundTwo} Round 2 match${roundTwo === 1 ? "" : "es"} ready`);
   if (draws > 0) parts.push("Knockout drawn");
   if (outcome.placed > 0) {
     parts.push(`${outcome.placed} match${outcome.placed === 1 ? "" : "es"} scheduled`);
@@ -197,9 +202,15 @@ export function useAutoScheduleReconciler(): void {
   const { data: placementMatches } = usePlacementMatches();
   const { data: tierMatches } = useTierDrawMatches();
 
+  const { data: entrants } = usePlacementEntrants();
+  const { data: draws } = useTierDraws();
+
   const signature = useMemo(() => {
     if (!canEdit || !tournamentId) return null;
-    const ids = readyUnplacedIds(placementMatches ?? [], tierMatches ?? []);
+    const ids = [
+      ...readyUnplacedIds(placementMatches ?? [], tierMatches ?? []),
+      ...pendingPlacementGenerationKeys(entrants ?? [], placementMatches ?? [], draws ?? []),
+    ];
     if (!ids.length) return null;
     // Everything a new answer could depend on: the days they could go on and the courts and
     // breaks of those days. A change to any of it is a new situation, not a repeat.
@@ -210,7 +221,18 @@ export function useAutoScheduleReconciler(): void {
       (dayBreaks ?? []).map((b) => `${b.day_id}:${b.start_time}-${b.end_time}`).sort(),
     ]);
     return `${context}|${ids.join(",")}`;
-  }, [canEdit, tournamentId, placementMatches, tierMatches, days, courts, dayCourts, dayBreaks]);
+  }, [
+    canEdit,
+    tournamentId,
+    placementMatches,
+    tierMatches,
+    entrants,
+    draws,
+    days,
+    courts,
+    dayCourts,
+    dayBreaks,
+  ]);
 
   const retry = useRef<RetryState>(INITIAL_RETRY);
 

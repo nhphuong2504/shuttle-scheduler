@@ -37,6 +37,11 @@ import {
 import { assignSeeds, type AssignedSeed, type SeedableEntrant } from "./placement-seed";
 import { seedFromString, type RandomFn } from "./rng";
 import { buildTierBracket, type TierBracketPlan } from "./tier-draw";
+import {
+  placementFeederSlots,
+  resolvePlacementFeederSlots,
+  type PlacementFeederSlot,
+} from "./placement-feeders";
 import type { DrawTier } from "./competition-format";
 
 async function rpc(name: string, args: Record<string, unknown>): Promise<void> {
@@ -157,6 +162,8 @@ export interface CategoryPlacementView {
   matches: PlacementMatch[];
   roundOne: PlacementMatch[];
   roundTwo: PlacementMatch[];
+  /** Logical round-two slots; actual placement rows still always have two known entrants. */
+  roundTwoSlots: PlacementFeederSlot[];
   outcomes: EntrantPlacementOutcome[];
   gate: PlacementGate;
   /** Entrants grouped by tier, or empty until every record is decided. */
@@ -208,6 +215,10 @@ export function buildCategoryView(
   const roundOne = matches.filter((match) => match.stage === "round1");
   const roundTwo = matches.filter((match) => match.stage === "round2");
   const seedsLocked = active.length > 0 && active.every((entrant) => entrant.seed != null);
+  const roundTwoSlots =
+    seedsLocked && roundOne.every((m) => m.status !== "void")
+      ? placementFeederSlots(refs, toGeneratedMatches(roundOne))
+      : [];
 
   // The gate is given EVERY entrant, including waived ones, so it can report how
   // many were skipped. It derives the field size from the entrants who are
@@ -246,6 +257,7 @@ export function buildCategoryView(
     matches: [...matches],
     roundOne,
     roundTwo,
+    roundTwoSlots,
     outcomes,
     gate,
     byTier,
@@ -399,9 +411,8 @@ export async function generatePlacementRoundOne(
 /**
  * Generates round two from round-one results.
  *
- * Refused before every round-one match is decided, which is the same condition
- * the database enforces. Checking here as well is what turns a failed request
- * into an immediate explanation.
+ * Fixed feeders append ready matches without waiting on unrelated results.
+ * Odd fields/crossover still require the complete round-one winner/loser sets.
  */
 export async function generatePlacementRoundTwo(
   categoryId: string,
@@ -411,6 +422,16 @@ export async function generatePlacementRoundTwo(
 ): Promise<number> {
   const active = entrants.filter((entrant) => !entrant.excluded);
   const roundOne = matches.filter((match) => match.stage === "round1");
+  if (
+    !force &&
+    placementFeederSlots(toEntrantRefs(active), toGeneratedMatches(roundOne)).length > 0
+  ) {
+    const { data, error } = await supabase.rpc("open_ready_placement_round_two", {
+      p_category_id: categoryId,
+    });
+    if (error) throw new Error(error.message);
+    return Number(data ?? 0);
+  }
   const undecided = roundOne.filter(
     (match) => match.status !== "reported" && match.status !== "walkover",
   );
@@ -558,11 +579,9 @@ export interface GenerateMissingStagesInput {
  * Creates whatever stage the queue is waiting on, for every category, in order.
  *
  * This is what makes one Build button enough. The generators were moved off the
- * Placement tab, so without this a build has nothing to schedule — and because
- * each stage only exists once the previous one is decided, "generate what is
- * missing, then schedule" is the same thing as "wait for round one, then round
- * two, then the knockouts". The database enforces that ordering, so this only
- * has to ask for the next thing rather than sequence anything itself.
+ * Placement tab, so without this a build has nothing to schedule. Fixed feeders
+ * append ready round-two matches while round one is still running; adaptive
+ * fields wait for the whole round. The knockout gate still requires full records.
  *
  * A category that cannot advance is reported rather than thrown: one event with
  * unlocked seeds must not stop the other four from being scheduled.
@@ -589,8 +608,23 @@ export async function generateMissingStages(
       continue;
     }
 
-    // `stage` already encodes the gate: it is `round1` until round one is settled,
-    // then `round2`, and `draws` as soon as every entrant has their full record.
+    // Fixed feeders can open round two while round one is still being played.
+    // Repeated calls append missing rows; they never replace a published match.
+    if (view.roundTwoSlots.length > 0 && !view.gate.ready) {
+      const existing = new Set(view.roundTwo.map((m) => m.generation_key));
+      if (
+        resolvePlacementFeederSlots(view.roundTwoSlots, toGeneratedMatches(view.roundOne),
+          decidedWinners(view.roundOne)).some((m) => !existing.has(m.key))
+      ) {
+        outcome.generated.roundTwo += await generatePlacementRoundTwo(
+          category.id,
+          entrants,
+          matches,
+        );
+      }
+      continue;
+    }
+
     if (view.stage === "round1") {
       if (view.roundOne.length > 0 || !view.roundOneExpected) continue;
       outcome.generated.roundOne += await generatePlacementRoundOne(category.id, entrants);
@@ -611,6 +645,39 @@ export async function generateMissingStages(
   }
 
   return outcome;
+}
+
+/** Recovery also watches unlocked generations, not just rows already missing a court/time. */
+export function pendingPlacementGenerationKeys(
+  entrants: readonly PlacementEntrant[],
+  matches: readonly PlacementMatch[],
+  draws: readonly TierDraw[],
+): string[] {
+  const categoryIds = new Set(matches.map((m) => m.category_id));
+  return [...categoryIds]
+    .flatMap((categoryId) => {
+      const view = buildCategoryView(
+        entrants.filter((e) => e.category_id === categoryId),
+        matches.filter((m) => m.category_id === categoryId),
+      );
+      if (!view.seedsLocked) return [];
+      if (view.gate.ready)
+        return draws.some((d) => d.category_id === categoryId) ? [] : [`${categoryId}:draws`];
+      if (view.roundTwoSlots.length) {
+        const existing = new Set(view.roundTwo.map((m) => m.generation_key));
+        return resolvePlacementFeederSlots(
+          view.roundTwoSlots,
+          toGeneratedMatches(view.roundOne),
+          decidedWinners(view.roundOne),
+        )
+          .filter((m) => !existing.has(m.key))
+          .map((m) => `${categoryId}:${m.key}`);
+      }
+      return view.stage === "round2" && view.roundTwo.length === 0 && view.roundTwoExpected
+        ? [`${categoryId}:round2`]
+        : [];
+    })
+    .sort();
 }
 
 /** True when `generateMissingStages` created anything, so a refetch is needed. */
@@ -821,9 +888,8 @@ export async function reschedulePlacementMatch(
 /**
  * Clears a placement result.
  *
- * The database refuses this for a round-one match once round two exists, because
- * the make-up opponents were chosen from that winner. Surfacing it here means the
- * desk gets the explanation at the button rather than from a failed request.
+ * Fixed feeders retract unplayed children, and refuse once a child starts.
+ * Adaptive/legacy round twos retain the category-wide regeneration guard.
  */
 export async function resetPlacementResult(matchId: string): Promise<void> {
   await rpc("reset_placement_result", { p_match_id: matchId });

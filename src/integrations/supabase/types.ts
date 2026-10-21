@@ -375,6 +375,16 @@ export type Database = {
           },
         ]
       }
+      placement_round_two_slots: {
+        Row: { category_id: string; generation_key: string; source_a_id: string; source_b_id: string; outcome: string }
+        Insert: { category_id: string; generation_key: string; source_a_id: string; source_b_id: string; outcome: string }
+        Update: { category_id?: string; generation_key?: string; source_a_id?: string; source_b_id?: string; outcome?: string }
+        Relationships: [
+          { foreignKeyName: "placement_round_two_slots_category_id_fkey"; columns: ["category_id"]; isOneToOne: false; referencedRelation: "categories"; referencedColumns: ["id"] },
+          { foreignKeyName: "placement_round_two_slots_source_a_id_fkey"; columns: ["source_a_id"]; isOneToOne: false; referencedRelation: "placement_matches"; referencedColumns: ["id"] },
+          { foreignKeyName: "placement_round_two_slots_source_b_id_fkey"; columns: ["source_b_id"]; isOneToOne: false; referencedRelation: "placement_matches"; referencedColumns: ["id"] }
+        ]
+      }
       placement_matches: {
         Row: {
           category_id: string
@@ -1486,6 +1496,10 @@ export type Database = {
       }
       apply_placement_round_two: {
         Args: { p_category_id: string; p_force?: boolean; p_matches: Json }
+        Returns: number
+      }
+      open_ready_placement_round_two: {
+        Args: { p_category_id: string }
         Returns: number
       }
       apply_pool_generation: {

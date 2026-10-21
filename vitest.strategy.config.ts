@@ -13,7 +13,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
-    include: ["src/lib/tournament/scheduling/strategy-replay.runner.ts"],
+    include: ["src/lib/tournament/scheduling/*.runner.ts"],
     testTimeout: 60 * 60 * 1000,
     hookTimeout: 60 * 60 * 1000,
     // Sequential: plan timings must not compete with each other for CPU.
