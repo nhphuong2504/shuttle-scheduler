@@ -788,7 +788,11 @@ test.describe("Editing a step of an upcoming tournament", () => {
     await page.waitForLoadState("networkidle");
 
     const name = page.getByRole("textbox", { name: "Name", exact: true });
+    // Wait for the saved snapshot before editing; otherwise hydration can erase the edit
+    // and the rail will correctly skip saving a step that appears unchanged.
+    await expect(name).toHaveValue(TOURNAMENT_NAME);
     await name.fill("Renamed Open");
+    await expect(name).toHaveValue("Renamed Open");
 
     // The page says "Saved as you go", so the rail cannot be a way to lose an edit.
     const saved = page.waitForRequest(
@@ -815,7 +819,12 @@ test.describe("Editing a step of an upcoming tournament", () => {
     await page.goto(`${routes.settings}?step=details`, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    await page.getByRole("textbox", { name: "Name", exact: true }).fill("Renamed Open");
+    const name = page.getByRole("textbox", { name: "Name", exact: true });
+    // Network idle does not guarantee that the controlled form has applied its loaded data.
+    // Wait for that state before editing, then confirm the edit before testing navigation.
+    await expect(name).toHaveValue(TOURNAMENT_NAME);
+    await name.fill("Renamed Open");
+    await expect(name).toHaveValue("Renamed Open");
     await page.getByRole("main").getByRole("link", { name: /my tournaments/i }).click();
 
     const dialog = page.getByRole("alertdialog", { name: "Save your changes?" });
@@ -823,7 +832,7 @@ test.describe("Editing a step of an upcoming tournament", () => {
     await dialog.getByRole("button", { name: "Stay here" }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page).toHaveURL(/\/settings/);
-    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Renamed Open");
+    await expect(name).toHaveValue("Renamed Open");
   });
 });
 
@@ -849,7 +858,10 @@ test.describe("Setting up a tournament that has started", () => {
     await expect(page.getByRole("button", { name: "Save details" })).toBeEnabled();
 
     // A rename saves: the locked registration window cannot hold it up.
-    await page.getByRole("textbox", { name: "Name", exact: true }).fill("Renamed Open");
+    const name = page.getByRole("textbox", { name: "Name", exact: true });
+    await expect(name).toHaveValue(TOURNAMENT_NAME);
+    await name.fill("Renamed Open");
+    await expect(name).toHaveValue("Renamed Open");
     const [request] = await Promise.all([
       page.waitForRequest(
         (r) => r.url().includes("/rpc/update_tournament_details") && r.method() === "POST",
