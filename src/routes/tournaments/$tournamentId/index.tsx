@@ -47,6 +47,7 @@ import {
 } from "@/lib/tournament/registration-state";
 import { countText, dateRangeText, instantText } from "@/lib/tournament/summary-format";
 import { cn } from "@/lib/utils";
+import { TournamentResults } from "@/components/tournament-results";
 
 /**
  * One tournament, for the person deciding whether to enter it.
@@ -183,7 +184,9 @@ function TournamentPage() {
   return (
     <Page
       title={name}
-      subtitle={[venue || "Venue not set", range].filter(Boolean).join(", ")}
+      // An empty venue is left out rather than announced: "Venue not set" was the first thing
+      // a visitor read about a tournament that had already been played.
+      subtitle={[venue, range].filter(Boolean).join(", ")}
       actions={
         summary ? (
           <TournamentStatusPill
@@ -194,6 +197,13 @@ function TournamentPage() {
       }
     >
       <div className="space-y-4">
+        {tournamentId ? <TournamentResults tournamentId={tournamentId} /> : null}
+
+        {/*
+          Once the tournament is completed there is nothing to register for, and the panel only
+          repeated the status the header already gives; it stays for someone with a request.
+        */}
+        {summary?.status === "completed" && !registration ? null : (
         <Panel title="Registration" right={state ? <RegistrationStatePill state={state} /> : null}>
           <p className="text-sm text-muted-foreground">
             {state === null
@@ -246,6 +256,7 @@ function TournamentPage() {
             </div>
           ) : null}
         </Panel>
+        )}
 
         {signedIn && registration ? (
           <Panel
