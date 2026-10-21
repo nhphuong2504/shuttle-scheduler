@@ -181,7 +181,11 @@ export function ReviewStep({
           </div>
           <Row
             label="Entries per player"
-            value={`Up to ${form.maxCategoriesPerPlayer}`}
+            value={`Up to ${
+              activeEvents.length
+                ? Math.min(form.maxCategoriesPerPlayer, activeEvents.length)
+                : form.maxCategoriesPerPlayer
+            }`}
           />
           <div className="min-w-0">
             <dt className="flex items-center justify-between text-sm text-muted-foreground">

@@ -93,6 +93,16 @@ export function EventsStep({
   const removeEvent = (code: string) =>
     onChange({ events: events.filter((event) => event.code !== code) });
 
+  /**
+   * The limit as it works: a player cannot enter more events than there are, so a stored 3
+   * with two events means 2, and that is what is selected and said. The stored value is left
+   * alone, so adding the event back restores it.
+   */
+  const effectiveLimit =
+    events.length > 0
+      ? Math.min(form.maxCategoriesPerPlayer, events.length)
+      : form.maxCategoriesPerPlayer;
+
   const toggle = (template: EventTemplate) =>
     present.has(template.code) ? removeEvent(template.code) : addEvent(template);
 
@@ -172,9 +182,11 @@ export function EventsStep({
                     placeholder="No cap"
                     value={event.maxEntries == null ? "" : String(event.maxEntries)}
                     onChange={(e) => {
-                      const raw = e.target.value.trim();
+                      // Digits only: anything else would parse to NaN, which the check below
+                      // cannot see and the save would send as "no cap".
+                      const digits = e.target.value.replace(/\D/g, "");
                       setEvent(event.code, {
-                        maxEntries: raw === "" ? null : Number.parseInt(raw, 10),
+                        maxEntries: digits === "" ? null : Number.parseInt(digits, 10),
                       });
                     }}
                   />
@@ -200,7 +212,7 @@ export function EventsStep({
       >
         <div role="group" aria-label="Entries per player" className="flex flex-wrap gap-2">
           {Array.from({ length: MAX_CATEGORIES_PER_PLAYER }, (_, i) => i + 1).map((count) => {
-            const selected = form.maxCategoriesPerPlayer === count;
+            const selected = effectiveLimit === count;
             const tooMany = events.length > 0 && count > events.length;
             return (
               <button
@@ -223,7 +235,7 @@ export function EventsStep({
         <p className="mt-3 text-sm text-muted-foreground">
           {events.length === 0
             ? "Choose events above to see which limits make sense."
-            : `A player can enter at most ${form.maxCategoriesPerPlayer} of your ${events.length} event${events.length === 1 ? "" : "s"}. More than that is refused when they register.`}
+            : `A player can enter at most ${effectiveLimit} of your ${events.length} event${events.length === 1 ? "" : "s"}. More than that is refused when they register.`}
         </p>
       </SetupSection>
 
