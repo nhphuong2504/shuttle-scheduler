@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { TournovaMark } from "@/components/brand/tournova-mark";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
@@ -207,6 +207,53 @@ const NAV_ACTIVE_CLASS =
  * tournament's name, with the open one marked by a line on the row's own edge. The pill
  * treatment above stays for the public bar, where the entries are separate destinations.
  */
+/**
+ * The section row on a screen too narrow for it: the current section kept in view, and a fade
+ * on the edge that has more.
+ *
+ * On a phone the row scrolls sideways, and nothing said so - the sections past the edge were
+ * simply absent, and opening one left its own tab, the one that says where you are, out of
+ * sight. The row is scrolled with `scrollLeft` rather than `scrollIntoView`, which can move the
+ * page as well, and only after mount, so the server render is the plain row.
+ */
+function useSectionRowScroll(pathname: string, sectionCount: number) {
+  const ref = useRef<HTMLElement>(null);
+  const [more, setMore] = useState<{ start: boolean; end: boolean }>({ start: false, end: false });
+  useEffect(() => {
+    const row = ref.current;
+    if (!row) return;
+    const current = row.querySelector<HTMLElement>('[aria-current="page"]');
+    if (current) {
+      const left = current.offsetLeft - row.offsetLeft;
+      const right = left + current.offsetWidth;
+      if (left < row.scrollLeft || right > row.scrollLeft + row.clientWidth) {
+        row.scrollLeft = Math.max(0, left - 16);
+      }
+    }
+    const measure = () =>
+      setMore({
+        start: row.scrollLeft > 1,
+        end: row.scrollLeft + row.clientWidth < row.scrollWidth - 1,
+      });
+    measure();
+    row.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      row.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, [pathname, sectionCount]);
+  const fade =
+    more.start && more.end
+      ? "[mask-image:linear-gradient(to_right,transparent,#000_32px,#000_calc(100%-32px),transparent)]"
+      : more.end
+        ? "[mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)]"
+        : more.start
+          ? "[mask-image:linear-gradient(to_right,transparent,#000_32px)]"
+          : "";
+  return { ref, fade };
+}
+
 const TAB_ITEM_CLASS =
   "inline-flex min-h-12 shrink-0 items-center border-b-[3px] border-transparent px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground";
 /**
@@ -749,6 +796,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
    * anyone else it is where a card in Explore opens the tournament, so the two agree.
    */
   const homeSection = access.can_edit ? DESK_PATH : readerHomeFor(tournament?.status);
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const sectionRow = useSectionRowScroll(pathname, sections.length);
   const readOnly = !accessLoading && !access.can_edit;
   /**
    * How much is waiting on the Registrations queue.
@@ -858,8 +907,13 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         */}
         <div className="relative mx-auto flex max-w-[1400px] items-center gap-2 border-t border-hairline px-4">
           <nav
+            ref={sectionRow.ref}
             aria-label="Tournament sections"
-            className="-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            className={cn(
+              // The fade says the row scrolls, so the bar under it is only noise.
+              "-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              sectionRow.fade,
+            )}
           >
             {tournamentId
               ? sections.map((item) => {
