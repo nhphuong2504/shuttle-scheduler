@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { TournamentStatus } from "@/lib/auth/authorization";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
@@ -54,6 +56,7 @@ export function ReviewStep({
   onComplete,
   onDiscard,
   onGoToStep,
+  extra,
 }: {
   mode: "create" | "existing";
   form: DraftForm;
@@ -66,6 +69,8 @@ export function ReviewStep({
   onComplete: () => void;
   onDiscard: () => void;
   onGoToStep?: ((step: SetupStep) => void) | undefined;
+  /** Settings outside the configuration (the start policy), placed above the Discard link. */
+  extra?: ReactNode;
 }) {
   const activeEvents = form.events.filter((event) => event.active !== false);
   const blockers = checks.filter((check) => !check.ok && check.blocking !== false);
@@ -284,6 +289,8 @@ export function ReviewStep({
           </p>
         )}
       </SetupSection>
+
+      {extra}
 
       {mode === "create" || status === "upcoming" ? (
         <div className="flex justify-end border-t border-hairline pt-3">

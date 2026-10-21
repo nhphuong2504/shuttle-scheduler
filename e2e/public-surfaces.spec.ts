@@ -824,6 +824,16 @@ test.describe("Setting up a tournament that has started", () => {
     await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Save details" })).toBeEnabled();
 
+    // A rename saves: the locked registration window cannot hold it up.
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill("Renamed Open");
+    const [request] = await Promise.all([
+      page.waitForRequest(
+        (r) => r.url().includes("/rpc/update_tournament_details") && r.method() === "POST",
+      ),
+      page.getByRole("button", { name: "Save details" }).click(),
+    ]);
+    expect(JSON.stringify(request.postDataJSON())).toContain("Renamed Open");
+
     // And the end of it: completing, which is the host's own act.
     await expect(page.getByRole("button", { name: "Complete tournament" })).toBeVisible();
     await expect(page.getByRole("button", { name: /start tournament/i })).toHaveCount(0);

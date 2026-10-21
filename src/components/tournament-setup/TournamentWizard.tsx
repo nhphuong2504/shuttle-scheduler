@@ -258,7 +258,12 @@ export function TournamentWizard({
    */
   const saveCurrent = async (): Promise<boolean> => {
     if (!tournamentId || !savedForm || !dirty) return true;
-    if (problemsForStep(editingStep, form).length) {
+    // Once the configuration is frozen the registration window is shown locked, so its checks
+    // cannot be answered here and must not hold up the name, venue or last day.
+    const checked = configEditable
+      ? form
+      : { ...form, registration: { ...form.registration, enabled: false } };
+    if (problemsForStep(editingStep, checked).length) {
       setAttempted(true);
       return false;
     }
@@ -572,8 +577,7 @@ export function TournamentWizard({
               <EventsStep form={form} onChange={patchForm} showErrors={attempted} />
             ) : null}
             {step === "structure" ? <StructureStep /> : null}
-            {step === "review" ? <ReviewStep {...reviewProps} /> : null}
-            {step === "review" && extra ? <div className="mt-5">{extra}</div> : null}
+            {step === "review" ? <ReviewStep {...reviewProps} extra={extra} /> : null}
 
             {step !== "review" && attempted && problems.length ? (
               <div
