@@ -528,7 +528,9 @@ function ReadOnlyNotice({ signedIn }: { signedIn: boolean }) {
     <Notice tone="info" data-read-only>
       {signedIn
         ? "Read-only view. You can see this tournament but not change it — ask its owner for edit access."
-        : "Read-only view. Sign in to start, score and schedule matches."}
+        : // Signing in changes nothing for a spectator or a player - only the people who run
+          // this tournament gain anything - so the sentence is addressed to them, not to everyone.
+          "Read-only view. Running this tournament? Sign in to operate it."}
     </Notice>
   );
 }
@@ -1062,7 +1064,8 @@ export function StatTile({
   tone = "normal",
 }: {
   label: string;
-  value: string | number;
+  /** `null` while the count is still loading: a 0 there read as an empty tournament. */
+  value: string | number | null;
   hint?: string;
   tone?: "normal" | "good" | "warn" | "danger";
 }) {
@@ -1098,7 +1101,16 @@ export function StatTile({
   return (
     <div className={cn("rounded-xl border p-3 shadow-panel", toneClass)}>
       <p className={cn("text-sm font-medium", labelClass)}>{label}</p>
-      <p className="mt-1 font-score text-t1 font-semibold leading-none tracking-tight">{value}</p>
+      <p className="mt-1 font-score text-t1 font-semibold leading-none tracking-tight">
+        {value === null ? (
+          <>
+            <span aria-hidden className="inline-block h-[1em] w-10 animate-pulse rounded bg-muted" />
+            <span className="sr-only">Loading</span>
+          </>
+        ) : (
+          value
+        )}
+      </p>
       {hint ? <p className={cn("mt-1 text-t4", labelClass)}>{hint}</p> : null}
     </div>
   );

@@ -1619,7 +1619,11 @@ export function PlacementScheduler() {
   return (
     <Page
       title="Court schedule"
-      subtitle="One running order for the whole tournament. Matches already played or on court never move."
+      subtitle={
+        canEdit
+          ? "One running order for the whole tournament. Matches already played or on court never move."
+          : "When and where every match is played."
+      }
       actions={
         canEdit ? (
           <div className="flex flex-col items-end gap-1">
@@ -1705,9 +1709,16 @@ export function PlacementScheduler() {
               {result.summary.unscheduled} could not be placed
             </span>
           ) : null}
-          <span className="ml-auto">
-            <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
-          </span>
+          {/*
+            The badge is the connection, not the tournament: "Live" beside a finished day read
+            as a match being on. Once the tournament is completed nothing more will arrive, so
+            there is no connection worth reporting.
+          */}
+          {tournament?.status === "completed" ? null : (
+            <span className="ml-auto">
+              <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
+            </span>
+          )}
         </div>
 
         {result && result.skipped.length > 0 ? (
@@ -2306,7 +2317,8 @@ export function PlacementScheduler() {
                                 {timeLabel(row.start)}
                               </td>
                               <td>
-                                <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-t2 font-semibold text-primary-ink">
+                                {/* Neutral: violet is for what can be pressed, and this chip cannot. */}
+                                <span className="inline-flex rounded-md bg-muted px-1.5 py-0.5 font-score text-t2 font-semibold text-foreground">
                                   C{row.courtNumber || "—"}
                                 </span>
                               </td>

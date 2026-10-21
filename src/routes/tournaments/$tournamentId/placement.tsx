@@ -461,17 +461,22 @@ function SeedingPanel({
     <Panel
       title="Seeding"
       right={
-        <span className="font-score text-t4 text-muted-foreground">
-          {saving ? "saving…" : view.seedsLocked ? "locked" : "not locked"}
-        </span>
+        // Whether the order can still change is the editor's question; a reader is only shown it.
+        canEdit ? (
+          <span className="font-score text-t4 text-muted-foreground">
+            {saving ? "saving…" : view.seedsLocked ? "locked" : "not locked"}
+          </span>
+        ) : null
       }
     >
       <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Skill level decides the seed order once: entrants are grouped by the block they reported,
-          shuffled inside it, and seeded strongest block first. Every pairing rule after this reads
-          the seed only.
-        </p>
+        {canEdit ? (
+          <p className="text-sm text-muted-foreground">
+            Skill level decides the seed order once: entrants are grouped by the block they
+            reported, shuffled inside it, and seeded strongest block first. Every pairing rule
+            after this reads the seed only.
+          </p>
+        ) : null}
 
         {canReorder ? (
           <p className="text-t4 text-muted-foreground">
@@ -649,11 +654,13 @@ function SeedingPanel({
           </table>
         </div>
 
-        <p className="text-t4 text-muted-foreground">
-          Blocks: {counts.advanced} advanced, {counts.intermediate} intermediate,{" "}
-          {counts.beginner} beginner
-          {view.excluded.length > 0 ? `, ${view.excluded.length} waived` : ""}
-        </p>
+        {canEdit ? (
+          <p className="text-t4 text-muted-foreground">
+            Blocks: {counts.advanced} advanced, {counts.intermediate} intermediate,{" "}
+            {counts.beginner} beginner
+            {view.excluded.length > 0 ? `, ${view.excluded.length} waived` : ""}
+          </p>
+        ) : null}
 
         {canReorder && !orderFollowsBlocks ? (
           <p className="rounded-md border border-warn-border bg-warn-surface px-3 py-2 text-t4 font-medium text-warn-foreground">

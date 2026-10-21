@@ -279,13 +279,26 @@ function EntriesPage() {
       */}
       <div
         className={cn(
-          "mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2",
+          // A reader's two counts sit side by side on a phone rather than filling its first screen.
+          "mb-4 grid gap-3 sm:grid-cols-2",
+          canEdit ? "grid-cols-1" : "grid-cols-2",
           canEdit ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-4",
         )}
       >
-        <StatTile label="Players" value={stats.entered} hint="Taking part" />
-        <StatTile label="Entries" value={stats.entries} hint="Across all categories" />
-        <StatTile label="Active" value={stats.active} tone="good" hint="Still in the draw" />
+        <StatTile label="Players" value={teams ? stats.entered : null} hint="Taking part" />
+        <StatTile label="Entries" value={teams ? stats.entries : null} hint="Across all categories" />
+        {/*
+          "Still in the draw" is the desk's count of who can still be scheduled. To a reader -
+          and on a finished tournament, to anyone - it read as a live state the event is not in.
+        */}
+        {canEdit && tournament?.status !== "completed" ? (
+          <StatTile
+            label="Active"
+            value={teams ? stats.active : null}
+            tone="good"
+            hint="Still in the draw"
+          />
+        ) : null}
         {canEdit || stats.withdrawn > 0 ? (
           <StatTile
             label="Withdrawn"
