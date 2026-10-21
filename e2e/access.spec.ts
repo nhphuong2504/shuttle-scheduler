@@ -364,6 +364,23 @@ test.describe("a signed-out visitor", () => {
     await expect(page.getByText(/running this tournament\? sign in to operate it/i).first()).toBeVisible();
   });
 
+  test("finds one player's matches across both stages, in a link that keeps the search", async ({
+    page,
+  }) => {
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByPlaceholder("Search a player or pair…").fill("Kristinsson");
+
+    // One list while a search is typed: the stage tabs split a player's matches in two.
+    await expect(page.getByRole("heading", { name: 'Matches for "Kristinsson"' })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /group stage/i })).toHaveCount(0);
+    await expect(page).toHaveURL(/[?&]q=Kristinsson/);
+
+    // And the address alone brings the same list back.
+    await page.reload({ waitUntil: "load" });
+    await expect(page.getByRole("heading", { name: 'Matches for "Kristinsson"' })).toBeVisible();
+  });
+
   test("meets the same read-only surface a signed-in viewer does", async ({ page }) => {
     // A visitor has no edit right to withhold, so the pages must not read as a form they
     // are failing to fill in. Entries is the workspace a card opens them on.

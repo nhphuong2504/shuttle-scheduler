@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import {
@@ -54,16 +54,24 @@ export const Route = createFileRoute("/tournaments/$tournamentId/scores")({
       {
         name: "description",
         content:
-          "Enter live badminton results so pool standings and knockout draws update immediately.",
+          "Every match in the tournament, where and when it is played, and its score.",
       },
       { property: "og:title", content: "Scores | Tournova Tournament Ops" },
       {
         property: "og:description",
         content:
-          "Enter live badminton results so pool standings and knockout draws update immediately.",
+          "Every match in the tournament, where and when it is played, and its score.",
       },
     ],
   }),
+  /**
+   * The search lives in the address, so "Ho Duc's matches" is a link a player can send. Only a
+   * non-empty string is kept; anything else is dropped rather than trusted.
+   */
+  validateSearch: (search: Record<string, unknown>): { q?: string } => {
+    const q = search["q"];
+    return typeof q === "string" && q.trim().length > 0 ? { q } : {};
+  },
   component: MatchesPage,
 });
 
@@ -182,7 +190,20 @@ function MatchesPage() {
   const qc = useQueryClient();
   useRealtimeRefresh();
   const [selected, setSelected] = useState<{ id: string } | null>(null);
-  const [query, setQuery] = useState("");
+  const { q: searchedFor } = Route.useSearch();
+  const { tournamentId } = Route.useParams();
+  const navigate = useNavigate();
+  const [query, setQueryState] = useState(searchedFor ?? "");
+  const setQuery = (value: string) => {
+    setQueryState(value);
+    const term = value.trim();
+    void navigate({
+      to: "/tournaments/$tournamentId/scores",
+      params: { tournamentId },
+      search: term ? { q: term } : {},
+      replace: true,
+    });
+  };
   const [categoryId, setCategoryId] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [stage, setStage] = useState<string | null>(null);
@@ -412,6 +433,20 @@ function MatchesPage() {
     [visibleTier, drawOfTierMatch],
   );
 
+  const searching = !roundRobin && query.trim().length > 0;
+  /** A search's matches, both stages together, in the order they are played. */
+  const searchRows = useMemo(
+    () =>
+      [...visiblePlacement, ...visibleTier].sort((a, b) => {
+        const at = (m: DeskMatch) =>
+          m.scheduled ? new Date(m.scheduled).getTime() : Number.POSITIVE_INFINITY;
+        const x = at(a);
+        const y = at(b);
+        return x === y ? 0 : x < y ? -1 : 1;
+      }),
+    [visiblePlacement, visibleTier],
+  );
+
   const groupCount = visiblePool.length + visiblePlacement.length;
   const knockoutCount = visibleDraw.length + visibleTier.length;
 
@@ -490,6 +525,44 @@ function MatchesPage() {
           page that said "No group matches yet" about a tournament that was already in its
           knockouts. A choice the reader makes wins from then on.
         */}
+        {/*
+          A search is for one player's matches, and a player's matches run across both stages: the
+          two tabs split them, so "Ho Duc" showed two of their five results until the other tab
+          was opened. While a search is typed the stages are one list in playing order. The
+          round-robin format keeps its tabs: its pool and draw rows are a different shape.
+        */}
+        {searching ? (
+          <Panel
+            title={`Matches for "${query.trim()}"`}
+            right={
+              <span className="font-score text-t4 text-muted-foreground">
+                {searchRows.length} match{searchRows.length === 1 ? "" : "es"}
+              </span>
+            }
+            bodyClassName="p-2"
+          >
+            {searchRows.length ? (
+              <ul className="divide-y divide-hairline">
+                {searchRows.map((m) => (
+                  <MatchRow
+                    key={m.id}
+                    match={m}
+                    left={m.tag}
+                    label={label}
+                    courtMap={courtMap}
+                    canEdit={canEdit}
+                    onOpen={() => setSelected({ id: m.id })}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <EmptyState
+                title="No matches for this search"
+                hint="Check the spelling, or clear the search and pick an event."
+              />
+            )}
+          </Panel>
+        ) : (
         <Tabs value={stage ?? (groupCount === 0 && knockoutCount > 0 ? "knockout" : "group")} onValueChange={setStage}>
           <TabsList>
             <TabsTrigger value="group">Group stage ({groupCount})</TabsTrigger>
@@ -702,6 +775,7 @@ function MatchesPage() {
             ) : null}
           </TabsContent>
         </Tabs>
+        )}
       </div>
 
       <Dialog open={!!selectedMatch && canEdit} onOpenChange={(open) => !open && setSelected(null)}>
