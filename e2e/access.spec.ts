@@ -357,9 +357,9 @@ test.describe("a signed-out visitor", () => {
     // And the read-only banner is the signed-out affordance, not a hidden control - a
     // visitor has no edit right to withhold, so the page says what signing in would buy.
     await expect(page.getByText(/read-only view/i).first()).toBeVisible();
-    // The sentence is the visitor's, not the viewer's: signing in is exactly the act that
-    // changes this outcome, so it is the call to action the banner offers.
-    await expect(page.getByText(/sign in to start, score and schedule matches/i).first()).toBeVisible();
+    // The sentence is the visitor's, not the viewer's, and it is addressed to the one visitor
+    // signing in helps: whoever runs the tournament. A spectator is not promised a right.
+    await expect(page.getByText(/running this tournament\? sign in to operate it/i).first()).toBeVisible();
   });
 
   test("meets the same read-only surface a signed-in viewer does", async ({ page }) => {

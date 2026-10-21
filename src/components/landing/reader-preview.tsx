@@ -28,7 +28,7 @@ export function ReaderPreview() {
     >
       <Phone className="top-14 left-1/2 -translate-x-1/2 -rotate-[4deg] sm:left-[8%] sm:translate-x-0">
         <p className="rounded-lg border border-info-border bg-info-surface px-2.5 py-2 text-xs leading-snug text-info-foreground">
-          Read-only view. Sign in to start, score and schedule matches.
+          Read-only view. Running this tournament? Sign in to operate it.
         </p>
         <p className="font-display text-lg font-bold">Control desk</p>
         <div className="flex gap-1">

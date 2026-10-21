@@ -527,7 +527,9 @@ function ReadOnlyNotice({ signedIn }: { signedIn: boolean }) {
     <Notice tone="info" data-read-only>
       {signedIn
         ? "Read-only view. You can see this tournament but not change it — ask its owner for edit access."
-        : "Read-only view. Sign in to start, score and schedule matches."}
+        : // Signing in changes nothing for a spectator or a player - only the people who run
+          // this tournament gain anything - so the sentence is addressed to them, not to everyone.
+          "Read-only view. Running this tournament? Sign in to operate it."}
     </Notice>
   );
 }
