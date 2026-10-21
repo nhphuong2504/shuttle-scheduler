@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
@@ -96,6 +96,11 @@ export interface TournamentWizardProps {
   /** Which step to show. Owned by the caller so it can live in the URL. */
   step: SetupStep;
   onStepChange: (step: SetupStep) => void;
+  /**
+   * Settings that are not configuration - they stay usable while the tournament plays, so
+   * they are not a step. Shown on Review, and at the top of a started tournament's page.
+   */
+  extra?: ReactNode;
 }
 
 /**
@@ -143,7 +148,12 @@ function registrationInstants(
   return opens && closes ? { opens, closes } : null;
 }
 
-export function TournamentWizard({ tournamentId, step, onStepChange }: TournamentWizardProps) {
+export function TournamentWizard({
+  tournamentId,
+  step,
+  onStepChange,
+  extra,
+}: TournamentWizardProps) {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
@@ -550,18 +560,20 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
 
           <div className="min-w-0 max-w-3xl">
             {step === "details" ? (
-              <DetailsStep form={form} onChange={patchForm} isNew={isNew} showErrors={attempted} />
-            ) : null}
-            {step === "events" ? (
-              <EventsStep
+              <DetailsStep
                 form={form}
                 onChange={patchForm}
+                isNew={isNew}
                 showErrors={attempted}
                 registrationOpened={registrationOpened}
               />
             ) : null}
+            {step === "events" ? (
+              <EventsStep form={form} onChange={patchForm} showErrors={attempted} />
+            ) : null}
             {step === "structure" ? <StructureStep /> : null}
             {step === "review" ? <ReviewStep {...reviewProps} /> : null}
+            {step === "review" && extra ? <div className="mt-5">{extra}</div> : null}
 
             {step !== "review" && attempted && problems.length ? (
               <div
@@ -611,7 +623,7 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
                   disabled={busy}
                   onClick={saveAndContinue}
                 >
-                  {busy ? "Saving…" : isNew ? "Continue →" : "Save and continue →"}
+                  {busy ? "Saving…" : isNew || step === "structure" ? "Continue →" : "Save and continue →"}
                 </Button>
               ) : null}
             </div>
@@ -630,11 +642,13 @@ export function TournamentWizard({ tournamentId, step, onStepChange }: Tournamen
               ? "This tournament is completed, so nothing here can change."
               : "This tournament has started, so its events, entry caps and format are fixed, and so are its first day and timezone. Its name, venue and last day can still change. Playing days, courts and timings are adjusted on the Schedule page."}
           </div>
+          {extra}
           <DetailsStep
             form={form}
             onChange={patchForm}
             isNew={false}
             showErrors={attempted}
+            registrationOpened={registrationOpened}
             lock={{
               all: tournamentStatus === "completed",
               start: true,
@@ -670,11 +684,12 @@ async function saveStep(
       // day would fall outside it), and its message names the day.
       await updateTournamentWindow(id, form.startsOn, form.endsOn);
       await saveTournamentConfig(id, toDraftInput(form));
+      // After the window: the deadline is checked against the first date just written.
+      await saveRegistration(id, form, origin);
       return;
     case "events": {
       await saveTournamentConfig(id, toDraftInput(form));
       await saveTournamentEvents(id, form.events);
-      await saveRegistration(id, form, origin);
       return;
     }
     default:

@@ -158,12 +158,12 @@ describe("problemsForStep", () => {
     );
   });
 
-  it("puts the registration problems on the events step, where the field is", () => {
+  it("puts the registration problems on the details step, beside the dates they depend on", () => {
     const form = filled({
       registration: { enabled: true, opensAt: "2026-10-08T09:00", closesAt: "2026-10-25T09:00" },
     });
-    expect(problemsForStep("events", form, NOW).join(" ")).toMatch(/must close before the tournament starts/);
-    expect(problemsForStep("details", form, NOW)).toEqual([]);
+    expect(problemsForStep("details", form, NOW).join(" ")).toMatch(/must close before the tournament starts/);
+    expect(problemsForStep("events", form, NOW)).toEqual([]);
   });
 
   it("has nothing to say about the structure or the review", () => {

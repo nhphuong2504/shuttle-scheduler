@@ -690,11 +690,12 @@ test.describe("Creating a tournament, signed in", () => {
     await page.getByRole("textbox", { name: "Name", exact: true }).fill("City Open");
     await page.getByLabel("Tournament starts").fill("2026-12-01");
     await page.getByLabel("Tournament ends").fill("2026-12-03");
+    // The deadline defaults to the end of the day before the tournament, at the venue - on
+    // the same step as the dates it is measured from.
+    await expect(page.getByLabel("Registration closes")).toHaveValue("2026-11-30T23:59");
     await page.getByRole("button", { name: /^continue/i }).click();
 
     await page.getByRole("button", { name: /^MS/ }).click();
-    // The deadline defaults to the end of the day before the tournament, at the venue.
-    await expect(page.getByLabel("Registration closes")).toHaveValue("2026-11-30T23:59");
     await page.getByRole("button", { name: /^continue/i }).click();
     await page.getByRole("button", { name: /^continue/i }).click();
 
@@ -772,6 +773,18 @@ test.describe("Editing a step of an upcoming tournament", () => {
     await page.getByRole("navigation", { name: "Setup steps" }).getByRole("button", { name: /Events/ }).click();
     expect(JSON.stringify((await saved).postDataJSON())).toContain("Renamed Open");
     await expect(page).toHaveURL(/step=events/);
+  });
+
+  test("keeps registration beside the dates, and the start policy on Review", async ({ page }) => {
+    await page.goto(`${routes.settings}?step=details`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "Registration" })).toBeVisible();
+    // The start policy is not configuration: it is not under every step, only on Review.
+    await expect(page.getByRole("heading", { name: "On the day" })).toHaveCount(0);
+
+    await page.goto(`${routes.settings}?step=review`, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("heading", { name: "On the day" })).toBeVisible();
   });
 
   test("asks before leaving the page with an edit, and stays when told to", async ({ page }) => {

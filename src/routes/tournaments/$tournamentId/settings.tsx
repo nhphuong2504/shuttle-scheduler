@@ -97,16 +97,19 @@ function SettingsPage() {
         </Button>
       }
     >
-      <TournamentWizard tournamentId={tournamentId} step={step} onStepChange={setStep} />
       {/*
-        The on-the-day start policy, deliberately outside the wizard. The wizard's steps are the
+        The on-the-day start policy is not one of the wizard's steps. The steps are the
         configuration, which the database freezes from the first match; this switch has to stay
-        usable while the tournament plays, so it is its own writer beside the wizard rather than
-        a fifth step or part of the wizard's save. It renders nothing unless the caller may edit.
+        usable while the tournament plays, so it is its own writer, handed to the wizard to
+        place in its content column rather than a fifth step or part of the wizard's save. It
+        renders nothing unless the caller may edit.
       */}
-      <div className="mx-auto mt-6 w-full max-w-[64rem]">
-        <StartPolicySection />
-      </div>
+      <TournamentWizard
+        tournamentId={tournamentId}
+        step={step}
+        onStepChange={setStep}
+        extra={<StartPolicySection />}
+      />
     </Page>
   );
 }

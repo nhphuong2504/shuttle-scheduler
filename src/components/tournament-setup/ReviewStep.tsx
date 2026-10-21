@@ -190,7 +190,7 @@ export function ReviewStep({
           <div className="min-w-0">
             <dt className="flex items-center justify-between text-sm text-muted-foreground">
               <span>Registration</span>
-              <EditLink step="events" onGoToStep={onGoToStep} />
+              <EditLink step="details" onGoToStep={onGoToStep} />
             </dt>
             <dd className="mt-0.5 break-words text-base font-semibold">
               {form.registration.enabled
@@ -207,7 +207,8 @@ export function ReviewStep({
           <div className="min-w-0 border-t border-hairline pt-5 sm:col-span-2">
             <dt className="flex items-center justify-between text-sm text-muted-foreground">
               <span>Format</span>
-              <EditLink step="structure" onGoToStep={onGoToStep} />
+              {/* There is one format, so nothing to edit: the link explains it. */}
+              <EditLink step="structure" label="See how it runs" onGoToStep={onGoToStep} />
             </dt>
             <dd className="mt-0.5 text-base font-semibold">{SUPPORTED_FORMAT.name}</dd>
             <dd className="mt-2 flex flex-wrap gap-2 text-sm">
@@ -378,9 +379,11 @@ function Verdict({
 
 function EditLink({
   step,
+  label = "Edit",
   onGoToStep,
 }: {
   step: SetupStep;
+  label?: string;
   onGoToStep?: ((step: SetupStep) => void) | undefined;
 }) {
   if (!onGoToStep) return null;
@@ -390,7 +393,7 @@ function EditLink({
       onClick={() => onGoToStep(step)}
       className="inline-flex min-h-11 items-center rounded-md px-1 text-sm font-semibold text-primary-ink hover:underline"
     >
-      Edit
+      {label}
     </button>
   );
 }

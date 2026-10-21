@@ -34,6 +34,9 @@ export function effectiveRegistration(
 /** Problems with the registration window, or none when registration is switched off. */
 export function registrationProblems(form: DraftForm, now: Date = new Date()): string[] {
   if (!form.registration.enabled) return [];
+  // Without a zone there is no "now" to fill a blank opening time with; the timezone's own
+  // problem, on the same step, is the one to fix first.
+  if (!isValidTimeZone(form.basics.venueTimezone.trim())) return [];
   const { opensAt, closesAt } = effectiveRegistration(form, now);
   const issues: string[] = [];
   if (!WALL_CLOCK.test(opensAt)) issues.push("Choose when registration opens.");
@@ -77,6 +80,7 @@ export function problemsForStep(step: SetupStep, form: DraftForm, now: Date = ne
   if (step === "details") {
     const found = detailsProblems(form);
     for (const issue of [found.name, found.zone, found.window]) if (issue) issues.push(issue);
+    issues.push(...registrationProblems(form, now));
     return issues;
   }
 
@@ -95,7 +99,6 @@ export function problemsForStep(step: SetupStep, form: DraftForm, now: Date = ne
     if (form.maxCategoriesPerPlayer < 1 || form.maxCategoriesPerPlayer > 5) {
       issues.push("The per-player event limit must be between 1 and 5.");
     }
-    issues.push(...registrationProblems(form, now));
     return issues;
   }
 

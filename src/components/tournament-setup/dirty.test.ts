@@ -27,12 +27,12 @@ describe("stepDirty", () => {
     expect(stepDirty("review", form, saved)).toBe(false);
   });
 
-  it("counts the registration window and the per-player limit as the events step's", () => {
+  it("counts the per-player limit as the events step's, and registration as the details step's", () => {
     const saved = stored();
     expect(stepDirty("events", { ...saved, maxCategoriesPerPlayer: 3 }, saved)).toBe(true);
     const reg = { ...saved, registration: { ...saved.registration, enabled: false } };
-    expect(stepDirty("events", reg, saved)).toBe(true);
-    expect(stepDirty("details", reg, saved)).toBe(false);
+    expect(stepDirty("details", reg, saved)).toBe(true);
+    expect(stepDirty("events", reg, saved)).toBe(false);
   });
 });
 

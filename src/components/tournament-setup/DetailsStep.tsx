@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RegistrationSection } from "./RegistrationSection";
 import { FieldError, FieldHeading, SetupSection } from "./section";
 import { countIsoDays, type BasicsForm, type DraftForm } from "./types";
 
@@ -52,11 +53,11 @@ function dayLabel(iso: string): string {
 }
 
 /**
- * The first step: a name, the tournament window and a timezone, then the venue, then the
- * contact details.
+ * The first step: a name, the tournament window and a timezone, then registration, then the
+ * venue, then the contact details.
  *
- * Three blocks in the order a host thinks of them. The first is the only one a tournament
- * cannot exist without; the venue is optional; the organiser's contact and a note are
+ * Blocks in the order a host thinks of them. The first is the only one a tournament cannot
+ * exist without; registration follows the dates it is measured from; the venue is optional; the organiser's contact and a note are
  * optional and folded away until asked for, because most hosts will not fill them in on
  * the first pass, and a long form of empty fields reads as work.
  *
@@ -87,12 +88,18 @@ export function DetailsStep({
   isNew,
   showErrors = false,
   lock = {},
+  registrationOpened = false,
 }: {
   form: DraftForm;
   onChange: (patch: Partial<DraftForm>) => void;
   isNew: boolean;
   showErrors?: boolean;
   lock?: DetailsLock;
+  /**
+   * True once a stored opening time has passed. The opening time is then fixed, because
+   * people have already relied on it.
+   */
+  registrationOpened?: boolean;
 }) {
   const basics = form.basics;
   const setBasics = (patch: Partial<BasicsForm>) => onChange({ basics: { ...basics, ...patch } });
@@ -218,6 +225,19 @@ export function DetailsStep({
           </div>
         </div>
       </SetupSection>
+
+      {/*
+        Beside the dates because its deadline is measured from the first one: a date that
+        breaks the deadline and the error that says so are on the same screen. Once the
+        tournament has started it is shown as it stands, read-only.
+      */}
+      <RegistrationSection
+        form={form}
+        onChange={onChange}
+        showErrors={showErrors}
+        opened={registrationOpened}
+        locked={Boolean(lock.start)}
+      />
 
       <SetupSection
         headingId="setup-venue"

@@ -10,14 +10,11 @@ import { SetupSection } from "./section";
 /**
  * The formats a host can choose between.
  *
- * There is one today, because the engine implements one. The step is written as a choice
- * anyway - a group of radio cards whose selected card carries the detail - so a second
- * format is one more entry here and one more case in how it is drawn, not a new screen. What
- * the step must not do in the meantime is pretend there is a decision: the one card is
- * selected, and a line under it says that it is the only one.
- *
- * Choosing a format is a write the form does not carry yet (`toDraftInput` fixes it), so the
- * radio is selected and read-only until there is a second value to store.
+ * There is one today, because the engine implements one. The step is laid out as a list of
+ * cards so a second format is one more entry here, not a new screen - but while there is one,
+ * the step must not pretend there is a decision. So the card is not a radio and does not look
+ * clickable: it is marked "Selected", and a line under it says it is the only one. When a
+ * second format exists, the cards become a radio group and `toDraftInput` stops fixing it.
  */
 const FORMATS: CompetitionFormat[] = [SUPPORTED_FORMAT];
 
@@ -38,25 +35,16 @@ export function StructureStep() {
         title="Competition format"
         hint="How entrants are sorted and who plays whom. The same format applies to every event."
       >
-        <fieldset className="space-y-3">
-          <legend className="sr-only">Competition format</legend>
+        <div className="space-y-3">
           {FORMATS.map((format) => {
             const isSelected = format.id === selected;
             return (
-              <label
+              <div
                 key={format.id}
-                className={`flex cursor-pointer gap-4 rounded-2xl border-2 p-5 transition-colors ${
+                className={`flex gap-4 rounded-2xl border-2 p-5 ${
                   isSelected ? "border-primary bg-info-surface/40" : "border-hairline bg-surface"
                 }`}
               >
-                <input
-                  type="radio"
-                  name="competition-format"
-                  value={format.id}
-                  checked={isSelected}
-                  readOnly
-                  className="mt-1 size-5 shrink-0 accent-primary"
-                />
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                     <span className="font-display text-lg font-bold leading-snug">
@@ -79,10 +67,10 @@ export function StructureStep() {
 
                   {isSelected ? <HowItRuns format={format} /> : null}
                 </span>
-              </label>
+              </div>
             );
           })}
-        </fieldset>
+        </div>
 
         <p className="mt-4 flex items-start gap-2.5 text-sm text-muted-foreground">
           <Info aria-hidden="true" className="mt-0.5 size-[18px] shrink-0" />
