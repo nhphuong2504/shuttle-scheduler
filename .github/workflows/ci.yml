@@ -71,12 +71,13 @@ jobs:
         # 4 shards, chosen from measurement rather than intuition - see `npm run
         # ci:shard-plan`, which prints the wall time and billed minutes for each count.
         #
-        # Re-measured when the density axis was removed, which took the suite from 297
-        # tests to 161. 4 shards now predicts 2.5 min wall on 7.3 billed minutes. 3 is
-        # slower (3.1 min wall) and only slightly cheaper (6.4 billed), and 5 buys 0.2 min
-        # of wall (2.3) for 0.9 more billed minutes, so the extra shard does not pay for
-        # itself. 6 is worse on both counts (2.5 wall, 9.1 billed) - shards split by test
-        # *count*, not duration, so a finer split shuffles the heavy specs back together.
+        # Re-measured when the route sweeps were folded into `route-sweep.spec.ts`, which
+        # took the suite from 219 tests to 196 and its work from ~165s to ~105s locally.
+        # 4 shards predicts ~2.2 min of work per slowest shard on 7.0 billed minutes. 3 is
+        # slower (2.7) for 6.1 billed, 2 is the cheapest (5.2 billed) but 3.5 slow, and 5
+        # buys 0.4 min for 0.9 more billed minutes, so the extra shard does not pay for
+        # itself. Shards split by test *count*, not duration, so a finer split shuffles the
+        # heavy specs back together: evenness is 50% at 4 and 94% at 2.
         #
         # Re-run that script after adding or removing a spec file: the split is by test
         # count, so it reshuffles every shard boundary.
@@ -91,7 +92,24 @@ jobs:
 
       - run: npm ci
 
-      - run: npx playwright install --with-deps chromium
+      # The browser download is the slow part of Playwright's setup and is identical on
+      # every run of a given version, so it is cached by that version. A hit still needs the
+      # system libraries, which live outside the cache and are installed by `install-deps`;
+      # a miss installs both. Shards share one cache key, so the first run fills it for all.
+      - id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 

@@ -115,7 +115,7 @@ function shardWork(durations, shard, total) {
   const output = execFileSync(
     "npx",
     ["playwright", "test", "--list", `--shard=${shard}/${total}`, "--reporter=list"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], shell: process.platform === "win32" },
   );
 
   const work = [];
