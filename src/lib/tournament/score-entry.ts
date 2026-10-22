@@ -73,6 +73,19 @@ function ruleShape(rule: ScoringRule): string {
 }
 
 /**
+ * Why a score past the target that is not the winning margin could not have happened.
+ *
+ * A game ends the instant it is won, so 25-10 never exists: at 21-10 the game was already
+ * over. Naming the moment it ends is the only part of that a person at the desk can act on -
+ * "not a winning score" against 25-10 reads like the target, not the margin.
+ */
+function pastTargetReason(rule: ScoringRule): string {
+  return rule.winBy === 1
+    ? `A game to ${rule.gamesTo} is won by the first side to reach ${rule.gamesTo}.`
+    : `Past ${rule.gamesTo}, a game ends on the point that opens a lead of ${rule.winBy}.`;
+}
+
+/**
  * Explains why a complete set of games is not a result. Only called when `gamesWinnerFor`
  * has already refused, so every branch here is a reason rather than the decision.
  */
@@ -83,13 +96,17 @@ function explain(games: GameScore[], rule: ScoringRule): { message: string; row:
     const game = games[i] as GameScore;
     if (!isLegalGameScoreFor(game.a, game.b, rule)) {
       const cap = gamePointCap(rule);
+      const high = Math.max(game.a, game.b);
+      const low = Math.min(game.a, game.b);
       return {
         message:
           game.a === game.b
             ? `Game ${i + 1} is level. A game needs a winner.`
-            : cap !== null && Math.max(game.a, game.b) > cap
+            : cap !== null && high > cap
               ? `Game ${i + 1} is past the cap. A game stops at ${cap}.`
-              : `Game ${i + 1} is not a winning score. ${ruleShape(rule)}`,
+              : high > rule.gamesTo
+                ? `Game ${i + 1} cannot end ${high}-${low}. ${pastTargetReason(rule)}`
+                : `Game ${i + 1} is not a winning score. ${ruleShape(rule)}`,
         row: i,
       };
     }

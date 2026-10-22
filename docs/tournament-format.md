@@ -153,19 +153,31 @@ rule.
 
 ### How a game is won
 
-A game is won by reaching `gamesTo` with a margin of `winBy`, and a match by winning
-`gamesNeededToWin` games. The **21-point win-by-2 game also stops at 30**: 29-29 is deuce, so
-the next point wins 30-29, and no score above 30 is a game at all. That ceiling is derived from
-the rule (`gamePointCap` in
-[`scoring.ts`](../src/lib/tournament/scoring.ts), `game_point_cap` in the database) rather than
-stored, because only the 21-point game has one: a 15- or 11-point tournament has no official
-cap, and `winBy: 1` has no deuce to end.
+A game ends the instant it is won, so a legal score is one the game could actually have
+stopped on, and a match is won by `gamesNeededToWin` such games.
+
+- At `gamesTo` the winner stopped there, which only happens when the loser is at most
+  `gamesTo - winBy` behind: `21-19` and `21-0` are games, `21-20` is not.
+- Past `gamesTo` the two sides are **exactly** `winBy` apart, because the game ended on the
+  point that opened that lead: `22-20` and `29-27` are games, `25-10` and `24-21` are not -
+  at `21-10` and `23-21` the game was already over.
+- The **21-point win-by-2 game also stops at 30**: 29-29 is deuce, so the next point wins
+  30-29, and no score above 30 is a game at all. That ceiling is derived from the rule
+  (`gamePointCap` in [`scoring.ts`](../src/lib/tournament/scoring.ts), `game_point_cap` in the
+  database) rather than stored, because only the 21-point game has one: a 15- or 11-point
+  tournament has no official cap, and `winBy: 1` has no deuce to end.
+- A rule with `winBy: 1` never leaves `gamesTo` at all - the first point at the target wins -
+  so `22-21` is not a game. An uncapped rule has no second ceiling: what stops an absurd
+  score there is the exact margin, and what stops one being typed is the two-digit field
+  (`parseScoreInput` in [`score-entry.ts`](../src/lib/tournament/score-entry.ts)).
 
 The rule is checked twice, by the same predicate on each side of the wire -
 `isLegalGameScoreFor` in [`format.ts`](../src/lib/tournament/format.ts) and
 `game_score_is_legal` in the database - so a score the desk accepts is a score the RPC accepts.
-Before the cap existed the predicate was written out three times and only knew a margin, which
-is how `31-29` and `211-19` were stored as results that cannot happen.
+One shared case table ([`game-rule-cases.test-helpers.ts`](../src/lib/tournament/game-rule-cases.test-helpers.ts))
+is answered by both, and the migration that wrote the rule checks itself against it.
+Before the predicate was shared it was written out three times and knew only a margin floor,
+which is how `31-29`, `211-19` and `25-10` were stored as results that cannot happen.
 
 Rest gaps are checked for **every individual player**, not per team. For doubles the
 scheduler checks all four players independently.

@@ -75,6 +75,29 @@ describe("readScoreEntry", () => {
     expect(entry.problem).toBe("Game 1 is past the cap. A game stops at 30.");
   });
 
+  /**
+   * 25-10 clears the target and the margin, which is all the rule used to ask. It is still not
+   * a score a game can stop on: the game ended at 21-10. The refusal has to say that, because
+   * "not a winning score" against 25-10 reads like the target, not the margin.
+   */
+  it("refuses a score past the target that is not the winning margin", () => {
+    const entry = readScoreEntry(rows(["25", "10"], ["", ""]), BEST_OF_THREE);
+    expect(entry.winner).toBeNull();
+    expect(entry.problem).toBe(
+      "Game 1 cannot end 25-10. Past 21, a game ends on the point that opens a lead of 2.",
+    );
+    expect(entry.problemRow).toBe(0);
+  });
+
+  it("says a game won by one point ends at the target, not after it", () => {
+    const onePoint: ScoringRule = { gamesTo: 21, winBy: 1, bestOf: 1 };
+    expect(readScoreEntry(rows(["21", "20"]), onePoint).problem).toBeNull();
+    const entry = readScoreEntry(rows(["22", "21"]), onePoint);
+    expect(entry.problem).toBe(
+      "Game 1 cannot end 22-21. A game to 21 is won by the first side to reach 21.",
+    );
+  });
+
   it("leaves a 15-point game uncapped, because only the 21 game has a ceiling", () => {
     const to15: ScoringRule = { gamesTo: 15, winBy: 2, bestOf: 1 };
     // 16-14 is a deuce that runs on; nothing stops it at 15.

@@ -108,11 +108,22 @@ export function parseGames(value: unknown): GameScore[] {
 }
 
 /**
- * A game is legal when the winner reached at least `gamesTo` and won by at least `winBy`.
+ * A game is legal when it is a score a game can actually stop on.
  *
- * Where the rule has a cap (`gamePointCap`), the cap is the second way to win: 29-29 is
- * deuce, so 30-29 takes a 21-point game. It also bounds the score, so `31-29` and `211-19`
- * are refused rather than stored as results that cannot happen.
+ * A game ends the instant it is won, so the margin is exact rather than a floor:
+ *
+ *   - at `gamesTo`, the loser is at most `gamesTo - winBy` behind - the winner reached the
+ *     target before the loser could get to deuce;
+ *   - past `gamesTo`, the two sides are exactly `winBy` apart - the game stopped on the point
+ *     that opened that lead, so `22-20` and `29-27` are games and `25-10` is not.
+ *
+ * `winBy: 1` never reaches the second branch: the first point at the target wins, so a score
+ * past it describes a game that was already over.
+ *
+ * Where the rule has a cap (`gamePointCap`), the cap is the third way to win - 29-29 is deuce,
+ * so 30-29 takes a 21-point game - and it bounds the top, so `31-29` and `211-19` are refused.
+ * A rule without a cap has no ceiling of its own; the exact-margin rule is what stops an
+ * absurd score, and the two-digit field is what stops one being typed (`parseScoreInput`).
  *
  * This mirrors `game_score_is_legal` in the database, so the client and the server always
  * agree about a valid result.
@@ -124,7 +135,11 @@ export function isLegalGameScoreFor(a: number, b: number, rule: ScoringRule): bo
   const low = Math.min(a, b);
   const cap = gamePointCap(rule);
   if (cap !== null && high > cap) return false;
-  if (high >= rule.gamesTo && high - low >= rule.winBy) return true;
+  // The winner stopped at the target, which only happens when the loser never reached deuce.
+  if (high === rule.gamesTo && low <= rule.gamesTo - rule.winBy) return true;
+  // Past the target, the game ended on the exact point that opened the margin.
+  if (rule.winBy > 1 && high > rule.gamesTo && high - low === rule.winBy) return true;
+  // At the cap the point that reaches it takes the game, whatever the margin.
   return cap !== null && high === cap && low === cap - 1;
 }
 

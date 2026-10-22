@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { supabase } from "@/integrations/supabase/client";
 import { createPlayer, createTeam } from "@/lib/tournament/actions";
 import { fetchCourts, fetchPlacementEntrants } from "@/lib/tournament/data";
+import { GAME_RULE_CASE_GROUPS } from "@/lib/tournament/game-rule-cases.test-helpers";
 import { reportPlacementMatch, syncPlacementEntrants } from "@/lib/tournament/placement-actions";
 
 import {
@@ -212,5 +213,47 @@ describe("the 30-point cap, at the RPC", () => {
       p_games: [{ a: 211, b: 19 }],
     });
     expect(error?.message).toBe("A game stops at 30 points");
+  }, 120_000);
+});
+
+/**
+ * The shared case table, asked of Postgres.
+ *
+ * `tournament.test.ts` answers the same table with `isLegalGameScoreFor`; this is the other
+ * half, through the RPC the desk actually calls. One fixture plays every rule in turn because
+ * `report_placement_result` reads the rule from the tournament row at call time, which is also
+ * how a tournament's rule is changed for real.
+ *
+ * A legal case reports (and a later legal case corrects it); an illegal one is refused before
+ * anything is written, so it leaves the fixture as it found it. Only "was it refused" is
+ * asserted - the message differs per rule, and pinning all five would make this a test of the
+ * wording rather than of the rule.
+ */
+describe("the exact margin, at the RPC", () => {
+  it("agrees with the client's case table under every rule", async () => {
+    const seeded = await seed("table");
+    const match = await matchOf(seeded.tournamentId, "table");
+
+    for (const group of GAME_RULE_CASE_GROUPS) {
+      const { error: ruleError } = await serviceClient()
+        .from("tournaments")
+        .update({
+          placement_games_to: group.rule.gamesTo,
+          placement_win_by: group.rule.winBy,
+          placement_best_of: group.rule.bestOf,
+        })
+        .eq("id", seeded.tournamentId);
+      if (ruleError) throw new Error(`setting the rule failed: ${ruleError.message}`);
+
+      for (const testCase of group.cases) {
+        const { error } = await supabase.rpc("report_placement_result", {
+          p_match_id: match,
+          p_games: [{ a: testCase.a, b: testCase.b }],
+        });
+        const label = `${group.label}: ${testCase.a}-${testCase.b}`;
+        if (testCase.legal) expect(error, label).toBeNull();
+        else expect(error, label).not.toBeNull();
+      }
+    }
   }, 120_000);
 });
