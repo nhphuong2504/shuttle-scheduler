@@ -120,6 +120,11 @@ Two shells, and which one a page draws is decided by whether it is about one tou
   does not move once the session settles. `/me/tournaments` and `/tournaments/new` stay
   reachable from the pages that link them.
 
+For a caller who may edit, `WorkspaceShell` also draws the **Next step** card
+([`next-step.ts`](../src/lib/tournament/next-step.ts)) above the organiser pages - Registrations,
+Entries, Placement, Schedule, Setup, Access - and never on the Desk, Scores, Knockout or the
+participant page. It names the one step the order of work says is next, and points; it moves nothing.
+
 The workspace nav is split by the edit right, not by the session. A caller who may edit gets
 the operational six (`desk`, `entries`, `placement`, `knockout`, `schedule`, `scores`) plus the
 three editor entries (`registrations`, `settings`, `access`). The editor entries are gated on
@@ -180,7 +185,8 @@ what a tournament is.
 that does not exist yet. Nothing is written until the last step: the answers live in the page
 and in the browser's session storage, so a reload keeps them, and "Create tournament" makes the
 tournament whole in one call, points the caller's working pointer at it, clears the stored
-answers and goes to `/tournaments/:id`. There is no draft row, so there is nothing for a
+answers and goes to `…/registrations` (registration on) or `…/entries`, the
+roster work that comes first, rather than to the participant page it just made. There is no draft row, so there is nothing for a
 refresh to resume and no half-made tournament for anyone else to find. There is one wizard with
 two hosts, and neither host owns the steps.
 
