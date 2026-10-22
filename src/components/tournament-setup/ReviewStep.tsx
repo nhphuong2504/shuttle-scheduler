@@ -58,7 +58,6 @@ export function ReviewStep({
   onDiscard,
   onGoToStep,
   extra,
-  wrapUp,
 }: {
   mode: "create" | "existing";
   form: DraftForm;
@@ -73,8 +72,6 @@ export function ReviewStep({
   onGoToStep?: ((step: SetupStep) => void) | undefined;
   /** Settings outside the configuration (the start policy), placed above the Discard link. */
   extra?: ReactNode;
-  /** What a completed tournament leaves behind: results, a link, a file. */
-  wrapUp?: ReactNode;
 }) {
   const activeEvents = form.events.filter((event) => event.active !== false);
   const blockers = checks.filter((check) => !check.ok && check.blocking !== false);
@@ -305,8 +302,6 @@ export function ReviewStep({
           </p>
         )}
       </SetupSection>
-
-      {status === "completed" ? wrapUp : null}
 
       {extra}
 

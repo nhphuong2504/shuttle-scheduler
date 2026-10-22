@@ -291,6 +291,7 @@ function EntriesPage() {
       {/* Before the tournament starts, an editor can see whether these entries fit the hall. */}
       {canEdit && tournament?.status === "upcoming" && fieldSizes.length > 0 ? (
         <CapacityEstimate
+          collapsible
           className="mb-4"
           eventCount={fieldSizes.length}
           entrantsPerEvent={fieldSizes}

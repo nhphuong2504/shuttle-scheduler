@@ -885,18 +885,17 @@ test.describe("the registration queue", () => {
     await expect(page.getByText(/Mixed Doubles with Ada/)).toBeVisible();
   });
 
-  test("draws the organiser's next step on organiser pages, and keeps it off the Desk", async ({
+  test("keeps the organiser's next step off a running tournament and off the Desk", async ({
     page,
   }) => {
+    // The fixture tournament is running: its next step is "keep running it", which the Desk
+    // already is, so no card is drawn above the organiser pages. The other rungs are pinned
+    // in next-step.test.ts and, with an upcoming tournament, in public-surfaces.spec.ts.
     await page.goto(routes.registrations, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
-    const card = page.getByTestId("next-step");
-    await expect(card).toBeVisible();
-    // The fixture tournament is running, and requests can no longer be filed against a
-    // running tournament; the "requests first" rung is pinned in next-step.test.ts.
-    await expect(card).toContainText("The tournament is running");
+    await expect(page.getByRole("heading", { name: "Awaiting a decision" })).toBeVisible();
+    await expect(page.getByTestId("next-step")).toHaveCount(0);
 
-    // The Desk is the moderator's surface: no tournament-wide guidance there.
     await page.goto(routes.desk, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await expect(page.getByTestId("next-step")).toHaveCount(0);
