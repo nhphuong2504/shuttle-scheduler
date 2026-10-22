@@ -18,6 +18,7 @@ import {
   gamePointCap,
 } from "./scoring";
 import { gamesWinner, gamesWinnerFor, isLegalGameScore, isLegalGameScoreFor } from "./format";
+import { GAME_RULE_CASE_GROUPS } from "./game-rule-cases.test-helpers";
 import { circleMethod, planPoolSizes, poolMatchCount } from "./pools";
 import { applyDayPlan, planDay, type DayPlan } from "./actions";
 import type { Court, PoolMatch, Team, Tournament, TournamentDay } from "./data";
@@ -799,4 +800,25 @@ describe("stage placement across the configured day count", () => {
   it("runs both stages on a single-day tournament", () => {
     expect(stagesForDay(1, 1)).toEqual(["group", "knockout"]);
   });
+});
+
+/**
+ * The same table is answered by Postgres in `integration/score-cap.test.ts`.
+ *
+ * The rule exists twice and the two copies must not disagree - a score the dialog accepts and
+ * the RPC refuses is a dead Save button, and the reverse is a result that never happened. One
+ * table means a new case is a change to what *both* sides are required to do, rather than two
+ * suites that can drift apart.
+ */
+describe("the shared game-rule case table", () => {
+  for (const group of GAME_RULE_CASE_GROUPS) {
+    it(`agrees under ${group.label}`, () => {
+      for (const testCase of group.cases) {
+        expect(
+          isLegalGameScoreFor(testCase.a, testCase.b, group.rule),
+          `${group.label}: ${testCase.a}-${testCase.b}`,
+        ).toBe(testCase.legal);
+      }
+    });
+  }
 });

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, ClipboardEvent } from "react";
 import { toast } from "sonner";
 
 import { Page, Panel } from "@/components/app-shell";
@@ -83,7 +84,7 @@ import {
   timeLabel,
   type GameScore,
 } from "@/lib/tournament/format";
-import { parseScoreInput, readScoreEntry } from "@/lib/tournament/score-entry";
+import { parseScoreInput, readScoreEntry, scorePasteRefusal } from "@/lib/tournament/score-entry";
 import { clockFromMinutesAgo, minutesAgoFromClock } from "@/lib/tournament/finish-time";
 import {
   DEFAULT_KNOCKOUT_RULE,
@@ -1073,6 +1074,14 @@ export function MatchOperationsDialog({
   const [values, setValues] = useState(() =>
     scoreFormValues(rows, match.status, match.initialGames),
   );
+  /**
+   * Why the last paste into a score box was refused, in words.
+   *
+   * Kept apart from `entry.problem` because it is about the edit, not the result: a refused
+   * paste leaves a value the rule may well accept, and the desk still needs to know why the
+   * number it copied did not appear.
+   */
+  const [inputNotice, setInputNotice] = useState<string | null>(null);
   const [working, setBusy] = useState(false);
   /** Every write is off while one is in flight, and while live updates are paused. */
   const busy = working || pausedSince != null;
@@ -1204,6 +1213,41 @@ export function MatchOperationsDialog({
   };
   const set = (row: number, col: number, v: string) =>
     setValues((prev) => prev.map((r, i) => (i === row ? r.map((c, j) => (j === col ? v : c)) : r)));
+
+  /**
+   * A score box's edit handlers, identical for both sides of every game.
+   *
+   * Typing is filtered a character at a time, so a stray keypress disappears and the digits
+   * that were meant are still there - what a typo deserves. A paste is a whole value at
+   * once, and filtering *that* would rewrite it: a copied `21-19` would become `21`, a score
+   * nobody copied. So a paste the box cannot hold is refused whole, the box keeps what it
+   * had, and the notice says why.
+   *
+   * The paste is judged against the box as it stands - its digits and the selection the paste
+   * would replace - not against the clipboard alone: `21` is a score and still does not fit a
+   * box that already reads `1`, where letting it through would leave `maxLength` to produce
+   * `12`. `maxLength` is the same ceiling for the keyboard, and for the paste that passes.
+   */
+  const scoreBoxProps = (row: number, side: 0 | 1) => ({
+    maxLength: 2,
+    onChange: (e: ChangeEvent<HTMLInputElement>) => {
+      setInputNotice(null);
+      set(row, side, parseScoreInput(e.target.value));
+    },
+    onPaste: (e: ClipboardEvent<HTMLInputElement>) => {
+      const refusal = scorePasteRefusal(e.clipboardData.getData("text"), {
+        value: e.currentTarget.value,
+        selectionStart: e.currentTarget.selectionStart ?? 0,
+        selectionEnd: e.currentTarget.selectionEnd ?? 0,
+      });
+      if (!refusal) {
+        setInputNotice(null);
+        return;
+      }
+      e.preventDefault();
+      setInputNotice(refusal);
+    },
+  });
 
   /**
    * What the box would send, and why it cannot be sent.
@@ -1494,9 +1538,9 @@ export function MatchOperationsDialog({
                   autoFocus={i === 0 && canEditScores}
                   value={values[i]?.[0] ?? ""}
                   disabled={!canEditScores}
-                  onChange={(e) => set(i, 0, parseScoreInput(e.target.value))}
                   aria-label={`Game ${i + 1} ${nameA}`}
                   aria-invalid={touched && entry.problemRow === i}
+                  {...scoreBoxProps(i, 0)}
                 />
                 <span className="w-6 text-center font-score text-2xl text-muted-foreground">:</span>
                 <Input
@@ -1505,9 +1549,9 @@ export function MatchOperationsDialog({
                   placeholder="—"
                   value={values[i]?.[1] ?? ""}
                   disabled={!canEditScores}
-                  onChange={(e) => set(i, 1, parseScoreInput(e.target.value))}
                   aria-label={`Game ${i + 1} ${nameB}`}
                   aria-invalid={touched && entry.problemRow === i}
+                  {...scoreBoxProps(i, 1)}
                 />
               </div>
             ))}
@@ -1530,13 +1574,17 @@ export function MatchOperationsDialog({
           Why the result cannot be saved, in words. A disabled button alone reads as a broken
           app at a live desk, and a score the desk believes it entered is then entered twice.
           `role="status"` announces it without stealing focus from the box being typed in.
+
+          One region, two reasons: a refused paste is about the edit and takes precedence,
+          because it is the most recent thing that happened and the value on screen is still
+          the one the moderator had before it.
         */}
-        {touched && entry.problem ? (
+        {inputNotice || (touched && entry.problem) ? (
           <p
             role="status"
             className="rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-sm font-medium text-warn-foreground"
           >
-            {entry.problem}
+            {inputNotice ?? entry.problem}
           </p>
         ) : null}
         {/*

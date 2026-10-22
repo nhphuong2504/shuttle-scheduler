@@ -2596,6 +2596,55 @@ describe("game point cap migration", () => {
 });
 
 /**
+ * A game ends on the point it is won, so the margin is exact.
+ *
+ * `integration/score-cap.test.ts` asks Postgres the shared case table; these pin the *shape*
+ * of the fix, because the failure this guards against is a later migration restating the
+ * comparison inline and the copies drifting apart again.
+ */
+describe("exact game margin migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261022020000_exact_game_margin.sql"), "utf8");
+
+  it("redefines the shared predicate in place rather than adding a second copy", () => {
+    expect(sql).toMatch(
+      /create or replace function public\.game_score_is_legal\(\s*p_a int,\s*p_b int,\s*p_games_to int,\s*p_win_by int\s*\)/i,
+    );
+    // A DROP would take the grants with it, and a second definition would be a second answer.
+    expect(sql).not.toMatch(/drop function/i);
+  });
+
+  it("requires the exact margin past the target", () => {
+    // Past `games_to` the game ended on the point that opened the margin, so it is equal to
+    // it - not "at least" it, which is what accepted 25-10.
+    expect(sql).toMatch(/GREATEST\(p_a, p_b\) - LEAST\(p_a, p_b\) = p_win_by/);
+    expect(sql).not.toMatch(/GREATEST\(p_a, p_b\) - LEAST\(p_a, p_b\) >=/);
+    // At the target the loser must have been too far behind to reach deuce.
+    expect(sql).toMatch(/LEAST\(p_a, p_b\) <= p_games_to - p_win_by/);
+  });
+
+  it("never lets a one-point game run past the target", () => {
+    // Without this guard `high - low = 1` accepts 22-21, a game that was already over at 21-20.
+    expect(sql).toMatch(/WHEN p_win_by > 1\s+AND GREATEST\(p_a, p_b\) > p_games_to/);
+  });
+
+  it("leaves uncapped rules without a ceiling of their own", () => {
+    // The cap is still derived, unchanged: only the 21-point win-by-2 game stops at 30.
+    expect(sql).not.toMatch(/create or replace function public\.game_point_cap/i);
+    expect(sql).not.toMatch(/add column/i);
+    // The cap is still the third way to win, and still the top bound.
+    expect(sql).toMatch(/LEAST\(p_a, p_b\) = cap\.points - 1/);
+  });
+
+  it("checks its own arithmetic when it is applied", () => {
+    // The rule cannot be read from TypeScript; a wrong CASE would otherwise ship unseen.
+    expect(sql).toMatch(/DO \$verify\$[\s\S]*game_score_is_legal\(case_row\.a, case_row\.b, 21, 2\)/);
+    expect(sql).toMatch(/\(25, 10, false\)/);
+    expect(sql).toMatch(/game_score_is_legal\(22, 21, 21, 1\)/);
+  });
+});
+
+/**
  * The correction history: a reported result that is replaced keeps what it replaced.
  *
  * `integration/result-history.test.ts` proves the trigger fires; these pin the shape, because
