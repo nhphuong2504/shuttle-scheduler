@@ -34,6 +34,8 @@ import {
   assertMatchUnchanged,
   decideTournamentRegistration,
   removeTournamentDay,
+  reportDrawMatch,
+  reportPoolMatch,
   setTournamentCourts,
   submitTournamentRegistration,
   updateTournamentMatchSettings,
@@ -342,5 +344,82 @@ describe("assertMatchUnchanged", () => {
     await expect(assertMatchUnchanged("pool_matches", "m1", "reported")).rejects.toThrow(
       /no longer exists/,
     );
+  });
+});
+
+/**
+ * The legacy paths read the rule the tournament configured, not a pinned constant.
+ *
+ * `reportDrawMatch` used to validate with `gamesWinner`, which is best of three to 21 whatever
+ * the tournament says - so a knockout configured best of five to 15 was drawn correctly by the
+ * dialog and refused by the action beside it. The server has read the tournament row since
+ * `20260916000000`; the client was the last place still pinned.
+ */
+describe("reportDrawMatch", () => {
+  const bestOfFiveTo15 = { gamesTo: 15, winBy: 2, bestOf: 5 };
+
+  it("accepts a result the tournament's own rule wins", async () => {
+    // 15-13, 15-13, 16-14: three games take a best of five, and each is a legal 15-point game.
+    await expect(
+      reportDrawMatch(
+        "m1",
+        [
+          { a: 15, b: 13 },
+          { a: 15, b: 13 },
+          { a: 16, b: 14 },
+        ],
+        bestOfFiveTo15,
+      ),
+    ).resolves.toBeDefined();
+    expect(mocks.rpc).toHaveBeenCalledWith("report_draw_result", {
+      p_match_id: "m1",
+      p_games: [
+        { a: 15, b: 13 },
+        { a: 15, b: 13 },
+        { a: 16, b: 14 },
+      ],
+    });
+  });
+
+  it("refuses the same result when the rule says best of three", async () => {
+    // Two wins take a best of three, so the third game is a game after the match was decided.
+    await expect(
+      reportDrawMatch(
+        "m2",
+        [
+          { a: 15, b: 13 },
+          { a: 15, b: 13 },
+          { a: 16, b: 14 },
+        ],
+        { gamesTo: 15, winBy: 2, bestOf: 3 },
+      ),
+    ).rejects.toThrow(/a side needs 2 games/);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("names the rule it refused under, rather than a rule the host never chose", async () => {
+    await expect(
+      reportDrawMatch("m3", [{ a: 21, b: 19 }], { gamesTo: 15, winBy: 2, bestOf: 5 }),
+    ).rejects.toThrow(/Best of 5 to 15, win by 2/);
+  });
+});
+
+describe("reportPoolMatch", () => {
+  it("says the bound the pool RPC actually enforces", async () => {
+    // The legacy pool engine was never made configurable, so the message is not the
+    // tournament's rule restated: it is the table's own 21-point, win-by-2 game.
+    await expect(reportPoolMatch("m1", 21, 20)).rejects.toThrow(
+      "Group games are race to 21, win by 2.",
+    );
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("sends a legal group score", async () => {
+    await expect(reportPoolMatch("m2", 21, 19)).resolves.toBeDefined();
+    expect(mocks.rpc).toHaveBeenCalledWith("report_pool_result", {
+      p_match_id: "m2",
+      p_score_a: 21,
+      p_score_b: 19,
+    });
   });
 });

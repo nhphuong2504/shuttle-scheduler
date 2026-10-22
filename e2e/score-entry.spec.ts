@@ -120,6 +120,38 @@ test.describe("Entering a result", () => {
     await expect(dialog).toHaveCount(0);
   });
 
+  /**
+   * A double tap on a large button is ordinary at a live desk, and two saves is two
+   * corrections of the same result and two reflows of the day.
+   *
+   * `busy` alone cannot stop it: it is React state, so both clicks in one task read the value
+   * from before the first. Firing both clicks synchronously is the only way to reproduce that
+   * window deterministically - the guard that closes it has to be a ref.
+   */
+  test("a double click on Report result saves once", async ({ page }) => {
+    const dialog = await openLiveMatch(page);
+    await fillGame(dialog, 1, "21", "19");
+    await fillGame(dialog, 2, "21", "18");
+
+    let saves = 0;
+    page.on("request", (request) => {
+      if (request.url().includes("/rpc/report_tier_draw_result")) saves += 1;
+    });
+
+    await dialog
+      .getByRole("button", { name: "Report result", exact: true })
+      .evaluate((el) => {
+        (el as HTMLButtonElement).click();
+        (el as HTMLButtonElement).click();
+      });
+
+    await expect(dialog).toHaveCount(0);
+    // Waiting for the request the guard prevents: it would be issued within the first save's
+    // round trip, so this is long enough to see it if it happened.
+    await page.waitForTimeout(400);
+    expect(saves).toBe(1);
+  });
+
   test("a knockout result can say when it finished", async ({ page }) => {
     const dialog = await openLiveMatch(page);
     await fillGame(dialog, 1, "21", "19");

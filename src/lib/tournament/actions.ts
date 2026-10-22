@@ -12,13 +12,18 @@ import type {
   TournamentDay,
 } from "./data";
 import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
-import { gamesWinner, isLegalGameScore, type GameScore } from "./format";
+import { gamesWinnerFor, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
 import {
   registrationEntriesPayload,
   type RegistrationEntryInput,
 } from "./registration";
-import { isOddBestOf } from "./scoring";
+import {
+  gamesNeededToWin,
+  isOddBestOf,
+  scoringRuleLabel,
+  type ScoringRule,
+} from "./scoring";
 import type { SolverDiagnostics } from "@/lib/scheduling";
 import { composeDayPlan, type ComposedAnchor, type ComposedMatch } from "./scheduling/composition";
 import type { DayOneSchedulerOptions } from "./scheduling/policy";
@@ -242,9 +247,18 @@ export async function assertMatchUnchanged(
   }
 }
 
+/**
+ * A legacy group result.
+ *
+ * The rule stays the 21-point win-by-2 game because that is what `report_pool_result`
+ * enforces in the database - the legacy pool engine was never made configurable, and a
+ * tournament that plays its group matches to 15 does not change that table. What the desk
+ * shows for a pool match is the same rule (`ruleFor("pool")` returns it), so this check is
+ * the server's own bound restated, and the message now says it the way the RPC does.
+ */
 export async function reportPoolMatch(matchId: string, scoreA: number, scoreB: number) {
   if (!isLegalGameScore(scoreA, scoreB))
-    throw new Error("A group match needs a race-to-21 winning score.");
+    throw new Error("Group games are race to 21, win by 2.");
   return withScheduleImpact(() =>
     rpc("report_pool_result", { p_match_id: matchId, p_score_a: scoreA, p_score_b: scoreB }),
   );
@@ -402,9 +416,24 @@ export async function generateDrawsForCategory(
   });
 }
 
-export async function reportDrawMatch(matchId: string, games: GameScore[]) {
-  const side = gamesWinner(games);
-  if (!side) throw new Error("Enter a valid best-of-three result (exactly two game wins).");
+/**
+ * A legacy knockout result, under the rule the tournament actually configured.
+ *
+ * This used to read the games with `gamesWinner` - the pinned best-of-three to 21 - while the
+ * dialog beside it drew its rows from the tournament's knockout rule and its refusal from
+ * that same rule. A tournament playing best of five to 15 therefore had a dialog that
+ * accepted a result and an action that refused it, and the refusal named a rule the operator
+ * had never chosen. The server has read the tournament row since `20260916000000`, so the
+ * client was the only side still pinned to the old constant.
+ */
+export async function reportDrawMatch(matchId: string, games: GameScore[], rule: ScoringRule) {
+  const side = gamesWinnerFor(games, rule);
+  if (!side) {
+    const needed = gamesNeededToWin(rule);
+    throw new Error(
+      `Enter a winning result for ${scoringRuleLabel(rule)}: a side needs ${needed} game${needed === 1 ? "" : "s"}.`,
+    );
+  }
   return withScheduleImpact(() =>
     rpc("report_draw_result", { p_match_id: matchId, p_games: games }),
   );
