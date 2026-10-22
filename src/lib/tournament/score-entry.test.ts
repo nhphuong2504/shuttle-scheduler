@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { parseScoreInput, readScoreEntry, type ScoreRow } from "./score-entry";
+import {
+  parseScoreInput,
+  readScoreEntry,
+  SCORE_BOX_FULL_NOTICE,
+  SCORE_INPUT_NOTICE,
+  scorePasteRefusal,
+  type ScoreRow,
+} from "./score-entry";
 import { LEGACY_GAME_RULE, type ScoringRule } from "./scoring";
 
 const BEST_OF_THREE: ScoringRule = { gamesTo: 21, winBy: 2, bestOf: 3 };
@@ -18,7 +25,69 @@ describe("parseScoreInput", () => {
     // A lone zero is a real score; only a leading zero before other digits is noise.
     expect(parseScoreInput("0")).toBe("0");
     expect(parseScoreInput("007")).toBe("7");
-    expect(parseScoreInput("21-19")).toBe("2119");
+  });
+
+  it("holds at most two digits, because no score needs a third", () => {
+    expect(parseScoreInput("21")).toBe("21");
+    expect(parseScoreInput("30")).toBe("30");
+    expect(parseScoreInput("2119")).toBe("21");
+    expect(parseScoreInput("123")).toBe("12");
+    // The ceiling is on what the digits mean, so leading zeros do not eat it.
+    expect(parseScoreInput("0021")).toBe("21");
+  });
+});
+
+describe("scorePasteRefusal", () => {
+  /** A box with a caret at the end, which is where typing leaves it. */
+  const box = (value: string, selectionStart = value.length, selectionEnd = selectionStart) => ({
+    value,
+    selectionStart,
+    selectionEnd,
+  });
+
+  it("takes one score that fits an empty box", () => {
+    expect(scorePasteRefusal("21", box(""))).toBeNull();
+    expect(scorePasteRefusal("0", box(""))).toBeNull();
+    expect(scorePasteRefusal(" 19 ", box(""))).toBeNull();
+    expect(scorePasteRefusal("1", box(""))).toBeNull();
+  });
+
+  it("refuses a value filtering would rewrite, rather than rewriting it", () => {
+    // Filtered digit by digit, "21-19" becomes "2119" and then "21" - a score nobody copied.
+    expect(scorePasteRefusal("21-19", box(""))).toBe(SCORE_INPUT_NOTICE);
+    expect(scorePasteRefusal("21.5", box(""))).toBe(SCORE_INPUT_NOTICE);
+    expect(scorePasteRefusal("0x15", box(""))).toBe(SCORE_INPUT_NOTICE);
+    expect(scorePasteRefusal("21 19", box(""))).toBe(SCORE_INPUT_NOTICE);
+    expect(scorePasteRefusal("", box(""))).toBe(SCORE_INPUT_NOTICE);
+    expect(scorePasteRefusal("   ", box(""))).toBe(SCORE_INPUT_NOTICE);
+    // A whole game pasted into one box is refused, not halved; "007" is three digits too.
+    expect(scorePasteRefusal("2119", box(""))).toBe(SCORE_BOX_FULL_NOTICE);
+    expect(scorePasteRefusal("007", box(""))).toBe(SCORE_BOX_FULL_NOTICE);
+  });
+
+  /**
+   * The clipboard is only half the question: the box already holds digits.
+   *
+   * This is the case that has to be asked about the box rather than the pasted text alone.
+   * `21` is a perfectly good score, and it still does not fit a box that reads `1` - letting
+   * it through would leave `maxLength` to produce `12`, which is a third score nobody pasted.
+   */
+  it("judges the paste against the digits already in the box", () => {
+    expect(scorePasteRefusal("21", box("1"))).toBe(SCORE_BOX_FULL_NOTICE);
+    expect(scorePasteRefusal("2", box("1"))).toBeNull();
+    // Full box, no room, whatever is on the clipboard.
+    expect(scorePasteRefusal("1", box("21"))).toBe(SCORE_BOX_FULL_NOTICE);
+  });
+
+  it("makes room for the digit the paste replaces", () => {
+    // Selecting the digit is how a moderator asks to overwrite it.
+    expect(scorePasteRefusal("21", box("1", 0, 1))).toBeNull();
+    // Selecting part of the box leaves the rest behind: "2" kept, "1" pasted, two digits.
+    expect(scorePasteRefusal("1", box("21", 1, 2))).toBeNull();
+    // ...but not if what stays plus what arrives is three.
+    expect(scorePasteRefusal("19", box("21", 1, 2))).toBe(SCORE_BOX_FULL_NOTICE);
+    // A selection reported backwards is still a selection.
+    expect(scorePasteRefusal("21", box("1", 1, 0))).toBeNull();
   });
 });
 

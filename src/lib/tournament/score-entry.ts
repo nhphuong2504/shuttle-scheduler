@@ -41,16 +41,73 @@ export interface ScoreEntry {
 }
 
 /**
- * Keeps digits and drops everything else.
+ * Keeps digits and drops everything else, and holds at most two of them.
  *
  * `inputMode="numeric"` only shapes a phone's soft keyboard, so a hardware keyboard or a
  * paste could put `0x15`, `1e1` or a stray space in the box - and `Number` reads those as
  * 21, 10 and 0. Digits are the only thing a badminton score is made of, so the box holds
  * nothing else. A leading zero is dropped so the digits read as the number they mean, but a
  * lone `0` is kept: a game can be lost to nothing.
+ *
+ * The two-digit ceiling is the honest maximum, not a rule: a 21-point deuce can reach 30, a
+ * 15-point one has no cap at all, and a score typed past two digits is a keystroke or a
+ * whole-game paste rather than a number. The rule itself is still `isLegalGameScoreFor`; the
+ * field only stops a value the rule would have to refuse anyway.
  */
 export function parseScoreInput(raw: string): string {
-  return raw.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "");
+  return raw
+    .replace(/[^0-9]/g, "")
+    .replace(/^0+(?=\d)/, "")
+    .slice(0, 2);
+}
+
+/** What the box says when a paste is not a score at all. */
+export const SCORE_INPUT_NOTICE = "Digits only, one score per box.";
+
+/** What the box says when the paste is a score, but not one this box can hold. */
+export const SCORE_BOX_FULL_NOTICE =
+  "That would make three digits. Clear the box, or select a digit to replace.";
+
+/** What a score box holds, as the input element reports it at the moment of the paste. */
+export interface ScoreBoxState {
+  /** The digits already in the box. */
+  value: string;
+  /** Where the selection starts; equal to `selectionEnd` when the caret is not a selection. */
+  selectionStart: number;
+  selectionEnd: number;
+}
+
+/**
+ * Whether a paste fits this box - the box's current contents included.
+ *
+ * Typing is filtered a character at a time, which is invisible and safe: a stray keypress
+ * vanishes and the digits that were meant are still there. A paste arrives whole, so
+ * filtering it would *rewrite* it - `21-19` would become `2119`, then be cut to `21`: a score
+ * nobody copied. A paste the box cannot hold is refused whole instead, and the box keeps
+ * what it already had.
+ *
+ * The room a paste needs is what the box will hold *after* it, which is why the existing
+ * digits and the selection matter: `21` is a score, and it still does not fit a box that
+ * already reads `1` - accepting it would let `maxLength` produce `12`, a third score nobody
+ * pasted. Selecting the digit it replaces is how a moderator asks to overwrite it.
+ *
+ * Returns the reason the box refused, or null when the paste can go ahead. The wording lives
+ * here rather than at the call site so the two refusals say different things: a letter is a
+ * mistake about digits, a third digit is a mistake about rooms.
+ */
+export function scorePasteRefusal(text: string, box: ScoreBoxState): string | null {
+  const trimmed = text.trim();
+  if (!/^[0-9]+$/.test(trimmed)) return SCORE_INPUT_NOTICE;
+  // A whole game pasted in one box, or a leading zero that is not a score, is too long for a
+  // box - the same answer either way, because the box is what ran out of room.
+  if (trimmed.length > 2) return SCORE_BOX_FULL_NOTICE;
+
+  const length = box.value.length;
+  const start = Math.min(Math.max(box.selectionStart, 0), length);
+  const end = Math.min(Math.max(box.selectionEnd, 0), length);
+  // Only the digits that are not being replaced stay in the box.
+  const kept = Math.max(length - Math.abs(end - start), 0);
+  return kept + trimmed.length <= 2 ? null : SCORE_BOX_FULL_NOTICE;
 }
 
 const NOTHING: ScoreEntry = {
