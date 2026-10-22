@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { countIsoDays } from "@/lib/tournament/iso-date";
+import { withdrawalImpact, withdrawalWarning } from "@/lib/tournament/withdrawal-impact";
 import { createPlayer, createTeam, deleteTeam, setTeamWithdrawn } from "@/lib/tournament/actions";
 import {
   indexBy,
@@ -24,8 +25,11 @@ import {
   useScopedAccess,
   useScopedTournament,
   useCategories,
+  usePlacementEntrants,
+  usePlacementMatches,
   usePlayers,
   useTeams,
+  useTierDrawMatches,
   type Player,
 } from "@/lib/tournament/data";
 import { cn } from "@/lib/utils";
@@ -119,6 +123,9 @@ function EntriesPage() {
   const { data: categories } = useCategories();
   const { data: players } = usePlayers();
   const { data: teams } = useTeams();
+  const { data: entrants } = usePlacementEntrants();
+  const { data: placementMatches } = usePlacementMatches();
+  const { data: tierMatches } = useTierDrawMatches();
   const tournament = useScopedTournament();
   /**
    * The former `canRegister` flag, now the tournament edit right.
@@ -511,8 +518,31 @@ function EntriesPage() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={async () => {
-                                  await setTeamWithdrawn(t.id, !t.withdrawn);
-                                  refresh();
+                                  // Withdrawing flags the entry only. Once matches exist the draw
+                                  // and schedule keep the team until a walkover is recorded, so
+                                  // say what is left behind before the click takes effect.
+                                  if (!t.withdrawn) {
+                                    const warning = withdrawalWarning(
+                                      teamLabel(t, playerMap),
+                                      withdrawalImpact({
+                                        teamId: t.id,
+                                        entrants: entrants ?? [],
+                                        placementMatches: placementMatches ?? [],
+                                        tierMatches: tierMatches ?? [],
+                                      }),
+                                    );
+                                    if (warning && !window.confirm(warning)) return;
+                                  }
+                                  try {
+                                    await setTeamWithdrawn(t.id, !t.withdrawn);
+                                    refresh();
+                                  } catch (error) {
+                                    toast.error(
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Could not update the entry",
+                                    );
+                                  }
                                 }}
                               >
                                 {t.withdrawn ? "Reinstate" : "Withdraw"}

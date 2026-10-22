@@ -978,6 +978,29 @@ test.describe("Entries of an upcoming tournament, for an editor", () => {
   });
 });
 
+test.describe("Entries of a running tournament, for an editor", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "in_progress" } });
+
+  test("says what a withdrawal leaves in the draw before it takes effect", async ({ page }) => {
+    const messages: string[] = [];
+    page.on("dialog", async (dialog) => {
+      messages.push(dialog.message());
+      await dialog.dismiss();
+    });
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const withdraws = page.getByRole("button", { name: "Withdraw" });
+    const count = await withdraws.count();
+    for (let i = 0; i < count && messages.length === 0; i++) {
+      await withdraws.nth(i).click();
+    }
+    expect(messages[0] ?? "").toMatch(/walkover on the Desk/);
+    // Dismissing the warning leaves the entry as it was.
+    await expect(page.getByRole("button", { name: "Reinstate" })).toHaveCount(0);
+  });
+});
+
 test.describe("Setting up a completed tournament", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "completed" } });
 

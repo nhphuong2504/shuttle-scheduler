@@ -32,7 +32,9 @@ operator at all, and no surface should present participation as authority.
    admin may override.
 3. Read [`docs/information-architecture.md`](docs/information-architecture.md) before adding,
    moving or redirecting an address.
-4. Check the repository state and do not discard existing work.
+4. Read [`docs/roster-freeze.md`](docs/roster-freeze.md) before changing how a team withdraws or
+   joins once matches exist.
+5. Check the repository state and do not discard existing work.
 
 ## Design
 
