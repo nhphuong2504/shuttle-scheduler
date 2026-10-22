@@ -169,7 +169,7 @@ npm run build
 Match the review to the risk. **Lightweight** — one reviewer, gates green — for
 docs, copy and UI styling changes.
 
-**Stronger** — a second reviewer, and reasoning written into the PR — for:
+**Stronger** — reasoning written into the PR — for:
 
 | Area | Paths |
 | --- | --- |
