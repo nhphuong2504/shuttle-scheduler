@@ -705,7 +705,7 @@ for (const cell of MATRIX_CELLS) {
     });
 
     test("a court tile takes a visible focus ring", async ({ page }) => {
-      // The focus sweep in `matrix.spec.ts` walks every route in every cell, but it
+      // The focus sweep in `route-sweep.spec.ts` walks every route in every cell, but it
       // walks them empty. A ring can be clipped by the tile that contains it, so the
       // populated tile is the case worth stating separately.
       await installAppMock(page, { preset: "states" });

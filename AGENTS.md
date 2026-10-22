@@ -39,7 +39,7 @@ operator at all, and no surface should present participation as authority.
 The visual design is not settled. There is no design system to conform to and no UI rule
 beyond the audience split above: layout, colour, type, spacing and components are yours to
 choose, and existing styling is not a constraint. Keep the result accessible — the
-accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
+accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `route-sweep.spec.ts`,
 `states.spec.ts`) still run. Current colour, type and size guidance is in
 [`docs/design-principles.md`](docs/design-principles.md); it is guidance, not a gate.
 
