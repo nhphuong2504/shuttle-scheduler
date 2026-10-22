@@ -145,6 +145,22 @@ rejected rather than warned about afterwards. Doubles pairs are a single "team" 
 scheduling, but each half is tracked individually against the cap and the rest-gap
 rule.
 
+### How a game is won
+
+A game is won by reaching `gamesTo` with a margin of `winBy`, and a match by winning
+`gamesNeededToWin` games. The **21-point win-by-2 game also stops at 30**: 29-29 is deuce, so
+the next point wins 30-29, and no score above 30 is a game at all. That ceiling is derived from
+the rule (`gamePointCap` in
+[`scoring.ts`](../src/lib/tournament/scoring.ts), `game_point_cap` in the database) rather than
+stored, because only the 21-point game has one: a 15- or 11-point tournament has no official
+cap, and `winBy: 1` has no deuce to end.
+
+The rule is checked twice, by the same predicate on each side of the wire -
+`isLegalGameScoreFor` in [`format.ts`](../src/lib/tournament/format.ts) and
+`game_score_is_legal` in the database - so a score the desk accepts is a score the RPC accepts.
+Before the cap existed the predicate was written out three times and only knew a margin, which
+is how `31-29` and `211-19` were stored as results that cannot happen.
+
 Rest gaps are checked for **every individual player**, not per team. For doubles the
 scheduler checks all four players independently.
 

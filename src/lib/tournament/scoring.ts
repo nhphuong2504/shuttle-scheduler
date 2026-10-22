@@ -108,6 +108,22 @@ export function isScoringRuleValid(rule: ScoringRule): boolean {
   );
 }
 
+/**
+ * The hard ceiling a game stops at, or null when the rule has none.
+ *
+ * Badminton ends a deuce at 30: from 20-20 a side must lead by two, but the first side to
+ * reach 30 takes the game at 30-29. That is a property of the 21-point game, so it is
+ * derived from the rule rather than stored as a fourth column: a tournament that plays to
+ * 15 or 11 has no official cap, and `winBy: 1` has no deuce to end.
+ *
+ * It is derived on both sides of the wire - `game_point_cap` in the database answers the
+ * same question - because a score the dialog accepts and the RPC refuses is worse than
+ * either rule alone.
+ */
+export function gamePointCap(rule: ScoringRule): number | null {
+  return rule.gamesTo === 21 && rule.winBy === 2 ? 30 : null;
+}
+
 /** The preset whose rule matches, or the custom preset when nothing matches. */
 export function presetForRule(rule: ScoringRule): ScoringPreset {
   return (

@@ -18,7 +18,7 @@
  */
 
 import { gamesWinnerFor, isLegalGameScoreFor, type GameScore } from "./format";
-import { gamesNeededToWin, isScoringRuleValid, type ScoringRule } from "./scoring";
+import { gamePointCap, gamesNeededToWin, isScoringRuleValid, type ScoringRule } from "./scoring";
 
 /** One game row exactly as it is held in the form. Digits only, either side may be blank. */
 export interface ScoreRow {
@@ -62,9 +62,14 @@ const NOTHING: ScoreEntry = {
   winsB: 0,
 };
 
-/** "Games are to 21, win by 2." - the rule restated, for a refusal that names the rule. */
+/**
+ * "Games are to 21, win by 2, capped at 30." - the rule restated, for a refusal that names
+ * the rule. The cap is left out when the rule has none, so a 15-point tournament is not
+ * told about a ceiling it does not play.
+ */
 function ruleShape(rule: ScoringRule): string {
-  return `Games are to ${rule.gamesTo}${rule.winBy > 1 ? `, win by ${rule.winBy}` : ""}.`;
+  const cap = gamePointCap(rule);
+  return `Games are to ${rule.gamesTo}${rule.winBy > 1 ? `, win by ${rule.winBy}` : ""}${cap === null ? "" : `, capped at ${cap}`}.`;
 }
 
 /**
@@ -77,11 +82,14 @@ function explain(games: GameScore[], rule: ScoringRule): { message: string; row:
   for (let i = 0; i < games.length; i++) {
     const game = games[i] as GameScore;
     if (!isLegalGameScoreFor(game.a, game.b, rule)) {
+      const cap = gamePointCap(rule);
       return {
         message:
           game.a === game.b
             ? `Game ${i + 1} is level. A game needs a winner.`
-            : `Game ${i + 1} is not a winning score. ${ruleShape(rule)}`,
+            : cap !== null && Math.max(game.a, game.b) > cap
+              ? `Game ${i + 1} is past the cap. A game stops at ${cap}.`
+              : `Game ${i + 1} is not a winning score. ${ruleShape(rule)}`,
         row: i,
       };
     }

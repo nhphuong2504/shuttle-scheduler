@@ -57,8 +57,29 @@ describe("readScoreEntry", () => {
   it("names the rule when a game is not won by enough", () => {
     const entry = readScoreEntry(rows(["21", "20"], ["", ""]), BEST_OF_THREE);
     expect(entry.winner).toBeNull();
-    expect(entry.problem).toBe("Game 1 is not a winning score. Games are to 21, win by 2.");
+    expect(entry.problem).toBe(
+      "Game 1 is not a winning score. Games are to 21, win by 2, capped at 30.",
+    );
     expect(entry.problemRow).toBe(0);
+  });
+
+  it("accepts 30-29, which is how a 21-point deuce ends", () => {
+    const entry = readScoreEntry(rows(["30", "29"], ["21", "18"]), BEST_OF_THREE);
+    expect(entry.winner).toBe("a");
+    expect(entry.problem).toBeNull();
+  });
+
+  it("refuses a game past the cap", () => {
+    const entry = readScoreEntry(rows(["31", "29"], ["", ""]), BEST_OF_THREE);
+    expect(entry.winner).toBeNull();
+    expect(entry.problem).toBe("Game 1 is past the cap. A game stops at 30.");
+  });
+
+  it("leaves a 15-point game uncapped, because only the 21 game has a ceiling", () => {
+    const to15: ScoringRule = { gamesTo: 15, winBy: 2, bestOf: 1 };
+    // 16-14 is a deuce that runs on; nothing stops it at 15.
+    expect(readScoreEntry(rows(["16", "14"]), to15).problem).toBeNull();
+    expect(readScoreEntry(rows(["40", "38"]), to15).problem).toBeNull();
   });
 
   it("refuses a level game, which has no winner", () => {

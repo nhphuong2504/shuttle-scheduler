@@ -62,11 +62,29 @@ test.describe("Entering a result", () => {
     await expect(report).toBeDisabled();
     // The reason, in words the person at the desk can act on - not just a dead button.
     await expect(dialog.getByRole("status")).toHaveText(
-      "Game 1 is not a winning score. Games are to 21, win by 2.",
+      "Game 1 is not a winning score. Games are to 21, win by 2, capped at 30.",
     );
     // The box that is wrong is the box that is marked.
     await expect(box(dialog, 1, 0)).toHaveAttribute("aria-invalid", "true");
     await expect(box(dialog, 2, 0)).toHaveAttribute("aria-invalid", "false");
+  });
+
+  test("accepts 30-29 and refuses past the cap, which is where a deuce ends", async ({ page }) => {
+    const dialog = await openLiveMatch(page);
+    const report = dialog.getByRole("button", { name: "Report result", exact: true });
+
+    // 29-29 is deuce, so the next point takes the game at the cap.
+    await fillGame(dialog, 1, "30", "29");
+    await fillGame(dialog, 2, "21", "18");
+    await expect(report).toBeEnabled();
+    await expect(dialog.getByRole("status")).toHaveCount(0);
+
+    // One point past it is not a game at all, and the reason names the cap.
+    await box(dialog, 1, 0).fill("31");
+    await expect(report).toBeDisabled();
+    await expect(dialog.getByRole("status")).toHaveText(
+      "Game 1 is past the cap. A game stops at 30.",
+    );
   });
 
   test("refuses a blank game between two entered ones instead of collapsing it", async ({
