@@ -179,6 +179,13 @@ is answered by both, and the migration that wrote the rule checks itself against
 Before the predicate was shared it was written out three times and knew only a margin floor,
 which is how `31-29`, `211-19` and `25-10` were stored as results that cannot happen.
 
+**Results already stored are not rewritten.** A migration that edited a recorded score would
+change standings and every placement that reads the result, with nobody to review it. Instead
+such a row is characterised: the desk still shows the score, and refuses to save it back
+unchanged until it is corrected. Run `npm run db:audit-scores` against a shared database
+*before* applying that rule change; it lists one row per affected match and the games to
+correct, so the handling is a per-match decision rather than a surprise.
+
 Rest gaps are checked for **every individual player**, not per team. For doubles the
 scheduler checks all four players independently.
 

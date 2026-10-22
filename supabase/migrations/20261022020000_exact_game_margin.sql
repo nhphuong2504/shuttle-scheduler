@@ -45,6 +45,23 @@
 -- Mirrored by `isLegalGameScoreFor` in src/lib/tournament/format.ts; the shared case table in
 -- src/lib/tournament/game-rule-cases.test-helpers.ts is answered by both sides, and
 -- `integration/score-cap.test.ts` asks Postgres the same questions.
+--
+-- BEFORE THIS IS APPLIED TO A SHARED DATABASE
+--
+-- Nothing here rewrites a stored result, so a row already saved under the old floor (25-10,
+-- 24-21, a deuce past the cap) stays exactly as it is - and becomes a score the app will not
+-- accept again, which shows up the next time the desk opens that match. Measure them first:
+--
+--   npm run db:audit-scores
+--
+-- It repeats this rule inline, so it answers the same question before this function is
+-- replaced, and lists one row per affected match with the games that need correcting.
+-- Handling them is a per-match decision for the organiser, not something a migration should
+-- decide silently.
+--
+-- The `DO $verify$` blocks below run inside the application, so a wrong CASE fails the
+-- migration rather than shipping a rule nobody could read. That is deliberate: this is a
+-- deploy gate, not a warning.
 
 CREATE OR REPLACE FUNCTION public.game_score_is_legal(
   p_a int,
