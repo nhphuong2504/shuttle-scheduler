@@ -2541,3 +2541,56 @@ describe("place_ready_matches migration", () => {
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.place_ready_matches\(uuid, text, jsonb\) FROM anon, PUBLIC/);
   });
 });
+
+/**
+ * The migration that gives a 21-point game its 30-point ceiling.
+ *
+ * It exists because the predicate was written out three times - in `placement_check_games`,
+ * `report_draw_result` and `report_pool_result` - and one of the three is what let `31-29`
+ * through. The assertions below are about the *shape* of the fix rather than its arithmetic,
+ * which `integration/score-cap.test.ts` proves against a real Postgres: if a later migration
+ * restates the comparison inline, the drift can start again.
+ */
+describe("game point cap migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const FILE = "20261022000000_game_point_cap.sql";
+  const sql = readFileSync(join(dir, FILE), "utf8");
+
+  it("derives the cap from the rule rather than storing a fourth column", () => {
+    expect(sql).toMatch(
+      /create or replace function public\.game_point_cap\(p_games_to int, p_win_by int\)/i,
+    );
+    expect(sql).toMatch(/p_games_to = 21 AND p_win_by = 2 THEN 30/);
+    // A column would have to be threaded through the wizard, the row and every reader.
+    expect(sql).not.toMatch(/add column/i);
+  });
+
+  it("answers 'is this a legal game' in one place", () => {
+    expect(sql).toMatch(
+      /create or replace function public\.game_score_is_legal\(\s*p_a int,\s*p_b int,\s*p_games_to int,\s*p_win_by int\s*\)/i,
+    );
+    // The cap is the second way to win: 30-29 is deuce ended, not a short margin.
+    expect(sql).toMatch(/cap\.points IS NOT NULL/);
+    expect(sql).toMatch(/LEAST\(p_a, p_b\) = cap\.points - 1/);
+  });
+
+  it("routes every writer through the shared predicate", () => {
+    for (const fn of ["placement_check_games", "report_draw_result", "report_pool_result"]) {
+      // Case-insensitive: the definitions are written upper-case, and `indexOf` is not.
+      const start = sql.search(new RegExp(`FUNCTION public\\.${fn}\\b`, "i"));
+      expect(start, `${fn} is defined here`).toBeGreaterThan(-1);
+      const body = sql.slice(start);
+      expect(body, fn).toMatch(/public\.game_score_is_legal\(/);
+      // The old inline comparison is what could drift from the others.
+      expect(body, fn).not.toMatch(/sa - sb >= win_by/);
+      expect(body, fn).not.toMatch(/p_score_a - p_score_b >= 2/);
+    }
+  });
+
+  it("keeps the helpers out of reach of a client role", () => {
+    expect(sql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.game_score_is_legal\(int, int, int, int\) FROM PUBLIC, anon, authenticated/,
+    );
+    expect(sql).toMatch(/has_function_privilege\('anon'/);
+  });
+});
