@@ -2645,6 +2645,81 @@ describe("exact game margin migration", () => {
 });
 
 /**
+ * The report guards: who may write a result, against what state, and from which read.
+ *
+ * `integration/report-guards.test.ts` proves the refusals against a real Postgres; these pin
+ * the *shape*, because a guard that is restated inline in a later migration is how the copies
+ * drift apart again - and because a signature left behind as an overload fails at runtime for
+ * every desk rather than here.
+ */
+describe("report guard migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const FILE = "20261022030000_report_guards.sql";
+  const sql = readFileSync(join(dir, FILE), "utf8");
+
+  it("leaves one definition per report name, not an overload", () => {
+    // A defaulted parameter leaves the shorter signature resolvable, and PostgREST then
+    // refuses to choose between the two for every call the desk makes.
+    expect(sql).toMatch(/DROP FUNCTION IF EXISTS public\.report_placement_result\(uuid, jsonb, integer\)/);
+    expect(sql).toMatch(/DROP FUNCTION IF EXISTS public\.report_tier_draw_result\(uuid, jsonb, integer\)/);
+    expect(sql).toMatch(
+      /to_regprocedure\('public\.report_placement_result\(uuid, jsonb, integer\)'\) IS NOT NULL/,
+    );
+  });
+
+  it("locks the row before comparing the dialog's snapshot to it", () => {
+    for (const fn of ["report_placement_result", "report_tier_draw_result", "report_draw_result"]) {
+      const start = sql.search(new RegExp(`FUNCTION public\\.${fn}\\b`, "i"));
+      expect(start, `${fn} is defined here`).toBeGreaterThan(-1);
+      const body = sql.slice(start, sql.indexOf("$function$;", start));
+      // The row is read under a lock, so the expectation is compared against - and the
+      // result written to - the same version of the row.
+      expect(body, fn).toMatch(/SELECT[\s\S]{0,400}?FOR UPDATE/);
+      expect(body, fn).toMatch(/PERFORM public\.assert_reportable_match\(/);
+    }
+    // Compared against the locked row, not the one the client last saw.
+    expect(sql).toMatch(/p_reported_time IS DISTINCT FROM p_expected_reported_at/);
+    expect(sql).toMatch(/p_status IS DISTINCT FROM p_expected_status/);
+  });
+
+  it("accepts only a result-bearing state", () => {
+    // `reported` stays reportable: a correction is the same state with a different score.
+    for (const state of ["scheduled", "in-progress", "reported"]) {
+      expect(sql, state).toMatch(new RegExp(`p_status IS DISTINCT FROM '${state}'`));
+    }
+    expect(sql).toMatch(/This match is marked "%" and takes no score/);
+  });
+
+  it("refuses a match with a side still to be decided", () => {
+    expect(sql).toMatch(/p_side_a IS NULL OR p_side_b IS NULL/);
+  });
+
+  it("checks the game's type before casting it", () => {
+    // `(game->>'a')::int` on 21.5 is a Postgres type error, which reads as a server fault.
+    expect(sql).toMatch(/jsonb_typeof\(game -> 'a'\) IS DISTINCT FROM 'number'/);
+    expect(sql).toMatch(/Each game needs a whole number of points/);
+  });
+
+  it("gives the legacy draw the shared checker instead of its own copy", () => {
+    const body = sql.slice(sql.search(/FUNCTION public\.report_draw_result/));
+    expect(body).toMatch(/public\.placement_check_games\(/);
+    // Comparing each game to `p_games -> -1` misses a repeated score, so the extra game is
+    // accepted whenever the last two games match. It is gone, not merely guarded.
+    expect(body).not.toMatch(/p_games -> -1/);
+    expect(body).not.toMatch(/wins_a >= needed OR wins_b >= needed/);
+  });
+
+  it("keeps the guard and the reporters off a client role", () => {
+    expect(sql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.assert_reportable_match\(text, uuid, uuid, timestamptz, text, timestamptz\)\s*FROM PUBLIC, anon, authenticated/,
+    );
+    expect(sql).toMatch(
+      /has_function_privilege\('authenticated', 'public\.assert_reportable_match/,
+    );
+  });
+});
+
+/**
  * The correction history: a reported result that is replaced keeps what it replaced.
  *
  * `integration/result-history.test.ts` proves the trigger fires; these pin the shape, because

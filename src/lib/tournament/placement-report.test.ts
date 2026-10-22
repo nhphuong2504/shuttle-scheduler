@@ -67,3 +67,37 @@ describe("the report RPC payload", () => {
     });
   });
 });
+
+/**
+ * The dialog's snapshot, which is what makes the server's staleness check possible.
+ *
+ * The absence of the keys is the contract for a caller that is not checking, so every test
+ * above still pins the old request shape. These pin the two shapes the desk actually sends.
+ */
+describe("the report RPC payload carries the dialog snapshot", () => {
+  it("sends the status a first entry opened on, without inventing a result token", async () => {
+    await reportPlacementMatch("m5", [{ a: 21, b: 10 }], "t1", 0, {
+      status: "scheduled",
+      reportedAt: null,
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith("report_placement_result", {
+      p_match_id: "m5",
+      p_games: [{ a: 21, b: 10 }],
+      p_expected_status: "scheduled",
+    });
+  });
+
+  it("sends both for a correction, where the token is what distinguishes two desks", async () => {
+    const reportedAt = "2026-10-22T15:04:05.123456+00:00";
+    await reportTierDrawMatch("m6", [{ a: 21, b: 10 }], "t1", 0, {
+      status: "reported",
+      reportedAt,
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith("report_tier_draw_result", {
+      p_match_id: "m6",
+      p_games: [{ a: 21, b: 10 }],
+      p_expected_status: "reported",
+      p_expected_reported_at: reportedAt,
+    });
+  });
+});
