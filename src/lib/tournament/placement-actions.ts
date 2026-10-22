@@ -49,6 +49,87 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** The same call, for the RPCs that answer with a count or a new id rather than nothing. */
+async function rpcReturning<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.rpc(name as never, args as never);
+  if (error) throw new Error(error.message);
+  return data as T;
+}
+
+// ---------------------------------------------------------------------------
+// Mid-tournament changes
+//
+// Each of these does the whole act in one transaction, so the caller never has to
+// follow a withdrawal with a walkover per match, or move a day and then move the
+// matches by hand. See `20261022040000_mid_tournament_changes.sql` and
+// docs/roster-freeze.md.
+// ---------------------------------------------------------------------------
+
+/**
+ * Withdraws a team that may already hold matches.
+ *
+ * The flags, every unplayed match as a walkover for the opponent, the bracket advance and the
+ * day's reflow are all one transaction. Returns how many matches it converted, which is the
+ * number worth telling the desk: "withdrawn" alone hides the work it did.
+ *
+ * Refused while one of the team's matches is on court - that is a retirement, not a withdrawal.
+ */
+export async function withdrawPlacementTeam(teamId: string): Promise<number> {
+  return rpcReturning<number>("withdraw_placement_team", { p_team_id: teamId });
+}
+
+/**
+ * Adds a team to an event that has not been drawn yet, as the lowest seed.
+ *
+ * Refused once any placement match exists: the pairing is then a fact, and adding a team is a
+ * re-draw rather than an entry.
+ */
+export async function addPlacementEntrant(categoryId: string, teamId: string): Promise<string> {
+  return rpcReturning<string>("add_placement_entrant", {
+    p_category_id: categoryId,
+    p_team_id: teamId,
+  });
+}
+
+/**
+ * Moves the window, every playing day from `fromDate` on, and their unplayed matches.
+ *
+ * The matches keep their wall clock in the *venue's* zone, so a shift across a DST boundary does
+ * not silently move every match an hour. Refused once anything from that day on has been played.
+ */
+export async function shiftTournamentDays(
+  tournamentId: string,
+  fromDate: string,
+  deltaDays: number,
+): Promise<number> {
+  return rpcReturning<number>("shift_tournament_days", {
+    p_tournament_id: tournamentId,
+    p_from_date: fromDate,
+    p_delta_days: deltaDays,
+  });
+}
+
+/**
+ * Moves one day's unstarted matches off a failed court onto another the day already uses.
+ *
+ * Refused while the source court is playing, and when the target already has matches that day:
+ * stacking a second schedule onto one court would create the overlap conflicts the scheduler
+ * exists to remove.
+ */
+export async function reassignCourtMatches(
+  tournamentId: string,
+  dayId: string,
+  fromCourtId: string,
+  toCourtId: string,
+): Promise<number> {
+  return rpcReturning<number>("reassign_court_matches", {
+    p_tournament_id: tournamentId,
+    p_day_id: dayId,
+    p_from_court_id: fromCourtId,
+    p_to_court_id: toCourtId,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Shape conversion
 //

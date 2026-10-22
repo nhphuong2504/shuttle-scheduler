@@ -21,12 +21,15 @@ export function CapacityEstimate({
   eventCount,
   entrantsPerEvent,
   days,
+  collapsible = false,
   className,
 }: {
   eventCount: number;
   entrantsPerEvent?: readonly number[];
   /** The tournament window's length, as the starting point for the playing days. */
   days: number;
+  /** Drawn closed behind its heading, for a page whose own work should come first. */
+  collapsible?: boolean;
   className?: string;
 }) {
   const ids = useId();
@@ -76,21 +79,14 @@ export function CapacityEstimate({
 
   const hours1 = (value: number) => (Math.round(value * 10) / 10).toString();
 
-  return (
-    <section
-      aria-label="Will it fit?"
-      data-testid="capacity-estimate"
-      className={cn("rounded-2xl border border-hairline bg-surface p-5 shadow-panel", className)}
-    >
-      <h3 className="font-display text-lg font-bold">Will it fit?</h3>
+  const inner = (
+    <>
       <p className="mt-0.5 text-sm text-muted-foreground">
         A rough check of court time, from your own planning numbers. Nothing here is saved; the
         real courts and hours are set on the Schedule page.
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
-        {known
-          ? null
-          : field("players", "Expected players per event", players, setPlayers)}
+        {known ? null : field("players", "Expected players per event", players, setPlayers)}
         {field("courts", "Courts", courts, setCourts)}
         {field("hours", "Hours per day", hours, setHours)}
         {field("days", "Playing days", daysText, setDaysText)}
@@ -117,6 +113,32 @@ export function CapacityEstimate({
             ? "Enter courts, hours and days to see the estimate."
             : "Enter the players per event, courts, hours and days to see the estimate."}
       </p>
+    </>
+  );
+
+  const shell = "rounded-2xl border border-hairline bg-surface p-5 shadow-panel";
+
+  if (collapsible) {
+    return (
+      <details
+        data-testid="capacity-estimate"
+        className={cn(shell, "group", className)}
+      >
+        <summary className="flex min-h-11 cursor-pointer items-center font-display text-lg font-bold">
+          Will it fit?
+          <span className="ml-3 text-sm font-normal text-muted-foreground">
+            Check the court time
+          </span>
+        </summary>
+        {inner}
+      </details>
+    );
+  }
+
+  return (
+    <section aria-label="Will it fit?" data-testid="capacity-estimate" className={cn(shell, className)}>
+      <h3 className="font-display text-lg font-bold">Will it fit?</h3>
+      {inner}
     </section>
   );
 }

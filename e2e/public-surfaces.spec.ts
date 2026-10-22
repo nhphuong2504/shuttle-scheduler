@@ -967,14 +967,42 @@ test.describe("Entries of an upcoming tournament, for an editor", () => {
     await page.goto(routes.entries, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
+    // The organiser's next step is drawn above the page, and the estimate is folded away so the
+    // roster comes first.
+    await expect(page.getByTestId("next-step")).toContainText("Build the schedule");
     const panel = page.getByTestId("capacity-estimate");
     await expect(panel).toBeVisible();
+    await expect(panel.getByLabel("Courts")).toBeHidden();
+    await panel.getByText("Will it fit?").click();
     // The entries exist, so the panel counts them rather than asking.
     await expect(panel.getByLabel("Expected players per event")).toHaveCount(0);
     await panel.getByLabel("Courts").fill("4");
     await panel.getByLabel("Hours per day").fill("8");
     await panel.getByLabel("Playing days").fill("2");
     await expect(panel.getByRole("status")).toContainText(/court-hours; you have 64/);
+  });
+});
+
+test.describe("Entries of a running tournament, for an editor", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "in_progress" } });
+
+  test("says what a withdrawal leaves in the draw before it takes effect", async ({ page }) => {
+    const messages: string[] = [];
+    page.on("dialog", async (dialog) => {
+      messages.push(dialog.message());
+      await dialog.dismiss();
+    });
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const withdraws = page.getByRole("button", { name: "Withdraw" });
+    const count = await withdraws.count();
+    for (let i = 0; i < count && messages.length === 0; i++) {
+      await withdraws.nth(i).click();
+    }
+    expect(messages[0] ?? "").toMatch(/walkover on the Desk/);
+    // Dismissing the warning leaves the entry as it was.
+    await expect(page.getByRole("button", { name: "Reinstate" })).toHaveCount(0);
   });
 });
 

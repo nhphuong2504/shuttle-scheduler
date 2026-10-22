@@ -17,15 +17,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { countIsoDays } from "@/lib/tournament/iso-date";
+import { withdrawalImpact, withdrawalWarning } from "@/lib/tournament/withdrawal-impact";
 import { createPlayer, createTeam, deleteTeam, setTeamWithdrawn } from "@/lib/tournament/actions";
+import { withdrawPlacementTeam } from "@/lib/tournament/placement-actions";
 import {
   indexBy,
   teamLabel,
   useScopedAccess,
   useScopedTournament,
   useCategories,
+  usePlacementEntrants,
+  usePlacementMatches,
   usePlayers,
   useTeams,
+  useTierDrawMatches,
   type Player,
 } from "@/lib/tournament/data";
 import { cn } from "@/lib/utils";
@@ -119,6 +124,9 @@ function EntriesPage() {
   const { data: categories } = useCategories();
   const { data: players } = usePlayers();
   const { data: teams } = useTeams();
+  const { data: entrants } = usePlacementEntrants();
+  const { data: placementMatches } = usePlacementMatches();
+  const { data: tierMatches } = useTierDrawMatches();
   const tournament = useScopedTournament();
   /**
    * The former `canRegister` flag, now the tournament edit right.
@@ -283,6 +291,7 @@ function EntriesPage() {
       {/* Before the tournament starts, an editor can see whether these entries fit the hall. */}
       {canEdit && tournament?.status === "upcoming" && fieldSizes.length > 0 ? (
         <CapacityEstimate
+          collapsible
           className="mb-4"
           eventCount={fieldSizes.length}
           entrantsPerEvent={fieldSizes}
@@ -511,8 +520,54 @@ function EntriesPage() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={async () => {
-                                  await setTeamWithdrawn(t.id, !t.withdrawn);
-                                  refresh();
+                                  // Withdrawing flags the entry only. Once matches exist the draw
+                                  // and schedule keep the team until a walkover is recorded, so
+                                  // say what is left behind before the click takes effect.
+                                  if (!t.withdrawn) {
+                                    const warning = withdrawalWarning(
+                                      teamLabel(t, playerMap),
+                                      withdrawalImpact({
+                                        teamId: t.id,
+                                        entrants: entrants ?? [],
+                                        placementMatches: placementMatches ?? [],
+                                        tierMatches: tierMatches ?? [],
+                                      }),
+                                    );
+                                    if (warning && !window.confirm(warning)) return;
+                                  }
+                                  try {
+                                    if (!t.withdrawn) {
+                                      /*
+                                       * A tournament that has started is withdrawn through the RPC,
+                                       * which is the whole act: the flag, the waiver, a walkover for
+                                       * every unplayed match, the bracket advance and the reflow, in
+                                       * one transaction. `setTeamWithdrawn` is the pre-draw half of
+                                       * that - it only flags the row, which is why the sync that
+                                       * turns it into a waiver is refused once matches exist.
+                                       *
+                                       * The warning above still runs first: it names the matches and
+                                       * says what happens to them, and the RPC then does it.
+                                       */
+                                      if (tournament?.status !== "upcoming") {
+                                        const converted = await withdrawPlacementTeam(t.id);
+                                        toast.success(
+                                          converted === 0
+                                            ? "Entry withdrawn"
+                                            : `Entry withdrawn · ${converted} unplayed match${converted === 1 ? "" : "es"} awarded as a walkover`,
+                                        );
+                                        refresh();
+                                        return;
+                                      }
+                                    }
+                                    await setTeamWithdrawn(t.id, !t.withdrawn);
+                                    refresh();
+                                  } catch (error) {
+                                    toast.error(
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Could not update the entry",
+                                    );
+                                  }
                                 }}
                               >
                                 {t.withdrawn ? "Reinstate" : "Withdraw"}

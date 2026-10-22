@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { Page } from "@/components/app-shell";
+import { WrapUp } from "@/components/tournament-setup/WrapUp";
 import { StartPolicySection } from "@/components/tournament-setup/StartPolicySection";
 import { TournamentWizard } from "@/components/tournament-setup/TournamentWizard";
 import {
@@ -97,6 +98,17 @@ function SettingsPage() {
         </Button>
       }
     >
+      {/*
+        What a finished tournament leaves behind comes first: who won, how it went, the link
+        and the file. Below it the page is the read-only configuration, which nobody opens a
+        completed tournament's Setup to read.
+      */}
+      {tournament?.status === "completed" ? (
+        <div className="mx-auto mb-6 w-full max-w-[64rem]">
+          <WrapUp tournamentId={tournamentId} name={tournament.name} />
+        </div>
+      ) : null}
+
       {/*
         The on-the-day start policy is not one of the wizard's steps. The steps are the
         configuration, which the database freezes from the first match; this switch has to stay

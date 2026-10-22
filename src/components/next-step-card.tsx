@@ -56,6 +56,12 @@ export function NextStepCard() {
   }, [summary, queue.data, entrants, matches]);
 
   if (!step || !tournamentId) return null;
+  // A running tournament's next step is "keep running it", which the Desk already is; drawing
+  // it above every organiser page for days is noise. It speaks again when there is a real act
+  // to take (Complete, once the last day has passed).
+  if (step.stage === "run" && summary && normalizeTournamentStatus(summary.status) === "in_progress") {
+    return null;
+  }
 
   const action = (target: NextStepTarget) =>
     typeof target === "string" ? (

@@ -2764,6 +2764,99 @@ describe("report guard migration", () => {
 });
 
 /**
+ * The mid-tournament changes: the four acts that only worked before the first match.
+ *
+ * `docs/roster-freeze.md` records why each was deferred; the migration is the SQL. What these pin
+ * is the *shape* of the safety, because each function's danger is a silent one: a withdrawal that
+ * leaves a court occupied, a shift that rewrites a played result, or a court move that stacks two
+ * schedules on one court.
+ */
+describe("mid-tournament changes migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261022040000_mid_tournament_changes.sql"), "utf8");
+  const body = (name: string) => {
+    const start = sql.search(new RegExp(`FUNCTION public\\.${name}\\b`, "i"));
+    expect(start, `${name} is defined here`).toBeGreaterThan(-1);
+    return sql.slice(start, sql.indexOf("$function$;", start));
+  };
+
+  it("takes the advisory locks before touching rows, on every path", () => {
+    // The same order as the reporters and the reflow. Reversing it is how a save deadlocks; see
+    // 20261022030000_report_guards.sql for the collision that proves it.
+    for (const fn of ["withdraw_placement_team", "shift_tournament_days", "reassign_court_matches"]) {
+      const fnBody = body(fn);
+      const lock = fnBody.indexOf("pg_advisory_xact_lock(hashtext('live-schedule'))");
+      const write = fnBody.indexOf("UPDATE ");
+      expect(lock, `${fn} takes the day lock`).toBeGreaterThan(-1);
+      expect(write, `${fn} writes`).toBeGreaterThan(-1);
+      expect(lock, `${fn} locks before writing`).toBeLessThan(write);
+    }
+  });
+
+  it("refuses to withdraw a team that is on court", () => {
+    const fn = body("withdraw_placement_team");
+    expect(fn).toMatch(/status = 'in-progress'/);
+    expect(fn).toMatch(/That team is on court right now/);
+  });
+
+  it("converts only unplayed matches, and never invents games", () => {
+    const fn = body("withdraw_placement_team");
+    // A played match keeps its score: withdrawing afterwards does not un-play it.
+    expect(fn).toMatch(/WHERE status = 'scheduled'/);
+    expect(fn).toMatch(/status = 'walkover'/);
+    expect(fn).toMatch(/games = '\[\]'::jsonb/);
+  });
+
+  it("advances the bracket after the walkovers", () => {
+    expect(body("withdraw_placement_team")).toMatch(
+      /PERFORM public\.advance_tier_draw_locked\(v_draw\)/,
+    );
+  });
+
+  it("refuses a late add once the draw exists", () => {
+    const fn = body("add_placement_entrant");
+    expect(fn).toMatch(/assert_tournament_configurable/);
+    expect(fn).toMatch(/FROM public\.placement_matches WHERE category_id = p_category_id/);
+    expect(fn).toMatch(/The draw is already built for this event/);
+    // The last seed, not a re-rank: moving an existing seed would silently change a matchup.
+    expect(fn).toMatch(/COALESCE\(v_seed, 0\) \+ 1/);
+  });
+
+  it("shifts the days in the venue's zone, not the session's", () => {
+    const fn = body("shift_tournament_days");
+    // `scheduled_time + interval 'n days'` preserves the session clock, so a DST boundary moves
+    // every match an hour on the venue's clock. The conversion is the fix, and it must stay.
+    expect(fn).toMatch(/AT TIME ZONE v_tz\) \+ make_interval\(days => p_delta_days\)\) AT TIME ZONE v_tz/);
+    expect(fn).not.toMatch(/scheduled_time = scheduled_time \+ make_interval/);
+  });
+
+  it("refuses a shift that would rewrite a played result", () => {
+    const fn = body("shift_tournament_days");
+    expect(fn).toMatch(/status NOT IN \('scheduled', 'void'\)/);
+    expect(fn).toMatch(/already been played or started/);
+  });
+
+  it("refuses a court move onto a court that already has matches", () => {
+    const fn = body("reassign_court_matches");
+    expect(fn).toMatch(/A match is being played on that court/);
+    expect(fn).toMatch(/already has % scheduled match/);
+    expect(fn).toMatch(/is not in use on this day/);
+  });
+
+  it("keeps every function off a client role except the four entry points", () => {
+    for (const signature of [
+      "public.withdraw_placement_team(uuid)",
+      "public.add_placement_entrant(uuid, uuid)",
+      "public.shift_tournament_days(uuid, date, int)",
+      "public.reassign_court_matches(uuid, uuid, uuid, uuid)",
+    ]) {
+      expect(sql, signature).toContain(`REVOKE ALL ON FUNCTION ${signature} FROM public, anon;`);
+      expect(sql, signature).toContain(`GRANT EXECUTE ON FUNCTION ${signature} TO authenticated;`);
+    }
+  });
+});
+
+/**
  * The correction history: a reported result that is replaced keeps what it replaced.
  *
  * `integration/result-history.test.ts` proves the trigger fires; these pin the shape, because

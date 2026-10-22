@@ -26,7 +26,14 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: { from: mocks.from, rpc: mocks.rpc },
 }));
 
-import { reportPlacementMatch, reportTierDrawMatch } from "./placement-actions";
+import {
+  addPlacementEntrant,
+  reassignCourtMatches,
+  reportPlacementMatch,
+  reportTierDrawMatch,
+  shiftTournamentDays,
+  withdrawPlacementTeam,
+} from "./placement-actions";
 
 beforeEach(() => {
   mocks.rpc.mockClear();
@@ -99,5 +106,60 @@ describe("the report RPC payload carries the dialog snapshot", () => {
       p_expected_status: "reported",
       p_expected_reported_at: reportedAt,
     });
+  });
+});
+
+/**
+ * The mid-tournament RPCs.
+ *
+ * What is worth pinning here is the payload, because each argument is a decision the database then
+ * acts on: the team, the category, the date a shift starts from, and which court a day moves onto.
+ * The behaviour itself is `integration/` and, until that runs, the migration's own probes.
+ */
+describe("the mid-tournament payloads", () => {
+  it("withdraws by team id alone", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: 3, error: null });
+    await expect(withdrawPlacementTeam("team-1")).resolves.toBe(3);
+    expect(mocks.rpc).toHaveBeenCalledWith("withdraw_placement_team", { p_team_id: "team-1" });
+  });
+
+  it("adds a late entrant by category and team", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: "entrant-1", error: null });
+    await expect(addPlacementEntrant("cat-1", "team-2")).resolves.toBe("entrant-1");
+    expect(mocks.rpc).toHaveBeenCalledWith("add_placement_entrant", {
+      p_category_id: "cat-1",
+      p_team_id: "team-2",
+    });
+  });
+
+  it("shifts from a date, so the days before it stay put", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: 4, error: null });
+    await expect(shiftTournamentDays("t1", "2099-03-01", 7)).resolves.toBe(4);
+    expect(mocks.rpc).toHaveBeenCalledWith("shift_tournament_days", {
+      p_tournament_id: "t1",
+      p_from_date: "2099-03-01",
+      p_delta_days: 7,
+    });
+  });
+
+  it("reassigns within one day, between two named courts", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: 2, error: null });
+    await expect(reassignCourtMatches("t1", "day-1", "court-broken", "court-3")).resolves.toBe(2);
+    expect(mocks.rpc).toHaveBeenCalledWith("reassign_court_matches", {
+      p_tournament_id: "t1",
+      p_day_id: "day-1",
+      p_from_court_id: "court-broken",
+      p_to_court_id: "court-3",
+    });
+  });
+
+  it("surfaces the database's refusal rather than a generic failure", async () => {
+    // The refusal is the whole point of these functions: "on court right now" is a sentence the
+    // desk can act on, and it would be lost if the action replaced it.
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "That team is on court right now (1 match). Finish or void the match first." },
+    });
+    await expect(withdrawPlacementTeam("team-1")).rejects.toThrow(/on court right now/);
   });
 });

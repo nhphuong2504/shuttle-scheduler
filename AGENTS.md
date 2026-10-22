@@ -32,7 +32,9 @@ operator at all, and no surface should present participation as authority.
    admin may override.
 3. Read [`docs/information-architecture.md`](docs/information-architecture.md) before adding,
    moving or redirecting an address.
-4. Check the repository state and do not discard existing work.
+4. Read [`docs/roster-freeze.md`](docs/roster-freeze.md) before changing how a team withdraws or
+   joins once matches exist.
+5. Check the repository state and do not discard existing work.
 
 ## Design
 
@@ -167,7 +169,7 @@ npm run build
 Match the review to the risk. **Lightweight** — one reviewer, gates green — for
 docs, copy and UI styling changes.
 
-**Stronger** — a second reviewer, and reasoning written into the PR — for:
+**Stronger** — reasoning written into the PR — for:
 
 | Area | Paths |
 | --- | --- |
