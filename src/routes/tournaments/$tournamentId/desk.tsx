@@ -78,12 +78,12 @@ import {
   dayDateLabel,
   gamesLabel,
   gamesWinnerFor,
-  isLegalGameScoreFor,
   minutesSince,
   parseGames,
   timeLabel,
   type GameScore,
 } from "@/lib/tournament/format";
+import { parseScoreInput, readScoreEntry } from "@/lib/tournament/score-entry";
 import { clockFromMinutesAgo, minutesAgoFromClock } from "@/lib/tournament/finish-time";
 import {
   DEFAULT_KNOCKOUT_RULE,
@@ -1183,14 +1183,31 @@ export function MatchOperationsDialog({
   const set = (row: number, col: number, v: string) =>
     setValues((prev) => prev.map((r, i) => (i === row ? r.map((c, j) => (j === col ? v : c)) : r)));
 
-  const games = values
+  /**
+   * What the box would send, and why it cannot be sent.
+   *
+   * The refusal is read from the same `gamesWinnerFor` the report path is built on, so the
+   * button and the server never disagree; `readScoreEntry` only says it in words. It also
+   * refuses a blank row between games, which used to be filtered away and silently turned
+   * `21-19, (blank), 21-19` into a legal 2-0.
+   */
+  const entry = useMemo(
+    () =>
+      readScoreEntry(
+        values.slice(0, rows).map((r) => ({ a: r[0] ?? "", b: r[1] ?? "" })),
+        scoringRule,
+      ),
+    [values, rows, scoringRule],
+  );
+  const games = entry.games;
+  const canSubmit = entry.winner !== null;
+  /**
+   * The refusal is shown once something has been typed, never on a fresh dialog: greeting
+   * the desk with "Enter the score." for a match it has not started is noise, not help.
+   */
+  const touched = values
     .slice(0, rows)
-    .filter((r) => r[0] !== "" && r[1] !== "")
-    .map((r) => ({ a: Number(r[0]), b: Number(r[1]) }));
-  const canSubmit =
-    match.kind === "pool"
-      ? !!games[0] && isLegalGameScoreFor(games[0].a, games[0].b, scoringRule)
-      : !!gamesWinnerFor(games, scoringRule);
+    .some((r) => (r[0] ?? "") !== "" || (r[1] ?? "") !== "");
 
   const submit = async () => {
     // The offset only exists on the placement and knockout paths. A blank field reads
@@ -1450,8 +1467,9 @@ export function MatchOperationsDialog({
                   autoFocus={i === 0 && canEditScores}
                   value={values[i]?.[0] ?? ""}
                   disabled={!canEditScores}
-                  onChange={(e) => set(i, 0, e.target.value)}
+                  onChange={(e) => set(i, 0, parseScoreInput(e.target.value))}
                   aria-label={`Game ${i + 1} ${nameA}`}
+                  aria-invalid={touched && entry.problemRow === i}
                 />
                 <span className="w-6 text-center font-score text-2xl text-muted-foreground">:</span>
                 <Input
@@ -1460,8 +1478,9 @@ export function MatchOperationsDialog({
                   placeholder="—"
                   value={values[i]?.[1] ?? ""}
                   disabled={!canEditScores}
-                  onChange={(e) => set(i, 1, e.target.value)}
+                  onChange={(e) => set(i, 1, parseScoreInput(e.target.value))}
                   aria-label={`Game ${i + 1} ${nameB}`}
+                  aria-invalid={touched && entry.problemRow === i}
                 />
               </div>
             ))}
@@ -1471,7 +1490,28 @@ export function MatchOperationsDialog({
               Games 1–{rows}, top to bottom. {gamesNeededToWin(scoringRule)} wins take the match.
             </p>
           ) : null}
-        </div>
+          {/*
+            The side the result decides, stated before it is saved. The operator used to
+            have to count the games themselves, which is where a mis-entry survives review.
+          */}
+          {entry.winner && rows > 1 ? (
+            <p className="mt-1.5 text-center text-sm font-semibold">
+              {`${entry.winner === "a" ? nameA : nameB} wins ${Math.max(entry.winsA, entry.winsB)}–${Math.min(entry.winsA, entry.winsB)}.`}
+            </p>
+          ) : null}        </div>
+        {/*
+          Why the result cannot be saved, in words. A disabled button alone reads as a broken
+          app at a live desk, and a score the desk believes it entered is then entered twice.
+          `role="status"` announces it without stealing focus from the box being typed in.
+        */}
+        {touched && entry.problem ? (
+          <p
+            role="status"
+            className="rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-sm font-medium text-warn-foreground"
+          >
+            {entry.problem}
+          </p>
+        ) : null}
         {/*
           The late-entry correction, kept to one quiet row under the score box so it
           never competes with entering the score itself. Only the placement and
