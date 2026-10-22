@@ -209,15 +209,23 @@ export async function generatePoolsForCategory(categoryId: string, teams: Team[]
  * meantime, "recorded" versus "corrected" and the not-started confirmation were decided against
  * stale state, and the save would silently overwrite the other desk's entry. The check is a
  * read just before the write, so it narrows that window to a round trip rather than closing it.
+ *
+ * `expectedReportedAt` is the second half: a *correction* leaves `status` at `reported`, so a
+ * status-only check let two desks correcting the same result both pass, and the later save
+ * overwrote the earlier one without either noticing. `reported_time` moves on every report, so
+ * it distinguishes "nobody has touched this" from "someone corrected it while you were typing".
+ * Omitted by callers that only care about the status (the restore paths), and compared whenever
+ * it is supplied - including null, which is a match nobody has reported yet.
  */
 export async function assertMatchUnchanged(
   table: "pool_matches" | "draw_matches" | "placement_matches" | "tier_draw_matches",
   matchId: string,
   expectedStatus: string,
+  expectedReportedAt?: string | null,
 ): Promise<void> {
   const { data, error } = await supabase
     .from(table)
-    .select("status")
+    .select("status, reported_time")
     .eq("id", matchId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -225,6 +233,11 @@ export async function assertMatchUnchanged(
   if (data.status !== expectedStatus) {
     throw new Error(
       `This match changed to "${data.status}" while you were entering the result. Close this window and reopen the match to see the latest.`,
+    );
+  }
+  if (expectedReportedAt !== undefined && (data.reported_time ?? null) !== expectedReportedAt) {
+    throw new Error(
+      "This result was changed while you were entering it. Close this window and reopen the match to see the latest.",
     );
   }
 }

@@ -12,18 +12,26 @@ const mocks = vi.hoisted(() => {
     data: null,
     error: null,
   }));
-  return { eq, update, rpc };
+  /**
+   * The read `assertMatchUnchanged` makes. `state.row` is what the next read returns, so a
+   * test can hand it a match that changed under the dialog without a database.
+   */
+  const state = { row: null as null | { status: string; reported_time: string | null } };
+  const maybeSingle = vi.fn(async () => ({ data: state.row, error: null }));
+  const select = vi.fn(() => ({ eq: () => ({ maybeSingle }) }));
+  return { eq, update, rpc, select, maybeSingle, state };
 });
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: () => ({ update: mocks.update }),
+    from: () => ({ update: mocks.update, select: mocks.select }),
     rpc: mocks.rpc,
   },
 }));
 
 import {
   addTournamentDay,
+  assertMatchUnchanged,
   decideTournamentRegistration,
   removeTournamentDay,
   setTournamentCourts,
@@ -35,6 +43,8 @@ import {
 beforeEach(() => {
   mocks.update.mockClear();
   mocks.rpc.mockClear();
+  mocks.select.mockClear();
+  mocks.state.row = null;
 });
 
 describe("updateTournamentMatchSettings", () => {
@@ -287,5 +297,50 @@ describe("decideTournamentRegistration", () => {
     await expect(
       decideTournamentRegistration({ registrationId: "reg-1", decision: "approved" }),
     ).rejects.toThrow(/Mixed Doubles is full/i);
+  });
+});
+
+describe("assertMatchUnchanged", () => {
+  it("reads the concurrency token, not only the status", async () => {
+    mocks.state.row = { status: "reported", reported_time: "2026-01-01T10:00:00Z" };
+    await assertMatchUnchanged("tier_draw_matches", "m1", "reported", "2026-01-01T10:00:00Z");
+    expect(mocks.select).toHaveBeenCalledWith("status, reported_time");
+  });
+
+  it("refuses a match that another desk started or cleared", async () => {
+    mocks.state.row = { status: "in-progress", reported_time: null };
+    await expect(assertMatchUnchanged("tier_draw_matches", "m1", "scheduled")).rejects.toThrow(
+      /changed to "in-progress"/,
+    );
+  });
+
+  it("refuses a correction whose result changed while the dialog was open", async () => {
+    // Status stays `reported` for a correction, which is why the status alone was not a
+    // conflict: two desks correcting the same result both passed it.
+    mocks.state.row = { status: "reported", reported_time: "2026-01-01T10:04:00Z" };
+    await expect(
+      assertMatchUnchanged("tier_draw_matches", "m1", "reported", "2026-01-01T10:00:00Z"),
+    ).rejects.toThrow(/result was changed while you were entering it/i);
+  });
+
+  it("accepts an untouched match, including one with no reported time yet", async () => {
+    mocks.state.row = { status: "scheduled", reported_time: null };
+    await expect(
+      assertMatchUnchanged("placement_matches", "m1", "scheduled", null),
+    ).resolves.toBeUndefined();
+  });
+
+  it("skips the token when the caller does not supply one", async () => {
+    // The restore paths only care about the status; they must not start failing on a
+    // reported_time they never read.
+    mocks.state.row = { status: "reported", reported_time: "2026-01-01T10:00:00Z" };
+    await expect(assertMatchUnchanged("pool_matches", "m1", "reported")).resolves.toBeUndefined();
+  });
+
+  it("refuses a match that no longer exists", async () => {
+    mocks.state.row = null;
+    await expect(assertMatchUnchanged("pool_matches", "m1", "reported")).rejects.toThrow(
+      /no longer exists/,
+    );
   });
 });

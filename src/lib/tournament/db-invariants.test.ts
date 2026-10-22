@@ -2594,3 +2594,42 @@ describe("game point cap migration", () => {
     expect(sql).toMatch(/has_function_privilege\('anon'/);
   });
 });
+
+/**
+ * The correction history: a reported result that is replaced keeps what it replaced.
+ *
+ * `integration/result-history.test.ts` proves the trigger fires; these pin the shape, because
+ * the failure mode of a trigger is silence - a table that looks complete while one of the
+ * four writers is unwatched.
+ */
+describe("match result history migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261022010000_match_result_history.sql"), "utf8");
+
+  it("watches every table a result can be written to", () => {
+    for (const table of ["pool_matches", "draw_matches", "placement_matches", "tier_draw_matches"]) {
+      expect(sql, table).toMatch(
+        new RegExp(`create trigger record_${table}_result_correction`, "i"),
+      );
+      expect(sql, table).toMatch(new RegExp(`after update on public\\.${table}`, "i"));
+    }
+  });
+
+  it("records corrections, not first entries or clears", () => {
+    // Both sides have to say `reported`: scheduled -> reported is an entry, and
+    // reported -> scheduled is the reset RPC, which is already loud.
+    expect(sql).toMatch(/before_row ->> 'status' IS DISTINCT FROM 'reported'/);
+    expect(sql).toMatch(/after_row ->> 'status' IS DISTINCT FROM 'reported'/);
+    expect(sql).toMatch(/before_row -> 'games' IS NOT DISTINCT FROM after_row -> 'games'/);
+  });
+
+  it("is written only by the trigger and read only by an editor", () => {
+    expect(sql).toMatch(/revoke all on public\.match_result_history from anon/i);
+    expect(sql).toMatch(
+      /revoke insert, update, delete, truncate, references, trigger\s+on public\.match_result_history from authenticated/i,
+    );
+    expect(sql).toMatch(/using \(public\.can_edit_tournament\(public\.result_history_tournament/i);
+    // Who sent it is half the reason to keep the row.
+    expect(sql).toMatch(/public\.current_profile_id\(\)/);
+  });
+});

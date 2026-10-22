@@ -314,6 +314,69 @@ export type Database = {
           },
         ]
       }
+      /**
+       * Written only by `record_result_correction` (20261022010000_match_result_history.sql),
+       * the AFTER UPDATE trigger on the four match tables. Added by hand rather than by
+       * `db:types`, because regenerating against the local stack churns the whole file with a
+       * newer CLI's formatting; only this table is missing. `typegen` will absorb it next time.
+       */
+      match_result_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          from_ended_at: string | null
+          from_games: Json | null
+          from_score_a: number | null
+          from_score_b: number | null
+          from_status: string | null
+          from_winner_id: string | null
+          id: string
+          match_id: string
+          table_name: string
+          to_ended_at: string | null
+          to_games: Json | null
+          to_score_a: number | null
+          to_score_b: number | null
+          to_winner_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          from_ended_at?: string | null
+          from_games?: Json | null
+          from_score_a?: number | null
+          from_score_b?: number | null
+          from_status?: string | null
+          from_winner_id?: string | null
+          id?: string
+          match_id: string
+          table_name: string
+          to_ended_at?: string | null
+          to_games?: Json | null
+          to_score_a?: number | null
+          to_score_b?: number | null
+          to_winner_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          from_ended_at?: string | null
+          from_games?: Json | null
+          from_score_a?: number | null
+          from_score_b?: number | null
+          from_status?: string | null
+          from_winner_id?: string | null
+          id?: string
+          match_id?: string
+          table_name?: string
+          to_ended_at?: string | null
+          to_games?: Json | null
+          to_score_a?: number | null
+          to_score_b?: number | null
+          to_winner_id?: string | null
+        }
+        Relationships: []
+      }
       placement_entrants: {
         Row: {
           category_id: string

@@ -1248,7 +1248,7 @@ export function MatchOperationsDialog({
     }
     setBusy(true);
     try {
-      await assertMatchUnchanged(table, match.id, match.status);
+      await assertMatchUnchanged(table, match.id, match.status, match.reportedAt ?? null);
       if (
         match.kind === "placement" &&
         isReported &&

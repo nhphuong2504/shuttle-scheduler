@@ -122,6 +122,11 @@ Slots above round one start empty, except that a bye's winner is advanced straig
   "Winner of Semifinal 2". One definition serves all of them: `isTierMatchReady`.
 - **Correcting.** Resetting a result withdraws the winner from the next slot (clearing its
   court and time) unless that match has already started, in which case it is refused.
+  Entering a *different* score for an already-reported match replaces the result instead, and
+  the replaced one is kept in `match_result_history` with who sent it: a clear is loud and
+  recoverable, a correction used to be silent. The desk also refuses a correction made against
+  a stale read (see `assertMatchUnchanged`), so two people correcting the same result cannot
+  overwrite each other without either noticing.
 
 Source: [`tier-draw.ts`](../src/lib/tournament/tier-draw.ts) (`buildTierBracket`,
 `childSlot`, `isTierMatchReady`, `feederLabel`) and migration
