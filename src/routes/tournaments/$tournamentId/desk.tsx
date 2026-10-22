@@ -1275,7 +1275,18 @@ export function MatchOperationsDialog({
     .slice(0, rows)
     .some((r) => (r[0] ?? "") !== "" || (r[1] ?? "") !== "");
 
-  const submit = async () => {
+  /**
+   * A synchronous lock for the save, which `busy` cannot be.
+   *
+   * `busy` is React state: it is written when the component re-renders, so two clicks that
+   * arrive in the same tick both read the value from before the first of them. At a live desk
+   * a double tap on a large button is ordinary, and a Save that fires twice corrects the same
+   * result twice and reflows the day twice. The ref is written before the first await, so the
+   * second click sees it immediately; the disabled state remains the visible half.
+   */
+  const saving = useRef(false);
+
+  const saveResult = async () => {
     // The offset only exists on the placement and knockout paths. A blank field reads
     // as 0, which is "reported live" and is exactly the old behaviour.
     let endedMinutes = 0;
@@ -1356,7 +1367,7 @@ export function MatchOperationsDialog({
         const impact = await reportPoolMatch(match.id, g.a, g.b);
         toast.success(impactMessage(isReported ? "Result corrected" : "Result recorded", impact));
       } else {
-        const impact = await reportDrawMatch(match.id, games);
+        const impact = await reportDrawMatch(match.id, games, scoringRule);
         toast.success(impactMessage(isReported ? "Result corrected" : "Result recorded", impact));
       }
       onDone();
@@ -1364,6 +1375,23 @@ export function MatchOperationsDialog({
       toast.error(error instanceof Error ? error.message : "Could not save result");
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * The save, entered at most once per click burst.
+   *
+   * The lock is taken before anything is awaited and released in `finally`, so the confirm
+   * prompts and the round trips in `saveResult` are all inside it - a second click during a
+   * prompt cannot start a second save.
+   */
+  const submit = async () => {
+    if (saving.current) return;
+    saving.current = true;
+    try {
+      await saveResult();
+    } finally {
+      saving.current = false;
     }
   };
 
