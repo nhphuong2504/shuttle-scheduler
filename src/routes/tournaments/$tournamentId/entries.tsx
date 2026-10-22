@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatTile } from "@/components/app-shell";
+import { CapacityEstimate } from "@/components/capacity-estimate";
 import { PlayerPicker } from "@/components/player-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { countIsoDays } from "@/lib/tournament/iso-date";
 import { createPlayer, createTeam, deleteTeam, setTeamWithdrawn } from "@/lib/tournament/actions";
 import {
   indexBy,
@@ -266,11 +268,35 @@ function EntriesPage() {
     };
   }, [teams, categoryCount]);
 
+  // Real field sizes, once there are entries: withdrawn teams do not take court time.
+  const fieldSizes = useMemo(
+    () => activeCategories.map((category) => activeEntryCount(category.id)).filter((n) => n > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeCategories, teams],
+  );
+
   return (
     <Page
       title="Entries"
       subtitle={canEdit ? capSubtitle(categoryCap) : "Who is playing in each event."}
     >
+      {/* Before the tournament starts, an editor can see whether these entries fit the hall. */}
+      {canEdit && tournament?.status === "upcoming" && fieldSizes.length > 0 ? (
+        <CapacityEstimate
+          className="mb-4"
+          eventCount={fieldSizes.length}
+          entrantsPerEvent={fieldSizes}
+          days={
+            tournament.starts_on
+              ? countIsoDays(
+                  String(tournament.starts_on).slice(0, 10),
+                  String(tournament.ends_on ?? tournament.starts_on).slice(0, 10),
+                )
+              : 0
+          }
+        />
+      ) : null}
+
       {/*
         What a reader needs is how big the field is. The roster-wide player count, the players
         with no entry and the two cap tiles are the desk's bookkeeping - they describe the
