@@ -19,6 +19,7 @@ import {
 import { countIsoDays } from "@/lib/tournament/iso-date";
 import { withdrawalImpact, withdrawalWarning } from "@/lib/tournament/withdrawal-impact";
 import { createPlayer, createTeam, deleteTeam, setTeamWithdrawn } from "@/lib/tournament/actions";
+import { withdrawPlacementTeam } from "@/lib/tournament/placement-actions";
 import {
   indexBy,
   teamLabel,
@@ -534,6 +535,29 @@ function EntriesPage() {
                                     if (warning && !window.confirm(warning)) return;
                                   }
                                   try {
+                                    if (!t.withdrawn) {
+                                      /*
+                                       * A tournament that has started is withdrawn through the RPC,
+                                       * which is the whole act: the flag, the waiver, a walkover for
+                                       * every unplayed match, the bracket advance and the reflow, in
+                                       * one transaction. `setTeamWithdrawn` is the pre-draw half of
+                                       * that - it only flags the row, which is why the sync that
+                                       * turns it into a waiver is refused once matches exist.
+                                       *
+                                       * The warning above still runs first: it names the matches and
+                                       * says what happens to them, and the RPC then does it.
+                                       */
+                                      if (tournament?.status !== "upcoming") {
+                                        const converted = await withdrawPlacementTeam(t.id);
+                                        toast.success(
+                                          converted === 0
+                                            ? "Entry withdrawn"
+                                            : `Entry withdrawn · ${converted} unplayed match${converted === 1 ? "" : "es"} awarded as a walkover`,
+                                        );
+                                        refresh();
+                                        return;
+                                      }
+                                    }
                                     await setTeamWithdrawn(t.id, !t.withdrawn);
                                     refresh();
                                   } catch (error) {
