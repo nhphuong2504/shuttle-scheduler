@@ -1,4 +1,5 @@
 import {
+  gamePointCap,
   gamesNeededToWin,
   isScoringRuleValid,
   LEGACY_GAME_RULE,
@@ -107,16 +108,24 @@ export function parseGames(value: unknown): GameScore[] {
 }
 
 /**
- * A game is legal when the winner reached at least `gamesTo` and won by at least
- * `winBy`. This mirrors the rule enforced by the database in `report_draw_result`,
- * so the client and the server always agree about a valid result.
+ * A game is legal when the winner reached at least `gamesTo` and won by at least `winBy`.
+ *
+ * Where the rule has a cap (`gamePointCap`), the cap is the second way to win: 29-29 is
+ * deuce, so 30-29 takes a 21-point game. It also bounds the score, so `31-29` and `211-19`
+ * are refused rather than stored as results that cannot happen.
+ *
+ * This mirrors `game_score_is_legal` in the database, so the client and the server always
+ * agree about a valid result.
  */
 export function isLegalGameScoreFor(a: number, b: number, rule: ScoringRule): boolean {
   if (!Number.isInteger(a) || !Number.isInteger(b)) return false;
   if (a < 0 || b < 0 || a === b) return false;
   const high = Math.max(a, b);
   const low = Math.min(a, b);
-  return high >= rule.gamesTo && high - low >= rule.winBy;
+  const cap = gamePointCap(rule);
+  if (cap !== null && high > cap) return false;
+  if (high >= rule.gamesTo && high - low >= rule.winBy) return true;
+  return cap !== null && high === cap && low === cap - 1;
 }
 
 /**

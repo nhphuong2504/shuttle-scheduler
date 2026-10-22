@@ -89,6 +89,49 @@ is fixed. The same construct survives in
 Both are outside the hermetic gates and were not exercised here, so they are recorded rather
 than changed. The integration suite needs its own run to prove a fix.
 
+### Nothing reads `match_result_history` yet
+
+Correcting an already-reported result now keeps the result it replaced, who sent it and when
+(`20261022010000_match_result_history.sql`). The table is readable by that tournament's
+editors through RLS, but no screen reads it: there is no "this result was amended" line on the
+Desk, the Scores list or the bracket, and no history panel.
+
+Recording was the gap - the previous score was being destroyed - so the table exists and the
+trigger that fills it is tested. Deciding *where* an amendment should be visible is a design
+question with more than one answer (a line in the match dialog, a column in Scores, a
+correction badge on the tile), and picking one speculatively is how a surface ends up showing
+half a story. Until then, reading it is an operator action:
+
+```sql
+select * from public.match_result_history
+where table_name = 'tier_draw_matches' and match_id = '<id>'
+order by changed_at;
+```
+
+### Retirement in the placement format
+A player can stop mid-match — injury, a family matter, a walkover agreed on court — and the
+supported format cannot record it. The only exception paths are `walkover` and `void`
+(`resolve_match_exception`), and the desk hides both for the placement and bracket tables
+(`isPlacement` in [`desk.tsx`](../src/routes/tournaments/$tournamentId/desk.tsx)), so
+[`scheduling-decisions.md`](scheduling-decisions.md) states it as a rule: withdrawals and
+walkovers are not part of the placement format. The desk is left inventing a full score or
+voiding a match that was partly played.
+
+This is deliberately deferred rather than half-built. The honest shape is a `retired` status
+carrying the games played to the point of retirement, which is not a local change:
+
+- the `status` CHECK on `placement_matches` and `tier_draw_matches` gains a value;
+- `stage-progress.ts` decides played/settled from status sets, and a retirement is played but
+  not a completed result;
+- `court-state.ts`, `knockout-bracket.tsx`, the Scores filter and `standings.ts` each enumerate
+  statuses and would silently misreport the new one;
+- the placement tie-break reads two results per entrant, and a retirement is a loss with a
+  partial record.
+
+A cheaper alternative — allowing `walkover`/`void` on the two newer tables — loses the games
+already played, so it is not the same feature and should not be mistaken for it. Not scheduled;
+recorded so the gap is a decision rather than an oversight.
+
 ### Operator scripts and the Prettier backlog
 
 `scripts/fake-day-one-results.mjs` and the `generate-/verify-placement-shift-migration.ps1`

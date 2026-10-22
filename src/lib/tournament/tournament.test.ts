@@ -15,6 +15,7 @@ import {
   SCORING_PRESETS,
   scoringRuleLabel,
   suggestedSlotMinutes,
+  gamePointCap,
 } from "./scoring";
 import { gamesWinner, gamesWinnerFor, isLegalGameScore, isLegalGameScoreFor } from "./format";
 import { circleMethod, planPoolSizes, poolMatchCount } from "./pools";
@@ -246,6 +247,33 @@ describe("rule-driven score validation", () => {
     expect(isLegalGameScoreFor(21.5, 19, LEGACY_GAME_RULE)).toBe(false);
     expect(isLegalGameScoreFor(-1, 21, LEGACY_GAME_RULE)).toBe(false);
     expect(isLegalGameScoreFor(21, 21, LEGACY_GAME_RULE)).toBe(false);
+  });
+
+  /**
+   * The 21-point game ends its deuce at 30: 29-29 is deuce, so 30-29 wins. Before this the
+   * model only knew a margin, which accepted 31-29 and even 211-19 as results.
+   */
+  it("caps a 21-point game at 30", () => {
+    expect(isLegalGameScoreFor(30, 29, LEGACY_GAME_RULE)).toBe(true);
+    expect(isLegalGameScoreFor(30, 28, LEGACY_GAME_RULE)).toBe(true);
+    expect(isLegalGameScoreFor(29, 28, LEGACY_GAME_RULE)).toBe(false);
+    expect(isLegalGameScoreFor(31, 29, LEGACY_GAME_RULE)).toBe(false);
+    expect(isLegalGameScoreFor(29, 31, LEGACY_GAME_RULE)).toBe(false);
+    expect(isLegalGameScoreFor(211, 19, LEGACY_GAME_RULE)).toBe(false);
+  });
+
+  it("derives the cap from the 21-point rule alone", () => {
+    expect(gamePointCap(LEGACY_GAME_RULE)).toBe(30);
+    expect(gamePointCap({ gamesTo: 15, winBy: 2, bestOf: 1 })).toBeNull();
+    expect(gamePointCap({ gamesTo: 11, winBy: 2, bestOf: 3 })).toBeNull();
+    // `winBy: 1` has no deuce, so there is no cap to end one.
+    expect(gamePointCap({ gamesTo: 21, winBy: 1, bestOf: 1 })).toBeNull();
+  });
+
+  it("leaves a capped game's margin rule alone below the cap", () => {
+    // 26-24 is a legal deuce game; the cap only bounds the top, it does not raise the floor.
+    expect(isLegalGameScoreFor(26, 24, LEGACY_GAME_RULE)).toBe(true);
+    expect(isLegalGameScoreFor(26, 25, LEGACY_GAME_RULE)).toBe(false);
   });
 
   it("decides a match under any best-of", () => {

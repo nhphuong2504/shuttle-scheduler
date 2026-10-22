@@ -2541,3 +2541,95 @@ describe("place_ready_matches migration", () => {
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.place_ready_matches\(uuid, text, jsonb\) FROM anon, PUBLIC/);
   });
 });
+
+/**
+ * The migration that gives a 21-point game its 30-point ceiling.
+ *
+ * It exists because the predicate was written out three times - in `placement_check_games`,
+ * `report_draw_result` and `report_pool_result` - and one of the three is what let `31-29`
+ * through. The assertions below are about the *shape* of the fix rather than its arithmetic,
+ * which `integration/score-cap.test.ts` proves against a real Postgres: if a later migration
+ * restates the comparison inline, the drift can start again.
+ */
+describe("game point cap migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const FILE = "20261022000000_game_point_cap.sql";
+  const sql = readFileSync(join(dir, FILE), "utf8");
+
+  it("derives the cap from the rule rather than storing a fourth column", () => {
+    expect(sql).toMatch(
+      /create or replace function public\.game_point_cap\(p_games_to int, p_win_by int\)/i,
+    );
+    expect(sql).toMatch(/p_games_to = 21 AND p_win_by = 2 THEN 30/);
+    // A column would have to be threaded through the wizard, the row and every reader.
+    expect(sql).not.toMatch(/add column/i);
+  });
+
+  it("answers 'is this a legal game' in one place", () => {
+    expect(sql).toMatch(
+      /create or replace function public\.game_score_is_legal\(\s*p_a int,\s*p_b int,\s*p_games_to int,\s*p_win_by int\s*\)/i,
+    );
+    // The cap is the second way to win: 30-29 is deuce ended, not a short margin.
+    expect(sql).toMatch(/cap\.points IS NOT NULL/);
+    expect(sql).toMatch(/LEAST\(p_a, p_b\) = cap\.points - 1/);
+  });
+
+  it("routes every writer through the shared predicate", () => {
+    for (const fn of ["placement_check_games", "report_draw_result", "report_pool_result"]) {
+      // Case-insensitive: the definitions are written upper-case, and `indexOf` is not.
+      const start = sql.search(new RegExp(`FUNCTION public\\.${fn}\\b`, "i"));
+      expect(start, `${fn} is defined here`).toBeGreaterThan(-1);
+      const body = sql.slice(start);
+      expect(body, fn).toMatch(/public\.game_score_is_legal\(/);
+      // The old inline comparison is what could drift from the others.
+      expect(body, fn).not.toMatch(/sa - sb >= win_by/);
+      expect(body, fn).not.toMatch(/p_score_a - p_score_b >= 2/);
+    }
+  });
+
+  it("keeps the helpers out of reach of a client role", () => {
+    expect(sql).toMatch(
+      /REVOKE ALL ON FUNCTION public\.game_score_is_legal\(int, int, int, int\) FROM PUBLIC, anon, authenticated/,
+    );
+    expect(sql).toMatch(/has_function_privilege\('anon'/);
+  });
+});
+
+/**
+ * The correction history: a reported result that is replaced keeps what it replaced.
+ *
+ * `integration/result-history.test.ts` proves the trigger fires; these pin the shape, because
+ * the failure mode of a trigger is silence - a table that looks complete while one of the
+ * four writers is unwatched.
+ */
+describe("match result history migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261022010000_match_result_history.sql"), "utf8");
+
+  it("watches every table a result can be written to", () => {
+    for (const table of ["pool_matches", "draw_matches", "placement_matches", "tier_draw_matches"]) {
+      expect(sql, table).toMatch(
+        new RegExp(`create trigger record_${table}_result_correction`, "i"),
+      );
+      expect(sql, table).toMatch(new RegExp(`after update on public\\.${table}`, "i"));
+    }
+  });
+
+  it("records corrections, not first entries or clears", () => {
+    // Both sides have to say `reported`: scheduled -> reported is an entry, and
+    // reported -> scheduled is the reset RPC, which is already loud.
+    expect(sql).toMatch(/before_row ->> 'status' IS DISTINCT FROM 'reported'/);
+    expect(sql).toMatch(/after_row ->> 'status' IS DISTINCT FROM 'reported'/);
+    expect(sql).toMatch(/before_row -> 'games' IS NOT DISTINCT FROM after_row -> 'games'/);
+  });
+
+  it("is written only by the trigger and read only by an editor", () => {
+    expect(sql).toMatch(/revoke all on public\.match_result_history from anon/i);
+    expect(sql).toMatch(
+      /revoke insert, update, delete, truncate, references, trigger\s+on public\.match_result_history from authenticated/i,
+    );
+    expect(sql).toMatch(/using \(public\.can_edit_tournament\(public\.result_history_tournament/i);
+    // Who sent it is half the reason to keep the row.
+    expect(sql).toMatch(/public\.current_profile_id\(\)/);
+  });
+});

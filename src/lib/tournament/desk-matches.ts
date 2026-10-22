@@ -38,6 +38,16 @@ export type DeskMatch = DeskMatchModel & {
   roundTag?: string | undefined;
   score: string | null;
   initialGames?: GameScore[] | undefined;
+  /**
+   * When the stored result was last written.
+   *
+   * The dialog's own conflict check. `status` catches another desk starting or clearing the
+   * match, but a *correction* leaves the status at `reported`, so two desks correcting the
+   * same result both passed a status-only check and the later save silently overwrote the
+   * earlier one. `reported_time` moves on every report, so it is the token that separates
+   * the two cases. Null until a result is written.
+   */
+  reportedAt?: string | null | undefined;
   /** Only the score desk needs this, for its per-category filter. */
   categoryId: string;
 };
@@ -155,6 +165,7 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
           tag: catMap.get(match.category_id)?.code ?? "",
           categoryId: match.category_id,
           score: match.status === "reported" ? `${match.score_a}-${match.score_b}` : null,
+          reportedAt: match.reported_time,
           initialGames:
             match.status === "reported" && match.score_a != null && match.score_b != null
               ? [{ a: match.score_a, b: match.score_b }]
@@ -180,6 +191,7 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
           categoryId: categoryOfDraw(match.draw_id),
           score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
           initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
+          reportedAt: match.reported_time,
         };
       })
     : [];
@@ -206,6 +218,7 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
         categoryId: match.category_id,
         score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
         initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
+        reportedAt: match.reported_time,
       };
     }),
     ...(sources.tierMatches ?? [])
@@ -239,6 +252,7 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
           categoryId: draw?.category_id ?? "",
           score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
           initialGames: match.status === "reported" ? parseGames(match.games) : undefined,
+          reportedAt: match.reported_time,
         };
       }),
   ];

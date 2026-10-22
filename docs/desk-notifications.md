@@ -161,6 +161,29 @@ the data is that old, while the clock keeps running. A bar under the day bar say
 every control that writes - start, score, walkover, void, move, clear - is locked, with the reason
 at the top; Cancel stays usable. Opening a match is still allowed: it is a read.
 
+## Entering a score
+
+The dialog collects one row per game the rule allows (`bestOf`), and reads them through
+`score-entry.ts` rather than deciding anything itself. `gamesWinnerFor` still decides whether
+the result is legal - the same function the report path is built on - so the button and the
+server cannot disagree; this module only says a refusal in words.
+
+Four behaviours are deliberate:
+
+- **A blank row between games is refused, not dropped.** Only trailing blank rows are ignored,
+  because those are how a best-of-three looks when the match ended in two. Filtering the array
+  instead used to turn `21-19, (blank), 21-19` into a legal 2-0, which recorded a result nobody
+  entered.
+- **The refusal is spoken.** `role="status"` under the score box names the reason - "Game 1 is
+  not a winning score. Games are to 21, win by 2.", "Game 2 is empty. Fill it in, or clear the
+  games after it." - and the box at fault carries `aria-invalid`. A disabled `Report result`
+  with no explanation reads as a broken app, and a score the desk believes it entered is then
+  entered twice. It appears only once something has been typed, never on a fresh dialog.
+- **The winner is named before saving.** "A. Nguyen / B. Tran wins 2-0." on a multi-game match,
+  so the operator does not count the games themselves.
+- **Only digits reach the box.** `inputMode="numeric"` shapes a phone keyboard but does not stop
+  a hardware keyboard or a paste, and `Number` reads `0x15` as 21 and `1e1` as 10.
+
 ## Recording a result: when did it finish?
 
 Placement and knockout matches only. Chips "Just now / 5 min ago / 10 min ago" plus "Other
