@@ -276,6 +276,16 @@ useful for reasoning about scale - **not** because the app enforces any of it.
 Nothing above is a setting. Court count, day count, player count and daily windows are
 all per-tournament values, and the platform does not assume this shape.
 
+### The "Will it fit?" estimate is advice
+
+The Review step and the Entries page of an upcoming tournament show a rough count of court time
+needed against court time offered ([`capacity-estimate.ts`](../src/lib/tournament/capacity-estimate.ts)).
+It uses the planning numbers the organiser types (courts, hours per day, playing days, and the
+expected players per event until there are entries), counts a field of N >= 3 as N placement
+matches plus an even split of the knockout draws, and prices them at the default 20 / 25 minute
+slots. Nothing is saved and the scheduler does not read it. It states "needs X court-hours, has
+Y" and nothing about utilisation, which was removed from the forecast on purpose.
+
 ## Removed from this document
 
 The previous version of this file has been replaced rather than amended, because

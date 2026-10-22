@@ -744,6 +744,30 @@ test.describe("Creating a tournament, signed in", () => {
     expect(payload).not.toHaveProperty("days");
   });
 
+  test("asks whether it will fit, from the host's own planning numbers", async ({ page }) => {
+    await page.goto(routes.newTournament, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("textbox", { name: "Name", exact: true }).fill("City Open");
+    await page.getByLabel("Tournament starts").fill("2026-12-01");
+    await page.getByLabel("Tournament ends").fill("2026-12-03");
+    await page.getByRole("button", { name: /^continue/i }).click();
+    await page.getByRole("button", { name: /^MS/ }).click();
+    await page.getByRole("button", { name: /^continue/i }).click();
+    await page.getByRole("button", { name: /^continue/i }).click();
+
+    const panel = page.getByTestId("capacity-estimate");
+    await expect(panel.getByRole("status")).toContainText(/Enter the players per event/);
+    await panel.getByLabel("Expected players per event").fill("16");
+    await panel.getByLabel("Courts").fill("1");
+    await panel.getByLabel("Hours per day").fill("3.5");
+    // The window is three days, so the playing days start there: 28 matches is about 10.3
+    // court-hours against 10.5.
+    await expect(panel.getByRole("status")).toContainText(/10\.3 court-hours; you have 10\.5/);
+    await expect(panel.getByRole("status")).toContainText(/tight/);
+    await panel.getByLabel("Courts").fill("4");
+    await expect(panel.getByRole("status")).toContainText(/should fit/);
+  });
+
   test("blocks creating while a check fails, and says which step fixes it", async ({ page }) => {
     await page.goto(`${routes.newTournament}?step=review`, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
@@ -931,6 +955,26 @@ test.describe("A tournament with no playing days yet", () => {
     await expect(build).toHaveCount(1);
     await expect(build).toBeDisabled();
     await expect(page.getByText("Choose at least one playing day first.")).toBeVisible();
+  });
+});
+
+test.describe("Entries of an upcoming tournament, for an editor", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
+
+  test("asks whether the real field sizes fit the hall, and asks for no player count", async ({
+    page,
+  }) => {
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const panel = page.getByTestId("capacity-estimate");
+    await expect(panel).toBeVisible();
+    // The entries exist, so the panel counts them rather than asking.
+    await expect(panel.getByLabel("Expected players per event")).toHaveCount(0);
+    await panel.getByLabel("Courts").fill("4");
+    await panel.getByLabel("Hours per day").fill("8");
+    await panel.getByLabel("Playing days").fill("2");
+    await expect(panel.getByRole("status")).toContainText(/court-hours; you have 64/);
   });
 });
 
