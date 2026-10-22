@@ -8,6 +8,7 @@ import { DiscardDialog, UnsavedDialog } from "@/components/tournament-setup/setu
 import { markStepSaved, stepDirty } from "@/components/tournament-setup/dirty";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
+import { WrapUp } from "@/components/tournament-setup/WrapUp";
 import { StructureStep } from "@/components/tournament-setup/StructureStep";
 import { useCompleteTournament } from "@/components/tournament-setup/use-complete-tournament";
 import {
@@ -430,6 +431,9 @@ export function TournamentWizard({
     onCreate: () => void create(),
     onComplete: complete.open,
     onDiscard: () => setDiscarding(true),
+    wrapUp: tournamentId ? (
+      <WrapUp tournamentId={tournamentId} name={draftData.tournament?.name ?? form.basics.name} />
+    ) : undefined,
     onGoToStep: configEditable ? (next: SetupStep) => void leaveTo(next) : undefined,
   };
 

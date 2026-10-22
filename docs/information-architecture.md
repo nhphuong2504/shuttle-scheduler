@@ -201,6 +201,18 @@ page, once the session has settled, rather than in a `beforeLoad` guard: the ses
 the browser and this app renders on the server first, so a load-time guard would read every
 caller as signed out.
 
+A new tournament can also start from a finished one: **Use as template** on a card in My
+Tournaments writes a draft ([`clone.ts`](../src/components/tournament-setup/clone.ts)) into the same
+browser storage the wizard already reads, and opens `/tournaments/new`. It keeps the venue,
+organiser, events and caps, moves the name and dates a year on, and leaves the registration window
+to its defaults. Players, entries, courts and the schedule are not copied, and nothing is created
+until the last step, as for any other new tournament.
+
+When a tournament is completed, Setup's Review step shows a wrap-up
+([`WrapUp.tsx`](../src/components/tournament-setup/WrapUp.tsx)): the champions, a count of what was
+played, a link to the results, and a CSV of every match
+([`results-export.ts`](../src/lib/tournament/results-export.ts)).
+
 ### Working in one
 
 The working tournament is per user: `profiles.current_tournament_id`, written by
