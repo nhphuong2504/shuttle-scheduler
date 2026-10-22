@@ -1166,6 +1166,18 @@ export function MatchOperationsDialog({
         ? "The schedule flags this match, but nothing stops it from starting now. It stays flagged until the schedule is fixed."
         : "This tournament lets you start before the full rest. Check that the players are ready.";
 
+  /**
+   * The match as it was when this dialog opened, for the conflict check at submit.
+   *
+   * `match` is a live prop: the desk refetches on realtime, so another person's correction
+   * arrives here as a new `match` object while this dialog is open. Reading the token from
+   * the prop at submit time would then move the baseline along with the very change the
+   * check exists to catch, and the typed score would overwrite the correction silently.
+   * Captured once instead - which is what "the dialog holds a snapshot" was supposed to
+   * mean. Both call sites key this component by match id, so a mount is an open.
+   */
+  const openedAs = useRef({ status: match.status, reportedAt: match.reportedAt ?? null });
+
   const runStart = async () => {
     const restWarnings = startCheck?.warnings ?? [];
     try {
@@ -1248,7 +1260,12 @@ export function MatchOperationsDialog({
     }
     setBusy(true);
     try {
-      await assertMatchUnchanged(table, match.id, match.status, match.reportedAt ?? null);
+      await assertMatchUnchanged(
+        table,
+        match.id,
+        openedAs.current.status,
+        openedAs.current.reportedAt,
+      );
       if (
         match.kind === "placement" &&
         isReported &&

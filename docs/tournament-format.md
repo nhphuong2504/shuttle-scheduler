@@ -125,8 +125,9 @@ Slots above round one start empty, except that a bye's winner is advanced straig
   Entering a *different* score for an already-reported match replaces the result instead, and
   the replaced one is kept in `match_result_history` with who sent it: a clear is loud and
   recoverable, a correction used to be silent. The desk also refuses a correction made against
-  a stale read (see `assertMatchUnchanged`), so two people correcting the same result cannot
-  overwrite each other without either noticing.
+  a stale read (see `assertMatchUnchanged`), comparing the result token captured when the match
+  was opened - not the live row, which realtime may have already updated - so two people
+  correcting the same result cannot overwrite each other without either noticing.
 
 Source: [`tier-draw.ts`](../src/lib/tournament/tier-draw.ts) (`buildTierBracket`,
 `childSlot`, `isTierMatchReady`, `feederLabel`) and migration
