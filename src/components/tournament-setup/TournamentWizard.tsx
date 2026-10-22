@@ -1,16 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useBlocker, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { CompleteDialog } from "@/components/tournament-setup/CompleteDialog";
 import { DetailsStep } from "@/components/tournament-setup/DetailsStep";
 import { DiscardDialog, UnsavedDialog } from "@/components/tournament-setup/setup-dialogs";
 import { markStepSaved, stepDirty } from "@/components/tournament-setup/dirty";
 import { EventsStep } from "@/components/tournament-setup/EventsStep";
 import { ReviewStep, type ReviewCheck } from "@/components/tournament-setup/ReviewStep";
 import { StructureStep } from "@/components/tournament-setup/StructureStep";
+import { useCompleteTournament } from "@/components/tournament-setup/use-complete-tournament";
 import {
   hydrateForm,
   registrationOrigin,
@@ -41,10 +40,8 @@ import {
   type TournamentStatus,
 } from "@/lib/auth/authorization";
 import {
-  completeTournament,
   createTournament,
   discardTournament,
-  fetchCompletionCheck,
   saveTournamentConfig,
   saveTournamentEvents,
   setRegistrationWindow,
@@ -176,18 +173,13 @@ export function TournamentWizard({
 
   const [form, setForm] = useState<DraftForm>(defaultForm);
   const [busy, setBusy] = useState(false);
-  /** The Complete dialog, which counts what is left to play each time it opens. */
-  const [completing, setCompleting] = useState(false);
   /** The Discard confirmation, which says what discarding destroys before it does. */
   const [discarding, setDiscarding] = useState(false);
-  const completion = useQuery({
-    queryKey: ["completion-check", tournamentId],
-    queryFn: () => fetchCompletionCheck(tournamentId as string),
-    enabled: completing && !!tournamentId,
-    // Counted fresh every time: a match may have gone on court since the page loaded.
-    staleTime: 0,
-    gcTime: 0,
-  });
+  /** The Complete dialog, which counts what is left to play each time it opens. */
+  const complete = useCompleteTournament(
+    tournamentId,
+    draftData.tournament?.name ?? form.basics.name,
+  );
   /**
    * Whether the host has pressed "continue" on this step with something missing.
    *
@@ -364,29 +356,17 @@ export function TournamentWizard({
       clearLocalDraft();
       await refresh();
       toast.success("Tournament created");
+      // The organiser's first job is the roster, not the participant page they just made:
+      // requests to decide while registration is on, otherwise the entries to add.
       void navigate({
-        to: "/tournaments/$tournamentId",
+        to: form.registration.enabled
+          ? "/tournaments/$tournamentId/registrations"
+          : "/tournaments/$tournamentId/entries",
         params: { tournamentId: id },
         replace: true,
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create the tournament");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /** In Progress -> Completed. Terminal apart from a platform admin's repair paths. */
-  const complete = async () => {
-    if (!tournamentId) return;
-    setBusy(true);
-    try {
-      await completeTournament(tournamentId);
-      setCompleting(false);
-      await refresh();
-      toast.success("Tournament completed");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not complete the tournament");
     } finally {
       setBusy(false);
     }
@@ -445,10 +425,10 @@ export function TournamentWizard({
     checks,
     loading: isNew ? false : !readinessQuery.data && !readinessQuery.error,
     error: readinessQuery.error instanceof Error ? readinessQuery.error.message : null,
-    busy,
+    busy: busy || complete.busy,
     status: tournamentStatus,
     onCreate: () => void create(),
-    onComplete: () => setCompleting(true),
+    onComplete: complete.open,
     onDiscard: () => setDiscarding(true),
     onGoToStep: configEditable ? (next: SetupStep) => void leaveTo(next) : undefined,
   };
@@ -459,16 +439,7 @@ export function TournamentWizard({
 
   return (
     <div className="wizard-flow mx-auto w-full max-w-[64rem]">
-      <CompleteDialog
-        open={completing}
-        onOpenChange={setCompleting}
-        name={draftData.tournament?.name ?? form.basics.name}
-        check={completion.data}
-        loading={completing && completion.isPending}
-        error={completion.error instanceof Error ? completion.error.message : null}
-        busy={busy}
-        onConfirm={() => void complete()}
-      />
+      {complete.dialog}
       <DiscardDialog
         open={discarding}
         existing={!isNew}

@@ -98,7 +98,7 @@ export function phaseReminder(phase: TournamentPhase, name: string): string | nu
     case "not_started":
       return `${name} was due to start, but no match has been started yet.`;
     case "past_last_day":
-      return `${name} has finished its last day. Complete it to publish the results.`;
+      return `${name} has finished its last day. Complete it to close the tournament and lock its results.`;
     default:
       return null;
   }

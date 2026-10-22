@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { TournovaMark } from "@/components/brand/tournova-mark";
+import { NextStepCard } from "@/components/next-step-card";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
@@ -162,6 +163,9 @@ const EDITOR_SECTIONS = [
  * entry keeps the section list a plain list of addresses, and means the badge cannot be
  * attached to a section that has no number behind it.
  */
+/** The pages the next-step card is drawn on: where an organiser prepares, not where matches run. */
+const ORGANISER_PAGES = ["/registrations", "/entries", "/placement", "/schedule", "/settings", "/access"];
+
 const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as const;
 
 /**
@@ -977,6 +981,14 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             demonstration data. A tournament shown as in progress is a snapshot of a moment
             during play, so nothing on the page updates on its own.
           </Notice>
+        ) : null}
+        {/*
+          The organiser's next step. For a caller who may edit, and only on the pages where
+          organising happens: the Desk is the moderator's surface, Scores and Knockout are
+          reading and entering results, and the participant page is not an operator's at all.
+        */}
+        {access.can_edit && ORGANISER_PAGES.some((page) => pathname.endsWith(page)) ? (
+          <NextStepCard />
         ) : null}
         {children}
       </main>

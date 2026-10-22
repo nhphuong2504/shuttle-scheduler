@@ -153,7 +153,9 @@ describe("the setup wizard asks only for what activation needs", () => {
     expect(create).not.toMatch(/onCreated/);
     expect(wizard).toMatch(/createTournament\(\{/);
     expect(wizard).toMatch(/clearLocalDraft\(\)/);
-    expect(wizard).toMatch(/to: "\/tournaments\/\$tournamentId"/);
+    // ...and to the organiser's first job, the roster, rather than the participant page.
+    expect(wizard).toMatch(/"\/tournaments\/\$tournamentId\/registrations"/);
+    expect(wizard).toMatch(/"\/tournaments\/\$tournamentId\/entries"/);
   });
 
   it("asks for the tournament window, and leaves the playing days to the schedule", () => {

@@ -700,6 +700,12 @@ function SeedingPanel({
             {view.seedsLocked ? "Re-shuffle seeds" : "Shuffle & lock seeds"}
           </Button>
         ) : null}
+        {canEdit && !hasMatches ? (
+          <p className="text-t4 text-muted-foreground">
+            Seeds can be re-shuffled until the schedule is built. After that the order is frozen,
+            and changing it means resetting the schedule first.
+          </p>
+        ) : null}
         {hasMatches && canEdit ? (
           <p className="text-t4 text-muted-foreground">
             Seeding is frozen because placement matches already exist. The seed order is only

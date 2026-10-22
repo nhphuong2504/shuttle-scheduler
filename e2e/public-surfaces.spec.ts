@@ -725,7 +725,9 @@ test.describe("Creating a tournament, signed in", () => {
 
     await expect(page.getByRole("heading", { name: /ready to create/i })).toBeVisible();
     await page.getByRole("button", { name: "Create tournament" }).click();
-    await expect(page).toHaveURL(new RegExp(routes.tournament + "$"));
+    // The organiser lands on the roster work (registration is on by default), not on the
+    // participant page they just made.
+    await expect(page).toHaveURL(new RegExp(routes.tournament + "/registrations$"));
 
     expect(calls).toHaveLength(1);
     const payload = calls[0]?.payload.p_payload as Record<string, unknown>;
