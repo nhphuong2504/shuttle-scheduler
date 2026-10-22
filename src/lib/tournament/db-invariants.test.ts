@@ -2682,6 +2682,50 @@ describe("report guard migration", () => {
     expect(sql).toMatch(/p_status IS DISTINCT FROM p_expected_status/);
   });
 
+  /**
+   * The advisory locks must come before the row lock, on every path.
+   *
+   * Every other writer in the system - the reflow, the placement resets,
+   * `apply_placement_round_two` - takes `live-schedule` and `placement:<category>` first and
+   * touches rows second. A reporter that locked its row first would hold one lock and wait
+   * for the other while the other transaction does the same, and Postgres would break the tie
+   * with "deadlock detected". Two moderators saving at the same moment is ordinary, so this
+   * ordering has to be pinned rather than remembered.
+   */
+  it("takes the advisory locks before the row lock, so a save cannot deadlock", () => {
+    const start = sql.search(/FUNCTION public\.report_placement_result\b/i);
+    const body = sql.slice(start, sql.indexOf("$function$;", start));
+
+    const liveSchedule = body.indexOf("pg_advisory_xact_lock(hashtext('live-schedule'))");
+    const categoryLock = body.indexOf("hashtext('placement:'");
+    const rowLock = body.indexOf("FOR UPDATE");
+
+    expect(liveSchedule, "the live-schedule lock is taken").toBeGreaterThan(-1);
+    expect(categoryLock, "the placement lock is taken").toBeGreaterThan(-1);
+    expect(rowLock, "the row is locked").toBeGreaterThan(-1);
+
+    expect(liveSchedule).toBeLessThan(rowLock);
+    expect(categoryLock).toBeLessThan(rowLock);
+    // The same order the other writers use: the day lock, then the category.
+    expect(liveSchedule).toBeLessThan(categoryLock);
+  });
+
+  it("refuses a game's whole range before casting it", () => {
+    // A negative score is not a score, which is also how the low end of `int` is handled:
+    // -99999999999 is refused in words instead of failing an integer range cast.
+    expect(sql).toMatch(/\(game ->> 'a'\)::numeric < 0 OR \(game ->> 'b'\)::numeric < 0/);
+    expect(sql).toMatch(/\(game ->> 'a'\)::numeric > 2147483647/);
+  });
+
+  it("labels a guard that raises as STABLE, not IMMUTABLE", () => {
+    const guard = sql.slice(
+      sql.search(/FUNCTION public\.assert_reportable_match/),
+      sql.search(/REVOKE ALL ON FUNCTION public\.assert_reportable_match/),
+    );
+    expect(guard).toMatch(/RETURNS void\s+LANGUAGE plpgsql\s+STABLE/);
+    expect(guard).not.toMatch(/LANGUAGE plpgsql\s+IMMUTABLE/);
+  });
+
   it("accepts only a result-bearing state", () => {
     // `reported` stays reportable: a correction is the same state with a different score.
     for (const state of ["scheduled", "in-progress", "reported"]) {

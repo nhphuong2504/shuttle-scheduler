@@ -41,6 +41,12 @@
 --    against the same row that was compared. `assertMatchUnchanged` stays on the client as
 --    the friendly early message; this is the check that actually holds.
 --
+--    The advisory locks are taken BEFORE that row lock, which is not cosmetic. Every other
+--    writer takes `live-schedule` and `placement:<category>` first and touches rows second;
+--    taking the row first would let two saves hold one lock each and wait on the other, and
+--    Postgres would answer "deadlock detected" - a hard error on a live desk for a result
+--    that was perfectly valid. The category is read unlocked only to name the key.
+--
 -- 4. THE LEGACY DRAW CHECKED THE WRONG THING.
 --
 --    `report_draw_result` refused "a game after the match was decided" by comparing each
@@ -79,6 +85,11 @@
 
 -- One answer to "may this result be written to this row?", so the two reporters cannot drift
 -- apart the way the score predicate did. Internal: both entry points are SECURITY DEFINER.
+--
+-- STABLE rather than IMMUTABLE. It reads no table and compares only its arguments, so a
+-- stricter label looks tempting - but it raises, and an IMMUTABLE function is one the planner
+-- may fold at plan time or evaluate once for a whole statement. The label here means "same
+-- answer within a statement", which is exactly what it does.
 CREATE OR REPLACE FUNCTION public.assert_reportable_match(
   p_status text,
   p_side_a uuid,
@@ -89,7 +100,7 @@ CREATE OR REPLACE FUNCTION public.assert_reportable_match(
 )
 RETURNS void
 LANGUAGE plpgsql
-IMMUTABLE
+STABLE
 SET search_path TO 'public'
 AS $function$
 BEGIN
@@ -185,14 +196,20 @@ BEGIN
        OR (game ->> 'b') !~ '^-?[0-9]+$' THEN
       RAISE EXCEPTION 'Each game needs a whole number of points';
     END IF;
-    -- A number the `int` type cannot hold would fail the cast below, which reads as a
-    -- server fault rather than a refused score. Any real game is far inside this bound.
+    -- A negative score is not a score at all, and this is where the lower end of the `int`
+    -- domain is handled: -99999999999 never reaches the cast, so it is refused in the same
+    -- words as -1 rather than failing with an integer range error.
+    IF (game ->> 'a')::numeric < 0 OR (game ->> 'b')::numeric < 0 THEN
+      RAISE EXCEPTION 'Each game needs a valid winning score';
+    END IF;
+    -- A non-negative number the `int` type cannot hold would also fail the cast below. Any
+    -- real game is far inside this bound.
     IF (game ->> 'a')::numeric > 2147483647 OR (game ->> 'b')::numeric > 2147483647 THEN
       RAISE EXCEPTION 'A game score is too large to record';
     END IF;
     sa := (game->>'a')::int;
     sb := (game->>'b')::int;
-    IF sa < 0 OR sb < 0 OR sa = sb THEN
+    IF sa = sb THEN
       RAISE EXCEPTION 'Each game needs a valid winning score';
     END IF;
     IF NOT public.game_score_is_legal(sa, sb, p_games_to, p_win_by) THEN
@@ -251,6 +268,7 @@ DECLARE
   -- src/lib/tournament/placement-actions.ts so the desk refuses the same number.
   c_max_minutes_ago constant integer := 720;
   v_tournament uuid;
+  v_category uuid;
   v_status text;
   v_side_a uuid;
   v_side_b uuid;
@@ -275,6 +293,26 @@ BEGIN
   IF p_ended_minutes_ago > c_max_minutes_ago THEN
     RAISE EXCEPTION 'A finish more than % minutes ago cannot be recorded', c_max_minutes_ago;
   END IF;
+
+  -- Read without a lock: this only names the lock below, and a match never moves between
+  -- categories, so there is nothing to protect here.
+  SELECT category_id INTO v_category
+  FROM public.placement_matches WHERE id = p_match_id;
+  IF v_category IS NULL THEN
+    RAISE EXCEPTION 'Unknown match';
+  END IF;
+
+  -- THE ADVISORY LOCKS COME BEFORE THE ROW LOCK, and that order is load-bearing.
+  --
+  -- Every other writer in this system - the live reflow, the placement resets,
+  -- `apply_placement_round_two`, the day writer - takes `live-schedule` and
+  -- `placement:<category>` first and only then touches rows. Locking the row first and the
+  -- advisory key second would let two saves hold one each and wait on the other; Postgres
+  -- breaks that tie with a "deadlock detected" error, which at a live desk reads as a save
+  -- that failed for no reason. Two moderators entering results at the same moment is
+  -- ordinary, so the order has to be the same on every path.
+  PERFORM pg_advisory_xact_lock(hashtext('live-schedule'));
+  PERFORM pg_advisory_xact_lock(hashtext('placement:' || v_category::text));
 
   -- The row is locked for the whole decision, so the expectation is compared against, and
   -- the result written to, the same version of the row.
@@ -314,9 +352,6 @@ BEGIN
   IF v_started_at IS NOT NULL AND v_ended_at < v_started_at THEN
     RAISE EXCEPTION 'The finish time is before the match started';
   END IF;
-
-  PERFORM pg_advisory_xact_lock(hashtext('live-schedule'));
-  PERFORM pg_advisory_xact_lock(hashtext('placement:' || (SELECT category_id FROM public.placement_matches WHERE id = p_match_id)::text));
 
   UPDATE public.placement_matches
   SET games = p_games,

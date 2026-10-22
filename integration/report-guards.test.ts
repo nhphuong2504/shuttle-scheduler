@@ -407,4 +407,22 @@ describe("a game is a whole number of points", () => {
     const { error } = await reportPlacement(match, [{ a: 21.5, b: 19 }]);
     expect(error?.message).toBe("Each game needs a whole number of points");
   }, 120_000);
+
+  it("refuses a negative score in words, rather than on the integer range", async () => {
+    const seeded = await seed("negative");
+    const match = await placementMatch(seeded, "negative");
+
+    // The low end of `int` is the case a single upper bound leaves to the cast:
+    // -99999999999 matches the digits pattern and then overflows `::int`.
+    const { error } = await reportPlacement(match, [{ a: -99999999999, b: 19 }]);
+    expect(error?.message).toBe("Each game needs a valid winning score");
+  }, 120_000);
+
+  it("refuses a score beyond what the column holds", async () => {
+    const seeded = await seed("huge");
+    const match = await placementMatch(seeded, "huge");
+
+    const { error } = await reportPlacement(match, [{ a: 4000000000, b: 19 }]);
+    expect(error?.message).toBe("A game score is too large to record");
+  }, 120_000);
 });
