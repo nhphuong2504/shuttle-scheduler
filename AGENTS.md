@@ -39,7 +39,7 @@ operator at all, and no surface should present participation as authority.
 The visual design is not settled. There is no design system to conform to and no UI rule
 beyond the audience split above: layout, colour, type, spacing and components are yours to
 choose, and existing styling is not a constraint. Keep the result accessible — the
-accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
+accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `route-sweep.spec.ts`,
 `states.spec.ts`) still run. Current colour, type and size guidance is in
 [`docs/design-principles.md`](docs/design-principles.md); it is guidance, not a gate.
 
@@ -74,7 +74,7 @@ migration — add a new one.
 ## Workflow
 
 Short-lived branches and pull requests. Every CI job must be green before merge. The browser
-job is **sharded across four runners** - the suite is CPU-bound, not worker-bound, so its wall
+job is **sharded across two runners** - the suite is CPU-bound, not worker-bound, so its wall
 time comes from running fewer tests per machine rather than more workers on one.
 
 ```mermaid
@@ -123,7 +123,7 @@ npm run build
 - `npm run test:e2e:final` sets `E2E_REQUIRE_STAFF=1`, which turns any skipped test
   into a failure, and then asserts that the run contained **zero** skips. A skipped
   test is never a passing test.
-- CI shards that same suite across four runners. If you add or rename a spec file, run
+- CI shards that same suite across two runners. If you add or rename a spec file, run
   `npm run ci:shard-plan` — the split is by test count, so a new file reshuffles every
   shard boundary, and it reports the wall time and billed minutes for each shard count.
 - **`npm run test:integration` is not part of that list.** It runs the real application

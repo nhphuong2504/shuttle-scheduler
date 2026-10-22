@@ -1,7 +1,7 @@
 # Design principles
 
 Guidance for colour, type and size. This is not a rulebook and no test pins it: the
-accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `matrix.spec.ts`,
+accessibility specs (`e2e/a11y.spec.ts`, `criteria.spec.ts`, `route-sweep.spec.ts`,
 `states.spec.ts`) are the only enforcement. Break a principle when a screen needs it, and say
 why in the PR.
 

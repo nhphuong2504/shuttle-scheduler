@@ -61,6 +61,11 @@ export default defineConfig({
    * through the shared `page` fixture, so the credentials this server boots with are never
    * used for data. An unmocked Supabase request is aborted rather than passed through, so
    * a gap in the fixture fails loudly instead of quietly reading the hosted project.
+   *
+   * It is the dev server on purpose. React's production build drops the hydration-mismatch
+   * console error that `route-sweep.spec.ts` listens for, so running against a build would
+   * make that check pass vacuously. Cold-transform cost is paid once per run now that each
+   * route is loaded once rather than eight times.
    */
   webServer: {
     command: "npm run dev",

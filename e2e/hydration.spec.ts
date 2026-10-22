@@ -1,13 +1,11 @@
-import { type ConsoleMessage, type Page } from "@playwright/test";
-
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
 
-import { cellLabel, MATRIX_CELLS, openCell, ROUTES } from "./fixtures/matrix";
+import { MATRIX_CELLS, openCell } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 
 /**
- * Hydration, checked across the matrix.
+ * Hydration.
  *
  * This exists because a real defect hid behind the two blind spots the earlier gates had.
  * The Desk rendered a wall-clock time from `Date.now()` into the server HTML, so whenever
@@ -16,67 +14,10 @@ import { routes } from "./fixtures/routes";
  * on the client. That is a functional failure in production - the busiest screen of a live
  * event discards its server render, flickers, and repeats the work the server already did.
  *
- * Nothing caught it. Axe does not look at hydration. The token and component tests never
- * run a second renderer. And the one existing mismatch test only checked a single route on
- * a fast local server, where the load reliably completes inside a single minute - so it
- * passed *because the clock rarely ticks mid-load*, which is the definition of a latent bug.
- *
- * What makes this check able to see what the old one could not is that every route is
- * checked, not just the Desk. The defect happened to be on the Desk, but the next one need
- * not be - so the sweep walks `ROUTES` through the shared `openCell` helper rather than
- * naming the pages it remembers.
+ * The every-route mismatch check now lives in `route-sweep.spec.ts`, which listens for
+ * hydration complaints on the same load as its other measurements. What stays here is the
+ * specific regression, pinned by its cause.
  */
-
-type Mismatch = { route: string; cell: string; message: string };
-
-/**
- * Collects hydration complaints from both channels they can arrive on.
- *
- * React reports a hydration mismatch through `console.error`, not by throwing, so a page
- * that "loads fine" can still be discarding its entire server render. `pageerror` is
- * checked as well because a thrown error during hydration would otherwise be missed.
- */
-function watchForMismatches(
-  page: Page,
-  sink: { route: string; cell: string; message: string }[],
-  cell: string,
-) {
-  const record = (message: string) => {
-    if (/hydrat/i.test(message)) sink.push({ route: page.url(), cell, message });
-  };
-  page.on("console", (message: ConsoleMessage) => {
-    if (message.type() === "error") record(message.text());
-  });
-  page.on("pageerror", (error: Error) => record(error.message));
-}
-
-test.describe("no route discards its server render", () => {
-  // The sweep visits all 12 routes and then waits for the console to settle, so it needs
-  // a budget sized for that rather than the 60s default.
-  test.describe.configure({ timeout: 240_000 });
-
-  for (const cell of MATRIX_CELLS) {
-    test(`every route hydrates cleanly (${cellLabel(cell)})`, async ({ page }) => {
-      const mismatches: Mismatch[] = [];
-      watchForMismatches(page, mismatches, cellLabel(cell));
-
-      for (const route of ROUTES) {
-        await openCell(page, route, cell);
-        // The mismatch is raised during hydration, which `openCell` has already waited
-        // for. The settle gives React's console output a chance to reach the listener
-        // before the next navigation.
-        await page.waitForTimeout(250);
-      }
-
-      expect(
-        mismatches,
-        `hydration mismatches: ${mismatches
-          .map((m) => `${m.route} — ${m.message.slice(0, 200)}`)
-          .join(" | ")}`,
-      ).toEqual([]);
-    });
-  }
-});
 
 /**
  * The specific regression, pinned by its observable cause.

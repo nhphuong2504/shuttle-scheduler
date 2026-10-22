@@ -1,9 +1,13 @@
 name: CI
 
+# Documentation-only changes cannot break the build or the browser suite, so they do not
+# spend runner minutes on them.
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
+    paths-ignore: ["docs/**", "**/*.md"]
 
 # Superseded runs are cancelled: a force-pushed branch should not hold a runner.
 concurrency:
@@ -68,19 +72,16 @@ jobs:
       # other's, which is most of the reason for splitting the run in the first place.
       fail-fast: false
       matrix:
-        # 4 shards, chosen from measurement rather than intuition - see `npm run
-        # ci:shard-plan`, which prints the wall time and billed minutes for each count.
+        # 2 shards, chosen for billed minutes. The plan (`npm run ci:shard-plan`) predicts
+        # 5.2 billed minutes at 2 shards against 7.0 at 4, for ~3.5 min of work on the
+        # slowest shard instead of ~2.2. The private-repo allowance is 2,000 minutes a
+        # month and ran out, so cost outranks the extra 1.3 min of wall time. 2 is also the
+        # most even split (94%): shards split by test *count*, not duration, so a finer
+        # split shuffles the heavy specs back together.
         #
-        # Re-measured when the density axis was removed, which took the suite from 297
-        # tests to 161. 4 shards now predicts 2.5 min wall on 7.3 billed minutes. 3 is
-        # slower (3.1 min wall) and only slightly cheaper (6.4 billed), and 5 buys 0.2 min
-        # of wall (2.3) for 0.9 more billed minutes, so the extra shard does not pay for
-        # itself. 6 is worse on both counts (2.5 wall, 9.1 billed) - shards split by test
-        # *count*, not duration, so a finer split shuffles the heavy specs back together.
-        #
-        # Re-run that script after adding or removing a spec file: the split is by test
+        # Re-run the script after adding or removing a spec file: the split is by test
         # count, so it reshuffles every shard boundary.
-        shard: [1, 2, 3, 4]
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
 
@@ -91,7 +92,24 @@ jobs:
 
       - run: npm ci
 
-      - run: npx playwright install --with-deps chromium
+      # The browser download is the slow part of Playwright's setup and is identical on
+      # every run of a given version, so it is cached by that version. A hit still needs the
+      # system libraries, which live outside the cache and are installed by `install-deps`;
+      # a miss installs both. Shards share one cache key, so the first run fills it for all.
+      - id: playwright-version
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
