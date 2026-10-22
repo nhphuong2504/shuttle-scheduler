@@ -73,6 +73,7 @@ import {
   type PlacementMatch,
   type Player,
   type ScheduleConflict,
+  type TierDrawMatch,
   type TournamentDay,
 } from "@/lib/tournament/data";
 import {
@@ -1065,11 +1066,26 @@ export function MatchOperationsDialog({
   /** After a result: draw what it unlocked and slot newly ready matches, never moving a time. */
   const autoSchedule = useAutoSchedule();
   const { data: allPlacementMatches } = usePlacementMatches();
+  const { data: tierDrawMatches } = useTierDrawMatches();
   const dependentMatches = (allPlacementMatches ?? []).filter((m) =>
     m.prerequisite_ids.includes(match.id),
   );
   const dependentLabel = (m: PlacementMatch) =>
     `Round 2 match ${m.generation_key.replace("r2-", "")}${m.scheduled_time ? ` — ${timeLabel(new Date(m.scheduled_time), timezone)}` : " — no time assigned"}${m.court_id ? `, Court ${courts.find((c) => c.id === m.court_id)?.number ?? "TBC"}` : ""}`;
+  /**
+   * The knockout match this result feeds.
+   *
+   * A bracket match names its two feeders, so the child of a result is a direct lookup rather
+   * than a slot calculation, and there is at most one: a parent fills exactly one slot of
+   * exactly one later match. What a corrected winner *does* to that child is decided in the
+   * database - it is repaired in place while it is unplayed, and refused once it has started -
+   * so the dialog asks before the attempt and says which match it is about.
+   */
+  const knockoutChild = (tierDrawMatches ?? []).find(
+    (m) => m.parent_a_id === match.id || m.parent_b_id === match.id,
+  );
+  const knockoutChildLabel = (m: TierDrawMatch) =>
+    `Round ${m.round} match ${m.slot}${m.scheduled_time ? ` — ${timeLabel(new Date(m.scheduled_time), timezone)}` : " — no time assigned"}${m.court_id ? `, Court ${courts.find((c) => c.id === m.court_id)?.number ?? "TBC"}` : ""}`;
   const rows = scoringRule.bestOf;
   const [values, setValues] = useState(() =>
     scoreFormValues(rows, match.status, match.initialGames),
@@ -1321,13 +1337,18 @@ export function MatchOperationsDialog({
         openedAs.current.status,
         openedAs.current.reportedAt,
       );
-      if (
-        match.kind === "placement" &&
+      /**
+       * Whether this save changes who won, as opposed to only the score.
+       *
+       * Both dependents care about exactly this and nothing else: a score correction that
+       * keeps the same winner changes no later match, so warning about one would train the
+       * desk to click through the warning that matters.
+       */
+      const winnerChanged =
         isReported &&
-        tournamentId &&
         gamesWinnerFor(games, scoringRule) !==
-          gamesWinnerFor(parseGames(match.initialGames), scoringRule)
-      ) {
+          gamesWinnerFor(parseGames(match.initialGames), scoringRule);
+      if (match.kind === "placement" && winnerChanged && tournamentId) {
         const affected = (await fetchPlacementMatches(tournamentId)).filter((m) =>
           m.prerequisite_ids.includes(match.id),
         );
@@ -1339,10 +1360,32 @@ export function MatchOperationsDialog({
         )
           return;
       }
+      /**
+       * A corrected knockout winner moves the next round's entrant.
+       *
+       * The database settles what happens to that child - repaired in place while it is still
+       * unplayed, refused once it has started - so this only asks before the attempt, and
+       * refuses early in the case the server would refuse anyway. Saying it here is the
+       * difference between "the Save button failed" and knowing which match is affected.
+       */
+      if (match.kind === "tier" && winnerChanged && knockoutChild) {
+        if (knockoutChild.status !== "scheduled") {
+          toast.error(
+            "The next round has already started from this result, so the winner cannot be changed.",
+          );
+          return;
+        }
+        if (
+          !window.confirm(
+            `Changing the winner changes who fills a slot in ${knockoutChildLabel(knockoutChild)}. Its court and time stay as published. Continue?`,
+          )
+        )
+          return;
+      }
       if (match.kind === "placement" || match.kind === "tier") {
         if (!tournamentId) throw new Error("No active tournament.");
         const report = match.kind === "placement" ? reportPlacementMatch : reportTierDrawMatch;
-        const impact = await report(match.id, games, tournamentId, endedMinutes);
+        const impact = await report(match.id, games, tournamentId, endedMinutes, openedAs.current);
         // The placement path reports its ripple in minutes rather than as a plan
         // diff, so it gets its own note rather than `impactMessage`.
         const note = scheduleImpactNote(impact);

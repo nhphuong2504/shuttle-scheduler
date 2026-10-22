@@ -1773,7 +1773,13 @@ export type Database = {
       }
       remove_demo_tournaments: { Args: never; Returns: number }
       report_placement_result: {
-        Args: { p_ended_minutes_ago?: number; p_games: Json; p_match_id: string }
+        Args: {
+          p_ended_minutes_ago?: number
+          p_expected_reported_at?: string
+          p_expected_status?: string
+          p_games: Json
+          p_match_id: string
+        }
         Returns: undefined
       }
       report_pool_result: {
@@ -1781,7 +1787,13 @@ export type Database = {
         Returns: undefined
       }
       report_tier_draw_result: {
-        Args: { p_ended_minutes_ago?: number; p_games: Json; p_match_id: string }
+        Args: {
+          p_ended_minutes_ago?: number
+          p_expected_reported_at?: string
+          p_expected_status?: string
+          p_games: Json
+          p_match_id: string
+        }
         Returns: undefined
       }
       reschedule_live_match: {

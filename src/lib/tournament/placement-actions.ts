@@ -701,18 +701,46 @@ export function stageGenerationChanged(outcome: StageGenerationOutcome): boolean
 export const MAX_ENDED_MINUTES_AGO = 720;
 
 /**
+ * The match as the dialog opened it, for the server's staleness check.
+ *
+ * `reportedAt` is null for a match nobody has reported, which is a real expectation and not
+ * an absence of one: the server binds the timestamp to `status = 'reported'`, so a first
+ * entry is guarded by the status alone and a correction by both. Keeping it optional means
+ * a scripted caller - and every integration fixture - asks for no check at all.
+ */
+export interface ResultSnapshot {
+  status: string;
+  reportedAt: string | null;
+}
+
+/**
  * The argument for a report, omitting the offset when it is zero.
  *
  * The database default is 0 and means "keep the old COALESCE(ended_at, now())", so
  * sending nothing keeps every existing caller and every test fixture on the old path.
  * A zero sent explicitly would be the same value, but omitting it keeps the request
  * shape — and the mocks that assert it — unchanged.
+ *
+ * The snapshot follows the same rule: absent entirely when the caller is not checking, so
+ * the request shape of every existing caller is untouched. A null `reportedAt` is omitted
+ * rather than sent, because NULL is how the server says "do not compare a result token".
  */
-function reportArgs(matchId: string, games: unknown, endedMinutesAgo: number) {
+function reportArgs(
+  matchId: string,
+  games: unknown,
+  endedMinutesAgo: number,
+  expected?: ResultSnapshot,
+) {
   return {
     p_match_id: matchId,
     p_games: games,
     ...(endedMinutesAgo > 0 ? { p_ended_minutes_ago: endedMinutesAgo } : {}),
+    ...(expected
+      ? {
+          p_expected_status: expected.status,
+          ...(expected.reportedAt ? { p_expected_reported_at: expected.reportedAt } : {}),
+        }
+      : {}),
   };
 }
 
@@ -732,9 +760,10 @@ export async function reportPlacementMatch(
   games: unknown,
   tournamentId: string,
   endedMinutesAgo = 0,
+  expected?: ResultSnapshot,
 ): Promise<PlacementScheduleImpact> {
   const { impact } = await withPlacementScheduleImpact(tournamentId, () =>
-    rpc("report_placement_result", reportArgs(matchId, games, endedMinutesAgo)),
+    rpc("report_placement_result", reportArgs(matchId, games, endedMinutesAgo, expected)),
   );
   return impact;
 }
@@ -751,9 +780,10 @@ export async function reportTierDrawMatch(
   games: unknown,
   tournamentId: string,
   endedMinutesAgo = 0,
+  expected?: ResultSnapshot,
 ): Promise<PlacementScheduleImpact> {
   const { impact } = await withPlacementScheduleImpact(tournamentId, () =>
-    rpc("report_tier_draw_result", reportArgs(matchId, games, endedMinutesAgo)),
+    rpc("report_tier_draw_result", reportArgs(matchId, games, endedMinutesAgo, expected)),
   );
   return impact;
 }
