@@ -456,6 +456,8 @@ test.describe("staff surfaces", () => {
     const group = dialog.getByRole("group", { name: "When did it finish?" });
     expectPresent((await group.count()) > 0, "The finish-time group in the score dialog");
     // Defaults to "Just now", which reads as "report live" and sends nothing to the RPC.
+    await expect(group).toContainText("Finished just now");
+    await group.getByRole("button", { name: "Change" }).click();
     await expect(group.getByRole("button", { name: "Just now" })).toHaveAttribute(
       "aria-pressed",
       "true",

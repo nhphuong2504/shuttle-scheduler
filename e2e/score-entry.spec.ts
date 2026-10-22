@@ -239,6 +239,7 @@ test.describe("Entering a result", () => {
     // The field used to be drawn for placement alone, though `report_tier_draw_result` has
     // taken the offset since `20261011000000`. A late knockout result therefore reflowed the
     // day from the moment it was typed rather than from when the match ended.
+    await dialog.getByRole("button", { name: "Change", exact: true }).click();
     await dialog.getByRole("button", { name: "10 min ago", exact: true }).click();
 
     const sent = page.waitForRequest((request) =>

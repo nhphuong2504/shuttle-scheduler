@@ -186,7 +186,7 @@ Four behaviours are deliberate:
 
 ## Recording a result: when did it finish?
 
-Placement and knockout matches only. Chips "Just now / 5 min ago / 10 min ago" plus "Other
+Placement and knockout matches only. Folded to one line ("Finished just now · Change"); Change opens the chips "Just now / 5 min ago / 10 min ago" plus "Other
 time…", a clock time read on the venue's wall clock (`finish-time.ts`). The RPC still takes
 minutes, so the screen converts; nothing server-side changed.
 

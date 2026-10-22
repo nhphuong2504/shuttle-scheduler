@@ -1115,6 +1115,8 @@ export function MatchOperationsDialog({
    * so a clock time is converted on the way out (`minutesAgoFromClock`).
    */
   const [finishChoice, setFinishChoice] = useState<"now" | "5" | "10" | "other">("now");
+  // Nearly every result is reported live, so the picker stays folded until asked for.
+  const [finishOpen, setFinishOpen] = useState(false);
   const [finishClock, setFinishClock] = useState("");
   const finishClockFieldId = useId();
   const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
@@ -1659,61 +1661,75 @@ export function MatchOperationsDialog({
           </p>
         ) : null}
         {/*
-          The late-entry correction, kept to one quiet row under the score box so it
-          never competes with entering the score itself. Only the placement and
-          knockout tables accept the offset, so it is not drawn for the rest.
+          The late-entry correction: one quiet row, so it never competes with entering the
+          score. Only the placement and knockout tables accept the offset.
         */}
         {canEditScores && canBackdateFinish ? (
-          <fieldset
-            className="rounded-lg border border-hairline bg-muted/20 px-3 py-2.5"
-            disabled={!canEdit || busy}
-          >
-            <legend className="px-1 text-sm font-semibold">When did it finish?</legend>
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  ["now", "Just now"],
-                  ["5", "5 min ago"],
-                  ["10", "10 min ago"],
-                  ["other", "Other time…"],
-                ] as const
-              ).map(([value, text]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={finishChoice === value}
-                  onClick={() => setFinishChoice(value)}
-                  className={`min-h-11 rounded-full border px-4 text-sm ${
-                    finishChoice === value
-                      ? "border-primary bg-primary font-semibold text-primary-foreground"
-                      : "border-hairline bg-surface"
-                  }`}
-                >
-                  {text}
-                </button>
-              ))}
+          <fieldset className="min-w-0 space-y-2" disabled={!canEdit || busy}>
+            <legend className="sr-only">When did it finish?</legend>
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <p className="text-sm">
+                <span className="text-muted-foreground">Finished </span>
+                <span className="font-semibold">
+                  {finishChoice === "now"
+                    ? "just now"
+                    : finishChoice === "other"
+                      ? `at ${finishClock || "…"}`
+                      : `${finishChoice} min ago (${clockFromMinutesAgo(Number(finishChoice), new Date(), timezone)})`}
+                </span>
+              </p>
+              <button
+                type="button"
+                aria-expanded={finishOpen}
+                onClick={() => setFinishOpen((open) => !open)}
+                className="min-h-11 rounded-md px-3 text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {finishOpen ? "Done" : "Change"}
+              </button>
             </div>
-            {finishChoice === "other" ? (
-              <div className="mt-2 flex items-center gap-2">
-                <label htmlFor={finishClockFieldId} className="text-sm text-muted-foreground">
-                  Finish time
-                </label>
-                <Input
-                  id={finishClockFieldId}
-                  type="time"
-                  className="h-11 w-36"
-                  value={finishClock}
-                  onChange={(e) => setFinishClock(e.target.value)}
-                />
+            {finishOpen ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    ["now", "Just now"],
+                    ["5", "5 min ago"],
+                    ["10", "10 min ago"],
+                    ["other", "Other time…"],
+                  ] as const
+                ).map(([value, text]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={finishChoice === value}
+                    onClick={() => {
+                      setFinishChoice(value);
+                      if (value !== "other") setFinishOpen(false);
+                    }}
+                    className={`min-h-11 rounded-full border px-3.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                      finishChoice === value
+                        ? "border-primary bg-primary font-semibold text-primary-foreground"
+                        : "border-hairline bg-surface"
+                    }`}
+                  >
+                    {text}
+                  </button>
+                ))}
+                {finishChoice === "other" ? (
+                  <>
+                    <label htmlFor={finishClockFieldId} className="sr-only">
+                      Finish time
+                    </label>
+                    <Input
+                      id={finishClockFieldId}
+                      type="time"
+                      className="h-11 w-32"
+                      value={finishClock}
+                      onChange={(e) => setFinishClock(e.target.value)}
+                    />
+                  </>
+                ) : null}
               </div>
             ) : null}
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {finishChoice === "now"
-                ? "Choose an earlier time if you are entering the result late, so the rest of the day isn't pushed back."
-                : finishChoice === "other"
-                  ? "Use the venue clock. Later matches shift by what actually happened."
-                  : `Finished at ${clockFromMinutesAgo(Number(finishChoice), new Date(), timezone)}. Later matches shift by what actually happened.`}
-            </p>
           </fieldset>
         ) : null}
         {!isReported &&
