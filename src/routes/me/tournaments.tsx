@@ -3,6 +3,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { cloneDraft } from "@/components/tournament-setup/clone";
+import { saveLocalDraft } from "@/components/tournament-setup/local-draft";
 import { EmptyState, Panel, PublicShell } from "@/components/app-shell";
 import { TournamentCard } from "@/components/tournament-card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,7 @@ import { isConfigurable } from "@/lib/auth/authorization";
 import { signInSearch } from "@/lib/routing/redirect";
 import { deleteTournament, setCurrentTournament } from "@/lib/tournament/actions";
 import {
+  fetchTournamentForClone,
   useCurrentTournamentPointer,
   useMyTournaments,
   type TournamentSummary,
@@ -120,6 +123,25 @@ function MyTournamentsPage() {
       void navigate({ to: "/tournaments/$tournamentId/desk", params: { tournamentId: summary.id } });
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "Could not switch tournament");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Starts a new tournament from this one: its venue, organiser and events, a year on.
+   *
+   * Nothing is created. The answers go into the create flow's browser draft, so the host
+   * reads all four steps before the one act that writes.
+   */
+  const startFrom = async (summary: TournamentSummary) => {
+    setBusy(true);
+    try {
+      const { tournament, categories } = await fetchTournamentForClone(summary.id);
+      saveLocalDraft(cloneDraft(tournament, categories));
+      void navigate({ to: "/tournaments/new" });
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "Could not copy the tournament");
     } finally {
       setBusy(false);
     }
@@ -256,6 +278,14 @@ function MyTournamentsPage() {
                           </Link>
                         </Button>
                       ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void startFrom(summary)}
+                      >
+                        Use as template
+                      </Button>
                       {canManage ? (
                         <Button
                           size="sm"

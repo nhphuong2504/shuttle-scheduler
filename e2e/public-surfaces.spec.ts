@@ -946,6 +946,35 @@ test.describe("Setting up a completed tournament", () => {
     await expect(page.getByRole("button", { name: "Save details" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Complete tournament" })).toHaveCount(0);
   });
+
+  test("leaves the organiser a wrap-up: how it went, a link and a results file", async ({
+    page,
+  }) => {
+    await page.goto(routes.settings + "?step=review", { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const wrapUp = page.getByTestId("wrap-up");
+    await expect(wrapUp).toBeVisible();
+    await expect(wrapUp.getByText(/matches? played/)).toBeVisible();
+    await expect(wrapUp.getByRole("button", { name: "Copy results link" })).toBeVisible();
+
+    const download = page.waitForEvent("download");
+    await wrapUp.getByRole("button", { name: /Download results/ }).click();
+    expect((await download).suggestedFilename()).toMatch(/-results\.csv$/);
+  });
+
+  test("can be used as a template for the next one, which lands in the create flow", async ({
+    page,
+  }) => {
+    await page.goto(routes.myTournaments, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "Use as template" }).first().click();
+    await expect(page).toHaveURL(/\/tournaments\/new/);
+    // Nothing was created: the answers are a draft, with the name moved on.
+    await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue(
+      /\(copy\)$|20\d\d/,
+    );
+  });
 });
 
 /**

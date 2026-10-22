@@ -1071,6 +1071,21 @@ export function useCourtsFor(tournamentId: string | null | undefined) {
 }
 
 /** Events for a specific tournament, so a non-active draft can be edited. */
+/** One tournament and its events, read once, for starting a new tournament from it. */
+export async function fetchTournamentForClone(
+  tournamentId: string,
+): Promise<{ tournament: Tournament; categories: Category[] }> {
+  const [tournaments, categories] = await Promise.all([
+    must<Tournament[]>(supabase.from("tournaments").select("*").eq("id", tournamentId).limit(1)),
+    must<Category[]>(
+      supabase.from("categories").select("*").eq("tournament_id", tournamentId).order("sort_order"),
+    ),
+  ]);
+  const tournament = tournaments[0];
+  if (!tournament) throw new Error("That tournament could not be found.");
+  return { tournament, categories };
+}
+
 export function useCategoriesFor(tournamentId: string | null | undefined) {
   return useQuery({
     queryKey: scopedKey(keys.categories, tournamentId),
