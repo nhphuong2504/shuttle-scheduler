@@ -89,6 +89,31 @@ is fixed. The same construct survives in
 Both are outside the hermetic gates and were not exercised here, so they are recorded rather
 than changed. The integration suite needs its own run to prove a fix.
 
+### Retirement in the placement format
+
+A player can stop mid-match — injury, a family matter, a walkover agreed on court — and the
+supported format cannot record it. The only exception paths are `walkover` and `void`
+(`resolve_match_exception`), and the desk hides both for the placement and bracket tables
+(`isPlacement` in [`desk.tsx`](../src/routes/tournaments/$tournamentId/desk.tsx)), so
+[`scheduling-decisions.md`](scheduling-decisions.md) states it as a rule: withdrawals and
+walkovers are not part of the placement format. The desk is left inventing a full score or
+voiding a match that was partly played.
+
+This is deliberately deferred rather than half-built. The honest shape is a `retired` status
+carrying the games played to the point of retirement, which is not a local change:
+
+- the `status` CHECK on `placement_matches` and `tier_draw_matches` gains a value;
+- `stage-progress.ts` decides played/settled from status sets, and a retirement is played but
+  not a completed result;
+- `court-state.ts`, `knockout-bracket.tsx`, the Scores filter and `standings.ts` each enumerate
+  statuses and would silently misreport the new one;
+- the placement tie-break reads two results per entrant, and a retirement is a loss with a
+  partial record.
+
+A cheaper alternative — allowing `walkover`/`void` on the two newer tables — loses the games
+already played, so it is not the same feature and should not be mistaken for it. Not scheduled;
+recorded so the gap is a decision rather than an oversight.
+
 ### Operator scripts and the Prettier backlog
 
 `scripts/fake-day-one-results.mjs` and the `generate-/verify-placement-shift-migration.ps1`
