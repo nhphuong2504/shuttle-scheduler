@@ -120,6 +120,25 @@ test.describe("Entering a result", () => {
     await expect(dialog).toHaveCount(0);
   });
 
+  test("a knockout result can say when it finished", async ({ page }) => {
+    const dialog = await openLiveMatch(page);
+    await fillGame(dialog, 1, "21", "19");
+    await fillGame(dialog, 2, "21", "18");
+
+    // The field used to be drawn for placement alone, though `report_tier_draw_result` has
+    // taken the offset since `20261011000000`. A late knockout result therefore reflowed the
+    // day from the moment it was typed rather than from when the match ended.
+    await dialog.getByRole("button", { name: "10 min ago", exact: true }).click();
+
+    const sent = page.waitForRequest((request) =>
+      request.url().includes("/rpc/report_tier_draw_result"),
+    );
+    await dialog.getByRole("button", { name: "Report result", exact: true }).click();
+
+    const body = JSON.parse((await sent).postData() ?? "{}") as { p_ended_minutes_ago?: number };
+    expect(body.p_ended_minutes_ago).toBe(10);
+  });
+
   test("the refusal introduces no accessibility violation", async ({ page }) => {
     const dialog = await openLiveMatch(page);
     await fillGame(dialog, 1, "21", "20");

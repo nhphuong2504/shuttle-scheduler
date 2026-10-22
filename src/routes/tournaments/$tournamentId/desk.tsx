@@ -1115,6 +1115,16 @@ export function MatchOperationsDialog({
   const canClearResult = isReported && isPlacement && canEdit;
 
   /**
+   * Whether this result can say when it finished.
+   *
+   * Only the placement and knockout tables take the offset, and both RPCs have had the
+   * parameter since `20261011000000_report_ended_minutes_ago.sql`. The dialog drew the
+   * field for placement alone, so a knockout result entered twenty minutes late reflowed
+   * the rest of the day from the entry time - the exact case the offset was added for.
+   */
+  const canBackdateFinish = isPlacement || match.kind === "tier";
+
+  /**
    * The schedule's conflicts for this match, reduced to their distinct reasons.
    *
    * A soft gate, unlike `startCheck.conflicts`: it opens the confirmation dialog rather
@@ -1213,7 +1223,7 @@ export function MatchOperationsDialog({
     // The offset only exists on the placement and knockout paths. A blank field reads
     // as 0, which is "reported live" and is exactly the old behaviour.
     let endedMinutes = 0;
-    if (isPlacement) {
+    if (canBackdateFinish) {
       if (finishChoice === "other") {
         const fromClock = minutesAgoFromClock(finishClock, new Date(), timezone);
         if (fromClock === null) {
@@ -1517,7 +1527,7 @@ export function MatchOperationsDialog({
           never competes with entering the score itself. Only the placement and
           knockout tables accept the offset, so it is not drawn for the rest.
         */}
-        {canEditScores && isPlacement ? (
+        {canEditScores && canBackdateFinish ? (
           <fieldset
             className="rounded-lg border border-hairline bg-muted/20 px-3 py-2.5"
             disabled={!canEdit || busy}
