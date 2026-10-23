@@ -184,7 +184,13 @@ test.describe("Entering a result", () => {
     );
 
     // Select the digit it replaces, and the same paste is welcome.
-    await box(dialog, 1, 0).press("Control+a");
+    //
+    // `ControlOrMeta` rather than `Control`: on macOS `Control+a` is not select-all in a text
+    // field, it moves the caret to the start - so the box kept its `1`, the paste was still
+    // three digits, and this assertion failed on a developer's machine while passing in CI.
+    // `ControlOrMeta` presses Cmd on darwin and Control elsewhere, which is the selection a
+    // moderator actually makes.
+    await box(dialog, 1, 0).press("ControlOrMeta+a");
     expect(await paste(box(dialog, 1, 0), "21")).toBe(true);
     await expect(dialog.getByRole("status")).not.toHaveText(
       "That would make three digits. Clear the box, or select a digit to replace.",
