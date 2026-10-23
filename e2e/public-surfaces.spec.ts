@@ -934,6 +934,100 @@ test.describe("A tournament with no playing days yet", () => {
   });
 });
 
+test.describe("Whether an upcoming tournament's entries fit, on the Schedule page", () => {
+  test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
+
+  /**
+   * The fixture's arithmetic, so a failure says which side moved.
+   *
+   * Entries: 12 teams over the two events, 6 each and none withdrawn, so the needed side is
+   * 12 placement matches (six per field) plus four knockout matches - a field of 6 splits
+   * into draws of 3/3/1/1, and a draw of n plays n - 1 - priced at 20 and 25 minutes:
+   * (12 x 20 + 4 x 25) / 60 = 5.7 court-hours.
+   *
+   * Offered: 8 courts over the fixture's one day, 00:00 to 23:59, so 8 x 1439 / 60 = 191.9.
+   */
+  const FITS = "About 16 matches need 5.7 court-hours; the days offer 191.9. That should fit.";
+
+  test("counts the real field sizes against the configured days, and asks for nothing", async ({
+    page,
+  }) => {
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const estimate = page.getByTestId("capacity-estimate");
+    await expect(estimate).toBeVisible();
+    await expect(estimate).toContainText("Will it fit?");
+    await expect(estimate).toContainText(FITS);
+
+    // Nothing is typed: the entries and the days are both already facts about the tournament,
+    // which is why the review step's "expected players per event" box is gone rather than moved.
+    await expect(page.getByLabel("Expected players per event")).toHaveCount(0);
+    await expect(estimate.getByRole("textbox")).toHaveCount(0);
+  });
+
+  test("takes each day's breaks off the hours on offer", async ({ page }) => {
+    // A break is the only way the offered side differs from the raw window, so this is the
+    // assertion that proves it is subtracted rather than counted as playable: 8 x (1439 - 60)
+    // / 60 = 183.9, where leaving the break in would read 191.9.
+    await installAppMock(page, {
+      preset: "layout",
+      role: "admin",
+      status: "upcoming",
+      dayBreaks: [{ label: "Lunch", start_time: "12:00:00", end_time: "13:00:00" }],
+    });
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByTestId("capacity-estimate")).toContainText(
+      "About 16 matches need 5.7 court-hours; the days offer 183.9. That should fit.",
+    );
+  });
+
+  test("says nothing once the tournament is under way", async ({ page }) => {
+    // Before a day is built the estimate is advice; after play starts the schedule's own
+    // finish line says the same thing with real times, so the estimate has nothing to add.
+    await installAppMock(page, { preset: "layout", role: "admin", status: "in_progress" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The page drew: the summary of the running order is there and only the estimate is not.
+    // Without this the absence below would pass just as well on a page that failed to render.
+    await expect(page.getByText(/match(es)? scheduled/).first()).toBeVisible();
+    await expect(page.getByTestId("capacity-estimate")).toHaveCount(0);
+  });
+
+  test("is a reader's page, with no estimate and no error", async ({ page }) => {
+    await installAppMock(page, {
+      preset: "layout",
+      role: "admin",
+      status: "upcoming",
+      access: { can_edit: false, is_owner: false, is_editor: false },
+    });
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // A reader gets the schedule, not a bookkeeping forecast about a hall they cannot change -
+    // and not an error, which is what a missing editor right used to produce on this page.
+    const schedule = page.getByRole("main");
+    await expect(schedule).toBeVisible();
+    await expect(schedule).not.toContainText(/not authorized|failed to load/i);
+    await expect(page.getByTestId("capacity-estimate")).toHaveCount(0);
+  });
+
+  test("introduces no accessibility violation", async ({ page }) => {
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("capacity-estimate")).toBeVisible();
+
+    // The line carries the verdict and the "about this estimate" button beside it, so what is
+    // scanned is the whole disclosure: a trigger with no accessible name, or a contrast miss
+    // in the tight/over colour, would surface here.
+    const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
+  });
+});
+
 test.describe("Entries of a running tournament, for an editor", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "in_progress" } });
 

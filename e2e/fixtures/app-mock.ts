@@ -9,6 +9,7 @@ import {
   TOURNAMENT_ID,
   deskFixture,
   type DeskMockPreset,
+  type MockDayBreak,
   type MockMembership,
   type MockSummaryArgs,
 } from "./desk-mock";
@@ -179,6 +180,16 @@ export interface AppMockOptions {
    * starts here and asserts the request the app sends; the RPC handler below answers the write.
    */
   startPolicy?: boolean;
+
+  /**
+   * Breaks on the fixture's one playing day, for the hours-on-offer side of "Will it fit?".
+   *
+   * Empty by default: the fixture day runs 00:00 to 23:59, and a spec that is not about the
+   * subtraction should see the whole window as playable. The Schedule page totals each day's
+   * courts times its window less these breaks, so a spec that supplies a break is asserting a
+   * number that is only right if the break was taken off.
+   */
+  dayBreaks?: readonly MockDayBreak[];
 }
 
 /**
@@ -391,6 +402,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     myRegistration = [],
     scheduleConflicts = [],
     startPolicy,
+    dayBreaks,
     demo,
   } = options;
 
@@ -515,6 +527,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     registrationState,
     startPolicy,
     demo,
+    dayBreaks,
   );
 
   /**

@@ -604,6 +604,19 @@ export type MockTournamentStatus = "upcoming" | "in_progress" | "completed";
 export type MockTournamentFormat = "two_round_placement" | "round_robin";
 
 /**
+ * One row of `tournament_day_breaks`, as the day panel reads it.
+ *
+ * The columns a break is *about* rather than its ids: a spec names when play stops, and the
+ * day and tournament ids come from the fixture, so a break cannot be attached to a day that
+ * does not exist. The times are `HH:MM:SS`, matching the column.
+ */
+export interface MockDayBreak {
+  label?: string | null;
+  start_time: string;
+  end_time: string;
+}
+
+/**
  * The `tournament_summary` row for the fixture, in the wire shape the RPC returns.
  *
  * `access_level` is the caller's relationship to the row in the database's own order - the
@@ -676,6 +689,15 @@ const buildFixture = (
   registrationState: string | null | undefined,
   startPolicy: boolean | undefined,
   demo: boolean | undefined,
+  /**
+   * Breaks on the fixture's one playing day.
+   *
+   * The day itself is fixed (00:00 to 23:59) because most specs need a wide window, and a
+   * break is the only way to make "the hours on offer" differ from the window - which is what
+   * the Schedule page's "Will it fit?" line subtracts. Empty is the honest default for every
+   * spec that is not about that subtraction.
+   */
+  dayBreaks?: readonly MockDayBreak[],
 ): DeskFixture => {
   /**
    * Whether this fixture stands in for sample data.
@@ -773,7 +795,15 @@ const buildFixture = (
       tournaments: [served],
       tournament_days: days,
       tournament_day_courts: [],
-      tournament_day_breaks: [],
+      tournament_day_breaks: (dayBreaks ?? []).map((brk, index) => ({
+        id: uid(900 + index),
+        tournament_id: TID,
+        day_id: dayId,
+        label: brk.label ?? null,
+        start_time: brk.start_time,
+        end_time: brk.end_time,
+        created_at: CREATED,
+      })),
       courts,
       categories,
       // Served to `rpc/tournament_players` and `rpc/search_players` by the app mock; the roster
@@ -866,6 +896,8 @@ export function deskFixture(
   startPolicy?: boolean,
   /** Serve the fixture as a sample tournament. See `isDemo` in `buildFixture`. */
   demo?: boolean,
+  /** Breaks on the fixture's one playing day. See `buildFixture`. */
+  dayBreaks?: readonly MockDayBreak[],
 ): DeskFixture {
   const chosen = PRESETS[preset];
   return buildFixture(
@@ -881,5 +913,6 @@ export function deskFixture(
     registrationState,
     startPolicy,
     demo,
+    dayBreaks,
   );
 }
