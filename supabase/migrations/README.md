@@ -3436,3 +3436,40 @@ concurrency, legacy preservation, correction/start races and completed events). 
 full integration suite when a container runtime is available. Additional reasoning and
 benchmark commands are in docs/incremental-placement.md. PostgreSQL WASM checks are useful
 for SQL execution but do not replace Supabase authentication/RLS/realtime integration.
+
+## Applying `20261023000000_prerequisite_order.sql`
+
+Two `CREATE OR REPLACE`s; no table, column or data changes. Written as a new migration because
+`20261010000000` and `20261017000000` are already applied (to staging at least), and applied migrations are not edited.
+
+### What it changes
+
+- `place_ready_matches` takes its slots earliest first and skips, with a reason, a placement match whose order
+  against `prerequisite_ids` would be wrong: `prerequisite_unplaced`, `before_prerequisite`, `after_dependent`.
+  Everything else (additive only, court and player checks, locks, privileges) is unchanged.
+- `shift_live_schedule_core` no longer uses a prerequisite queued behind a match on that match's own court as a
+  floor, which is what let a pair published out of order push itself later by a slot plus rest on every
+  result. The in-progress handling from `20261010000000` is carried over verbatim. See
+  docs/scheduling-decisions.md section 31 for the incident.
+
+Deploy the migration before or with the client: an old client simply meets the new skip reasons as ordinary
+declines. A pair that is already out of order is not repaired by this - a rebuild does that.
+
+### Verify after applying
+
+```sql
+SELECT prosrc LIKE '%after_dependent%' AND prosrc LIKE '%prerequisite_unplaced%'
+FROM pg_proc WHERE proname = 'place_ready_matches';                                      -- true
+SELECT prosrc LIKE '%prereq.court_id = current_match.court_id%'
+FROM pg_proc WHERE proname = 'shift_live_schedule_core';                                 -- true
+SELECT has_function_privilege('authenticated', 'public.shift_live_schedule_core(text, uuid)', 'execute'); -- false
+```
+
+The `DO $verify$` block asserts the same on apply. `npm run test:integration` case (k) in
+`live-reflow.test.ts` exercises the reflow against real rows.
+
+### Rolling back
+
+Re-apply the earlier bodies: `20261017000000_place_ready_matches.sql` (the whole function) and the
+`shift_live_schedule_core` definition in `20261010000000_start_match_checks_and_reflow.sql`, followed by the
+`REVOKE`/`GRANT` lines at their ends.
