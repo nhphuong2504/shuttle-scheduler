@@ -613,3 +613,42 @@ Stage progress allows both placement rounds to be current, includes unopened fix
 in the round-two total, and shows their winner/loser sources on the Schedule page. The Desk
 receives only materialized matches. Knockout seeding and the placement completeness gate
 are unchanged. Benchmark and rollout notes: `docs/incremental-placement.md`.
+
+## 31. Order between a match and the one it waits on
+
+`prerequisite_ids` is an ordering rule ("the held entrant's second make-up waits for the first", a
+round-two child waits for its sources). Three places can break it, and each is closed.
+
+**What happened (Viet Nam Open 2026, Men's Doubles; `desk_activity`).** The second make-up was
+published at 11:35 on court 1; twenty minutes later the first was placed on the same court at 11:50. Every
+result after that ran the live reflow, which holds two rules at once - a match may not start before the one
+ahead of it on its court ends, and may not start before its prerequisites end - and for this pair they
+cannot both be true. Each run pushed the second behind the first, then the first behind the second: a slot
+plus the entrant's rest (10 + 5 + 10 = +25 minutes) per result, seven results, 11:50 -> 14:45, until a
+rebuild at 11:30 re-ordered the pair. Matches sharing a player with the pair moved in lockstep.
+
+- **Automatic placement (`place-ready`).** A published match is an anchor, and the solver gives a movable
+  prerequisite no deadline, so a prerequisite with room only *after* its published dependent was placed
+  behind it. The plan now drops any new slot that ends after a published dependent starts, and anything
+  waiting on a dropped one, and reports them as `out_of_order` (the Schedule page asks for a rebuild). With
+  room before the dependent, the prerequisite is placed there as before.
+- **A rebuild** no longer pins a match that still waits on an unplayed one (the near-term freeze kept the
+  second make-up at its published time and left the first only the room after it). Unpinned, the pair is
+  placed in order.
+- **The server (`place_ready_matches`)** re-checks the order in both directions and skips with a reason:
+  `prerequisite_unplaced` (a prerequisite holds no time and is not reported; transient, the same pass may
+  be placing it), `before_prerequisite` (a prerequisite would end after the start) and `after_dependent`
+  (a match already published to wait for this one starts before it ends). Slots are taken earliest first, so
+  a prerequisite sent with its dependent is checked in playing order. Void prerequisites do not block, and a
+  reported or walkover prerequisite counts as over. Knockouts are ordered by their bracket and not checked.
+- **The reflow (`shift_live_schedule_core`)** stops using a prerequisite that is queued *behind* the match
+  on the match's own court as a floor. The court keeps its published order, so a pair already out of order
+  is left where it is - it no longer amplifies - and `schedule_conflicts` reports it as
+  `before_prerequisite` for a rebuild to reorder. A dependent published ahead of its prerequisite on
+  *another* court is still pushed behind it. A cycle that runs through three or more matches on different
+  courts is not detected.
+
+Verified: the unit cases in `placement-schedule.test.ts` ("place-ready never puts a match after one that
+waits on it"), the pins in `db-invariants.test.ts`, and `integration/live-reflow.test.ts` case (k). The two
+functions were also run on an embedded Postgres with a minimal schema: the old reflow reproduces the log
+above exactly (12:15, 12:40, ... 14:45); the new one leaves the pair at 11:35/11:50 across seven runs.

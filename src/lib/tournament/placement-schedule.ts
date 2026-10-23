@@ -257,13 +257,16 @@ export interface PlacementSchedulePlan {
  * - `data`: a prerequisite the plan never schedules, matches waiting on each other, or an entrant
  *   with no team. Pressing anything again will not change it.
  * - `no_slot`: no court and free pair of players coincide (rebuild mode's generic cause).
+ * - `out_of_order`: placing it would put it after a published match that waits on it (or it waits on
+ *   one such), so it is left for a rebuild to reorder (automatic placement only).
  */
 export type UnplacedReason =
   | "no_courts"
   | "past_closing"
   | "held_behind_placement"
   | "data"
-  | "no_slot";
+  | "no_slot"
+  | "out_of_order";
 
 export interface UnplacedMatch {
   matchId: string;
@@ -517,12 +520,27 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     end: number;
   }
 
+  const rawById = new Map([...placementRaw, ...knockoutRaw].map((item) => [item.id, item]));
   /** Rows the freeze would pin, minus the ones whose current time is no longer legal. */
   const candidates: FreezeCandidate[] = [];
   for (const item of [...placementRaw, ...knockoutRaw]) {
     if (item.fixed || !freezeIds.has(item.id)) continue;
     const committed = committedById.get(item.id);
     if (!committed) continue;
+    // A rebuild does not pin a match that still waits on an unplayed one. The solver can move that
+    // prerequisite but cannot give it a deadline, so a pinned dependent would leave it only the room
+    // after the pin: the held entrant's second make-up match, kept at 11:35, put the first at 11:50.
+    // Unpinned, the pair is placed in order. (`place-ready` pins everything and checks the order
+    // afterwards, since a published time there is not ours to release.)
+    if (
+      !placeReady &&
+      (item.dependencies ?? []).some((id) => {
+        const prerequisite = rawById.get(id);
+        return prerequisite != null && !prerequisite.fixed;
+      })
+    ) {
+      continue;
+    }
     const owningDay = orderedDays[dayOwning(committed.start, orderedDays)];
     if (!owningDay) {
       release(item);
@@ -643,7 +661,6 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
    * match depends on the first). The dependency becomes what it meant, a floor: the dependent may not
    * start before the dropped match is due to end where it stands.
    */
-  const rawById = new Map([...placementRaw, ...knockoutRaw].map((item) => [item.id, item]));
   const withoutDropped = (item: StageItem): StageItem => {
     const dropped = (item.dependencies ?? []).filter((id) => dropIds.has(id));
     if (!dropped.length) return item;
@@ -761,12 +778,51 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
         court_id: slot.courtId,
       }));
 
+  /**
+   * `place-ready` only: new slots that would sit on the wrong side of a published time.
+   *
+   * A published match is an anchor, and the solver gives a movable prerequisite no deadline, so a
+   * prerequisite placed after its already-published dependent comes out *behind* it - the held
+   * entrant's first make-up match at 11:50 behind the second at 11:35. Writing that is what set the
+   * live reflow chasing a contradiction. Such a slot is dropped and reported as `out_of_order`, and so
+   * is anything that waits on a dropped one: a rebuild, which may reorder, is the way out.
+   */
+  const outOfOrder = new Set<string>();
+  if (placeReady) {
+    const fresh = new Map(
+      run.allSlots
+        .filter((slot) => !fixedSet.has(slot.matchId) && !committedById.has(slot.matchId))
+        .map((slot) => [slot.matchId, slot]),
+    );
+    for (const [dependentId, published] of committedById) {
+      for (const prerequisiteId of rawById.get(dependentId)?.dependencies ?? []) {
+        const slot = fresh.get(prerequisiteId);
+        if (slot && slot.end.getTime() > published.start) outOfOrder.add(prerequisiteId);
+      }
+    }
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const id of fresh.keys()) {
+        if (outOfOrder.has(id)) continue;
+        if ((rawById.get(id)?.dependencies ?? []).some((dep) => outOfOrder.has(dep))) {
+          outOfOrder.add(id);
+          grew = true;
+        }
+      }
+    }
+    for (const id of [...outOfOrder].sort()) unplaced.push({ matchId: id, reason: "out_of_order" });
+  }
+
   /** Slots for matches that held no court or time before: the additive writer's whole input. */
   const newPayloadFor = (stageIds: ReadonlySet<string>): PlacementSlotPayload[] =>
     run.allSlots
       .filter(
         (slot) =>
-          stageIds.has(slot.matchId) && !fixedSet.has(slot.matchId) && !committedById.has(slot.matchId),
+          stageIds.has(slot.matchId) &&
+          !fixedSet.has(slot.matchId) &&
+          !committedById.has(slot.matchId) &&
+          !outOfOrder.has(slot.matchId),
       )
       .map((slot) => ({
         match_id: slot.matchId,

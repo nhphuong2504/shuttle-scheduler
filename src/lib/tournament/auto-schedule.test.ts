@@ -175,10 +175,22 @@ describe("singleFlight", () => {
 
 describe("isTransientDecline / attemptResult", () => {
   it("treats races as transient and a bad court as not", () => {
-    for (const reason of ["court_busy", "player_busy", "already_placed", "not_ready"]) {
+    for (const reason of [
+      "court_busy",
+      "player_busy",
+      "already_placed",
+      "not_ready",
+      "prerequisite_unplaced",
+    ]) {
       expect(isTransientDecline(reason)).toBe(true);
     }
-    for (const reason of ["bad_court", "incomplete", "unknown_match"]) {
+    for (const reason of [
+      "bad_court",
+      "incomplete",
+      "unknown_match",
+      "before_prerequisite",
+      "after_dependent",
+    ]) {
       expect(isTransientDecline(reason)).toBe(false);
     }
   });

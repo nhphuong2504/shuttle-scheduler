@@ -547,4 +547,41 @@ describe("live reflow", () => {
     const pastClosing = conflicts.filter((row) => row.match_id === m3);
     expect(pastClosing.map((row) => row.conflict_kind)).toContain("past_closing");
   });
+
+  it("(k) does not chase a prerequisite that is queued behind its dependent on the same court", async () => {
+    // Viet Nam Open 2026. The held entrant's second make-up (m2) waits for the first (m1), but m2
+    // was published ahead of it on the same court. The court keeps its order and the prerequisite
+    // keeps its order, so no move satisfies both: every reflow pushed m2 behind m1 and m1 behind m2,
+    // a slot plus rest later each time, for as long as results kept arriving.
+    //
+    //   s1 09:00, s2 09:20  unrelated earlier matches on court one; each report seeds the tail.
+    //   m2 11:00            waits for m1, published first.
+    //   m1 11:20            the prerequisite, queued behind it.
+    //
+    // m1 and m2 share no player, so only the two orderings are in play. Two reports, two reflows:
+    // the pair must not move, and the read over the rows must name the dependent.
+    const seeded = await seed({ label: "k", entrants: 8 });
+    const s1 = await placeMatch(seeded, { key: "k-s1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const s2 = await placeMatch(seeded, { key: "k-s2", a: 6, b: 7, court: 1, at: iso(DAY1, "09:20") });
+    const m1 = await placeMatch(seeded, { key: "k-m1", a: 4, b: 5, court: 1, at: iso(DAY1, "11:20") });
+    const m2 = await placeMatch(seeded, {
+      key: "k-m2",
+      a: 2,
+      b: 3,
+      court: 1,
+      at: iso(DAY1, "11:00"),
+      prerequisites: [m1],
+    });
+
+    await reportAt(s1, iso(DAY1, "09:20"), seeded.tournamentId);
+    await reportAt(s2, iso(DAY1, "09:40"), seeded.tournamentId);
+
+    const times = await timesOf([m1, m2]);
+    expect(times.get(m2)).toBe(iso(DAY1, "11:00"));
+    expect(times.get(m1)).toBe(iso(DAY1, "11:20"));
+
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    const inverted = conflicts.filter((row) => row.match_id === m2);
+    expect(inverted.map((row) => row.conflict_kind)).toContain("before_prerequisite");
+  });
 });
