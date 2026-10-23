@@ -61,7 +61,7 @@ function PoolsPage() {
   return (
     <Page
       title="Pools & standings"
-      subtitle="Pools are always four, or five where the entry count requires it — never three."
+      subtitle="Pools of four, or five when the entry count needs it."
     >
       <div className="space-y-6">
         {(categories ?? []).map((c) => {

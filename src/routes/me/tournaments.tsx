@@ -183,7 +183,7 @@ function MyTournamentsPage() {
   return (
     <PublicShell
       title="My tournaments"
-      subtitle="The tournaments you own, and the ones somebody else has asked you to help run."
+      subtitle="Tournaments you own or help run."
     >
       <div role="group" aria-label="Which tournaments" className="mb-4 flex flex-wrap gap-1">
         {(

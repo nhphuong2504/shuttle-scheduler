@@ -342,7 +342,7 @@ export function DayPlanner() {
   return (
     <Page
       title="Court schedule"
-      subtitle="Build each day of the running order, or safely rebuild the remaining group matches from the current time."
+      subtitle="Build each day of the running order."
       actions={
         <span className="text-sm text-muted-foreground">
           {tournament ? `${tournament.name}, ${dayCount} day${dayCount === 1 ? "" : "s"}` : ""}

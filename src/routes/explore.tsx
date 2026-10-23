@@ -261,7 +261,7 @@ function ExplorePage() {
   return (
     <PublicShell
       title="Explore tournaments"
-      subtitle="Open a tournament to see who is playing, when and where, and the scores as they come in."
+      subtitle="Open a tournament to see who is playing, when and where."
       actions={
         signedIn ? (
           <Button asChild>

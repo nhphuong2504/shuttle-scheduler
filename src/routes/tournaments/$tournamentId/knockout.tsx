@@ -84,7 +84,7 @@ function KnockoutPage() {
   return (
     <Page
       title="Knockout"
-      subtitle="The four brackets the placement rounds sort entrants into."
+      subtitle="The four A/B/C/D knockout brackets."
       actions={
         <Button size="sm" variant="outline" asChild>
           <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>

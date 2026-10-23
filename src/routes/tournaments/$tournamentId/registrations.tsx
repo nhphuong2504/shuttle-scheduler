@@ -126,7 +126,7 @@ function RegistrationsPage() {
   return (
     <Page
       title="Registrations"
-      subtitle="Requests people have filed to enter this tournament."
+      subtitle="Requests to enter this tournament."
     >
       <div className="space-y-4">
         <PendingPanel queue={queue} usage={usage} loading={queueQuery.isLoading} />

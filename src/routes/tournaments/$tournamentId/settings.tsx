@@ -91,7 +91,7 @@ function SettingsPage() {
   return (
     <Page
       title="Setup"
-      subtitle="Name, dates, events and format. Each step is saved as you go."
+      subtitle="Name, dates, events and format."
       actions={
         <Button size="sm" variant="ghost" asChild>
           <Link to="/me/tournaments">← My tournaments</Link>

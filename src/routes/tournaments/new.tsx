@@ -91,7 +91,7 @@ function NewTournamentPage() {
   return (
     <PublicShell
       title="New tournament"
-      subtitle="Four short steps. Nothing is created until the last one, and your answers are kept if you reload this tab."
+      subtitle="Four short steps. Nothing is created until the last one."
       actions={
         <Button size="sm" variant="ghost" asChild>
           <Link to="/me/tournaments">← My tournaments</Link>

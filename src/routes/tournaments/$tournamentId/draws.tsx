@@ -112,7 +112,7 @@ function DrawsPage() {
   return (
     <Page
       title="Knockout draws"
-      subtitle="Draw A = pool winners, B = runners-up, C = thirds, D = fourths plus any fifths. Byes go to the top seeds."
+      subtitle="A = pool winners, B = runners-up, C = thirds, D = fourths and below."
     >
       <div className="space-y-8">
         {(categories ?? []).map((c) => {
