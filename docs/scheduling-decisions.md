@@ -652,3 +652,28 @@ Verified: the unit cases in `placement-schedule.test.ts` ("place-ready never put
 waits on it"), the pins in `db-invariants.test.ts`, and `integration/live-reflow.test.ts` case (k). The two
 functions were also run on an embedded Postgres with a minimal schema: the old reflow reproduces the log
 above exactly (12:15, 12:40, ... 14:45); the new one leaves the pair at 11:35/11:50 across seven runs.
+
+### 31.1 Times are stored in whole milliseconds
+
+The order checks above compare a start with another match's end, and so does every other writer. Postgres
+keeps a `timestamptz` to the microsecond and a JavaScript `Date` to the millisecond, so a time the database
+stamped from the clock (`ended_at` and `started_at` from `statement_timestamp()`, a reflow's `shifted_time`
+behind a match still on court) was read by the app up to 0.999 ms early. The planner then placed the next
+match at the previous end *as it read it* - 11:15:06.310 for 11:15:06.310499 - and `place_ready_matches`
+answered `court_busy` (or `player_busy`, which adds the rest gap), slot by slot. A batch refused one slot at
+a time is how the second make-up match was written without its prerequisites at 10:50:51: the reports in the
+seconds before had left microsecond times behind. Neither side was wrong in its own units.
+
+- **One resolution at the database's edge.** A BEFORE trigger on the four match tables truncates
+  `scheduled_time`, `started_at` and `ended_at` to whole milliseconds on insert and on any write of them
+  (`20261023010000_whole_millisecond_match_times.sql`). Truncation, not rounding, so a stored time is never later
+  than the instant it was taken. It is the database-side twin of `inProgressEnd`, which already rounds the
+  model to whole milliseconds.
+- **Not a tolerance in the writers.** Accepting a start up to a millisecond early would write matches that
+  overlap by a fraction of a millisecond, and `schedule_conflicts`, which compares strictly, would report the
+  very match that was just placed.
+- **Existing rows are backfilled** in the same migration. The desk-activity and result-history triggers are
+  switched off for the update and back on after, so the backfill leaves no "time-shifted" or "result
+  corrected" rows behind.
+- **Reflow.** A shifted time is still computed in microseconds and truncated when written, so the stored value
+  is at most 0.999 ms before the instant it was computed from. Anything that reads it back sees the stored value.
