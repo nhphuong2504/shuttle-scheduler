@@ -1,0 +1,52 @@
+﻿team_id,category,seed,withdrawn,player_1,player_2,label
+0df87894-347d-4b00-9453-ca655dd41292,MS,,false,Dang Manh,,Dang Manh
+17a88cb2-9fda-4866-b24a-b32143007d78,MS,,false,Mai Khoa,,Mai Khoa
+1d92de37-ae73-49a8-be79-8b9e1fc575f8,MS,,false,Do Huy,,Do Huy
+79ae7596-8f18-4234-8a7e-916ae7f54309,MS,,false,Dang Nam,,Dang Nam
+8242feeb-d761-4d4c-9462-954aa085303b,MS,,false,Duong Thanh,,Duong Thanh
+8cc453ed-1ee8-49b9-a24b-d4351ececf60,MS,,false,Do Nam,,Do Nam
+902749b2-49e5-4570-96c3-917685041f92,MS,,false,Ho Thien,,Ho Thien
+add901e4-06b4-4ea0-a1c7-f8f4e54c9050,MS,,false,Dinh Minh,,Dinh Minh
+bab0337f-9ee7-4d70-80ea-98b0a0b8f32b,MS,,false,Do Anh,,Do Anh
+c75f6428-386e-4b8e-af04-18f5510b962e,MS,,false,Bui Minh,,Bui Minh
+ccc0b88b-ac52-4941-89d0-3fbff8fec83f,MS,,false,Cao Binh,,Cao Binh
+cf37adba-5405-4274-9eb9-319ed60c3633,MS,,false,Vu Duc,,Vu Duc
+d66564fe-a5cb-45ba-a509-15fb4dae1fb5,MS,,false,Ho Viet,,Ho Viet
+2263affc-424c-4f33-af32-82c75034fe49,MD,,false,Dang Nam,Do Nam,Dang Nam / Do Nam
+46953710-1259-4f69-875e-cabbddd65f78,MD,,false,Bui Minh,Dinh Minh,Bui Minh / Dinh Minh
+79eb81ff-152b-4c6e-b15a-9115ab6376be,MD,,false,Do Huy,Duong Duy,Do Huy / Duong Duy
+8384e89e-8a99-4c3d-bc99-32636a3096bb,MD,,false,Do Anh,Duong Khang,Do Anh / Duong Khang
+8a759525-f894-4a9a-b9f9-fa469eb1ce28,MD,,false,Mai Khoa,Duong Manh,Mai Khoa / Duong Manh
+a31f0599-e5e8-42e4-81bd-851caad3820d,MD,,false,Cao Binh,Hoang Vinh,Cao Binh / Hoang Vinh
+ad88e786-1d12-4330-829b-4c7fd717dd52,MD,,false,Ho Viet,Huynh Anh,Ho Viet / Huynh Anh
+d528e56c-03ee-412c-a397-584efd616386,MD,,false,Dang Manh,Vo Bao,Dang Manh / Vo Bao
+f94e8713-4702-4793-98cc-4c924340c3a2,MD,,false,Duong Thanh,Cao Thien,Duong Thanh / Cao Thien
+10535ad6-0f40-41ae-a441-81a1d64aa925,XD,,false,Cao Binh,Do Van,Cao Binh / Do Van
+1230fc63-d4a4-4d52-b6b7-7afb83aede8d,XD,,false,Bui Minh,Dinh Giang,Bui Minh / Dinh Giang
+16bf73f1-7f8a-4b2a-a7fd-e2d18b408546,XD,,false,Dang Nam,Truong Diep,Dang Nam / Truong Diep
+2184b409-f098-469d-9d20-b671af07e2a7,XD,,false,Cao Thien,Ly Van,Cao Thien / Ly Van
+32027303-2959-4f9e-ac4e-8f7c79692578,XD,,false,Dang Manh,Huynh Trang,Dang Manh / Huynh Trang
+97f7beea-dcc3-42c1-a874-108576df156d,XD,,false,Hoang Vinh,Bui Yen,Hoang Vinh / Bui Yen
+9e550766-33e0-4688-8923-b051bb1cd21b,XD,,false,Do Anh,Ly Ngoc,Do Anh / Ly Ngoc
+d09b0a1c-c361-41f6-b0b0-fdafcdaf2db2,XD,,false,Duong Thanh,Le Nhung,Duong Thanh / Le Nhung
+e20de5da-080f-48b7-9747-4bce62a986b3,XD,,false,Ho Duc,Cao Huong,Ho Duc / Cao Huong
+e8c8aa1d-52c7-44b8-af3e-6ab24d291e58,XD,,false,Do Hieu,Ngo Thu,Do Hieu / Ngo Thu
+e9d0ed3b-62ee-46b9-9c66-d2426368f1aa,XD,,false,Do Huy,Bui Nguyet,Do Huy / Bui Nguyet
+eca4fa1a-c441-4f98-bad3-1ed132666c64,XD,,false,Vo Bao,Le Tram,Vo Bao / Le Tram
+fcecd97b-17f6-426b-af86-6989624fd8c1,XD,,false,Duong Duy,Cao Thao,Duong Duy / Cao Thao
+21cb3131-f446-45e0-b5ea-a0ae0cf0362d,WD,,false,Dinh Giang,Cao Thao,Dinh Giang / Cao Thao
+38007250-2a3a-47a0-9e58-4a4bf47b32e0,WD,,false,Ly Ngoc,Duong Linh,Ly Ngoc / Duong Linh
+6a572e9a-39e1-4c5e-9140-dd0f159aa90b,WD,,false,Le Nhung,Dinh Nhung,Le Nhung / Dinh Nhung
+83bfe9cf-5e82-424d-b75b-9c533d4b40be,WD,,false,Bui Nguyet,Le Tram,Bui Nguyet / Le Tram
+be8b096e-4873-4b37-bbd7-8c6f68f0f557,WD,,false,Truong Diep,Bui Yen,Truong Diep / Bui Yen
+edab005b-d3ce-4f01-b037-36a87abd1191,WD,,false,Do Van,Ly Van,Do Van / Ly Van
+f81e5fa3-be25-4632-b9fc-7acf57b220f2,WD,,false,Huynh Trang,Le Xuan,Huynh Trang / Le Xuan
+12bf5ad2-2bf2-42b6-91f6-84d142eb3c62,WS,,false,Do Van,,Do Van
+34d5e659-e52f-4826-9550-3c8b54cc0789,WS,,false,Bui Nguyet,,Bui Nguyet
+4916e281-d035-4891-abfb-0c30d7e558a6,WS,,false,Ho Thuy,,Ho Thuy
+4a11fc6b-5421-475b-be51-c3a897d71e09,WS,,false,Dang Diep,,Dang Diep
+60c81d07-e5e9-446f-a420-d95854eee35b,WS,,false,Truong Diep,,Truong Diep
+7f804e47-6a9a-470d-9552-d2594ef0c256,WS,,false,Huynh Trang,,Huynh Trang
+c89e6e6c-daf8-4e39-9657-cef11c3b46aa,WS,,false,Ly Ngoc,,Ly Ngoc
+ca75308d-eb90-493d-b866-dc2837ed53e4,WS,,false,Dinh Giang,,Dinh Giang
+ed2cd8a6-7d1e-472d-af36-34854f6c4b40,WS,,false,Le Nhung,,Le Nhung
