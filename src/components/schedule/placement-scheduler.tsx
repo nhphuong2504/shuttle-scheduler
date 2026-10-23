@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { InfoNote } from "@/components/ui/info-note";
 import { Input } from "@/components/ui/input";
 import { useAutoScheduleReconciler } from "@/hooks/useAutoSchedule";
 import { PickerInput } from "@/components/ui/picker-input";
@@ -64,8 +65,8 @@ import {
   type TierDrawMatch,
   type TournamentDay,
 } from "@/lib/tournament/data";
-import { describeUnplaced } from "@/lib/tournament/auto-schedule";
 import { courtHoursOffered } from "@/lib/tournament/capacity-estimate";
+import { describeUnplaced } from "@/lib/tournament/auto-schedule";
 import { buildRebuildSuggestion, type RebuildSuggestion } from "@/lib/tournament/rebuild-suggestion";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import {
@@ -988,7 +989,6 @@ export function PlacementScheduler() {
   }, [plannerDays, courtsFor]);
 
   /**
-  /**
    * "Will it fit?": the active field sizes against the court time the configured days offer.
    *
    * Only before the tournament starts, when it is advice for the organiser; once play begins the
@@ -1024,6 +1024,7 @@ export function PlacementScheduler() {
     };
   }, [tournament?.status, categories, teams, plannerDays, courtsFor, breaksByDay]);
 
+  /**
    * When the already-scheduled matches end.
    *
    * The latest end among matches that have a court and a time, read straight off the rows. This
@@ -1716,7 +1717,7 @@ export function PlacementScheduler() {
       title="Court schedule"
       subtitle={
         canEdit
-          ? "One running order for the whole tournament. Matches already played or on court never move."
+          ? "One running order for the whole tournament."
           : "When and where every match is played."
       }
       actions={
@@ -1799,6 +1800,11 @@ export function PlacementScheduler() {
             {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
           </span>
           <ScheduledFinish finishMs={scheduledFinishMs} closeMs={officialCloseMs} />
+          {canEdit ? (
+            <InfoNote label="About the running order">
+              <p>Matches already played or on court never move when the schedule is rebuilt.</p>
+            </InfoNote>
+          ) : null}
           {result && result.summary.unscheduled > 0 ? (
             <span className="text-danger-foreground">
               {result.summary.unscheduled} could not be placed
@@ -1814,12 +1820,6 @@ export function PlacementScheduler() {
               <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
             </span>
           )}
-        </div>
-
-        {result && result.skipped.length > 0 ? (
-          <div className="rounded-lg bg-warn-surface px-3 py-2 text-sm text-warn-foreground">
-            <p className="font-semibold">Left alone</p>
-            <ul className="mt-0.5 space-y-0.5">
           {canEdit && capacity ? (
             <CapacityEstimate
               inline
@@ -1827,6 +1827,12 @@ export function PlacementScheduler() {
               courtHoursOffered={capacity.offered}
             />
           ) : null}
+        </div>
+
+        {result && result.skipped.length > 0 ? (
+          <div className="rounded-lg bg-warn-surface px-3 py-2 text-sm text-warn-foreground">
+            <p className="font-semibold">Left alone</p>
+            <ul className="mt-0.5 space-y-0.5">
               {result.skipped.map((entry) => (
                 <li key={entry.categoryId}>
                   {entry.code}: {entry.reason}

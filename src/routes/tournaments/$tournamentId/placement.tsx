@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { InfoNote } from "@/components/ui/info-note";
 import { entrantCountNote } from "@/lib/tournament/competition-format";
 import {
   buildCategoryView,
@@ -190,7 +191,7 @@ function PlacementPage() {
   return (
     <Page
       title="Placement"
-      subtitle="Every entrant plays two placement matches. The two results sort them into four knockout brackets."
+      subtitle="Every entrant plays two placement matches."
       actions={resetAction}
     >
       {wrongFormat ? null : <PlacementTierLegend />}
@@ -468,28 +469,30 @@ function SeedingPanel({
       right={
         // Whether the order can still change is the editor's question; a reader is only shown it.
         canEdit ? (
-          <span className="font-score text-t4 text-muted-foreground">
-            {saving ? "saving…" : view.seedsLocked ? "locked" : "not locked"}
+          <span className="flex items-center gap-1">
+            <span className="font-score text-t4 text-muted-foreground">
+              {saving ? "saving…" : view.seedsLocked ? "locked" : "not locked"}
+            </span>
+            <InfoNote label="How seeding works">
+              <p>
+                Skill level decides the seed order once: entrants are grouped by the block they
+                reported, shuffled inside it, and seeded strongest block first. Every pairing
+                rule after this reads the seed only.
+              </p>
+              <p>
+                Drag a row to set the order by hand, or use the arrows. Each change is saved
+                straight away.
+              </p>
+              <p>
+                Seeds can be re-shuffled until the schedule is built. After that the order is
+                frozen, and changing it means resetting the schedule first.
+              </p>
+            </InfoNote>
           </span>
         ) : null
       }
     >
       <div className="space-y-3">
-        {canEdit ? (
-          <p className="text-sm text-muted-foreground">
-            Skill level decides the seed order once: entrants are grouped by the block they
-            reported, shuffled inside it, and seeded strongest block first. Every pairing rule
-            after this reads the seed only.
-          </p>
-        ) : null}
-
-        {canReorder ? (
-          <p className="text-t4 text-muted-foreground">
-            Drag a row to set the order by hand, or use the arrows. Each change is saved straight
-            away, and the order stops being editable once placement matches exist.
-          </p>
-        ) : null}
-
         <div className="overflow-x-auto">
           <table className="data-table">
             <thead>
@@ -669,9 +672,8 @@ function SeedingPanel({
 
         {canReorder && !orderFollowsBlocks ? (
           <p className="rounded-md border border-warn-border bg-warn-surface px-3 py-2 text-t4 font-medium text-warn-foreground">
-            This order no longer follows the skill blocks: a weaker block is seeded above a stronger
-            one. It is still a valid order — every pairing rule reads the seed and nothing else —
-            and "Re-shuffle seeds" puts the blocks back.
+            This order no longer follows the skill blocks. &quot;Re-shuffle seeds&quot; puts them
+            back.
           </p>
         ) : null}
 
@@ -700,16 +702,9 @@ function SeedingPanel({
             {view.seedsLocked ? "Re-shuffle seeds" : "Shuffle & lock seeds"}
           </Button>
         ) : null}
-        {canEdit && !hasMatches ? (
-          <p className="text-t4 text-muted-foreground">
-            Seeds can be re-shuffled until the schedule is built. After that the order is frozen,
-            and changing it means resetting the schedule first.
-          </p>
-        ) : null}
         {hasMatches && canEdit ? (
           <p className="text-t4 text-muted-foreground">
-            Seeding is frozen because placement matches already exist. The seed order is only
-            editable while the stage is still empty.
+            Frozen: placement matches already exist.
           </p>
         ) : null}
       </div>
