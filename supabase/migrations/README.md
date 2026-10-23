@@ -3473,3 +3473,52 @@ The `DO $verify$` block asserts the same on apply. `npm run test:integration` ca
 Re-apply the earlier bodies: `20261017000000_place_ready_matches.sql` (the whole function) and the
 `shift_live_schedule_core` definition in `20261010000000_start_match_checks_and_reflow.sql`, followed by the
 `REVOKE`/`GRANT` lines at their ends.
+
+## Applying `20261023010000_whole_millisecond_match_times.sql`
+
+A BEFORE trigger on `pool_matches`, `draw_matches`, `placement_matches` and `tier_draw_matches` that truncates
+`scheduled_time`, `started_at` and `ended_at` to whole milliseconds, plus a backfill of the rows already stored.
+No column, policy or function signature changes.
+
+### Why
+
+A `timestamptz` keeps microseconds and a JavaScript `Date` keeps milliseconds, so a time the database stamped
+read back in the app up to 0.999 ms early, and the next match was planned half a millisecond before the court
+was free: `place_ready_matches` refused it with `court_busy` / `player_busy`. See docs/scheduling-decisions.md
+section 31.1 for the incident.
+
+### Things to know before applying
+
+- The backfill updates every row with a sub-millisecond time and takes a brief lock on each match table while it
+  switches the logging triggers off and on. Apply it between matches, not in the middle of a call.
+- The trigger runs only when one of the three columns is written, so ordinary updates (a result, a note) are
+  untouched.
+- The backfill disables `*_desk_activity` and `record_*_result_correction` for its own update and re-enables them
+  in the same transaction; the `DO $verify$` block fails the migration (and rolls it back) if any is left off.
+- Apply it with `20261023000000_prerequisite_order.sql` or after it. Either order works.
+
+### Verify after applying
+
+```sql
+SELECT count(*) FROM public.placement_matches
+WHERE scheduled_time <> date_trunc('milliseconds', scheduled_time)
+   OR started_at <> date_trunc('milliseconds', started_at)
+   OR ended_at <> date_trunc('milliseconds', ended_at);                               -- 0
+SELECT count(*) FROM pg_trigger WHERE tgname LIKE '%\_whole\_ms';                      -- 4
+SELECT tgname, tgenabled FROM pg_trigger WHERE tgname LIKE '%desk_activity';           -- all 'O'
+```
+
+The `DO $verify$` block asserts the same for all four tables. `npm run test:integration` case (l) in
+`live-reflow.test.ts` exercises it against real rows.
+
+### Rolling back
+
+```sql
+DROP TRIGGER pool_matches_whole_ms ON public.pool_matches;
+DROP TRIGGER draw_matches_whole_ms ON public.draw_matches;
+DROP TRIGGER placement_matches_whole_ms ON public.placement_matches;
+DROP TRIGGER tier_draw_matches_whole_ms ON public.tier_draw_matches;
+DROP FUNCTION public.truncate_match_times_to_ms();
+```
+
+Truncated times stay truncated; nothing depends on the lost fraction.

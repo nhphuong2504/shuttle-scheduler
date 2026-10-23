@@ -2589,6 +2589,41 @@ describe("prerequisite order migration", () => {
   });
 });
 
+describe("whole-millisecond match times migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "20261023010000_whole_millisecond_match_times.sql"),
+    "utf8",
+  );
+
+  it("truncates the three scheduling times on every match table, on insert and on write", () => {
+    expect(sql).toMatch(/date_trunc\('milliseconds', NEW\.scheduled_time\)/);
+    expect(sql).toMatch(/date_trunc\('milliseconds', NEW\.started_at\)/);
+    expect(sql).toMatch(/date_trunc\('milliseconds', NEW\.ended_at\)/);
+    for (const table of ["pool_matches", "draw_matches", "placement_matches", "tier_draw_matches"]) {
+      expect(sql).toMatch(
+        new RegExp(
+          `CREATE TRIGGER ${table}_whole_ms\\s+BEFORE INSERT OR UPDATE OF scheduled_time, started_at, ended_at ON public\\.${table}`,
+        ),
+      );
+    }
+  });
+
+  it("backfills without leaving a time-shifted or result-corrected entry behind", () => {
+    for (const table of ["pool_matches", "draw_matches", "placement_matches", "tier_draw_matches"]) {
+      expect(sql).toContain(`DISABLE TRIGGER ${table}_desk_activity`);
+      expect(sql).toContain(`ENABLE TRIGGER ${table}_desk_activity`);
+      expect(sql).toContain(`DISABLE TRIGGER record_${table}_result_correction`);
+      expect(sql).toContain(`ENABLE TRIGGER record_${table}_result_correction`);
+    }
+  });
+
+  it("keeps the helper off the client surface and verifies on apply", () => {
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.truncate_match_times_to_ms\(\) FROM PUBLIC, anon, authenticated/);
+    expect(sql).toMatch(/DO \$verify\$/);
+    expect(sql).toMatch(/still has % rows with a sub-millisecond time/);
+  });
+});
+
 /**
  * The migration that gives a 21-point game its 30-point ceiling.
  *
