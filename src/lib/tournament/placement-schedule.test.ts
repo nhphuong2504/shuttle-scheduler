@@ -2811,3 +2811,88 @@ describe("place-ready when a held match is a prerequisite", () => {
     );
   });
 });
+
+/**
+ * Viet Nam Open 2026, Men's Doubles. The held entrant's second make-up match waits for the first
+ * (`prerequisite_ids`), but the second was published first (11:35, court 1) and the first was
+ * placed twenty minutes later - after it, at 11:50 - because place-ready held the published
+ * time as an anchor and nothing told it that the new match must come *before* it. The live
+ * reflow then chased the contradiction, +25 minutes a result, for seven results.
+ */
+describe("place-ready never puts a match after one that waits on it", () => {
+  const at = (hhmm: string) => new Date(`2026-09-17T${hhmm}:00`).getTime();
+  const field = {
+    tournament: tournament({ group_slot_minutes: 10, group_rest_gap_minutes: 5 }),
+    courts: [court(1)],
+  };
+  const secondMakeup = (time: string) =>
+    placementMatch("makeup-2", "round2", "e1", "e3", {
+      is_makeup: true,
+      prerequisite_ids: ["makeup-1"],
+      status: "scheduled",
+      court_id: "c1",
+      scheduled_time: new Date(`2026-09-17T${time}:00`).toISOString(),
+    });
+  const firstMakeup = () => placementMatch("makeup-1", "round2", "e1", "e2", { is_makeup: true });
+
+  it("places the first make-up before the published second one when there is room", () => {
+    const result = plan({
+      mode: "place-ready",
+      ...field,
+      now: at("11:00"),
+      placementMatches: [firstMakeup(), secondMakeup("11:35")],
+    });
+    const first = result.placementNewPayload.find((slot) => slot.match_id === "makeup-1");
+    expect(first).toBeDefined();
+    // 10 minutes long, so it must be over before the second one starts.
+    expect(Date.parse(first!.scheduled_time) + 10 * MINUTE).toBeLessThanOrEqual(at("11:35"));
+    expect(result.unplaced).toEqual([]);
+  });
+
+  it("leaves the first make-up unplaced when the only room is after the published second one", () => {
+    // It is 11:30 and the second make-up starts at 11:35: ten minutes plus rest no longer fit
+    // ahead of it, so the old behaviour was 11:50, behind the match that waits on it.
+    const result = plan({
+      mode: "place-ready",
+      ...field,
+      now: at("11:30"),
+      placementMatches: [firstMakeup(), secondMakeup("11:35")],
+    });
+    expect(result.placementNewPayload.map((slot) => slot.match_id)).not.toContain("makeup-1");
+    expect(result.unplaced).toEqual([{ matchId: "makeup-1", reason: "out_of_order" }]);
+  });
+
+  it("also holds back a match that waits on a held-back one, even if it fits on its own", () => {
+    const result = plan({
+      mode: "place-ready",
+      ...field,
+      courts: [court(1), court(2)],
+      now: at("11:30"),
+      placementMatches: [
+        firstMakeup(),
+        secondMakeup("11:35"),
+        placementMatch("after-first", "round2", "e2", "e4", { prerequisite_ids: ["makeup-1"] }),
+      ],
+    });
+    const ids = result.placementNewPayload.map((slot) => slot.match_id);
+    expect(ids).not.toContain("makeup-1");
+    expect(ids).not.toContain("after-first");
+    expect(result.unplaced.map((entry) => entry.reason)).toEqual(["out_of_order", "out_of_order"]);
+  });
+
+  it("does not touch a rebuild, which reorders the whole queue", () => {
+    const result = plan({
+      ...field,
+      now: at("11:30"),
+      placementMatches: [firstMakeup(), secondMakeup("11:35")],
+    });
+    const first = result.placementSlotPayload.find((slot) => slot.match_id === "makeup-1");
+    const second = result.placementSlotPayload.find((slot) => slot.match_id === "makeup-2");
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(Date.parse(second!.scheduled_time)).toBeGreaterThanOrEqual(
+      Date.parse(first!.scheduled_time) + 10 * MINUTE,
+    );
+    expect(result.unplaced).toEqual([]);
+  });
+});

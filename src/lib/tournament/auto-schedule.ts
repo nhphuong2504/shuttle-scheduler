@@ -67,6 +67,9 @@ const TRANSIENT_DECLINES: ReadonlySet<string> = new Set([
   "not_ready",
   "not_scheduled",
   "in_the_past",
+  // A prerequisite the same pass is still placing. `before_prerequisite` and `after_dependent` are
+  // not here: the order will not change by asking again, so a rebuild is what resolves them.
+  "prerequisite_unplaced",
 ]);
 
 export function isTransientDecline(reason: string): boolean {
@@ -215,6 +218,15 @@ export function describeUnplaced(unplaced: readonly UnplacedMatch[]): UnplacedNo
     return {
       headline,
       detail: "Knockout matches are waiting for placement matches that have no slot yet.",
+      action: "rebuild",
+      actionLabel: "Review options",
+    };
+  }
+  if (has("out_of_order")) {
+    return {
+      headline,
+      detail:
+        "A match they must follow already has an earlier time, so placing them would put them out of order. Review a rebuild.",
       action: "rebuild",
       actionLabel: "Review options",
     };
