@@ -1088,6 +1088,29 @@ test.describe("Whether a tournament's entries fit, on the Schedule page", () => 
     await expect(page.getByTestId("capacity-estimate")).toHaveCount(0);
   });
 
+  test("puts both (i) markers in one column, not where their sentence happens to end", async ({
+    page,
+  }) => {
+    // Two notes on one bar, meaning the same kind of thing. The first used to sit inline after
+    // the finish times and the second at the far right of its own row, so they landed in two
+    // columns - which read as two different kinds of affordance. Measured, not eyeballed: the x
+    // is compared because that is what "aligned" means on screen.
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const running = page.getByRole("button", { name: "About the running order" });
+    const estimate = page.getByRole("button", { name: "About this estimate" });
+    await expect(running).toBeVisible();
+    await expect(estimate).toBeVisible();
+
+    const [a, b] = await Promise.all([running.boundingBox(), estimate.boundingBox()]);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(Math.round(a!.x)).toBe(Math.round(b!.x));
+    // On different rows, which is what makes the shared x meaningful.
+    expect(Math.round(a!.y)).not.toBe(Math.round(b!.y));
+  });
+
   test("introduces no accessibility violation", async ({ page }) => {
     await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");

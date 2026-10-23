@@ -623,6 +623,32 @@ for (const cell of MATRIX_CELLS) {
       expect(ids).toEqual([]);
     });
 
+    test("the day's pace count says what it counts, and what it leaves out", async ({ page }) => {
+      // The count reads "12 of 16 matches done" and is drawn from the matches *placed on this
+      // day's courts*. A match that has been generated but not yet given a court and time
+      // belongs to no day, so it is in neither number - and a moderator reading the count
+      // had no way to know that from the line itself.
+      await installAppMock(page, { preset: "states" });
+      await openCell(page, routes.desk, cell);
+
+      const trigger = page.getByRole("button", { name: "What this count includes" });
+      await expect(trigger).toBeVisible();
+
+      // Closed until asked for: the visible line stays what the reader acts on.
+      await expect(page.getByText(/generated but not yet given a court/)).toHaveCount(0);
+
+      await trigger.click();
+      const note = page.getByText(/generated but not yet given a court/);
+      await expect(note).toBeVisible();
+
+      // The two things a reader would otherwise get wrong: an unplaced match is missing from
+      // both numbers, and a void match is in neither.
+      await expect(page.getByText(/not counted here/)).toBeVisible();
+      await expect(page.getByText(/void match is left out of both numbers/)).toBeVisible();
+      // A walkover is done, which is why it is in the first number.
+      await expect(page.getByText(/walkover counts as done/)).toBeVisible();
+    });
+
     test("a populated running order introduces no new a11y violation", async ({ page }) => {
       await installAppMock(page, { preset: "layout" });
       await openCell(page, routes.schedule, cell);

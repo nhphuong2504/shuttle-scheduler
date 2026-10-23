@@ -652,12 +652,28 @@ function Desk() {
               {/*
                 The day's pace as one count, in place of the per-court progress bars: those led
                 to no action, and the moderator only needs to read how far through the day is.
+
+                The count is the *scheduled* work, which is not the same as the whole field: a
+                match that has been generated but not yet given a court and time is attributed
+                to no day, so it is neither counted nor expected here. The note says so, because
+                a moderator reading "12 of 16" mid-afternoon and then finding a fifth of the
+                field unplaced would otherwise be reading a number that never mentioned it.
               */}
               <span className="text-muted-foreground">
                 <b className="font-semibold tabular-nums text-foreground">
                   {dayCounts.completed} of {dayCounts.completed + dayCounts.remaining}
                 </b>{" "}
                 matches done
+                <InfoNote label="What this count includes" className="ml-1 align-middle">
+                  <p>
+                    Only matches already placed on this day&apos;s courts. A match that has been
+                    generated but not yet given a court and time is not counted here, and a void
+                    match is left out of both numbers.
+                  </p>
+                  <p>
+                    A walkover counts as done: it is decided, and nothing more is owed on it.
+                  </p>
+                </InfoNote>
               </span>
             </span>
             {consoleBar ? (
