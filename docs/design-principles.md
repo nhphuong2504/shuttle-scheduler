@@ -140,3 +140,17 @@ Scale in use on the Desk: panel title 16px bold, nav 14px semibold, body and chi
   became the reference, so there is nothing to build from but the pages themselves.
 - Whether the type scale tokens in `styles.css` (`--type-t1` to `--type-t4`) should move to match
   the sizes above. The Desk currently sets sizes with utility classes.
+
+## Words on screen
+
+Too much text is the most common reason a screen reads as noisy. The rules:
+
+- **A subtitle is one short sentence.** It says what the page is, not how to use it. The page's
+  meta description is separate and is not repeated as the subtitle.
+- **One prominent banner per page.** When several things need saying, the most urgent (a conflict,
+  something that cannot be placed) goes first and the rest sit behind a count or a link.
+- **Explanation goes behind an (i).** Use [`InfoNote`](../src/components/ui/info-note.tsx) for the
+  "why" and "how it is worked out". It opens on hover, click and keyboard focus.
+- **Text stays on screen only when it prevents a mistake** that cannot be undone, such as a
+  delete or a reset that clears results.
+- **Do not say the same thing twice on a page**, or on the page and the page it links to.
