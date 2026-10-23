@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Page, Panel } from "@/components/app-shell";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { Button } from "@/components/ui/button";
+import { InfoNote } from "@/components/ui/info-note";
 import { useAutoSchedule, useAutoScheduleReconciler } from "@/hooks/useAutoSchedule";
 import {
   Dialog,
@@ -1984,11 +1985,16 @@ export function MatchOperationsDialog({
             >
               Clear result
             </Button>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Sends this match back to unplayed so the score can be entered again. For fixed
-              round-two pairings, unplayed matches fed by this result are also withdrawn.
-              A dependent match that has started prevents clearing the result. Adaptive
-              round-two pairings still require a placement reset.
+            <p className="mt-1.5 flex items-center gap-1 text-sm text-muted-foreground">
+              Sends this match back to unplayed so the score can be entered again.
+              <InfoNote label="What clearing a result affects">
+                <p>
+                  For fixed round-two pairings, unplayed matches fed by this result are also
+                  withdrawn.
+                </p>
+                <p>A dependent match that has started prevents clearing the result.</p>
+                <p>Adaptive round-two pairings still require a placement reset.</p>
+              </InfoNote>
             </p>
           </div>
         ) : null}

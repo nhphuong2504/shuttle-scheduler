@@ -6,6 +6,7 @@ import { TournovaMark } from "@/components/brand/tournova-mark";
 import { NextStepCard } from "@/components/next-step-card";
 import { TournamentSwitcher } from "@/components/tournament-switcher";
 import { Button } from "@/components/ui/button";
+import { InfoNote } from "@/components/ui/info-note";
 import { useSession } from "@/hooks/useSession";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useTournamentSummary } from "@/lib/tournament/data";
@@ -975,11 +976,18 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         */}
         {tournament?.is_demo ? (
           <Notice tone="info" data-testid="demo-notice">
-            <strong className="font-bold">Sample tournament.</strong> Tournova ships a few
-            example tournaments so you can see how the app works. This is not a real event and
-            nothing here is happening on a real court - the entries, scores and standings are
-            demonstration data. A tournament shown as in progress is a snapshot of a moment
-            during play, so nothing on the page updates on its own.
+            <strong className="font-bold">Sample tournament.</strong> Not a real event.{" "}
+            <InfoNote label="About the sample tournament" className="align-middle">
+              <p>
+                Tournova ships a few example tournaments so you can see how the app works.
+                Nothing here is happening on a real court - the entries, scores and standings are
+                demonstration data.
+              </p>
+              <p>
+                A tournament shown as in progress is a snapshot of a moment during play, so
+                nothing on the page updates on its own.
+              </p>
+            </InfoNote>
           </Notice>
         ) : null}
         {/*

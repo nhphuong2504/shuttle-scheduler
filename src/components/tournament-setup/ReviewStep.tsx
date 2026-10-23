@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { TournamentStatus } from "@/lib/auth/authorization";
 import { Button } from "@/components/ui/button";
+import { InfoNote } from "@/components/ui/info-note";
 import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
 import { cn } from "@/lib/utils";
 import { effectiveRegistration } from "./problems";
@@ -121,7 +122,7 @@ export function ReviewStep({
                     ) : null}
                     {advisory ? (
                       <span className="block text-sm text-muted-foreground">
-                        Finished on the Schedule page. It does not hold anything up.
+                        Finish on the Schedule page.
                       </span>
                     ) : null}
                   </span>
@@ -233,10 +234,15 @@ export function ReviewStep({
             </dd>
           </div>
         </dl>
-        <p className="mt-5 text-sm text-muted-foreground">
-          Which days are played, the venue&apos;s courts, each day&apos;s hours and breaks, match
-          lengths and scoring rules are set on the Schedule page when the schedule is built,
-          where the courts exist.
+        <p className="mt-5 flex items-center gap-1 text-sm text-muted-foreground">
+          Days, courts, hours and scoring are set on the Schedule page.
+          <InfoNote label="What the Schedule page sets">
+            <p>
+              Which days are played, the venue&apos;s courts, each day&apos;s hours and breaks,
+              match lengths and scoring rules are set when the schedule is built, where the
+              courts exist.
+            </p>
+          </InfoNote>
         </p>
       </SetupSection>
 
@@ -255,10 +261,15 @@ export function ReviewStep({
         {mode === "create" ? (
           <>
             <p className="mb-4 text-base text-muted-foreground">
-              Creating saves it as <strong className="text-foreground">Upcoming</strong>. It is
-              listed in Explore, and people can register while registration is open. It becomes{" "}
-              <strong className="text-foreground">In progress</strong> by itself when the first
-              match is started on the Desk, from the first day at 00:00.
+              Creating saves it as <strong className="text-foreground">Upcoming</strong> and lists
+              it in Explore.{" "}
+              <InfoNote label="What happens after creating" className="align-middle">
+                <p>
+                  People can register while registration is open. It becomes{" "}
+                  <strong>In progress</strong> by itself when the first match is started on the
+                  Desk, from the first day at 00:00.
+                </p>
+              </InfoNote>
             </p>
             <Button
               className="h-12 px-7 text-base"
@@ -275,16 +286,20 @@ export function ReviewStep({
           </>
         ) : status === "upcoming" ? (
           <p className="text-base text-muted-foreground">
-            Nobody presses Start. This tournament becomes{" "}
-            <strong className="text-foreground">In progress</strong> by itself when the first match is
-            started on the Desk, from {form.startsOn || "the first day"} at 00:00. Until then
-            everything on the previous steps can still change.
+            Upcoming. It becomes <strong className="text-foreground">In progress</strong> when the
+            first match is started on the Desk.{" "}
+            <InfoNote label="When it starts" className="align-middle">
+              <p>
+                Nobody presses Start: it begins by itself when the first match is started on the
+                Desk, from {form.startsOn || "the first day"} at 00:00. Until then everything on
+                the previous steps can still change.
+              </p>
+            </InfoNote>
           </p>
         ) : status === "in_progress" ? (
           <>
             <p className="mb-4 text-base text-muted-foreground">
-              This tournament is running. Its events, caps and format are now fixed; its name,
-              venue and last day can still change. Completing it closes the event.
+              Running. Events, caps and format are fixed; name, venue and last day can still change.
             </p>
             <Button className="h-12 px-7 text-base" disabled={busy} onClick={onComplete}>
               {busy ? "Working…" : "Complete tournament"}
@@ -292,8 +307,7 @@ export function ReviewStep({
           </>
         ) : (
           <p className="mb-4 text-base text-muted-foreground">
-            This tournament is completed. Nothing can be started or changed here; a platform admin
-            can repair individual results from the desk.
+            Completed. Nothing can be started or changed here.
           </p>
         )}
       </SetupSection>
