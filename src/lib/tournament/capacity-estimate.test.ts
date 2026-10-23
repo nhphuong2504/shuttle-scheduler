@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { estimateCapacity, knockoutMatchCount, placementMatchCount } from "./capacity-estimate";
+import {
+  courtHoursOffered,
+  estimateCapacity,
+  knockoutMatchCount,
+  placementMatchCount,
+} from "./capacity-estimate";
 
 describe("placementMatchCount", () => {
   it("is none for one entrant, one for two, and one per entrant from three", () => {
@@ -36,5 +41,34 @@ describe("estimateCapacity", () => {
 
   it("is over when there is no court time at all", () => {
     expect(estimateCapacity({ ...base, courts: 0 }).verdict).toBe("over");
+  });
+});
+
+describe("courtHoursOffered", () => {
+  it("is each day's courts times its window less breaks", () => {
+    expect(
+      courtHoursOffered([
+        { courts: 4, windowMinutes: 540, breakMinutes: 60 }, // 4 x 8h
+        { courts: 2, windowMinutes: 480, breakMinutes: 0 }, // 2 x 8h
+      ]),
+    ).toBe(48);
+  });
+  it("counts a day with no courts as nothing", () => {
+    expect(courtHoursOffered([{ courts: 0, windowMinutes: 600, breakMinutes: 0 }])).toBe(0);
+  });
+  it("replaces courts x hours x days in the estimate", () => {
+    const result = estimateCapacity({
+      entrantsPerEvent: [16],
+      courtHoursOffered: 32,
+    });
+    expect(result.courtHoursAvailable).toBe(32);
+    expect(result.verdict).toBe("fits");
+  });
+  it("reads the offered total it is given rather than a plan it was not given", () => {
+    // The trap this guards: a caller that supplied only the offered side used to fall back to
+    // 0 x 0 x 0 and call a comfortable tournament impossible.
+    const result = estimateCapacity({ entrantsPerEvent: [16], courtHoursOffered: 0 });
+    expect(result.courtHoursAvailable).toBe(0);
+    expect(result.verdict).toBe("over");
   });
 });

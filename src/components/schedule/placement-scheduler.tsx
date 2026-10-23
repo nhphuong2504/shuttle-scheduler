@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatusPill } from "@/components/app-shell";
+import { CapacityEstimate } from "@/components/capacity-estimate";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { MatchFormatCard } from "@/components/match-format";
 import { PlayingDayPicker } from "@/components/schedule/playing-day-picker";
@@ -64,6 +65,7 @@ import {
   type TournamentDay,
 } from "@/lib/tournament/data";
 import { describeUnplaced } from "@/lib/tournament/auto-schedule";
+import { courtHoursOffered } from "@/lib/tournament/capacity-estimate";
 import { buildRebuildSuggestion, type RebuildSuggestion } from "@/lib/tournament/rebuild-suggestion";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import {
@@ -986,6 +988,42 @@ export function PlacementScheduler() {
   }, [plannerDays, courtsFor]);
 
   /**
+  /**
+   * "Will it fit?": the active field sizes against the court time the configured days offer.
+   *
+   * Only before the tournament starts, when it is advice for the organiser; once play begins the
+   * schedule's own finish line says the same thing with real times. Withdrawn teams take no
+   * court time, and a day with no courts offers none.
+   */
+  const capacity = useMemo(() => {
+    if (tournament?.status !== "upcoming") return null;
+    const fields = (categories ?? [])
+      .filter((category) => category.active)
+      .map((category) => (teams ?? []).filter((t) => t.category_id === category.id && !t.withdrawn).length)
+      .filter((n) => n > 0);
+    if (fields.length === 0 || plannerDays.length === 0) return null;
+    const minutes = (time: string) => {
+      const [h = "0", m = "0"] = time.split(":");
+      return Number(h) * 60 + Number(m);
+    };
+    return {
+      fields,
+      offered: courtHoursOffered(
+        plannerDays.map((day) => {
+          const { start, end } = dayWindowBounds(day);
+          return {
+            courts: courtsFor(day).length,
+            windowMinutes: Math.max((end - start) / 60000, 0),
+            breakMinutes: (breaksByDay.get(day.id) ?? []).reduce(
+              (sum, brk) => sum + Math.max(minutes(brk.end_time) - minutes(brk.start_time), 0),
+              0,
+            ),
+          };
+        }),
+      ),
+    };
+  }, [tournament?.status, categories, teams, plannerDays, courtsFor, breaksByDay]);
+
    * When the already-scheduled matches end.
    *
    * The latest end among matches that have a court and a time, read straight off the rows. This
@@ -1782,6 +1820,13 @@ export function PlacementScheduler() {
           <div className="rounded-lg bg-warn-surface px-3 py-2 text-sm text-warn-foreground">
             <p className="font-semibold">Left alone</p>
             <ul className="mt-0.5 space-y-0.5">
+          {canEdit && capacity ? (
+            <CapacityEstimate
+              inline
+              entrantsPerEvent={capacity.fields}
+              courtHoursOffered={capacity.offered}
+            />
+          ) : null}
               {result.skipped.map((entry) => (
                 <li key={entry.categoryId}>
                   {entry.code}: {entry.reason}

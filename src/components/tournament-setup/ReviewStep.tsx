@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import type { TournamentStatus } from "@/lib/auth/authorization";
-import { CapacityEstimate } from "@/components/capacity-estimate";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS, SUPPORTED_FORMAT } from "@/lib/tournament/competition-format";
 import { cn } from "@/lib/utils";
@@ -240,10 +239,6 @@ export function ReviewStep({
           where the courts exist.
         </p>
       </SetupSection>
-
-      {mode === "create" || status === "upcoming" ? (
-        <CapacityEstimate eventCount={activeEvents.length} days={days} />
-      ) : null}
 
       <SetupSection
         headingId="review-finish"
