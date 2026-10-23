@@ -1,0 +1,175 @@
+{
+  "exportedAt": "2026-10-23 22:06:36.010773+00",
+  "source": {
+    "project": "dzilzdxzdrrbdimhbiwv",
+    "tournamentId": "93034e9a-aab3-4fc1-80c5-36e5b7209c09",
+    "name": "Viet Nam Open 2026"
+  },
+  "settings": {
+    "venueTimezone": "America/Chicago",
+    "groupSlotMinutes": 10,
+    "groupRestGapMinutes": 5,
+    "knockoutSlotMinutes": 20,
+    "knockoutRestGapMinutes": 10,
+    "courts": 8,
+    "maxCategoriesPerPlayer": 3
+  },
+  "counts": {
+    "matches": 51,
+    "reported": 46,
+    "scheduled": 5,
+    "inProgress": 0,
+    "entrants": 51,
+    "teams": 51,
+    "players": 40,
+    "activityRows": 352,
+    "activityAttached": 320,
+    "activityOrphaned": 32
+  },
+  "perCategory": [
+    {
+      "category": "MS",
+      "entryType": "individual",
+      "entrants": 13,
+      "matches": 13,
+      "reported": 10,
+      "round1": 6,
+      "round2": 7,
+      "makeups": 2,
+      "crossovers": 1
+    },
+    {
+      "category": "WS",
+      "entryType": "individual",
+      "entrants": 9,
+      "matches": 9,
+      "reported": 9,
+      "round1": 4,
+      "round2": 5,
+      "makeups": 2,
+      "crossovers": 1
+    },
+    {
+      "category": "MD",
+      "entryType": "pair",
+      "entrants": 9,
+      "matches": 9,
+      "reported": 9,
+      "round1": 4,
+      "round2": 5,
+      "makeups": 2,
+      "crossovers": 1
+    },
+    {
+      "category": "WD",
+      "entryType": "pair",
+      "entrants": 7,
+      "matches": 7,
+      "reported": 7,
+      "round1": 3,
+      "round2": 4,
+      "makeups": 2,
+      "crossovers": 0
+    },
+    {
+      "category": "XD",
+      "entryType": "pair",
+      "entrants": 13,
+      "matches": 13,
+      "reported": 11,
+      "round1": 6,
+      "round2": 7,
+      "makeups": 2,
+      "crossovers": 1
+    }
+  ],
+  "day1": {
+    "date": "2026-10-23",
+    "windowLocal": "15:04:00–17:00:00",
+    "matchesStarted": 46,
+    "firstStartLocal": "2026-10-23 15:04:52",
+    "lastStartLocal": "2026-10-23 16:53:05",
+    "lastEndLocal": "2026-10-23 16:59:06",
+    "onCourtMinutes": 545,
+    "courtCapacityMinutes": 928,
+    "utilization": 0.588,
+    "overranSlot": 41,
+    "maxOverrunMin": 6.8
+  },
+  "duration": {
+    "matches": 46,
+    "meanMin": 11.9,
+    "minMin": 6,
+    "maxMin": 16.8,
+    "overSlot": 41
+  },
+  "drift": {
+    "movedMatches": 38,
+    "maxMin": 8.5,
+    "meanMin": 4
+  },
+  "spill": [
+    {
+      "match": "MS round2 r2-1",
+      "court": 3,
+      "firstPublishedLocal": "2026-10-24 12:01:00",
+      "nowScheduledLocal": "2026-10-24 12:01:00",
+      "movedMin": 0
+    },
+    {
+      "match": "MS round2 r2-4",
+      "court": 1,
+      "firstPublishedLocal": "2026-10-24 12:16:00",
+      "nowScheduledLocal": "2026-10-24 12:16:00",
+      "movedMin": 0
+    },
+    {
+      "match": "MS round2 r2-makeup-2",
+      "court": 2,
+      "firstPublishedLocal": "2026-10-24 12:11:00",
+      "nowScheduledLocal": "2026-10-24 12:11:00",
+      "movedMin": 0
+    },
+    {
+      "match": "XD round2 r2-5",
+      "court": 2,
+      "firstPublishedLocal": "2026-10-23 16:55:00",
+      "nowScheduledLocal": "2026-10-24 12:01:00",
+      "movedMin": 1146
+    },
+    {
+      "match": "XD round2 r2-makeup-2",
+      "court": 1,
+      "firstPublishedLocal": "2026-10-23 17:01:00",
+      "nowScheduledLocal": "2026-10-24 12:01:00",
+      "movedMin": 1140
+    }
+  ],
+  "remaining": [
+    {
+      "match": "MS round2 r2-1",
+      "court": 3,
+      "scheduled": "2026-10-24T17:01:00+00:00"
+    },
+    {
+      "match": "MS round2 r2-4",
+      "court": 1,
+      "scheduled": "2026-10-24T17:16:00+00:00"
+    },
+    {
+      "match": "MS round2 r2-makeup-2",
+      "court": 2,
+      "scheduled": "2026-10-24T17:11:00+00:00"
+    },
+    {
+      "match": "XD round2 r2-5",
+      "court": 2,
+      "scheduled": "2026-10-24T17:01:00+00:00"
+    },
+    {
+      "match": "XD round2 r2-makeup-2",
+      "court": 1,
+      "scheduled": "2026-10-24T17:01:00+00:00"
+    }
+  ]
+}
