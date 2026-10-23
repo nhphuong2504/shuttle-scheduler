@@ -23,7 +23,7 @@
     "bench:strategies": "vitest run --config vitest.strategy.config.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:final": "E2E_REQUIRE_STAFF=1 playwright test && node scripts/assert-no-skips.mjs",
+    "test:e2e:final": "node scripts/e2e-final.mjs",
     "test:all": "npm run test && npm run test:e2e",
     "test:e2e:record-auth": "node scripts/record-staff-session.mjs",
     "db:link": "supabase link --project-ref \"$SUPABASE_PROJECT_ID\"",
