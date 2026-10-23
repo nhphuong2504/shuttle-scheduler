@@ -2542,6 +2542,53 @@ describe("place_ready_matches migration", () => {
   });
 });
 
+describe("prerequisite order migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "20261023000000_prerequisite_order.sql"),
+    "utf8",
+  );
+  const body = (name: string) => {
+    const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    expect(start).toBeGreaterThan(-1);
+    const ends = [
+      sql.indexOf("\nCREATE OR REPLACE FUNCTION", start + 1),
+      sql.indexOf("\nREVOKE ALL", start),
+    ].filter((index) => index > -1);
+    return sql.slice(start, Math.min(...ends));
+  };
+
+  it("checks the order in both directions, with a reason rather than a failed batch", () => {
+    const writer = body("place_ready_matches");
+    for (const reason of ["prerequisite_unplaced", "before_prerequisite", "after_dependent"]) {
+      expect(writer).toContain(`'${reason}'`);
+    }
+    // Taken earliest first, so a prerequisite sent with its dependent is on the books for it.
+    expect(writer).toMatch(/ORDER BY \(e\.value->>'scheduled_time'\)::timestamptz/);
+    // A void prerequisite is no wait, and a reported one is over whether or not it held a slot.
+    expect(writer).toMatch(/pre\.status <> 'void'/);
+    expect(writer).toMatch(/NOT IN \('reported', 'walkover'\)/);
+    // Still the additive writer.
+    expect(writer).toMatch(/court_id IS NULL AND scheduled_time IS NULL/);
+    expect(writer).not.toMatch(/DELETE FROM/);
+  });
+
+  it("leaves a prerequisite behind a match on its own court out of the reflow floor", () => {
+    const core = body("shift_live_schedule_core");
+    expect(core).toMatch(/prereq\.court_id = current_match\.court_id/);
+    expect(core).toMatch(/prereq\.day_id IS NOT DISTINCT FROM current_match\.day_id/);
+    // The in-progress handling from 20261010 is carried over unchanged.
+    expect(core).toMatch(/source_status = 'in-progress'/);
+    expect(core).toMatch(/COALESCE\(prereq\.actual_start, prereq\.shifted_time\)/);
+  });
+
+  it("keeps both functions' privileges and verifies on apply", () => {
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.place_ready_matches\(uuid, text, jsonb\) FROM anon, PUBLIC/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.shift_live_schedule_core\(text, uuid\) FROM anon, authenticated, PUBLIC/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.shift_live_schedule_core\(text, uuid\) TO service_role/);
+    expect(sql).toMatch(/DO \$verify\$/);
+  });
+});
+
 /**
  * The migration that gives a 21-point game its 30-point ceiling.
  *
