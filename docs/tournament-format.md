@@ -278,15 +278,20 @@ all per-tournament values, and the platform does not assume this shape.
 
 ### The "Will it fit?" estimate is advice
 
-The Schedule page of an upcoming tournament shows a rough count of court time needed against
-court time offered ([`capacity-estimate.ts`](../src/lib/tournament/capacity-estimate.ts)). Both
-sides are read from the tournament, with nothing typed: the needed side from the active entries
-per event, the offered side from each configured day's courts times its window less its breaks.
-It counts a field of N >= 3 as N placement matches plus an even split of the knockout draws, and
-prices them at the default 20 / 25 minute slots. Nothing is saved and the scheduler does not read
-it. It states "needs X court-hours, has Y" and nothing about utilisation, which was removed from
-the forecast on purpose. The Review step and the Entries page do not show it: before entries
-and a built schedule its inputs are guesses.
+The Schedule page shows a rough count of court time needed against court time offered
+([`capacity-estimate.ts`](../src/lib/tournament/capacity-estimate.ts)). Both sides are read from
+the tournament, with nothing typed: the needed side from the active entries per event, the
+offered side from each configured day's courts times its window less its breaks. It counts a
+field of N >= 3 as N placement matches plus an even split of the knockout draws, and prices them
+at the default 20 / 25 minute slots. Nothing is saved and the scheduler does not read it. It
+states "needs X court-hours, has Y" and nothing about utilisation, which was removed from the
+forecast on purpose.
+
+It is shown for as long as the tournament is being run — before it starts and throughout it — and
+dropped only once the tournament is completed. Mid-event it is still a planning line: it says
+whether the remaining field fits the hours on offer, which is a different question from the
+schedule's finish line (when the day ends). The Review step and the Entries page do not show it:
+before entries and a built schedule its inputs are guesses.
 
 ## Removed from this document
 

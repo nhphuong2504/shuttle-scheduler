@@ -991,12 +991,16 @@ export function PlacementScheduler() {
   /**
    * "Will it fit?": the active field sizes against the court time the configured days offer.
    *
-   * Only before the tournament starts, when it is advice for the organiser; once play begins the
-   * schedule's own finish line says the same thing with real times. Withdrawn teams take no
-   * court time, and a day with no courts offers none.
+   * Shown while the tournament is still being run — before it starts and all the way through — and
+   * dropped only once it is completed. It is a planning line: an organiser mid-event still wants to
+   * know whether the remaining field fits the hours on offer, and the schedule's own finish line
+   * answers a different question (when the day ends, not whether the work fits in it). Once the
+   * tournament is completed there is nothing left to plan, so the line has nothing to say.
+   *
+   * Withdrawn teams take no court time, and a day with no courts offers none.
    */
   const capacity = useMemo(() => {
-    if (tournament?.status !== "upcoming") return null;
+    if (tournament?.status === "completed") return null;
     const fields = (categories ?? [])
       .filter((category) => category.active)
       .map((category) => (teams ?? []).filter((t) => t.category_id === category.id && !t.withdrawn).length)
