@@ -991,12 +991,16 @@ export function PlacementScheduler() {
   /**
    * "Will it fit?": the active field sizes against the court time the configured days offer.
    *
-   * Only before the tournament starts, when it is advice for the organiser; once play begins the
-   * schedule's own finish line says the same thing with real times. Withdrawn teams take no
-   * court time, and a day with no courts offers none.
+   * Shown while the tournament is still being run — before it starts and all the way through — and
+   * dropped only once it is completed. It is a planning line: an organiser mid-event still wants to
+   * know whether the remaining field fits the hours on offer, and the schedule's own finish line
+   * answers a different question (when the day ends, not whether the work fits in it). Once the
+   * tournament is completed there is nothing left to plan, so the line has nothing to say.
+   *
+   * Withdrawn teams take no court time, and a day with no courts offers none.
    */
   const capacity = useMemo(() => {
-    if (tournament?.status !== "upcoming") return null;
+    if (tournament?.status === "completed") return null;
     const fields = (categories ?? [])
       .filter((category) => category.active)
       .map((category) => (teams ?? []).filter((t) => t.category_id === category.id && !t.withdrawn).length)
@@ -1813,26 +1817,34 @@ export function PlacementScheduler() {
             {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
           </span>
           <ScheduledFinish finishMs={scheduledFinishMs} closeMs={officialCloseMs} />
-          {canEdit ? (
-            <InfoNote label="About the running order">
-              <p>Matches already played or on court never move when the schedule is rebuilt.</p>
-            </InfoNote>
-          ) : null}
           {result && result.summary.unscheduled > 0 ? (
             <span className="text-danger-foreground">
               {result.summary.unscheduled} could not be placed
             </span>
           ) : null}
           {/*
-            The badge is the connection, not the tournament: "Live" beside a finished day read
-            as a match being on. Once the tournament is completed nothing more will arrive, so
-            there is no connection worth reporting.
+            The right-hand group, in one place so the two rows agree about it.
+
+            The (i) used to sit inline after the finish times while the "Will it fit?" line's own
+            (i) sat at the far right, so two markers that mean the same thing landed in two
+            different columns. Both now end their row, which puts them on one vertical line, and a
+            test compares their measured x rather than trusting this comment.
+
+            The badge is inside the group rather than right-aligned on its own, so it sits beside
+            the note instead of pushing it off the line. It is the connection, not the tournament:
+            "Live" beside a finished day read as a match being on. Once the tournament is completed
+            nothing more will arrive, so there is no connection worth reporting.
           */}
-          {tournament?.status === "completed" ? null : (
-            <span className="ml-auto">
+          <span className="ml-auto flex items-center gap-2">
+            {tournament?.status === "completed" ? null : (
               <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
-            </span>
-          )}
+            )}
+            {canEdit ? (
+              <InfoNote label="About the running order">
+                <p>Matches already played or on court never move when the schedule is rebuilt.</p>
+              </InfoNote>
+            ) : null}
+          </span>
           {canEdit && capacity ? (
             <CapacityEstimate
               inline

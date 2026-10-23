@@ -993,7 +993,7 @@ test.describe("The first build, on a tournament that has never had a schedule", 
   });
 });
 
-test.describe("Whether an upcoming tournament's entries fit, on the Schedule page", () => {
+test.describe("Whether a tournament's entries fit, on the Schedule page", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
 
   /**
@@ -1043,16 +1043,30 @@ test.describe("Whether an upcoming tournament's entries fit, on the Schedule pag
     );
   });
 
-  test("says nothing once the tournament is under way", async ({ page }) => {
-    // Before a day is built the estimate is advice; after play starts the schedule's own
-    // finish line says the same thing with real times, so the estimate has nothing to add.
+  test("keeps saying it while the tournament is under way", async ({ page }) => {
+    // A running tournament is still being planned: the line says whether the remaining field fits
+    // the hours on offer, which the schedule's finish line does not answer. It is drawn from the
+    // same entries and days, so nothing about it is stale once play starts.
     await installAppMock(page, { preset: "layout", role: "admin", status: "in_progress" });
     await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
-    // The page drew: the summary of the running order is there and only the estimate is not.
-    // Without this the absence below would pass just as well on a page that failed to render.
+    const estimate = page.getByTestId("capacity-estimate");
+    await expect(estimate).toBeVisible();
+    await expect(estimate).toContainText("Will it fit?");
+    // The running order is still there beside it: the estimate adds a line, it does not replace
+    // the schedule's own summary.
     await expect(page.getByText(/match(es)? scheduled/).first()).toBeVisible();
+  });
+
+  test("says nothing once the tournament is completed", async ({ page }) => {
+    // Nothing is left to plan, so the planning line has nothing to add. The page still draws -
+    // asserted first, so the absence below cannot pass on a page that failed to render.
+    await installAppMock(page, { preset: "layout", role: "admin", status: "completed" });
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("main")).toBeVisible();
     await expect(page.getByTestId("capacity-estimate")).toHaveCount(0);
   });
 
@@ -1072,6 +1086,29 @@ test.describe("Whether an upcoming tournament's entries fit, on the Schedule pag
     await expect(schedule).toBeVisible();
     await expect(schedule).not.toContainText(/not authorized|failed to load/i);
     await expect(page.getByTestId("capacity-estimate")).toHaveCount(0);
+  });
+
+  test("puts both (i) markers in one column, not where their sentence happens to end", async ({
+    page,
+  }) => {
+    // Two notes on one bar, meaning the same kind of thing. The first used to sit inline after
+    // the finish times and the second at the far right of its own row, so they landed in two
+    // columns - which read as two different kinds of affordance. Measured, not eyeballed: the x
+    // is compared because that is what "aligned" means on screen.
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const running = page.getByRole("button", { name: "About the running order" });
+    const estimate = page.getByRole("button", { name: "About this estimate" });
+    await expect(running).toBeVisible();
+    await expect(estimate).toBeVisible();
+
+    const [a, b] = await Promise.all([running.boundingBox(), estimate.boundingBox()]);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(Math.round(a!.x)).toBe(Math.round(b!.x));
+    // On different rows, which is what makes the shared x meaningful.
+    expect(Math.round(a!.y)).not.toBe(Math.round(b!.y));
   });
 
   test("introduces no accessibility violation", async ({ page }) => {
