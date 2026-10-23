@@ -584,4 +584,44 @@ describe("live reflow", () => {
     const inverted = conflicts.filter((row) => row.match_id === m2);
     expect(inverted.map((row) => row.conflict_kind)).toContain("before_prerequisite");
   });
+
+  it("(l) stores match times in whole milliseconds, so the app and the database read one instant", async () => {
+    // A `timestamptz` keeps microseconds and a JavaScript `Date` keeps milliseconds, so a time the
+    // database stamped (a finish from the clock, a reflow behind it) read back early in the app, and
+    // the planner's start for the next match came out half a millisecond before the court was free:
+    // `place_ready_matches` answered `court_busy`. A trigger now truncates on every write.
+    //
+    //   m1 09:00:00.123456  published with microseconds.
+    //   m2 09:10            behind it on court one.
+    //   m1 reports a finish of 09:25:06.310499, which the reflow carries into m2's start.
+    const seeded = await seed({ label: "l", entrants: 4 });
+    const m1 = await placeMatch(seeded, {
+      key: "l-1",
+      a: 0,
+      b: 1,
+      court: 1,
+      at: "2020-01-04T09:00:00.123456Z",
+    });
+    const m2 = await placeMatch(seeded, { key: "l-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:10") });
+
+    await reportAt(m1, "2020-01-04T09:25:06.310499Z", seeded.tournamentId);
+
+    const { data, error } = await serviceClient()
+      .from("placement_matches")
+      .select("id, scheduled_time, started_at, ended_at")
+      .in("id", [m1, m2]);
+    if (error) throw new Error(`reading times failed: ${error.message}`);
+    // PostgREST prints a timestamptz without trailing zeros, so more than three fractional digits
+    // means a sub-millisecond part survived.
+    const wholeMs = (value: string | null) => value == null || !/\.\d{4,}/.test(value);
+    for (const row of data) {
+      expect(wholeMs(row.scheduled_time), `scheduled_time ${row.scheduled_time}`).toBe(true);
+      expect(wholeMs(row.started_at), `started_at ${row.started_at}`).toBe(true);
+      expect(wholeMs(row.ended_at), `ended_at ${row.ended_at}`).toBe(true);
+    }
+    const times = await timesOf([m1, m2]);
+    expect(times.get(m1)).toBe("2020-01-04T09:00:00.123Z");
+    // The reflow moved m2 behind the finish, to the same truncated instant.
+    expect(times.get(m2)).toBe("2020-01-04T09:25:06.310Z");
+  });
 });
