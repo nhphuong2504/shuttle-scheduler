@@ -934,6 +934,65 @@ test.describe("A tournament with no playing days yet", () => {
   });
 });
 
+test.describe("The first build, on a tournament that has never had a schedule", () => {
+  test.use({ appMock: { preset: "prebuild", role: "admin", status: "upcoming" } });
+
+  /**
+   * `prebuild` is the seeded field before any build: entrants with a locked seed order, and no
+   * matches or draws. It is the only fixture that reaches the first-build path at all - every
+   * other preset serves a built schedule, so their button reads "Rebuild schedule" and goes to
+   * the preview instead.
+   *
+   * The fixture's input rows are what make the build succeed here: 12 entrants over two events
+   * and 8 courts on one all-day window is a plan with nothing blocked, so the handler reaches
+   * the write and the page's post-build state, rather than stopping at the blocked preview.
+   */
+  test("closes the settings panel once the schedule is built", async ({ page }) => {
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    // The panel opens itself on a tournament that has never been built: the days, courts and
+    // match settings in it are the whole job on a first pass.
+    const toggle = page.getByRole("button", { name: "Hide settings" });
+    await expect(toggle).toBeVisible();
+
+    // With the settings open the only Build lives in the bar at the foot of the page.
+    const build = page.getByRole("button", { name: "Build schedule" });
+    await expect(build).toHaveCount(1);
+    await expect(build).toBeEnabled();
+    await build.click();
+
+    // The build succeeded: the running order is no longer empty, and the toast said so.
+    await expect(page.getByText(/matches? placed across/)).toBeVisible();
+
+    // And the setup closed behind it, handing the page back to the order it produced: the
+    // panel's own heading is gone, and the toggle in the header reads as closed. The build
+    // button is back in the header too, because that is where it lives while the settings
+    // are shut. Its label is still "Build schedule" here only because this fixture answers
+    // every read from a frozen snapshot - the write is not projected back as rows until a
+    // real refetch would show it.
+    await expect(page.getByRole("heading", { name: "Tournament settings" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Hide settings" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Tournament settings" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Build schedule" })).toHaveCount(1);
+  });
+
+  test("closes nothing when the build is refused before it runs", async ({ page }) => {
+    // No playing day leaves nothing to build on, so the handler returns before it plans. The
+    // panel is where the day is chosen, so hiding it here would take away the only way to fix
+    // what refused the build.
+    await page.route("**/rest/v1/tournament_days*", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+    );
+    await page.goto(routes.schedule, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const build = page.getByRole("button", { name: "Build schedule" });
+    await expect(build).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Hide settings" })).toBeVisible();
+  });
+});
+
 test.describe("Whether an upcoming tournament's entries fit, on the Schedule page", () => {
   test.use({ appMock: { preset: "layout", role: "admin", status: "upcoming" } });
 

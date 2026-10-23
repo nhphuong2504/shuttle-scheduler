@@ -1590,6 +1590,19 @@ export function PlacementScheduler() {
       }
       await finishApply(plan, outcome);
       setPreview(null);
+      /**
+       * The first build ends the setup the panel exists for.
+       *
+       * The days, the per-day courts, the hours, the breaks and the match settings have all
+       * been read and written by the time this returns, and what the host needs next is the
+       * running order the build just produced - which the panel, drawn above it, was covering.
+       * Closing it is the page's own way of saying the setup is done.
+       *
+       * Only on success: a plan with blocked matches returned above with the preview open, and
+       * a thrown error leaves the panel where the host left it. A rebuild never reaches here,
+       * because a tournament that already has a schedule edits through `previewRebuild`.
+       */
+      setShowSettings(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not build the schedule");
     } finally {

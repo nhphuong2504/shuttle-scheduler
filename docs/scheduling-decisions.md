@@ -550,6 +550,12 @@ used to be pressed for happens on its own, and the button is left for deliberate
   stays quiet when the unplaced-matches notice is showing.
 - **The Desk** lists a ready match with no time at all in its "ready, unassigned" pool (after every
   timed one), so it can still be dispatched while nothing has placed it.
+- **The settings panel is the first build's page.** On a tournament that has never been built it opens
+  itself, because the days, the per-day courts, the hours, the breaks and the match settings in it are
+  the whole job on a first pass. It closes itself when that build succeeds: everything in it has been
+  read and written by then, and the running order the build just produced is what the host needs next.
+  A refused build leaves it open, because it is also the only place to fix what refused it. A rebuild
+  never closes it — that path has its own preview to dismiss.
 - **What stays manual:** the first build, a rebuild after the day windows, courts or timings change,
   clearing a held overlap, and withdrawals or walkovers, which the placement format does not support
   on the Desk.
