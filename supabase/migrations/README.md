@@ -1688,7 +1688,7 @@ Harmless, but the desk goes back to manual refresh.
 
 ---
 
-## Comparing two projects: `scripts/parity-dump.sql` and `scripts/migration-drift-check.sql`
+## Comparing two projects: `scripts/parity-dump.sql`, `scripts/migration-status.mjs` and `scripts/migration-drift-check.sql`
 
 The files here are **not a complete record of the live schema**, and these two scripts exist to
 measure the difference rather than assume it. They matter if this project is ever replayed onto a
@@ -1736,22 +1736,34 @@ Definitions rather than counts, because a count of 17 functions matches whether 
 are identical — and a body is where the scoring and generation rules live. Likewise, a policy with
 the same name and a different `qual` is a different authorization rule.
 
-### `scripts/migration-drift-check.sql`
+### `scripts/migration-status.mjs`
 
-Run on the **old** project:
+The current drift check, and what `npm run db:drift -- <ref>` runs:
 
 ```sh
-SUPABASE_DB_URL='postgresql://...old' npm run db:drift
+npm run db:drift -- <project-ref>
 ```
 
-It compares `supabase_migrations.schema_migrations` against the file
-list and reports three things: versions applied with no local file (a change that exists only in
-that database), files never applied, and an explicit `OK` line with the counts when they agree. It
-prints an `OK` row rather than nothing, because zero rows is indistinguishable from a query that
-did not run.
+It reads `supabase/migrations/`, lists the versions in `supabase_migrations.schema_migrations`, and
+reports three things: versions applied with no local file (a change that exists only in that
+database - the drift the original SQL tool was written to surface), files never applied, and an
+explicit `OK` line with the counts when they agree. It prints the `OK` line rather than nothing,
+because zero rows is indistinguishable from a query that did not run, and it exits non-zero on any
+drift so a deploy can gate on it.
 
-The expected list is generated from `ls supabase/migrations/*.sql`; regenerate it if migrations are
-added before the check is run.
+Reading the directory is the point: the side that changes is the source of truth, so there is no
+list to regenerate.
+
+### `scripts/migration-drift-check.sql`
+
+**Superseded.** Kept only as the record of the move between two projects. Its `expected` list is
+hardcoded and stops at `20260921000000`, so running it against a current project reports a false
+`DRIFT` row for every migration added since - a database-side query cannot see the filesystem, and
+regenerating the list by hand is the defect itself. Use `migration-status.mjs`.
+
+For the historical record, the query compared `supabase_migrations.schema_migrations` against that
+list and reported versions applied with no local file, files never applied, and an explicit `OK`
+row with the counts when they agreed.
 
 Both scripts were run against a real Postgres engine (PGlite) before they were first used against a
 hosted project, and doing so caught two defects that would otherwise have surfaced on the first
@@ -1795,7 +1807,7 @@ is refused unless `--allow-production` is passed.
 | Check | Result |
 | --- | --- |
 | All 34 migrations, in order, unedited | 34/34 on the first pass |
-| `migration-drift-check.sql` against the replayed project | `OK` — applied=34, expected=34, matched=34 |
+| `migration-status.mjs` against the replayed project | `OK` — applied=68, local=68, matched=68 |
 | `parity-dump.sql` against the replayed project | 1,442 rows across 17 kinds |
 | `supabase_realtime` publication membership | 19 tables, exactly the list the migration names |
 | `types.ts` regenerated and diffed against the committed file | byte-identical — 1,607 lines, 0 differences |
@@ -1963,8 +1975,8 @@ correct the file and re-run — not to patch a half-applied state.
 ### Verify after applying
 
 ```sh
-node scripts/run-sql.mjs scripts/migration-drift-check.sql --project-ref <ref>
-node scripts/run-sql.mjs scripts/parity-dump.sql           --project-ref <ref>
+node scripts/migration-status.mjs <ref>
+node scripts/run-sql.mjs scripts/parity-dump.sql --project-ref <ref>
 ```
 
 Then confirm the four things that would otherwise fail later and quietly:

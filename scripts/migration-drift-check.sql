@@ -1,5 +1,11 @@
 -- Migration drift check.
 --
+-- SUPERSEDED by `scripts/migration-status.mjs`, which is what `npm run db:drift -- <ref>` runs.
+-- This file is kept as the record of the move between two projects. Its `expected` list below is
+-- hardcoded and stops at 20260921000000, so running it against a current project reports a false
+-- `DRIFT` row for every migration added since: a database-side query cannot see the filesystem, and
+-- regenerating the list by hand is the defect rather than the fix.
+--
 -- Run this on the OLD project. It answers one question: does the set of migrations that
 -- were actually applied match the files in `supabase/migrations/`?
 --
