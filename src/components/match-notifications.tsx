@@ -54,16 +54,26 @@ export function MatchNotifications() {
   return (
     <>
       <Button
-        variant="outline"
-        className="fixed bottom-4 right-4 z-40 h-11 gap-2 bg-background shadow-md"
+        variant="ghost"
+        className="relative size-11 shrink-0 rounded-full p-0 text-muted-foreground hover:text-foreground [&_svg]:size-5"
         aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="Notifications"
         onClick={() => {
           setOpen(true);
           void query.refetch();
         }}
       >
-        <Bell className="size-4" aria-hidden="true" />
-        Notifications{unread ? <span>{unread}</span> : null}
+        <Bell aria-hidden="true" />
+        {unread ? (
+          <span
+            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold tabular-nums text-primary-foreground ring-2 ring-surface"
+          >
+            {unread > 99 ? "99+" : unread}
+          </span>
+        ) : null}
       </Button>
       <span role="status" className="sr-only">
         {unread ? `${unread} unread match notifications` : ""}
@@ -92,13 +102,16 @@ export function MatchNotifications() {
           <ul className="space-y-3">
             {query.data?.map((n) => (
               <li key={n.id} className="space-y-2 rounded-lg border border-hairline p-3">
-                <p className="font-semibold">
-                  {n.tournament_name} · Court {n.court_number}
-                  {!n.read_at ? " · Unread" : ""}
-                </p>
-                <time className="text-sm text-muted-foreground" dateTime={n.created_at}>
-                  {new Date(n.created_at).toLocaleString()}
-                </time>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 font-semibold">{n.tournament_name}</p>
+                  {!n.read_at ? <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-sm font-medium">Unread</span> : null}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  <span>Court {n.court_number}</span>
+                  <time dateTime={n.created_at}>{new Intl.DateTimeFormat(undefined, {
+                    month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZoneName: "short",
+                  }).format(new Date(n.created_at))}</time>
+                </div>
                 <p className="whitespace-pre-wrap break-words">{n.message}</p>
                 {n.outdated ? (
                   <p className="text-sm font-medium">

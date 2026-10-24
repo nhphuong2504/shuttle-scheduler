@@ -150,7 +150,7 @@ a reader, and at the Desk for an operator), and the tournament's participant pag
 
 The header's own line — brand, then the tournament's name and status — carries one more entry
 for a reader, and it follows the same split as the section nav. An operator gets the workspace
-switcher in the section row, because the tournaments they may work in are a list they hold and
+switcher beside the tournament name, because the tournaments they may work in are a list they hold and
 moving between them is their own act. A reader gets **Browse tournaments** at `/explore`, in
 the position `PublicShell` puts its public nav: immediately after the brand. It is the entry a
 card came in by, and a reader who left the list should find the way back where they left it.
@@ -158,8 +158,8 @@ There is no create-tournament button in either case: starting a tournament is an
 act, and a header that offers no way to change this one should not offer a way to begin
 another.
 
-The signed-in root also hosts a
-**Notifications** inbox, available across both shells without a new address. It lists
+Both shells include a **Notifications** inbox in the signed-in account header,
+available without a new address. It lists
 only the caller's own match calls and links to the tournament's read-only Desk. Receiving
 a call does not change the workspace nav or grant operator access. The participant can
 read a call and mark it as read without choosing a working tournament.

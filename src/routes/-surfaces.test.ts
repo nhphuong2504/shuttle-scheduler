@@ -699,7 +699,7 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
      * at all in the bar - opening a tournament took Browse, My tournaments and New tournament
      * away from the person running it. Now one component draws the row for both shells, so
      * the two cannot drift, and the tournament's own sections stay a second row under its
-     * name. The operator's switcher stays where it was: the section row.
+     * name. The operator's switcher sits beside the tournament identity.
      */
     const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
     const workspace = shell.slice(
@@ -713,7 +713,7 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     expect(shell.slice(shell.indexOf("export function PublicShell"))).toMatch(
       /<PrimaryNav signedIn=\{signedIn\} marked \/>/,
     );
-    // The switcher's place, unchanged: the section row, for a caller who may edit.
+    // The switcher belongs to the tournament identity, for a caller who may edit.
     expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
     // The row itself: Browse for everyone, My tournaments and New tournament once signed in.
     expect(shell).toMatch(/\{ label: "Browse tournaments", to: "\/explore" \}/);

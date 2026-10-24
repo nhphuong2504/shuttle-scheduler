@@ -268,7 +268,7 @@ function PhoneRunningOrder({ rows }: { rows: RunningOrderRow[] }) {
   const allPlayed = played === rows.length;
   const visible = showPlayed || allPlayed ? rows : rows.filter((row) => !isPlayed(row.status));
   return (
-    <div className="sm:hidden">
+    <div className="lg:hidden">
       {played > 0 && !allPlayed ? (
         <div className="px-3 pb-2">
           <Button
@@ -286,16 +286,15 @@ function PhoneRunningOrder({ rows }: { rows: RunningOrderRow[] }) {
       <ul className="divide-y divide-hairline border-t border-hairline">
         {visible.map((row) => (
           <li key={row.id} className="flex gap-3 px-3 py-2.5">
-            <div className="w-12 shrink-0">
+            <div className="w-20 shrink-0">
               <p className="font-score text-sm font-semibold tabular-nums">{timeLabel(row.start)}</p>
-              <p className="font-score text-t4 text-muted-foreground">C{row.courtNumber || "—"}</p>
+              <p className="whitespace-nowrap font-score text-t4 text-muted-foreground" title={row.courtNumber ? undefined : "Court not assigned"}>{row.courtNumber ? `Court ${row.courtNumber}` : "Unassigned"}</p>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium leading-snug">{row.label}</p>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-t4 text-muted-foreground">
-                <span>
-                  {row.categoryCode} · {row.stage}
-                </span>
+                <span className="font-medium">{row.categoryCode}</span>
+                <span>{row.stage}</span>
                 <StatusPill status={row.status} />
               </p>
             </div>
@@ -1816,35 +1815,24 @@ export function PlacementScheduler() {
             {tournamentDays.length} day{tournamentDays.length === 1 ? "" : "s"},{" "}
             {(courts ?? []).length} court{(courts ?? []).length === 1 ? "" : "s"}
           </span>
-          <ScheduledFinish finishMs={scheduledFinishMs} closeMs={officialCloseMs} />
-          {result && result.summary.unscheduled > 0 ? (
-            <span className="text-danger-foreground">
-              {result.summary.unscheduled} could not be placed
-            </span>
-          ) : null}
-          {/*
-            The right-hand group, in one place so the two rows agree about it.
-
-            The (i) used to sit inline after the finish times while the "Will it fit?" line's own
-            (i) sat at the far right, so two markers that mean the same thing landed in two
-            different columns. Both now end their row, which puts them on one vertical line, and a
-            test compares their measured x rather than trusting this comment.
-
-            The badge is inside the group rather than right-aligned on its own, so it sits beside
-            the note instead of pushing it off the line. It is the connection, not the tournament:
-            "Live" beside a finished day read as a match being on. Once the tournament is completed
-            nothing more will arrive, so there is no connection worth reporting.
-          */}
-          <span className="ml-auto flex items-center gap-2">
-            {tournament?.status === "completed" ? null : (
-              <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
-            )}
+          <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-1">
+            <ScheduledFinish finishMs={scheduledFinishMs} closeMs={officialCloseMs} />
+            {result && result.summary.unscheduled > 0 ? (
+              <span className="text-danger-foreground">
+                {result.summary.unscheduled} could not be placed
+              </span>
+            ) : null}
             {canEdit ? (
               <InfoNote label="About the running order">
                 <p>Matches already played or on court never move when the schedule is rebuilt.</p>
               </InfoNote>
             ) : null}
           </span>
+          {tournament?.status === "completed" ? null : (
+            <span className="ml-auto flex items-center">
+              <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
+            </span>
+          )}
           {canEdit && capacity ? (
             <CapacityEstimate
               inline
@@ -2149,7 +2137,7 @@ export function PlacementScheduler() {
                                     key={court.id}
                                     size="sm"
                                     variant={on ? "default" : "outline"}
-                                    className="font-score h-7 w-11 px-0"
+                                    className="font-score h-9 min-w-16 px-2"
                                     disabled={!canEdit || busy || lastOn}
                                     title={
                                       lastOn
@@ -2159,7 +2147,7 @@ export function PlacementScheduler() {
                                     aria-pressed={on}
                                     onClick={() => void toggleDayCourt(day, court.id)}
                                   >
-                                    C{court.number}
+                                    Court {court.number}
                                   </Button>
                                 );
                               })}
@@ -2433,19 +2421,19 @@ export function PlacementScheduler() {
                   ) : (
                     <>
                     {/*
-                      A phone gets one card per match instead of the six-column table, which it
+                      A phone or tablet gets one card per match instead of the six-column table, which it
                       squeezed until the status read "COMPLE" and the day ran to 23,000px. A
                       match already played is folded away while some are still to come, since
                       a reader on a phone is looking for what is next; when none are left the
                       played ones are the day, so they show.
                     */}
                     <PhoneRunningOrder rows={slice.rows} />
-                    <div className="hidden overflow-x-auto sm:block">
+                    <div className="hidden overflow-x-auto lg:block">
                       <table className="data-table">
                         <thead>
                           <tr>
                             <th className="w-16">Time</th>
-                            <th className="w-16">Court</th>
+                            <th className="w-28">Court</th>
                             <th className="w-14">Cat</th>
                             <th className="w-40">Stage</th>
                             <th className="w-28">Status</th>
@@ -2460,8 +2448,8 @@ export function PlacementScheduler() {
                               </td>
                               <td>
                                 {/* Neutral: violet is for what can be pressed, and this chip cannot. */}
-                                <span className="inline-flex rounded-md bg-muted px-1.5 py-0.5 font-score text-t2 font-semibold text-foreground">
-                                  C{row.courtNumber || "—"}
+                                <span className="inline-flex whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 font-score text-t2 font-semibold text-foreground" title={row.courtNumber ? undefined : "Court not assigned"}>
+                                  {row.courtNumber ? `Court ${row.courtNumber}` : "Unassigned"}
                                 </span>
                               </td>
                               <td className="font-score text-sm">{row.categoryCode}</td>
@@ -2646,7 +2634,7 @@ export function PlacementScheduler() {
                           <tr>
                             <th>Match</th>
                             <th className="w-28">Time</th>
-                            <th className="w-20">Court</th>
+                            <th className="w-40">Court</th>
                             <th className="w-16">Shift</th>
                           </tr>
                         </thead>
@@ -2658,11 +2646,11 @@ export function PlacementScheduler() {
                                 {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
                                 {timeLabel(change.toStart)}
                               </td>
-                              <td className="font-score text-sm">
+                              <td className="whitespace-nowrap font-score text-sm">
                                 {change.fromCourtNumber != null
-                                  ? `C${change.fromCourtNumber}`
+                                  ? `Court ${change.fromCourtNumber}`
                                   : "—"}{" "}
-                                → C{change.toCourtNumber}
+                                → Court {change.toCourtNumber}
                               </td>
                               <td className="font-score text-sm">
                                 {change.shiftMinutes > 0 ? "+" : ""}

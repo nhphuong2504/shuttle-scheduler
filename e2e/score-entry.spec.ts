@@ -270,3 +270,89 @@ test.describe("Entering a result", () => {
     expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 });
+
+// Presentation-only fixtures: no pairing, scheduling or scoring RPC is called.
+async function placementWordingFixture(page: Page, crossover = false, queuedCourtNumber = 6) {
+  const { deskFixture } = await import("./fixtures/desk-mock");
+  await installAppMock(page, { preset: "states", role: "user", access: { can_edit: false, is_owner: false, can_manage_access: false } });
+  const fixture = deskFixture("states", "user");
+  const entrants = (fixture.tables["placement_entrants"] as { id: string; category_id: string; tournament_id: string }[]).slice(0, crossover ? 6 : 3);
+  const courts = fixture.tables["courts"] as { id: string; number: number }[];
+  const past = new Date(Date.now() - 3_600_000).toISOString();
+  const base = { tournament_id: entrants[0]!.tournament_id, category_id: entrants[0]!.category_id,
+    games: [], prerequisite_ids: [], started_at: null, ended_at: null, reported_time: null,
+    winner_id: null, note: null, is_makeup: false, is_crossover: false, court_id: null, scheduled_time: null };
+  const rows = [
+    { ...base, id: "00000000-0000-4000-8000-000000009001", generation_key: "r1-1", stage: "round1", status: "reported", entrant_a_id: entrants[0]!.id, entrant_b_id: entrants[1]!.id, winner_id: entrants[0]!.id, games: [{ a: 21, b: 10 }], ended_at: past, reported_time: past },
+    { ...base, id: "00000000-0000-4000-8000-000000009002", generation_key: crossover ? "r2-cross" : "r2-makeup-1", stage: "round2", status: "scheduled", entrant_a_id: crossover ? entrants[0]!.id : entrants[2]!.id, entrant_b_id: entrants[crossover ? 3 : 1]!.id, is_makeup: !crossover, is_crossover: crossover, court_id: courts.find(c => c.number === queuedCourtNumber)!.id, scheduled_time: new Date(Date.now() + 600_000).toISOString() },
+  ];
+  if (crossover) {
+    for (const offset of [2, 4]) rows.splice(1, 0, {
+      ...base, id: `00000000-0000-4000-8000-00000000900${offset + 1}`, generation_key: `r1-${offset + 1}`,
+      stage: "round1", status: "reported", entrant_a_id: entrants[offset]!.id, entrant_b_id: entrants[offset + 1]!.id,
+      winner_id: entrants[offset]!.id, games: [{ a: 21, b: 10 }], ended_at: past, reported_time: past,
+    });
+  }
+  await page.route("**/rest/v1/placement_matches?*", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(rows) }));
+  await page.route("**/rest/v1/placement_entrants?*", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(entrants) }));
+  const playing = queuedCourtNumber === 2
+    ? (fixture.tables["tier_draw_matches"] as { court_id: string; status: string }[])
+      .filter(m => m.court_id === courts.find(c => c.number === 2)!.id && m.status === "in-progress")
+    : [];
+  await page.route("**/rest/v1/tier_draw_matches?*", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(playing) }));
+}
+
+test.describe("plain-language placement matches", () => {
+  test("keeps a normal round label and explains an entrant's two matches in the detail", async ({ page }) => {
+    await placementWordingFixture(page);
+    await page.goto(routes.desk);
+    await expect(page.getByText(/^Next \d{1,2}:\d{2}$/)).toBeVisible();
+    await expect(page.locator("[data-match-identity]", { hasText: "MD R2" })).toBeVisible();
+    await expect(page.getByText(/make-up|crossover/i)).toHaveCount(0);
+    await page.getByRole("button", { name: /^Court 6:/ }).click();
+    await expect(page.getByRole("dialog").getByText(/did not play in Round 1 and plays both placement matches in Round 2/)).toBeVisible();
+    await expect(page.getByRole("dialog").getByText("MD R2", { exact: true })).toBeVisible();
+    await page.getByRole("dialog").screenshot({ path: test.info().outputPath("placement-detail.png") });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole("dialog")).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Close", exact: true })).toBeVisible();
+  });
+
+  test("explains the official winner-versus-loser pairing without a technical type", async ({ page }) => {
+    await placementWordingFixture(page, true);
+    await page.goto(routes.desk);
+    await expect(page.getByText(/^Next \d{1,2}:\d{2}$/)).toBeVisible();
+    await expect(page.locator("[data-match-identity]", { hasText: "MD R2" })).toBeVisible();
+    await page.getByRole("button", { name: /^Court 6:/ }).click();
+    await expect(page.getByRole("dialog").getByText(/a Round 1 winner with a Round 1 loser/)).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(/counts towards draw assignment/)).toBeVisible();
+  });
+
+  for (const crossover of [false, true]) {
+    test(`preserves the busy court's current label and Next time/pairing line (${crossover ? "mixed results" : "held entrant"})`, async ({ page }) => {
+      await placementWordingFixture(page, crossover, 2);
+      await page.goto(routes.desk);
+      const court = page.getByRole("button", { name: "Court 2: playing", exact: true });
+      await expect(court.getByText("MD Draw A", { exact: true })).toBeVisible();
+      await expect(court.getByText(/^Next \d{1,2}:\d{2}$/)).toBeVisible();
+      await expect(court.getByText(/ vs /)).toHaveCount(2);
+      await expect(court.getByText(/make-up|crossover|Placement ·|Ready now/)).toHaveCount(0);
+    });
+  }
+
+  test("explains the held entrant in the Placement table alongside their own match progress", async ({ page }) => {
+    await placementWordingFixture(page);
+    await page.goto(routes.placement);
+    const info = page.getByRole("button", { name: /^Why .+ plays both matches in Round 2$/ });
+    await expect(info).toBeVisible();
+    await expect(info.locator("xpath=ancestor::tr").getByRole("cell", { name: "0/2", exact: true })).toBeVisible();
+    const explanation = page.getByText(/Plays both placement matches in Round 2\./);
+    await expect(explanation).toHaveCount(0);
+    await info.focus();
+    await info.press("Enter");
+    await expect(explanation).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(explanation).toHaveCount(0);
+    await expect(info).toBeFocused();
+  });
+});

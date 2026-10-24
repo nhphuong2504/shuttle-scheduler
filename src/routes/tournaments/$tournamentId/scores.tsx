@@ -164,15 +164,16 @@ function MatchRow({
     );
   };
   return (
-    <li className="flex min-h-[var(--row-height)] flex-wrap items-center gap-3 rounded-md px-2 py-1 text-t3 transition-colors hover:bg-muted/50">
-      <span className="w-28 font-score text-t2 font-semibold text-foreground">{left}</span>
-      <span className="min-w-[220px] flex-1">
+    <li className="grid min-h-[var(--row-height)] grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 rounded-md px-2 py-3 text-t3 transition-colors hover:bg-muted/50 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:py-1">
+      <span className="font-score text-t2 font-semibold text-foreground sm:w-28">{left}</span>
+      <span className="col-span-2 row-start-2 min-w-0 text-base sm:min-w-[220px] sm:flex-1 sm:text-t3">
         {side(0)} <span className="text-muted-foreground">vs</span> {side(1)}
       </span>
-      <span className="font-score text-t2 text-muted-foreground">
-        {timeLabel(match.scheduled)}
-        {match.courtId ? `, C${courtMap.get(match.courtId)?.number ?? "?"}` : ""}
+      <span className="col-start-2 row-start-1 flex shrink-0 flex-col text-right font-score text-t2 text-muted-foreground sm:text-left">
+        <span>{match.scheduled ? timeLabel(match.scheduled) : "Time not assigned"}</span>
+        <span>{match.courtId ? `Court ${courtMap.get(match.courtId)?.number ?? "?"}` : "Court not assigned"}</span>
       </span>
+      <div className="col-span-2 flex flex-wrap items-center justify-between gap-3 sm:contents">
       {canEdit || !won ? <StatusPill status={match.status} /> : null}
       {/* A game score is a number, so it must never be broken across lines. The fixed
           `w-24` this replaces was narrower than three games at the 30-point cap
@@ -200,6 +201,7 @@ function MatchRow({
       ) : (
         <span className="w-[62px]" aria-hidden />
       )}
+      </div>
     </li>
   );
 }
@@ -479,7 +481,7 @@ function MatchesPage() {
   return (
     <Page
       title={canEdit ? "Score entry" : "Scores"}
-      subtitle={`Group stage is ${scoringRuleLabel(LEGACY_GAME_RULE).toLowerCase()}. Knockouts are ${scoringRuleLabel(knockoutRule).toLowerCase()}.`}
+      subtitle={`${roundRobin ? "Group stage" : "Placement"} is ${scoringRuleLabel(roundRobin ? LEGACY_GAME_RULE : placementRule).toLowerCase()}. Knockouts are ${scoringRuleLabel(knockoutRule).toLowerCase()}.`}
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -591,7 +593,7 @@ function MatchesPage() {
         ) : (
         <Tabs value={stage ?? (groupCount === 0 && knockoutCount > 0 ? "knockout" : "group")} onValueChange={setStage}>
           <TabsList>
-            <TabsTrigger value="group">Group stage ({groupCount})</TabsTrigger>
+            <TabsTrigger value="group">{roundRobin ? "Group stage" : "Placement"} ({groupCount})</TabsTrigger>
             <TabsTrigger value="knockout">Knockout ({knockoutCount})</TabsTrigger>
           </TabsList>
 
@@ -599,7 +601,7 @@ function MatchesPage() {
             {placementGroups.map(([catId, list]) => (
               <Panel
                 key={`placement-${catId}`}
-                title={`${catMap.get(catId)?.code ?? "Placement"} — two placement rounds`}
+                title={`${catMap.get(catId)?.code ?? "Placement"} Placement`}
                 right={
                   <span className="font-score text-t4 text-muted-foreground">
                     {list.filter((m) => m.status === "reported").length}/{list.length} reported
@@ -654,7 +656,7 @@ function MatchesPage() {
                         </span>
                         <span className="font-score text-t2 text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
-                          {m.court_id ? `, C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
+                          {m.court_id ? `, Court ${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
                         </span>
                         <StatusPill status={m.status} />
                         <span className="w-20 text-right font-score text-t2">
@@ -701,7 +703,7 @@ function MatchesPage() {
               return (
                 <Panel
                   key={`tier-${drawId}`}
-                  title={`${catMap.get(draw?.category_id ?? "")?.code ?? ""} — Draw ${draw?.tier ?? "?"}`}
+                  title={`${catMap.get(draw?.category_id ?? "")?.code ?? ""} Draw ${draw?.tier ?? "?"}`}
                   right={
                     <span className="font-score text-t4 text-muted-foreground">
                       {list.filter((m) => m.status === "reported").length}/{list.length} reported
@@ -733,7 +735,7 @@ function MatchesPage() {
               return (
                 <Panel
                   key={draw.id}
-                  title={`${catMap.get(draw.category_id)?.code ?? ""} — Draw ${draw.tier}`}
+                  title={`${catMap.get(draw.category_id)?.code ?? ""} Draw ${draw.tier}`}
                   right={
                     <span className="font-score text-t4 text-muted-foreground">
                       {draw.entrant_count} entrants, bracket {draw.bracket_size}
@@ -756,7 +758,7 @@ function MatchesPage() {
                         </span>
                         <span className="font-score text-t2 text-muted-foreground">
                           {timeLabel(m.scheduled_time)}
-                          {m.court_id ? `, C${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
+                          {m.court_id ? `, Court ${courtMap.get(m.court_id)?.number ?? "?"}` : ""}
                         </span>
                         {isByeMatch(m) ? <ByeMarker /> : <StatusPill status={m.status} />}
                         <span className="w-24 text-right font-score text-sm">
@@ -805,7 +807,7 @@ function MatchesPage() {
       </div>
 
       <Dialog open={!!selectedMatch && canEdit} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
           {selectedMatch && canEdit ? (
             /*
              * The score desk deliberately shows no schedule conflicts.

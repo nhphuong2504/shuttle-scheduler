@@ -54,7 +54,7 @@ test.describe("Call next", () => {
     await expect(button.locator("[data-call-ready]")).toHaveCount(1);
     await button.click();
     await expect(page.getByRole("dialog").getByText("Sends to 0 of 4 players")).toBeVisible();
-    await expect(page.getByRole("dialog").getByRole("button", { name: "Send", exact: true })).toBeDisabled();
+    await expect(page.getByRole("dialog").getByRole("button", { name: /^Send(?: to \d+ players?)?$/ })).toBeDisabled();
   });
 
   test("previews recipients before sending in Tournova", async ({ page }) => {
@@ -62,18 +62,19 @@ test.describe("Call next", () => {
     const button = callButton(page, 3);
     await button.click();
 
-    const dialog = page.getByRole("dialog", { name: "Notify the next match on Court 3" });
+    const dialog = page.getByRole("dialog", { name: "Call next on Court 3" });
     await expect(dialog).toBeVisible();
-    // The match dialog's own wording: comma-separated facts.
-    await expect(dialog.getByText(/, scheduled \d{1,2}:\d{2}.*, Court 3 free now$/)).toBeVisible();
+    // Each fact has its own readable group.
+    await expect(dialog.getByText(/^Scheduled \d{1,2}:\d{2}$/)).toBeVisible();
+    await expect(dialog.getByText("Court 3 free now")).toBeVisible();
     // A doubles match: one row per player, all four free, since nobody here has played yet.
     await expect(dialog.getByRole("rowheader")).toHaveCount(4);
     await expect(dialog.getByRole("cell", { name: "Free" })).toHaveCount(4);
     await expect(dialog.getByLabel("Message")).toHaveValue(/Please come to the court now\.$/);
 
     await expect(dialog.getByText(/Sends to \d of 4 players/)).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
-    await expect(dialog.getByRole("columnheader", { name: "Reach by" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /^Send(?: to \d+ players?)?$/ })).toBeEnabled();
+    await expect(dialog.getByRole("columnheader", { name: "Contact" })).toBeVisible();
 
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
@@ -86,10 +87,13 @@ test.describe("Call next", () => {
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Message").fill("Please prepare near Court 3.");
     const request = page.waitForRequest((r) => r.url().endsWith("/rpc/send_match_call"));
-    await dialog.getByRole("button", { name: "Send", exact: true }).click();
+    await dialog.getByRole("button", { name: /^Send(?: to \d+ players?)?$/ }).click();
     expect((await request).postDataJSON().p_message).toBe("Please prepare near Court 3.");
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Notified .*Court 3/ })).toBeVisible();
+    const called = page.getByRole("button", { name: /^Call next, Court 3/ });
+    await expect(called.getByText(/^Last sent \d{1,2}:\d{2}$/)).toBeVisible();
+    await called.click();
+    await expect(page.getByRole("dialog").getByRole("button", { name: /^Send again to \d+ players?$/ })).toBeVisible();
   });
 
   test("shows a participant's inbox and acknowledges a call", async ({ page }) => {

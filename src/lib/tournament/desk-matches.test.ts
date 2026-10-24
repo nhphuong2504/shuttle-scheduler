@@ -247,6 +247,18 @@ describe("buildDeskMatches labels every kind", () => {
     expect(byId.get("plm1")).toMatchObject({ tag: "MS R1", categoryId: CATEGORY_ID });
   });
 
+  it("keeps identical round labels while carrying explanations for special pairings", () => {
+    const source = sources("two_round_placement");
+    const matches = [placementMatch("r1"),
+      placementMatch("held", { stage: "round2", is_makeup: true, entrant_a_id: "e3" }),
+      placementMatch("mixed", { stage: "round2", is_crossover: true })];
+    const rows = buildDeskMatches({ ...source, placementMatches: matches });
+    expect(rows.find(m => m.id === "held")).toMatchObject({ tag: "MS R2", placementContext: { kind: "both-in-round-two", heldSide: "a" } });
+    expect(rows.find(m => m.id === "mixed")).toMatchObject({ tag: "MS R2", placementContext: { kind: "different-round-one-results" } });
+    expect(matches[1]!.is_makeup).toBe(true);
+    expect(matches[2]!.is_crossover).toBe(true);
+  });
+
   it("resolves a placement side through its entrant to a team", () => {
     // The placement tables store entrants, not teams; a row that skipped the entrant
     // would render both sides as "TBC" and drop the players from the rest checks.

@@ -33,7 +33,7 @@ export function CapacityEstimate({
       role="status"
       data-testid="capacity-estimate"
       className={cn(
-        "flex items-start justify-between gap-3 text-sm text-muted-foreground",
+        "text-sm text-muted-foreground",
         inline ? "basis-full" : "rounded-lg border border-hairline bg-surface px-3 py-2.5",
         className,
       )}
@@ -55,18 +55,18 @@ export function CapacityEstimate({
               ? "That is tight, with little room for a late start."
               : "That should fit."}
         </span>
+        <InfoNote label="About this estimate" className="ml-1 inline-flex align-middle">
+          <p>
+            Advice only: the scheduler does not read it, and a tournament that does not fit can
+            still be built and will run past the hours.
+          </p>
+          <p>
+            Needed time counts the group-stage matches (each active entry plays two) and splits the
+            knockout draws evenly, so the knockout figure is a guess until the draws are set.
+          </p>
+          <p>Offered time is each day&apos;s courts times its hours, less breaks.</p>
+        </InfoNote>
       </span>
-      <InfoNote label="About this estimate">
-        <p>
-          Advice only: the scheduler does not read it, and a tournament that does not fit can
-          still be built and will run past the hours.
-        </p>
-        <p>
-          Needed time counts the group-stage matches (each active entry plays two) and splits the
-          knockout draws evenly, so the knockout figure is a guess until the draws are set.
-        </p>
-        <p>Offered time is each day&apos;s courts times its hours, less breaks.</p>
-      </InfoNote>
     </p>
   );
 }

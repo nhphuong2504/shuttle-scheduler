@@ -1,3 +1,4 @@
+import { MatchNotifications } from "@/components/match-notifications";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useRef, useState } from "react";
@@ -322,11 +323,8 @@ function BrandMark() {
  * Decorative — the email beside it carries the
  * meaning — so it stays out of the accessibility tree.
  *
- * The chip names its own tier (`text-t4`) rather than inheriting: the shell sets no size
- * on the header row, so without it this label renders at the browser's 16px - a step above
- * every control beside it, all of which name 12px. The tier is the point, not the number:
- * `text-t4` is the 12px floor, and naming it keeps the chip on the scale when the scale
- * moves.
+ * Account utilities stay together: the inbox bell leads the identity and sign-out action.
+ * The email truncates on desktop and is hidden on smaller screens to keep room for controls.
  *
  * ## Signing in returns you to the page you were on
  *
@@ -358,22 +356,26 @@ function SessionBlock() {
 
   return (
     <>
-      {/* From `lg` only: on a tablet the chip pushed Sign out onto a second header row. */}
-      <span className="hidden items-center gap-1.5 rounded-full border border-hairline bg-muted/60 px-2.5 py-1 text-t4 text-muted-foreground lg:inline-flex">
-        <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
-        {session?.userEmail}
-      </span>
       {isPlatformAdmin ? <ViewModeSwitch /> : null}
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={async () => {
-          await supabase.auth.signOut();
-          navigate({ to: "/auth", replace: true });
-        }}
-      >
-        Sign out
-      </Button>
+      <div className="flex shrink-0 items-center gap-2 border-l border-hairline pl-2 sm:gap-3 sm:pl-3">
+        <MatchNotifications />
+        {/* From `lg` only: on a tablet the email pushed Sign out onto a second header row. */}
+        <span className="hidden max-w-48 items-center gap-1.5 text-sm text-muted-foreground lg:inline-flex">
+          <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
+          <span className="truncate" title={session?.userEmail ?? undefined}>{session?.userEmail}</span>
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-11"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            navigate({ to: "/auth", replace: true });
+          }}
+        >
+          Sign out
+        </Button>
+      </div>
     </>
   );
 }
@@ -884,7 +886,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3">
+        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight">
               {tournament?.name ?? "Loading…"}
@@ -898,20 +900,13 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             {tournament?.is_demo ? <DemoPill /> : null}
           </div>
           {meta ? <p className="mt-1 break-words text-sm text-muted-foreground">{meta}</p> : null}
+          <div className="mt-2 flex justify-end empty:hidden sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:self-center">
+            {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
+          </div>
         </div>
 
         <div>
-        {/*
-          The section row, and the reason it is a `div` wrapping the `nav` rather than the
-          `nav` itself.
-
-          Two things have shared this line: the sections of the tournament you are reading,
-          and the control that changes which tournament that is. The second is not a section,
-          so it does not belong inside the sections landmark. It also anchors its panel to
-          this row: `relative` here is what puts the panel's right edge on the same container
-          edge the nav is aligned to, and its top on the row's own bottom edge. See
-          `TournamentSwitcher` for what those two facts buy.
-        */}
+        {/* Tournament sections stay separate from the identity and switcher above. */}
         <div className="relative mx-auto flex max-w-[1400px] items-center gap-2 border-t border-hairline px-4">
           <nav
             ref={sectionRow.ref}
@@ -947,12 +942,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 })
               : null}
           </nav>
-          {/*
-            The switcher, for a caller who may edit - the same split the nav beside it and
-            the public list above it follow. A reader is not left with an empty slot: the
-            thing that leaves their tournament is up in the bar.
-          */}
-          {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
         </div>
         </div>
       </header>

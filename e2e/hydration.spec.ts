@@ -67,7 +67,7 @@ test.describe("the desk clock is client-owned", () => {
  *
  * After the clock was fixed, two other sites in the same file looked like the same bug
  * waiting to happen: the urgent-action list renders `N minutes — open the score desk` and
- * the court board renders `N′ on court`, both computed from the same `now`. Both are
+ * the court board renders `N min on court`, both computed from the same `now`. Both are
  * driven by `now`, so both would mismatch on exactly the same trigger.
  *
  * They cannot, and the reason is worth pinning rather than trusting. Every data hook in
@@ -116,7 +116,7 @@ test.describe("the server render carries no time-derived match text", () => {
         /\d+\s*minutes?\s*[—–-]\s*open the score desk/i,
       );
       expect(text, `${route} server HTML contains an on-court timer`).not.toMatch(
-        /\d+\s*′\s*on court/i,
+        /\d+\s*(?:min|′)\s*on court/i,
       );
     });
   }

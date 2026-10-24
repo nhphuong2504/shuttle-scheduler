@@ -1,3 +1,4 @@
+import { placementMatchLabel, placementMatchContext, type PlacementMatchContext } from "./placement-presentation";
 import { isSupportedFormat } from "./competition-format";
 import type {
   Category,
@@ -27,6 +28,7 @@ import { isTierMatchReady } from "./tier-draw";
 export type DeskMatch = DeskMatchModel & {
   teams: [string | null, string | null];
   tag: string;
+  placementContext?: PlacementMatchContext | null;
   /**
    * The knockout round alone ("Semifinal"), for a surface that already names the draw.
    *
@@ -74,30 +76,11 @@ export interface DeskMatchSources {
 }
 
 /**
- * How a placement match is labelled: event code plus round.
- *
- * Which round it is matters to the desk, because a make-up match is the reason one
- * player appears twice in round two and a crossover is not simply a spare qualifier.
- */
-function placementTag(match: PlacementMatch, catMap: Map<string, Category | undefined>): string {
-  const code = catMap.get(match.category_id)?.code;
-  const round =
-    match.stage === "round1"
-      ? "R1"
-      : match.is_makeup
-        ? "R2 make-up"
-        : match.is_crossover
-          ? "R2 crossover"
-          : "R2";
-  return [code, round].filter(Boolean).join(" ");
-}
-
-/**
  * How a knockout match is labelled: event code, draw and round.
  *
  * The board used to print only the draw - "Tier A" - which named neither the event it
  * belonged to (every event has a Draw A) nor the round inside the bracket, so a semifinal
- * and a final read identically on the tile. It now mirrors `placementTag`'s shape and uses
+ * and a final read identically on the tile. It now mirrors `placementMatchLabel`'s shape and uses
  * the same round vocabulary the Knockout tab prints, so one thing has one name across the
  * app rather than "Tier A" here and "Draw A" everywhere else.
  */
@@ -214,7 +197,8 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
         scheduled: match.scheduled_time,
         teams,
         playerIds: playersOf(teams),
-        tag: placementTag(match, catMap),
+        tag: placementMatchLabel(match.stage, catMap.get(match.category_id)?.code),
+        placementContext: placementMatchContext(match, sources.placementMatches ?? []),
         categoryId: match.category_id,
         score: match.status === "reported" ? gamesLabel(parseGames(match.games)) : null,
         initialGames: match.status === "reported" ? parseGames(match.games) : undefined,

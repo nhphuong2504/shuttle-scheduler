@@ -322,7 +322,7 @@ export function ScheduleDemo() {
       <div aria-hidden="true" className="rounded-[18px] bg-info-surface/40 px-3 pt-5 pb-10 shadow-[inset_0_0_0_1px_var(--info-border)] sm:px-5">
         <div className="flex flex-col gap-2.5">
           <div className="flex gap-3">
-            <span className="w-7 shrink-0 sm:w-16" />
+            <span className="w-7 shrink-0 text-[11px] text-muted-foreground sm:w-16 sm:invisible">Court</span>
             <div className="relative h-[18px] flex-1 font-mono text-[11px] text-muted-foreground tabular-nums">
               {[0, 60, 120].map((m) => (
                 <span key={m} className="absolute top-0" style={{ left: pct(m) }}>
@@ -335,7 +335,7 @@ export function ScheduleDemo() {
             <div className="flex w-7 shrink-0 flex-col gap-2.5 sm:w-16">
               {[1, 2, 3].map((c) => (
                 <span key={c} className="flex h-[62px] items-center font-display text-[15px] font-bold">
-                  <span className="sm:hidden">C{c}</span>
+                  <span className="sm:hidden">{c}</span>
                   <span className="hidden sm:inline">Court {c}</span>
                 </span>
               ))}

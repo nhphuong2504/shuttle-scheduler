@@ -71,7 +71,7 @@ ahead is allowed. Busy-player warnings stay in the dialog and button description
 Calling ahead while the court is busy, or a player is on another court, is allowed. Only a Ready court proposes “come now”; all others propose
 “be ready near the court”. A match that moves or starts closes its old preview.
 
-The preview lists each player's whereabouts and either Tournova or No linked account.
+The preview lists each player's whereabouts and either In Tournova or Not linked.
 It counts reachable players; no recipients means Send is disabled. Messages are editable,
 with a 500-character limit. Missing accounts need a direct call by the moderator. Identity
 is never inferred from email or name. Approval remains the only profile-linking path.
@@ -79,10 +79,11 @@ is never inferred from email or name. Approval remains the only profile-linking 
 While sending, Send and the message are locked. Errors stay in the preview. An uncertain
 response retains its request ID for a safe retry. Send again after success creates a new
 call, with a 30-second server cooldown per match. The server checks permission, live
-lifecycle, court, scheduled time, players and queue before committing. “Notified” records
-an inbox write, not delivery to a device or proof the player read it.
+lifecycle, court, scheduled time, players and queue before committing. “Last sent” records
+an inbox write, not delivery to a device or proof the player read it. The tile always
+keeps the action label Call next, with the last-sent time on a secondary line.
 
-The inbox is available throughout the signed-in app, shows the latest 100 calls, has an
+The inbox is in the signed-in account header in both shells, shows the latest 100 calls, has an
 unread count and per-item Mark as read. It links to the read-only court board without
 granting operating rights. Old calls whose match has changed or started carry a notice
 to check the board. Reads and acknowledgements are scoped to the recipient profile.
@@ -185,3 +186,18 @@ minutes, so the screen converts; nothing server-side changed.
 - Several toasts show the database's `error.message` unchanged.
 - A partial reflow ("2 moved, 1 couldn't be moved safely") is not reported as such yet; the
   toast only states what was committed and what now needs review.
+
+## Placement wording
+
+Court tiles, Scores and Call next use the existing event/round labels (`MD R1`,
+`MD R2`) for every pairing. A free court groups `Next 12:40` and `MD R2` with layout
+spacing and wrapping. A busy court keeps its current match identity, then puts the next
+time and pairing on separate lines. Details group identity, court/time and scoring rules
+into separate readable lines. Internal `is_makeup` and `is_crossover` flags are not public match types.
+Details explain why an entrant plays both placement matches in Round 2, or why a Round 1
+winner meets a Round 1 loser, and state that these results count towards draw assignment.
+The Placement table places an (i) next to the entrant who did not play in Round 1, with
+the explanation available on hover, tap or keyboard activation. The row keeps its own
+completed/required match count. A match is never called an extra, friendly or bye.
+The landing Desk preview uses the same label helper. Pairings, dependencies, rest gaps,
+scoring and tier assignment are unchanged.

@@ -609,6 +609,14 @@ function SeedingPanel({
                     </td>
                     <td className="pr-2 font-medium" {...dropProps}>
                       {label(entrant.id)}
+                      {view.roundOne.length > 0 && entrant.id === view.heldEntrantId ? (
+                        <InfoNote
+                          label={`Why ${label(entrant.id)} plays both matches in Round 2`}
+                          className="ml-1 align-middle"
+                        >
+                          <p>Plays both placement matches in Round 2. Did not play in Round 1 because the field had an odd number of entrants.</p>
+                        </InfoNote>
+                      ) : null}
                     </td>
                     <td {...dropProps}>
                       {canEdit && !view.seedsLocked ? (

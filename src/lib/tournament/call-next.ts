@@ -91,7 +91,7 @@ export function callNextContext({
   }
   if (court.kind === "busy") {
     parts.push(`Court ${courtNumber} still playing`);
-    if (court.elapsedMinutes != null) parts.push(`${court.elapsedMinutes}′ on court`);
+    if (court.elapsedMinutes != null) parts.push(`${court.elapsedMinutes} min on court`);
   } else {
     parts.push(`Court ${courtNumber} free now`);
   }

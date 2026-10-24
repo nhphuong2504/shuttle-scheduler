@@ -13,7 +13,7 @@ import {
 } from "../src/lib/tournament/match-status";
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
-import { REFERENCE } from "./fixtures/desk-mock";
+import { deskFixture, REFERENCE } from "./fixtures/desk-mock";
 import { MATRIX_CELLS, WCAG_TAGS, cellLabel, openCell } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 import { settleAnimations } from "./fixtures/settle";
@@ -91,6 +91,98 @@ test("the app clock is pinned to the fixture reference", async ({ page }) => {
 
 /** The state vocabulary as the aria-label spells it: hyphens replaced by spaces. */
 const ariaState = (state: CourtState) => state.replace("-", " ");
+
+test("Refresh fetches new court data and shows progress", async ({ page }) => {
+  await installAppMock(page, { preset: "states", role: "user" });
+  await page.goto(routes.desk);
+  await expect(page.locator('[data-court-number="6"]')).toBeVisible();
+  const courts = deskFixture("states", "user").tables["courts"] as { id: string; number: number }[];
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/rest/v1/courts?*", async (route) => {
+    await pending;
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify(courts.map((court) => court.number === 6 ? { ...court, number: 9 } : court)),
+    });
+  });
+  try {
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Refreshing…", exact: true })).toBeDisabled();
+  } finally {
+    release();
+  }
+  await expect(page.locator('[data-court-number="9"]')).toBeVisible();
+  await expect(page.locator('[data-court-number="6"]')).toHaveCount(0);
+  await expect(page.getByText("Desk updated.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+});
+
+test("Refresh explains when the desk is offline", async ({ page, context }) => {
+  await installAppMock(page, { preset: "states", role: "user" });
+  await page.goto(routes.desk);
+  const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+  await expect(refresh).toBeVisible();
+  await expect(page.locator('[data-court-number="6"]')).toBeVisible();
+  await context.setOffline(true);
+  try {
+    // Going offline re-renders the desk: the badge, the paused bar above the board and the
+    // Refresh button's own variant all change at once, so the button moves under the
+    // pointer. Clicking into that re-render is a race the test loses under load - wait for
+    // the pause to land, then click the button it left behind.
+    await expect(page.locator("[data-desk-paused]")).toBeVisible();
+    await refresh.click();
+    await expect(page.getByText("You are offline. Reconnect to refresh the desk.", { exact: true })).toBeVisible();
+    await expect(refresh).toBeEnabled();
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
+test("court labels stay on one line in the running order at every density", async ({ page }) => {
+  await installAppMock(page, { preset: "states", role: "user" });
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(routes.schedule);
+    const order = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "Running order", exact: true }),
+    });
+    await expect(order.getByText("Unassigned", { exact: true }).filter({ visible: true })).toBeVisible();
+    const labels = order.getByText(/^(Court \d+|Unassigned)$/).filter({ visible: true });
+    expect(await labels.count()).toBeGreaterThan(0);
+    for (const label of await labels.all()) {
+      const lines = await label.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+      });
+      expect(lines, `${width}px: ${await label.textContent()}`).toBe(1);
+    }
+  }
+});
+
+test("Desk cards leave room for the match action beside Call next", async ({ page }) => {
+  await installAppMock(page, { preset: "states", role: "user" });
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(routes.desk);
+    const court = page.locator('[data-court-number="3"]');
+    const action = court.getByText("Open next match", { exact: true });
+    const call = court.getByRole("button", { name: /^Call next, Court 3/ });
+    await expect(action).toBeVisible();
+    await expect(call).toBeVisible();
+    const actionText = await action.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rects = [...range.getClientRects()];
+      return { right: Math.max(...rects.map((rect) => rect.right)), lines: rects.length };
+    });
+    const callBounds = await call.boundingBox();
+    expect(actionText.right, `${width}px: match action overlaps Call next`).toBeLessThan(callBounds!.x);
+    expect(actionText.lines, `${width}px: match action is squeezed`).toBeLessThanOrEqual(width === 320 ? 2 : 1);
+    expect(await court.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+});
 
 interface Chips {
   state: string;

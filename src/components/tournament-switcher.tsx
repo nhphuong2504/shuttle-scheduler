@@ -12,35 +12,8 @@ import { cn } from "@/lib/utils";
 /**
  * The one control that changes *which* tournament you are working in.
  *
- * It sits in the workspace's section row rather than in the header's top row, and the
- * placement is load-bearing rather than cosmetic. The workspace header has two rows, each
- * with its own centred `max-w-[1400px]` container, and the panel below hangs from the row
- * that contains it. Anchored to the top row it would open *over* the section nav, because
- * `top-full` there means "below the top row" and the nav is what comes next.
- *
- * The section row is also the only element here that *cannot* move. The row is
- * `flex-wrap`, so the trigger can wrap onto a line of its own while the nav sits above it;
- * a panel anchored to the trigger would then be positioned from a box that is no longer at
- * the row's edge, and one anchored to the trigger's own line would overlap the pills that
- * wrapped around it. The row is the last block in the header at every width, so `top-full`
- * on it means "below the whole header" - measured at 4px below the header's bottom edge,
- * and it does not move as the row wraps.
- *
- * ## What `right-0` actually resolves against
- *
- * The row is padded (`px-4`), and `right-0` resolves against its *padding* box, so the
- * panel's right edge is the container's outer edge rather than the nav's content edge: it
- * comes to rest 16px to the right of the trigger, and at a viewport narrower than the
- * container the two coincide and the panel is flush with the viewport. That is a
- * consequence of anchoring to a box that does not wrap rather than a choice, and it is
- * recorded rather than corrected: the alternative - `right-4`, or a wrapper around the
- * trigger - restates the row's padding as a magic number in a second place.
- *
- * What has to hold at every width is that the panel is *inside* the viewport, and that is
- * `max-w-[calc(100vw-2rem)]`'s job rather than the anchor's. Measured with the panel open
- * at 1920, 1366, 1024, 768, 390 and 320, the document overflows by 0 and the panel's own
- * box never leaves the viewport; the slack goes to the panel's left edge, which is at 32px
- * when the viewport is 320.
+ * It sits beside the tournament identity, apart from its section navigation. The panel
+ * anchors to the trigger's wrapper and stays within the viewport on narrow screens.
  *
  * ## A disclosure, not a menu, and not a select
  *
@@ -161,12 +134,13 @@ export function TournamentSwitcher({ currentId }: { currentId: string | null }) 
   };
 
   return (
-    <div ref={wrapper} className="ml-auto flex items-center">
+    <div ref={wrapper} className="relative ml-auto flex shrink-0 items-center">
       <Button
         ref={trigger}
         type="button"
         size="sm"
-        variant="outline"
+        variant="ghost"
+        className="h-11 gap-1.5 px-3 text-muted-foreground hover:text-foreground"
         /**
          * `aria-haspopup` is deliberately absent. It announces a *menu*, and a menu
          * promises arrow-key navigation between items that this does not implement.
@@ -178,18 +152,14 @@ export function TournamentSwitcher({ currentId }: { currentId: string | null }) 
         disabled={busy}
         onClick={() => setOpen((was) => !was)}
       >
-        {/*
-          "Switch" alone below `lg`, where the full label took the room the section tabs need;
-          the rest stays in the accessible name, which therefore still contains what is shown.
-        */}
-        Switch<span className="max-lg:sr-only"> tournament</span>
+        Switch tournament
         <ChevronDown aria-hidden className={cn("transition-transform", open && "rotate-180")} />
       </Button>
 
       {open ? (
         <div
           id={panelId}
-          className="absolute right-0 top-full z-10 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
+          className="absolute right-0 top-full z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
         >
           {isLoading ? (
             <p className="px-2 py-2 text-t4 text-muted-foreground">Loading your tournaments…</p>

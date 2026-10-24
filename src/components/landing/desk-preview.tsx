@@ -1,3 +1,4 @@
+import { placementMatchLabel } from "@/lib/tournament/placement-presentation";
 import { Panel } from "@/components/app-shell";
 import { TournovaMark } from "@/components/brand/tournova-mark";
 import {
@@ -63,23 +64,24 @@ export function DeskPreview() {
               number={1}
               phone={false}
               state="playing"
-              tag="WS R2"
+              tag={placementMatchLabel("round2", "WS")}
               names="Hannah Kim vs Grace Lowe"
-              timer="12′ of 25′ on court"
-              next="Next 14:50: Tom Hughes / Dev Patel vs Sam Okafor / Luke Reid"
+              timer="12 of 25 min on court"
+              next={{ time: "14:50", pairing: "Tom Hughes / Dev Patel vs Sam Okafor / Luke Reid" }}
             />
             <PreviewTile
               number={2}
               state="overrun"
-              tag="MD R2 crossover"
+              tag={placementMatchLabel("round2", "MD")}
               names="Ben Carter / Leo Nguyen vs Max Walsh / Owen Brooks"
-              timer="37′ on court"
-              next="Next 14:25: Ryan Lewis / Adam Grant vs Chris Bell / Dan Ortiz"
+              timer="37 min on court"
+              next={{ time: "14:25", pairing: "Ryan Lewis / Adam Grant vs Chris Bell / Dan Ortiz" }}
             />
             <PreviewTile
               number={3}
               state="free-blocked"
-              tag="Next 14:35 · XD R1"
+              tag={placementMatchLabel("round1", "XD")}
+              nextTime="14:35"
               names="Ben Carter / Amy Young vs Sam Lee / Ella Fox"
               readiness={{ text: "Ben Carter, on Court 2", tone: "busy" }}
             />
@@ -87,7 +89,8 @@ export function DeskPreview() {
               number={4}
               phone={false}
               state="free-ready"
-              tag="Next 14:30 · MS R2"
+              tag={placementMatchLabel("round2", "MS")}
+              nextTime="14:30"
               names="Jack Evans vs Liam Murphy"
               readiness={{ text: "Ready now", tone: "ready" }}
             />
@@ -112,6 +115,7 @@ function PreviewTile({
   names,
   timer,
   next,
+  nextTime,
   readiness,
 }: {
   number: number;
@@ -123,7 +127,8 @@ function PreviewTile({
   names: string;
   timer?: string;
   /** A busy court's next pairing. A free court's queued match is `tag` and `names`. */
-  next?: string;
+  next?: { time: string; pairing: string };
+  nextTime?: string;
   /** Only a free court answers "can the queued match start": a busy one names its next match. */
   readiness?: { text: string; tone: keyof typeof READINESS_TONE };
 }) {
@@ -147,7 +152,10 @@ function PreviewTile({
         pairing under a rule; a free court's queued match is already the tile's subject.
       */}
       <div className="mt-2 leading-snug">
-        <p className="font-score text-sm font-medium text-muted-foreground">{tag}</p>
+        <div className="mb-1 space-y-1 font-score text-sm font-medium text-muted-foreground">
+          {nextTime ? <span className="block whitespace-nowrap">Next {nextTime}</span> : null}
+          <span>{tag}</span>
+        </div>
         <p className="text-[15px] font-semibold">{names}</p>
         {timer ? (
           <p
@@ -166,7 +174,8 @@ function PreviewTile({
       </div>
       {next ? (
         <p className="mt-2 border-t border-hairline pt-2 text-[13px] leading-snug text-muted-foreground tabular-nums">
-          {next}
+          <span className="mb-0.5 block font-medium">Next {next.time}</span>
+          <span>{next.pairing}</span>
         </p>
       ) : null}
     </div>

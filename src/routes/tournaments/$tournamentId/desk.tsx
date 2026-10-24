@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ClipboardEvent } from "react";
 import { toast } from "sonner";
+import { RefreshCw } from "lucide-react";
 
 import { Page, Panel } from "@/components/app-shell";
 import { ConnectionBadge } from "@/components/connection-badge";
@@ -120,6 +121,8 @@ import {
   type CourtState,
 } from "@/lib/tournament/court-state";
 import { buildDeskMatches, type DeskMatch } from "@/lib/tournament/desk-matches";
+import { MatchIdentity } from "@/components/match-identity";
+import { placementMatchExplanation } from "@/lib/tournament/placement-presentation";
 import {
   conflictedMatchCount,
   conflictKindLabels,
@@ -257,7 +260,6 @@ function Desk() {
 
   const teamMap = useMemo(() => indexBy(teams), [teams]);
   const playerMap = useMemo(() => indexBy(players), [players]);
-  const catMap = useMemo(() => indexBy(categories), [categories]);
   const courtMap = useMemo(() => indexBy(courts), [courts]);
   const entrantMap = useMemo(() => indexBy(placementEntrants), [placementEntrants]);
 
@@ -269,27 +271,6 @@ function Desk() {
   const entrantTeam = useCallback(
     (entrantId: string | null) => (entrantId ? (entrantMap.get(entrantId)?.team_id ?? null) : null),
     [entrantMap],
-  );
-
-  /**
-   * What round a placement match belongs to, which the desk needs on the card: a
-   * make-up match is why one player appears twice in round two, and a crossover is
-   * an official part of tiering rather than a spare qualifier.
-   */
-  const placementTag = useCallback(
-    (match: PlacementMatch) => {
-      const code = catMap.get(match.category_id)?.code;
-      const round =
-        match.stage === "round1"
-          ? "R1"
-          : match.is_makeup
-            ? "R2 make-up"
-            : match.is_crossover
-              ? "R2 crossover"
-              : "R2";
-      return [code, round].filter(Boolean).join(" ");
-    },
-    [catMap],
   );
 
   /**
@@ -369,6 +350,24 @@ function Desk() {
   );
 
   const refresh = () => qc.invalidateQueries();
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshDesk = async () => {
+    if (refreshing) return;
+    if (!navigator.onLine) {
+      toast.error("You are offline. Reconnect to refresh the desk.");
+      return;
+    }
+    setRefreshing(true);
+    try {
+      await qc.invalidateQueries({}, { throwOnError: true });
+      setNow(Date.now());
+      toast.success("Desk updated.");
+    } catch {
+      toast.error("Could not refresh the desk. Try again.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const current = openMatch ? (allMatches.find((m) => m.id === openMatch.id) ?? openMatch) : null;
 
   const startCheck = useMemo<StartConstraints | null>(() => {
@@ -568,7 +567,7 @@ function Desk() {
     whole page, not one panel.
   */
   const controls = (
-    <>
+    <span className="inline-flex flex-wrap items-center gap-2 rounded-lg border border-hairline bg-surface px-2 py-1">
       {clockAdopted ? (
         <time data-desk-clock className="font-score text-sm font-semibold tabular-nums text-foreground">
           {timeLabel(new Date(now))}
@@ -578,13 +577,16 @@ function Desk() {
       {/* While paused, Refresh is the one thing to do here, so it is the primary button. */}
       <Button
         size="sm"
-        variant={paused ? "default" : "outline"}
-        className="h-11 px-4 text-sm"
-        onClick={() => void qc.invalidateQueries()}
+        variant={paused ? "default" : "ghost"}
+        className="h-11 gap-1.5 px-3 text-sm"
+        disabled={refreshing}
+        aria-busy={refreshing}
+        onClick={() => void refreshDesk()}
       >
-        Refresh
+        <RefreshCw aria-hidden="true" className={refreshing ? "motion-safe:animate-spin" : undefined} />
+        {refreshing ? "Refreshing…" : "Refresh"}
       </Button>
-    </>
+    </span>
   );
   /** On each panel while paused: the moment its numbers are from. */
   const asOf = paused ? (
@@ -740,7 +742,7 @@ function Desk() {
                 : ""
             }
           >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-3">
             {courtStates.map(({ court, state }) => {
               const target = state.playing ?? state.next ?? readyUnassigned[0];
               // The button is about the court's queued match, never `target`: on a busy court
@@ -791,7 +793,7 @@ function Desk() {
                   {state.playing ? (
                     <div className="mt-3 leading-snug">
                       <p className="font-score text-sm font-medium text-muted-foreground">
-                        {state.playing.tag}
+                        <MatchIdentity match={state.playing} />
                       </p>
                       <p
                         className="line-clamp-3 text-base font-semibold"
@@ -814,11 +816,11 @@ function Desk() {
                           second statement of that. Neither says how the match started.
                         */}
                         {state.state === "overrun" ? (
-                          <span data-desk-derived>{state.elapsedMinutes}′ on court</span>
+                          <span data-desk-derived>{state.elapsedMinutes} min on court</span>
                         ) : (
                           <>
-                            <span data-desk-derived>{state.elapsedMinutes}′</span> of{" "}
-                            {slotMinutesFor(state.playing)}′ on court
+                            <span data-desk-derived>{state.elapsedMinutes}</span> of{" "}
+                            {slotMinutesFor(state.playing)} min on court
                           </>
                         )}
                       </p>
@@ -831,9 +833,10 @@ function Desk() {
                       asked. Free-ready is exactly "yes"; Waiting is "not yet, and here is why".
                     */
                     <div className="mt-3 leading-snug">
-                      <p className="font-score text-sm font-medium text-muted-foreground">
-                        Next {timeLabel(state.next.scheduled)} · {state.next.tag}
-                      </p>
+                      <div className="mb-1 space-y-1 font-score text-sm font-medium text-muted-foreground">
+                        <span className="block whitespace-nowrap">Next {timeLabel(state.next.scheduled)}</span>
+                        <MatchIdentity match={state.next} />
+                      </div>
                       <p
                         className="line-clamp-3 text-base font-semibold"
                         title={`${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`}
@@ -880,8 +883,8 @@ function Desk() {
                           className="line-clamp-2"
                           title={`${label(state.next.teams[0])} vs ${label(state.next.teams[1])}`}
                         >
-                          Next {timeLabel(state.next.scheduled)}: {label(state.next.teams[0])} vs{" "}
-                          {label(state.next.teams[1])}
+                          <span className="mb-0.5 block font-medium">Next {timeLabel(state.next.scheduled)}</span>
+                          <span>{label(state.next.teams[0])} vs {label(state.next.teams[1])}</span>
                         </span>
                       ) : (
                         "Nothing queued"
@@ -896,7 +899,7 @@ function Desk() {
                   <div className="mt-auto pt-3">
                     <p
                       className={`flex min-h-11 items-center text-sm font-semibold text-primary-ink ${
-                        callNext.kind === "none" ? "" : "pr-32"
+                        callNext.kind === "none" ? "" : "pr-28"
                       }`}
                     >
                       {state.playing
@@ -968,6 +971,12 @@ function Desk() {
             status: playerStatus(id, callMatch!, dayMatches, restMinutesFor(callMatch!), viewNow),
           }))}
           courtNumberFor={(id) => (id ? (courtMap.get(id)?.number ?? "?") : "?")}
+          explanation={callMatch ? placementMatchExplanation(callMatch.placementContext, label(callMatch.teams[0]), label(callMatch.teams[1])) : null}
+          identity={callMatch}
+          scheduledLabel={callMatch?.scheduled ? timeLabel(callMatch.scheduled) : null}
+          courtContext={callMatch && callCourt ? callNextContext({ tag: "", courtNumber: callCourt.court.number,
+            scheduledMs: null, scheduledLabel: null, court: callCourt.state.playing
+              ? { kind: "busy", elapsedMinutes: callCourt.state.elapsedMinutes } : { kind: "free" }, now: viewNow }) : null}
           reach={playerReach}
           notifiedAt={callMatch ? notifiedAtFor(callMatch.id) : null}
           initialMessage={
@@ -998,7 +1007,7 @@ function Desk() {
       ) : null}
 
       <Dialog open={!!current} onOpenChange={(o) => !o && setOpenMatch(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
           {current ? (
             <MatchOperationsDialog
               key={current.id}
@@ -1586,24 +1595,29 @@ export function MatchOperationsDialog({
     }
   };
 
+  const placementExplanation = placementMatchExplanation(match.placementContext, nameA, nameB);
+
   return (
     <>
       <DialogHeader className="space-y-1 border-b border-hairline pb-3 text-left">
         <DialogTitle className="pr-8 font-display text-2xl leading-tight">
           {nameA} <span className="text-muted-foreground">vs</span> {nameB}
         </DialogTitle>
-        <DialogDescription className="text-sm">
-          {match.tag}, {scoringRuleLabel(scoringRule)}
-          {courtNumber ? `, Court ${courtNumber}` : ""},{" "}
-          {match.status === "in-progress"
-            ? `${minutesSince(match.startedAt)}′ on court`
-            : isReported
-              ? `Finished ${timeLabel(match.endedAt)}`
-              : timeLabel(match.scheduled, timezone)}
+        <DialogDescription className="space-y-1 text-sm">
+          <MatchIdentity match={match} />
+          <span className="flex flex-wrap gap-x-4 gap-y-1">
+            <span>{courtNumber ? `Court ${courtNumber}` : "Court not assigned"}</span>
+            <span>{match.status === "in-progress"
+              ? `${minutesSince(match.startedAt)} min on court`
+              : isReported ? `Finished ${timeLabel(match.endedAt)}`
+                : match.scheduled ? `Scheduled ${timeLabel(match.scheduled, timezone)}` : "Time not assigned"}</span>
+          </span>
+          <span className="block">{scoringRuleLabel(scoringRule)}</span>
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-4">
+        {placementExplanation ? <p className="text-sm text-muted-foreground">{placementExplanation}</p> : null}
         {pausedSince != null && canEdit ? (
           <p className="rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
             <span className="font-semibold">No connection since {timeLabel(new Date(pausedSince))}.</span>{" "}

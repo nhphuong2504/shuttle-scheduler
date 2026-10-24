@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Bell, Check, Clock, Mail, MessageSquare } from "lucide-react";
 
+import { MatchIdentity } from "@/components/match-identity";
+import type { DeskMatch } from "@/lib/tournament/desk-matches";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { InfoNote } from "@/components/ui/info-note";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -51,7 +54,8 @@ export function CallNextButton({
   const locked = availability.kind === "locked" || paused;
   const readyToCall = playersFree && !locked;
   const readyDescription = "All players are free; ready to call";
-  const text = notifiedAt != null ? `Notified ${timeLabel(new Date(notifiedAt))}` : "Call next";
+  const text = "Call next";
+  const lastSent = notifiedAt != null ? `Last sent ${timeLabel(new Date(notifiedAt))}` : null;
   const note =
     availability.kind === "locked"
       ? "the teams are not known yet"
@@ -70,7 +74,7 @@ export function CallNextButton({
       // The visible words lead the name, so a voice user can say what they see.
       aria-label={`${text}, Court ${courtNumber}${note ? `, ${note}` : ""}`}
       title={note ? `${text}: ${note}` : readyToCall ? readyDescription : undefined}
-      aria-description={readyToCall ? readyDescription : undefined}
+      aria-description={[readyToCall ? readyDescription : null, lastSent].filter(Boolean).join(". ") || undefined}
       className="h-11 gap-1.5 px-3 text-sm font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
     >
       <span className="relative inline-flex">
@@ -83,7 +87,10 @@ export function CallNextButton({
           />
         ) : null}
       </span>
-      {text}
+      <span className="flex flex-col items-start leading-tight">
+        <span>{text}</span>
+        {lastSent ? <span className="mt-0.5 text-xs font-normal tabular-nums">{lastSent}</span> : null}
+      </span>
     </Button>
   );
 }
@@ -118,9 +125,17 @@ export function CallNextDialog({
   returnFocusTo,
   sending = false,
   sendError = null,
+  explanation = null,
+  identity = null,
+  scheduledLabel = null,
+  courtContext = null,
 }: {
   sending?: boolean;
   sendError?: string | null;
+  explanation?: string | null;
+  identity?: Pick<DeskMatch, "tag" | "roundTag"> | null;
+  scheduledLabel?: string | null;
+  courtContext?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The match being notified; a different match starts from its own proposed message. */
@@ -145,7 +160,7 @@ export function CallNextDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-lg"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
         onCloseAutoFocus={(event) => {
           if (!returnFocusTo?.isConnected) return;
           event.preventDefault();
@@ -169,6 +184,10 @@ export function CallNextDialog({
             onSend={onSend}
             sending={sending}
             sendError={sendError}
+            explanation={explanation}
+            identity={identity}
+            scheduledLabel={scheduledLabel}
+            courtContext={courtContext}
           />
         ) : null}
       </DialogContent>
@@ -190,9 +209,17 @@ function CallNextBody({
   onSend,
   sending,
   sendError,
+  explanation,
+  identity,
+  scheduledLabel,
+  courtContext,
 }: {
   sending: boolean;
   sendError: string | null;
+  explanation: string | null;
+  identity: Pick<DeskMatch, "tag" | "roundTag"> | null;
+  scheduledLabel: string | null;
+  courtContext: string | null;
   courtNumber: number | string;
   courtId: string | null;
   context: string;
@@ -232,11 +259,31 @@ function CallNextBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="font-display text-xl">
-          Notify the next match on Court {courtNumber}
+      <DialogHeader className="text-left">
+        <DialogTitle className="pr-5 font-display text-xl">
+          Call next on Court {courtNumber}
         </DialogTitle>
-        <DialogDescription className="text-sm">{context}</DialogDescription>
+        <DialogDescription asChild>
+          <div className="space-y-1 text-left text-sm text-muted-foreground">
+            {identity ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <MatchIdentity match={identity} />
+                  {explanation ? <InfoNote label="About this pairing">{explanation}</InfoNote> : null}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <span>{scheduledLabel ? `Scheduled ${scheduledLabel}` : "Time not assigned"}</span>
+                  {courtContext ? <span>{courtContext}</span> : null}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span>{context}</span>
+                {explanation ? <InfoNote label="About this pairing">{explanation}</InfoNote> : null}
+              </div>
+            )}
+          </div>
+        </DialogDescription>
       </DialogHeader>
 
       {paused ? (
@@ -245,10 +292,6 @@ function CallNextBody({
         </p>
       ) : null}
 
-      {/*
-        Allowed, but they are mid-match: one short line per court, since a pair on the same court
-        is one fact. The rows below say the same per player.
-      */}
       {elsewhereByCourt.length ? (
         <ul className="space-y-1 rounded-lg border border-warn-border bg-warn-surface px-3 py-2 text-sm text-warn-foreground">
           {elsewhereByCourt.map(({ courtId: busyCourtId, names }) => (
@@ -260,47 +303,22 @@ function CallNextBody({
         </ul>
       ) : null}
 
-      {notifiedAt != null ? (
-        <p className="flex items-center gap-1.5 text-sm text-play-foreground">
-          <Check aria-hidden="true" className="size-4" />
-          Notified {timeLabel(new Date(notifiedAt))}. Sending again notifies everyone again.
-        </p>
-      ) : null}
-
       <table className="w-full text-left text-sm">
         <caption className="sr-only">The players of the next match on Court {courtNumber}</caption>
         <thead>
-          <tr className="border-b border-hairline text-xs text-muted-foreground">
-            <th scope="col" className="py-1.5 font-medium">
-              Player
-            </th>
-            {reach ? (
-              <th scope="col" className="py-1.5 font-medium">
-                Reach by
-              </th>
-            ) : null}
-            <th scope="col" className="py-1.5 text-right font-medium">
-              Right now
-            </th>
+          <tr className="border-b border-hairline text-sm text-muted-foreground">
+            <th scope="col" className="py-1.5 pr-3 font-medium">Player</th>
+            {reach ? <th scope="col" className="py-1.5 pr-3 font-medium">Contact</th> : null}
+            <th scope="col" className="py-1.5 text-right font-medium">Availability</th>
           </tr>
         </thead>
         <tbody>
           {players.map((player) => (
             <tr key={player.id} className="border-b border-hairline last:border-b-0">
-              <th scope="row" className="py-2 text-base font-semibold">
-                {player.name}
-              </th>
-              {reach ? (
-                <td className="py-2">
-                  <ReachCell channels={reach.get(player.id)} />
-                </td>
-              ) : null}
+              <th scope="row" className="py-2 pr-3 text-base font-semibold">{player.name}</th>
+              {reach ? <td className="py-2 pr-3"><ReachCell channels={reach.get(player.id)} /></td> : null}
               <td className="py-2 text-right">
-                <StatusCell
-                  status={player.status}
-                  courtId={courtId}
-                  courtNumberFor={courtNumberFor}
-                />
+                <StatusCell status={player.status} courtId={courtId} courtNumberFor={courtNumberFor} />
               </td>
             </tr>
           ))}
@@ -308,7 +326,20 @@ function CallNextBody({
       </table>
 
       <div className="space-y-1.5">
-        <Label htmlFor="call-next-message">Message</Label>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1">
+            <Label htmlFor="call-next-message">Message</Label>
+            <InfoNote label="Delivery details">
+              Players receive this in Tournova when signed in. This does not confirm they have read it.
+              {notifiedAt != null ? <p className="mt-2">Sending again notifies everyone again.</p> : null}
+            </InfoNote>
+          </div>
+          {notifiedAt != null ? (
+            <p className="text-sm tabular-nums text-muted-foreground">
+              Last sent {timeLabel(new Date(notifiedAt))}.
+            </p>
+          ) : null}
+        </div>
         <Textarea
           id="call-next-message"
           value={message}
@@ -320,38 +351,18 @@ function CallNextBody({
         />
       </div>
 
-      {sendError ? (
-        <p role="alert" className="text-sm text-danger-foreground">
-          {sendError}
-        </p>
-      ) : null}
-      <p className="text-sm text-muted-foreground">
-        Players receive this in Tournova when signed in. This does not confirm they have read it.
-      </p>
-      <DialogFooter className="items-center gap-2 sm:justify-between sm:space-x-0">
-        <p className="text-sm text-muted-foreground">
-          {reach
-            ? `Sends to ${reachable} of ${players.length} player${players.length === 1 ? "" : "s"}`
-            : "Loading recipients…"}
-        </p>
-        {/* On a phone the two buttons share the dialog's width and Send is 48px tall. */}
+      {sendError ? <p role="alert" className="text-sm text-danger-foreground">{sendError}</p> : null}
+      <DialogFooter className="flex-col items-center gap-3 border-t border-hairline pt-4 sm:justify-between sm:space-x-0">
+        <div className="w-full text-sm text-muted-foreground sm:w-auto">
+          <p>{reach ? `Sends to ${reachable} of ${players.length} player${players.length === 1 ? "" : "s"}` : "Loading recipients…"}</p>
+          {reach && reachable < players.length ? <p className="mt-1">Call {players.length - reachable} player{players.length - reachable === 1 ? "" : "s"} at the venue.</p> : null}
+        </div>
         <span className="flex w-full gap-2 sm:w-auto">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 flex-1 px-4 sm:h-11 sm:flex-none"
-            disabled={sending}
-            onClick={onCancel}
-          >
+          <Button type="button" variant="outline" className="h-12 flex-1 px-4 sm:h-11 sm:flex-none" disabled={sending} onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            type="button"
-            className="h-12 flex-1 px-4 sm:h-11 sm:flex-none"
-            disabled={!canSend}
-            onClick={() => onSend(message.trim())}
-          >
-            {sending ? "Sending…" : notifiedAt != null ? "Send again" : "Send"}
+          <Button type="button" className="h-12 flex-1 px-4 sm:h-11 sm:flex-none" disabled={!canSend} onClick={() => onSend(message.trim())}>
+            {sending ? "Sending…" : reachable > 0 ? `${notifiedAt != null ? "Send again" : "Send"} to ${reachable} player${reachable === 1 ? "" : "s"}` : "Send"}
           </Button>
         </span>
       </DialogFooter>
@@ -362,11 +373,11 @@ function CallNextBody({
 /** Account reach is explicit; contacts never enter this component. */
 function ReachCell({ channels }: { channels: PlayerReach | undefined }) {
   if (!channels || (!channels.inApp && !channels.sms && !channels.email)) {
-    return <span className="text-sm font-semibold text-danger-foreground">No linked account</span>;
+    return <span className="text-sm text-muted-foreground">Not linked</span>;
   }
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
-      {channels.inApp ? <span>Tournova</span> : null}
+      {channels.inApp ? <span>In Tournova</span> : null}
       {channels.sms ? (
         <span title="SMS">
           <MessageSquare aria-hidden="true" className="size-4" />

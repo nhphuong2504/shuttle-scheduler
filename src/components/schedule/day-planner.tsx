@@ -598,7 +598,7 @@ export function DayPlanner() {
                 <thead>
                   <tr>
                     <th className="w-16">Time</th>
-                    <th className="w-16">Court</th>
+                    <th className="w-28">Court</th>
                     <th className="w-14">Cat</th>
                     <th className="w-24">Stage</th>
                     <th className="w-28">Status</th>
@@ -610,8 +610,8 @@ export function DayPlanner() {
                     <tr key={r.id}>
                       <td className="font-score text-sm font-semibold">{timeLabel(r.start)}</td>
                       <td>
-                        <span className="inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 font-score text-t4 font-semibold text-primary-ink">
-                          C{r.courtNumber || "—"}
+                        <span className="inline-flex whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 font-score text-t4 font-semibold text-foreground" title={r.courtNumber ? undefined : "Court not assigned"}>
+                          {r.courtNumber ? `Court ${r.courtNumber}` : "Unassigned"}
                         </span>
                       </td>
                       <td className="font-score text-sm">{r.categoryCode}</td>
@@ -730,7 +730,7 @@ export function DayPlanner() {
                           <tr>
                             <th>Match</th>
                             <th className="w-28">Time</th>
-                            <th className="w-20">Court</th>
+                            <th className="w-40">Court</th>
                             <th className="w-16">Shift</th>
                           </tr>
                         </thead>
@@ -742,11 +742,11 @@ export function DayPlanner() {
                                 {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
                                 {timeLabel(change.toStart)}
                               </td>
-                              <td className="font-score text-sm">
+                              <td className="whitespace-nowrap font-score text-sm">
                                 {change.fromCourtNumber != null
-                                  ? `C${change.fromCourtNumber}`
+                                  ? `Court ${change.fromCourtNumber}`
                                   : "—"}{" "}
-                                → C{change.toCourtNumber}
+                                → Court {change.toCourtNumber}
                               </td>
                               <td className="font-score text-sm">
                                 {change.shiftMinutes > 0 ? "+" : ""}

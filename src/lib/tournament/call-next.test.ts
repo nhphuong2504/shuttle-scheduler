@@ -92,7 +92,7 @@ describe("call next: the context line", () => {
   it("reads as comma-separated facts on a busy court", () => {
     expect(
       callNextContext({ ...base, court: { kind: "busy", elapsedMinutes: 37 }, now: BASE + 20 * 60_000 }),
-    ).toBe("MD R2, scheduled 14:25, Court 2 still playing, 37′ on court");
+    ).toBe("MD R2, scheduled 14:25, Court 2 still playing, 37 min on court");
   });
 
   it("says how late a free court's match is, once a whole minute has passed", () => {

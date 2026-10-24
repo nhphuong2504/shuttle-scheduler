@@ -526,7 +526,7 @@ function EntriesPage() {
                                         toast.success(
                                           converted === 0
                                             ? "Entry withdrawn"
-                                            : `Entry withdrawn · ${converted} unplayed match${converted === 1 ? "" : "es"} awarded as a walkover`,
+                                            : `Entry withdrawn. ${converted} unplayed match${converted === 1 ? "" : "es"} awarded as a walkover`,
                                         );
                                         refresh();
                                         return;

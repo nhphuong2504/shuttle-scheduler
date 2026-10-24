@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CallNextButton, CallNextDialog, type CallNextPlayer } from "@/components/desk/call-next";
@@ -53,14 +53,14 @@ describe("CallNextDialog", () => {
     expect(within(row("Ryan Lewis")).getByText("SMS")).toBeTruthy();
     expect(within(row("Ryan Lewis")).getByText("Email")).toBeTruthy();
     expect(within(row("Adam Grant")).queryByText("SMS")).toBeNull();
-    expect(within(row("Dan Ortiz")).getByText("No linked account")).toBeTruthy();
+    expect(within(row("Dan Ortiz")).getByText("Not linked")).toBeTruthy();
     expect(within(dialog).getByText("Sends to 3 of 4 players")).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(false);
+    expect(within(dialog).getByRole("button", { name: /^Send(?: to \d+ players?)?$/ }).hasAttribute("disabled")).toBe(false);
   });
 
   it("reaches linked accounts through Tournova", () => {
     const { dialog } = renderDialog({ reach: new Map([["a", { inApp: true, sms: false, email: false }]]) });
-    expect(within(dialog).getByText("Tournova")).toBeTruthy();
+    expect(within(dialog).getByText("In Tournova")).toBeTruthy();
     expect(within(dialog).getByText("Sends to 1 of 4 players")).toBeTruthy();
   });
 
@@ -68,6 +68,13 @@ describe("CallNextDialog", () => {
     const { dialog } = renderDialog({ sending: true, sendError: "Match changed" });
     expect(within(dialog).getByRole("button", { name: "Sending…" }).hasAttribute("disabled")).toBe(true);
     expect(within(dialog).getByRole("alert").textContent).toBe("Match changed");
+  });
+
+  it("explains a placement pairing without putting a technical type in the title", () => {
+    const { dialog } = renderDialog({ context: "MD R2", explanation: "Team A did not play in Round 1 and plays both placement matches in Round 2." });
+    fireEvent.click(within(dialog).getByRole("button", { name: "About this pairing" }));
+    expect(screen.getByText(/Team A did not play in Round 1/)).toBeTruthy();
+    expect(within(dialog).getByRole("heading", { name: "Call next on Court 2" }).textContent).not.toMatch(/make-up|crossover/);
   });
 
   it("words each player's whereabouts as the tile does", () => {
@@ -80,30 +87,30 @@ describe("CallNextDialog", () => {
 
   it("sends the edited message, trimmed", () => {
     const { dialog, onSend } = renderDialog({ initialMessage: "  Come now.  " });
-    within(dialog).getByRole("button", { name: "Send" }).click();
+    within(dialog).getByRole("button", { name: /^Send(?: to \d+ players?)?$/ }).click();
     expect(onSend).toHaveBeenCalledWith("Come now.");
   });
 
   it("offers Send again once the players were notified", () => {
     const { dialog } = renderDialog({ notifiedAt: T });
-    expect(within(dialog).getByText(/^Notified \d{1,2}:\d{2}\./)).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Send again" })).toBeTruthy();
+    expect(within(dialog).getByText(/^Last sent \d{1,2}:\d{2}\./)).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: /^Send again to \d+ players?$/ })).toBeTruthy();
   });
 
   it("cannot send while paused, or when nobody can be reached", () => {
     let { dialog } = renderDialog({ paused: true });
-    expect(within(dialog).getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(true);
+    expect(within(dialog).getByRole("button", { name: /^Send(?: to \d+ players?)?$/ }).hasAttribute("disabled")).toBe(true);
     cleanup();
     ({ dialog } = renderDialog({ reach: new Map() }));
     expect(within(dialog).getByText("Sends to 0 of 4 players")).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(true);
+    expect(within(dialog).getByRole("button", { name: /^Send(?: to \d+ players?)?$/ }).hasAttribute("disabled")).toBe(true);
   });
 
   it("waits for recipient capabilities before enabling send", () => {
     const { dialog } = renderDialog({ reach: null });
     expect(within(dialog).getByText("Loading recipients…")).toBeTruthy();
-    expect(within(dialog).queryByRole("columnheader", { name: "Reach by" })).toBeNull();
-    expect(within(dialog).getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(true);
+    expect(within(dialog).queryByRole("columnheader", { name: "Contact" })).toBeNull();
+    expect(within(dialog).getByRole("button", { name: /^Send(?: to \d+ players?)?$/ }).hasAttribute("disabled")).toBe(true);
   });
 });
 
@@ -140,7 +147,8 @@ describe("CallNextButton", () => {
 
   it("names when the players were notified", () => {
     render(<CallNextButton {...base} notifiedAt={T} availability={{ kind: "ready" }} />);
-    expect(screen.getByRole("button", { name: /^Notified \d{1,2}:\d{2}, Court 4$/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Call next, Court 4" })).toBeTruthy();
+    expect(screen.getByText(/^Last sent \d{1,2}:\d{2}$/)).toBeTruthy();
   });
 
   it("is locked while the Desk is offline", () => {

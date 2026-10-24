@@ -154,3 +154,31 @@ Too much text is the most common reason a screen reads as noisy. The rules:
 - **Text stays on screen only when it prevents a mistake** that cannot be undone, such as a
   delete or a reset that clears results.
 - **Do not say the same thing twice on a page**, or on the page and the page it links to.
+
+## Match metadata and narrow screens
+
+Use layout spacing and wrapping to separate metadata, with no middle-dot separators.
+Keep `MD R1` / `MD R2` as the compact placement identity. Knockout identity (`MD Draw A`)
+and round (`Semifinal`) are separate units. Keep `Next` and the published time; the court's
+state determines whether that next match is the tile's subject or follows a current match.
+Use `Court 3` on operational screens and `min` for elapsed time. A chart may use numbered
+rows under an explicit Court axis. Scores remain a single, unbroken value.
+
+Court labels stay on one line; under a Court column, `Unassigned` is enough. The running
+order uses match rows on phones and tablets, reserving the six-column table for desktop.
+Desk cards fit as many columns as can retain 18rem per card, with one column on narrower
+screens. A queued match's Next time has its own line above its identity, and the match
+action has room beside Call next.
+
+On mobile, score rows have a round/time header, full-width team names, then status, score
+and the action. Dialog metadata uses separate lines for identity, court/time and scoring
+rules. Public pages and account/access forms retain their existing field labels and hierarchy.
+
+Call next remains an action after sending; Last sent is secondary metadata, not the button
+name. The green cue describes player availability, independently of account reach. In the
+preview, In Tournova and Not linked describe the player’s account contact status without treating a
+missing account as an error. Instructions to call at the venue stay outside the Contact column. The send button names the recipient count.
+
+Notifications belong in the account header, not over court or score controls. The trigger is a quiet, 44px circular bell before the account identity and Sign out,
+with a compact unread badge and a complete accessible name at every screen size. Inbox items give the event
+its own heading, an explicit unread label, and court/date/time metadata with a timezone.
