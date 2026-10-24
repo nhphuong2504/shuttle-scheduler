@@ -766,3 +766,15 @@ two-project limit.
 
 State in the PR what could break and what you checked. The tests are the floor, not the
 argument.
+
+## 12. In-app match calls
+
+`desk_call_state` and `send_match_call` require `can_edit_tournament`; sending also
+requires `assert_tournament_live` and the lifecycle/shared schedule locks. A participant
+receives a notification only through an existing `players.profile_id` link. Receiving or
+reading one grants no operator rights. Client payloads cannot nominate recipient profiles.
+
+`match_calls` and `player_notifications` have RLS enabled and no direct client grants.
+`my_match_notifications` and `read_match_notification` scope every read/write to
+`current_profile_id()`. The private `call_next_matches` adapter has no client EXECUTE.
+The public RPCs are authenticated-only and return no contacts or other profile identities.

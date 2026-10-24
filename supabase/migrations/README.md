@@ -3534,3 +3534,22 @@ DROP FUNCTION public.truncate_match_times_to_ms();
 ```
 
 Truncated times stay truncated; nothing depends on the lost fraction.
+
+## Applying `20261024000000_in_app_call_next.sql`
+
+Adds RPC-only `match_calls` and `player_notifications`. Calls are an atomic database
+write, with recipients derived from the match's player/profile links. There is no
+external delivery service. Reads and acknowledgements are scoped to the current profile;
+Desk reach/history and sending require tournament edit access. Sending requires a live
+tournament, takes lifecycle/live-schedule locks, rechecks the expected court, time and
+players, and refuses an earlier queued match on the same venue date. Request IDs make
+lost-response retries idempotent; deliberate new calls have a 30-second per-match cooldown.
+
+Apply the migration before deploying the client: Call next is enabled by default. The inbox polls
+while signed in (five seconds while the app is active, plus focus/reconnect refresh); no
+realtime publication or push/browser permission is needed. Unlinked walk-ins and partners
+cannot receive calls. Existing identity linking rules are unchanged.
+
+Verify with `integration/call-next.test.ts` on local Supabase and the normal full gate.
+The migration checks its privileges and RLS on apply. To roll back, deploy an earlier
+client and preserve the tables to retain calls. No existing match rows are modified.

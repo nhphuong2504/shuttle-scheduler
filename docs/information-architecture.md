@@ -153,6 +153,12 @@ There is no create-tournament button in either case: starting a tournament is an
 act, and a header that offers no way to change this one should not offer a way to begin
 another.
 
+The signed-in root also hosts a
+**Notifications** inbox, available across both shells without a new address. It lists
+only the caller's own match calls and links to the tournament's read-only Desk. Receiving
+a call does not change the workspace nav or grant operator access. The participant can
+read a call and mark it as read without choosing a working tournament.
+
 ## 4. The flows
 
 ### Finding a tournament

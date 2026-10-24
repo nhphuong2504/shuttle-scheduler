@@ -21,21 +21,6 @@ import type { PlayerStatus } from "@/lib/tournament/desk";
 import { timeLabel } from "@/lib/tournament/format";
 
 /**
- * How each player of a match can be reached. `null` until the sending feature exists: the
- * players read the Desk has today carries no contact details, and none are fetched just to
- * draw icons. The real feature replaces this one seam, with booleans from the server - never
- * an address or a number sent to the browser.
- */
-export function usePlayerReach(): ReadonlyMap<string, PlayerReach> | null {
-  return null;
-}
-
-/** When a match's players were last notified. Nothing is recorded until sending exists. */
-export function useCallNextRecords(): (matchId: string) => number | null {
-  return () => null;
-}
-
-/**
  * The tile's Call next button. It sits on the tile beside the control that opens the match,
  * never inside it, so there is no button within a button.
  *
@@ -107,9 +92,8 @@ export interface CallNextPlayer {
  * The Call next dialog: who the next match's players are, where each of them is right now,
  * how each can be reached, and the message to send them.
  *
- * Opening it sends nothing; Send does. Until sending exists `reach` is null, so the reach
- * column is left out, the footer says sending is not connected, and Send stays disabled -
- * the dialog never claims to have notified anyone.
+ * Opening sends nothing. Recipients load as capability booleans; Send remains locked
+ * until they are known. Committed calls are inbox records, not proof of reading.
  */
 export function CallNextDialog({
   open,
@@ -126,7 +110,11 @@ export function CallNextDialog({
   paused,
   onSend,
   returnFocusTo,
+  sending = false,
+  sendError = null,
 }: {
+  sending?: boolean;
+  sendError?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The match being notified; a different match starts from its own proposed message. */
@@ -173,6 +161,8 @@ export function CallNextDialog({
             paused={paused}
             onCancel={() => onOpenChange(false)}
             onSend={onSend}
+            sending={sending}
+            sendError={sendError}
           />
         ) : null}
       </DialogContent>
@@ -192,7 +182,11 @@ function CallNextBody({
   paused,
   onCancel,
   onSend,
+  sending,
+  sendError,
 }: {
+  sending: boolean;
+  sendError: string | null;
   courtNumber: number | string;
   courtId: string | null;
   context: string;
@@ -216,8 +210,19 @@ function CallNextBody({
     if (group) group.names.push(player.name);
     else elsewhereByCourt.push({ courtId: busyCourtId, names: [player.name] });
   }
-  const reachable = reach ? reachableCount(players.map((player) => player.id), reach) : 0;
-  const canSend = reach != null && reachable > 0 && !paused && message.trim().length > 0;
+  const reachable = reach
+    ? reachableCount(
+        players.map((player) => player.id),
+        reach,
+      )
+    : 0;
+  const canSend =
+    reach != null &&
+    reachable > 0 &&
+    !paused &&
+    !sending &&
+    message.trim().length > 0 &&
+    message.trim().length <= 500;
 
   return (
     <>
@@ -303,15 +308,25 @@ function CallNextBody({
           value={message}
           onChange={(event) => setMessage(event.target.value)}
           rows={3}
+          maxLength={500}
+          disabled={sending}
           className="text-base md:text-base"
         />
       </div>
 
+      {sendError ? (
+        <p role="alert" className="text-sm text-danger-foreground">
+          {sendError}
+        </p>
+      ) : null}
+      <p className="text-sm text-muted-foreground">
+        Players receive this in Tournova when signed in. This does not confirm they have read it.
+      </p>
       <DialogFooter className="items-center gap-2 sm:justify-between sm:space-x-0">
         <p className="text-sm text-muted-foreground">
           {reach
             ? `Sends to ${reachable} of ${players.length} player${players.length === 1 ? "" : "s"}`
-            : "Sending is not connected yet."}
+            : "Loading recipients…"}
         </p>
         {/* On a phone the two buttons share the dialog's width and Send is 48px tall. */}
         <span className="flex w-full gap-2 sm:w-auto">
@@ -319,6 +334,7 @@ function CallNextBody({
             type="button"
             variant="outline"
             className="h-12 flex-1 px-4 sm:h-11 sm:flex-none"
+            disabled={sending}
             onClick={onCancel}
           >
             Cancel
@@ -329,7 +345,7 @@ function CallNextBody({
             disabled={!canSend}
             onClick={() => onSend(message.trim())}
           >
-            {notifiedAt != null ? "Send again" : "Send"}
+            {sending ? "Sending…" : notifiedAt != null ? "Send again" : "Send"}
           </Button>
         </span>
       </DialogFooter>
@@ -337,13 +353,14 @@ function CallNextBody({
   );
 }
 
-/** A player's channels: an icon each, named for a screen reader, or "No contact". */
+/** Account reach is explicit; contacts never enter this component. */
 function ReachCell({ channels }: { channels: PlayerReach | undefined }) {
-  if (!channels || (!channels.sms && !channels.email)) {
-    return <span className="text-sm font-semibold text-danger-foreground">No contact</span>;
+  if (!channels || (!channels.inApp && !channels.sms && !channels.email)) {
+    return <span className="text-sm font-semibold text-danger-foreground">No linked account</span>;
   }
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
+      {channels.inApp ? <span>Tournova</span> : null}
       {channels.sms ? (
         <span title="SMS">
           <MessageSquare aria-hidden="true" className="size-4" />
@@ -388,7 +405,9 @@ function StatusCell({
     case "on-court":
       return (
         <span className="whitespace-nowrap font-semibold text-warn-foreground">
-          {status.courtId === courtId ? "On this court" : `On Court ${courtNumberFor(status.courtId)}`}
+          {status.courtId === courtId
+            ? "On this court"
+            : `On Court ${courtNumberFor(status.courtId)}`}
         </span>
       );
   }

@@ -5,13 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CallNextButton, CallNextDialog, type CallNextPlayer } from "@/components/desk/call-next";
 import type { PlayerReach } from "@/lib/tournament/call-next";
 
-/**
- * The Call next layout, rendered with the data the sending feature will supply.
- *
- * The Desk passes no contact details and no notified time yet, so the browser suite can only
- * see the "not connected" dialog. The states that need them - channel icons, "No contact",
- * who a send reaches, "Notified" - are drawn here from injected props.
- */
+/** Preview, pending, reach and last-call states; the browser/integration suites cover delivery. */
 
 afterEach(cleanup);
 
@@ -59,9 +53,21 @@ describe("CallNextDialog", () => {
     expect(within(row("Ryan Lewis")).getByText("SMS")).toBeTruthy();
     expect(within(row("Ryan Lewis")).getByText("Email")).toBeTruthy();
     expect(within(row("Adam Grant")).queryByText("SMS")).toBeNull();
-    expect(within(row("Dan Ortiz")).getByText("No contact")).toBeTruthy();
+    expect(within(row("Dan Ortiz")).getByText("No linked account")).toBeTruthy();
     expect(within(dialog).getByText("Sends to 3 of 4 players")).toBeTruthy();
     expect(within(dialog).getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("reaches linked accounts through Tournova", () => {
+    const { dialog } = renderDialog({ reach: new Map([["a", { inApp: true, sms: false, email: false }]]) });
+    expect(within(dialog).getByText("Tournova")).toBeTruthy();
+    expect(within(dialog).getByText("Sends to 1 of 4 players")).toBeTruthy();
+  });
+
+  it("locks the send while pending and exposes a failed send", () => {
+    const { dialog } = renderDialog({ sending: true, sendError: "Match changed" });
+    expect(within(dialog).getByRole("button", { name: "Sending…" }).hasAttribute("disabled")).toBe(true);
+    expect(within(dialog).getByRole("alert").textContent).toBe("Match changed");
   });
 
   it("words each player's whereabouts as the tile does", () => {
@@ -93,9 +99,9 @@ describe("CallNextDialog", () => {
     expect(within(dialog).getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("says sending is not connected, and drops the reach column, without contact data", () => {
+  it("waits for recipient capabilities before enabling send", () => {
     const { dialog } = renderDialog({ reach: null });
-    expect(within(dialog).getByText("Sending is not connected yet.")).toBeTruthy();
+    expect(within(dialog).getByText("Loading recipients…")).toBeTruthy();
     expect(within(dialog).queryByRole("columnheader", { name: "Reach by" })).toBeNull();
     expect(within(dialog).getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(true);
   });

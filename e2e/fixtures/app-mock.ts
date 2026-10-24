@@ -538,6 +538,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
    * resolve to `[]` rather than 404, which is the honest answer for a table the surface
    * under test does not read and keeps the mock from failing closed on an unrelated one.
    */
+  const calls: { matchId: string; sentAt: string }[] = [];
   await page.route("**/rest/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const target = url.pathname.split("/rest/v1/")[1] ?? "";
@@ -545,6 +546,19 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     const rpc = (body: unknown) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 
+    if (target === "rpc/desk_call_state") {
+      await rpc({ players: (fixture.tables["players"] ?? []).map((p: { id: string }, i: number) => ({ id: p.id, inApp: i !== 0 })), records: calls });
+      return;
+    }
+    if (target === "rpc/send_match_call") {
+      const args = route.request().postDataJSON();
+      const sentAt = new Date().toISOString();
+      calls.push({ matchId: args.p_match_id, sentAt });
+      await rpc({ count: 3, sentAt });
+      return;
+    }
+    if (target === "rpc/my_match_notifications") { await rpc([]); return; }
+    if (target === "rpc/read_match_notification") { await rpc(null); return; }
     // The platform role. `null` is the signed-out answer, which reads as `user` in the
     // hook, so a signed-out page is never treated as privileged.
     if (target === "rpc/current_system_role") {

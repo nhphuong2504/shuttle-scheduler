@@ -131,13 +131,11 @@ import {
   callNextContext,
   callNextMessage,
 } from "@/lib/tournament/call-next";
-import { NOTIFY_PLAYERS_ENABLED } from "@/lib/feature-flags";
 import {
   CallNextButton,
   CallNextDialog,
-  useCallNextRecords,
-  usePlayerReach,
 } from "@/components/desk/call-next";
+import { useMatchCalls } from "@/hooks/useMatchCalls";
 import { DayScheduleStatus } from "@/components/schedule-status";
 import {
   attributeMatchesToDays,
@@ -190,7 +188,7 @@ function Desk() {
    * court: if that match starts or moves while the dialog is open, the court's next match
    * changes, and the dialog closes rather than quietly showing another match's players.
    */
-  const [callTarget, setCallTarget] = useState<{ courtId: string; matchId: string } | null>(null);
+  const [callTarget, setCallTarget] = useState<{ courtId: string; matchId: string; scheduled: string | null; players: string; ready: boolean } | null>(null);
   const callOpener = useRef<HTMLElement | null>(null);
   const [now, setNow] = useState(() => Date.now());
   /**
@@ -534,17 +532,20 @@ function Desk() {
     });
 
   /**
-   * Call next: notify a court's next match's players. Only for someone who may edit, and only
-   * once the feature is offered - until sending exists the flag keeps the button off the board.
+   * Call next is available to anyone who may edit this tournament.
    */
-  const offerCallNext = NOTIFY_PLAYERS_ENABLED && canEdit;
-  const playerReach = usePlayerReach();
-  const notifiedAtFor = useCallNextRecords();
+  const offerCallNext = canEdit;
+  const calls = useMatchCalls(tournament?.id ?? null, offerCallNext);
+  const playerReach = calls.reach;
+  const notifiedAtFor = calls.notifiedAtFor;
   const callCourt = callTarget
     ? (courtStates.find(({ court }) => court.id === callTarget.courtId) ?? null)
     : null;
   const callMatch =
     callCourt?.state.next && callCourt.state.next.id === callTarget?.matchId
+      && callCourt.state.next.scheduled === callTarget.scheduled
+      && [...callCourt.state.next.playerIds].sort().join(",") === callTarget.players
+      && (!callTarget.ready || callCourt.state.state === "free-ready")
       ? callCourt.state.next
       : null;
   // The match moved on while the dialog was open: let the target go too, so it cannot come back.
@@ -920,10 +921,12 @@ function Desk() {
                       availability={callNext}
                       courtNumber={court.number}
                       notifiedAt={notifiedAtFor(state.next.id)}
-                      paused={paused}
+                      paused={paused || calls.sending}
                       onOpen={(opener) => {
                         callOpener.current = opener;
-                        if (state.next) setCallTarget({ courtId: court.id, matchId: state.next.id });
+                        if (state.next) setCallTarget({ courtId: court.id, matchId: state.next.id,
+                          scheduled: state.next.scheduled, players: [...state.next.playerIds].sort().join(","),
+                          ready: state.state === "free-ready" });
                       }}
                     />
                   </span>
@@ -978,8 +981,16 @@ function Desk() {
               : ""
           }
           paused={paused}
-          // Nothing sends yet: Send is disabled while `reach` is null, so this only closes.
-          onSend={() => setCallTarget(null)}
+          sending={calls.sending}
+          sendError={calls.sendError}
+          onSend={async (message) => {
+            if (!callMatch || paused) return;
+            const result = await calls.send(callMatch, message);
+            if (result) {
+              toast.success(`Sent in Tournova to ${result.count} account${result.count === 1 ? "" : "s"}.`);
+              setCallTarget(null);
+            }
+          }}
           returnFocusTo={callOpener.current}
         />
       ) : null}

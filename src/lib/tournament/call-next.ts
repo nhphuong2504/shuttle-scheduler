@@ -3,15 +3,15 @@ import { playerOnCourt, type DeskMatchModel } from "@/lib/tournament/desk";
 /**
  * The Desk's "Call next": notify the players of a court's next match.
  *
- * The layout is built ahead of the sending feature (see `NOTIFY_PLAYERS_ENABLED`), so this
- * holds only what the tile and the dialog draw: whether a court offers the button, the
- * dialog's context line, and the message it proposes. Nothing here sends anything.
+ * Pure preview rules: button availability, context, proposed message and reach counts.
+ * Durable in-app calls are made through the server RPC by useMatchCalls.
  */
 
 const MINUTE = 60_000;
 
 /** How a channel can reach one player. Unknown until the server answers it. */
 export interface PlayerReach {
+  inApp?: boolean;
   sms: boolean;
   email: boolean;
 }
@@ -120,6 +120,6 @@ export function reachableCount(
 ): number {
   return playerIds.filter((id) => {
     const channels = reach.get(id);
-    return channels != null && (channels.sms || channels.email);
+    return channels != null && (channels.inApp || channels.sms || channels.email);
   }).length;
 }

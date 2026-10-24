@@ -72,11 +72,5 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: true,
     timeout: 120_000,
-    /**
-     * Features built but not yet offered are on here, so their layout is checked while it
-     * waits (`src/lib/feature-flags.ts`). A dev server already listening was started without
-     * this, which is why `e2e/call-next.spec.ts` fails rather than skips when it is missing.
-     */
-    env: { VITE_FEATURE_NOTIFY_PLAYERS: "1" },
   },
 });

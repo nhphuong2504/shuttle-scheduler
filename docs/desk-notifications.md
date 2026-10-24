@@ -54,53 +54,36 @@ The board is now the whole Desk: a tile's state and readiness line say what a co
 the tile opens the match to start or score it. The tab reads "Control desk" while the Desk is
 open.
 
-## Call next (layout built, sending not yet)
+## Call next (in Tournova)
 
-A button on each court tile to notify the players of that court's next match, by SMS or email.
-The layout is built; sending is not, so it is held behind `VITE_FEATURE_NOTIFY_PLAYERS`
-(`src/lib/feature-flags.ts`): off in every build that does not set it, on in the browser suite.
-Logic in `src/lib/tournament/call-next.ts`, UI in `src/components/desk/call-next.tsx`.
+Call next on a court tile opens a preview for that court's next match. Opening sends
+nothing. Send writes a call and notifications atomically; players with a linked profile
+receive it in their account's Notifications inbox. There is no email, SMS or browser push.
+Call next is enabled by default. Apply its database migration before deploying the client.
 
-This reverses an older rule, that the Desk does not track who has been called: once sending
-exists, the tile shows when a match's players were last notified.
+The button is offered only to tournament editors. It is locked while disconnected or
+when the sides are unknown. Calling ahead while the court is busy, or a player is on
+another court, is allowed. Only a Ready court proposes “come now”; all others propose
+“be ready near the court”. A match that moves or starts closes its old preview.
 
-**The button** sits at the tile's bottom right, level with "Open next match" and beside the
-control that opens the match (two controls, never one inside the other). It is the tile's
-secondary action, so it is the quieter one: a bell and muted words, no border, fill or shadow
-until hovered, while "Open next match" keeps the interaction colour. An outlined chip there was
-the heaviest object on the tile, and the state pill is meant to be the loudest. The hit area is
-still 44px tall.
+The preview lists each player's whereabouts and either Tournova or No linked account.
+It counts reachable players; no recipients means Send is disabled. Messages are editable,
+with a 500-character limit. Missing accounts need a direct call by the moderator. Identity
+is never inferred from email or name. Approval remains the only profile-linking path.
 
-| Court | Button |
-| --- | --- |
-| Playing, Overrun, Ready, Waiting, with a match queued | Call next. Calling ahead on a busy court is allowed |
-| A player of that match on another court | Call next with an amber dot; the reason is in its name, and the dialog says it |
-| A side not known yet | Locked: nobody to notify |
-| Offline | Locked, like every other write |
-| Nothing queued, or a reader | No button |
-| Already notified (once sending exists) | "Notified 14:32", which reopens the dialog |
+While sending, Send and the message are locked. Errors stay in the preview. An uncertain
+response retains its request ID for a safe retry. Send again after success creates a new
+call, with a 30-second server cooldown per match. The server checks permission, live
+lifecycle, court, scheduled time, players and queue before committing. “Notified” records
+an inbox write, not delivery to a device or proof the player read it.
 
-**The dialog** opens on the button; opening it sends nothing, Send does.
-
-- Title "Notify the next match on Court N", then the context line in the match dialog's own
-  wording, comma-separated: "MD R2, scheduled 14:25, Court 2 still playing, 37′ on court", or
-  "MS R1, scheduled 14:30 (7 min ago), Court 4 free now".
-- An amber note for players on another court, one short line per court: "Do Tuyet is on Court
-  3.", or "A and B are on Court 2." They are reached anyway, mid-match.
-- One row per player: name, how they can be reached (SMS, email, or "No contact"), and where they
-  are now in the tile's words - Free, Resting until 14:41, On Court 5, On this court.
-- The proposed message, editable. Only a Ready court's asks the players to come now; a busy
-  court's, or a Waiting one's, asks them to be ready near the court, so a call never pulls them
-  onto a court whose match cannot start yet.
-- The dialog belongs to the match it was opened for. If that match starts or moves while it is
-  open, the court's next match changes and the dialog closes.
-- "Sends to 3 of 4 players", Cancel, Send - "Send again" once notified.
-
-**Until sending exists** the Desk has no contact details (`usePlayerReach` returns null) and no
-record of a send (`useCallNextRecords`). The dialog therefore leaves out the reach column, says
-"Sending is not connected yet." and keeps Send disabled; it never claims to have notified anyone.
-The reach and notified states are drawn in `call-next.test.tsx` from injected data. When the
-feature lands, reach comes from the server as booleans, never an address or a number.
+The inbox is available throughout the signed-in app, shows the latest 100 calls, has an
+unread count and per-item Mark as read. It links to the read-only court board without
+granting operating rights. Old calls whose match has changed or started carry a notice
+to check the board. Reads and acknowledgements are scoped to the recipient profile.
+Five-second polling while the app is active and focus/reconnect refresh catch up from
+stored records; the app must be open to display updates. Desk call history uses the
+same refresh policy so multiple moderators share the last call time.
 
 ## Day bar
 

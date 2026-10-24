@@ -1513,6 +1513,11 @@ export type Database = {
       }
     }
     Functions: {
+      desk_call_state: { Args: { p_tournament_id: string }; Returns: Json }
+      send_match_call: { Args: { p_request_id: string; p_tournament_id: string; p_kind: string; p_match_id: string; p_court_id: string; p_scheduled_time: string | null; p_player_ids: string[]; p_message: string }; Returns: Json }
+      my_match_notifications: { Args: Record<PropertyKey, never>; Returns: Json }
+      read_match_notification: { Args: { p_id: string }; Returns: undefined }
+
       add_tournament_day: {
         Args: {
           p_date: string
