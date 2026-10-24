@@ -108,7 +108,7 @@ describe("CallNextDialog", () => {
 });
 
 describe("CallNextButton", () => {
-  const base = { courtNumber: 4, notifiedAt: null, paused: false, onOpen: () => {} };
+  const base = { playersFree: false, courtNumber: 4, notifiedAt: null, paused: false, onOpen: () => {} };
 
   it("draws nothing when nothing is queued", () => {
     const { container } = render(<CallNextButton {...base} availability={{ kind: "none" }} />);
@@ -125,6 +125,17 @@ describe("CallNextButton", () => {
     render(<CallNextButton {...base} availability={{ kind: "warn", busyPlayerIds: ["c"] }} />);
     const button = screen.getByRole("button", { name: "Call next, Court 4, a player is on another court" });
     expect(button.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("shows a green cue when all players are free and the button is usable", () => {
+    const { container, rerender } = render(<CallNextButton {...base} playersFree availability={{ kind: "ready" }} />);
+    expect(container.querySelector("[data-call-ready]")).toBeTruthy();
+    expect(container.querySelector("[data-call-ready]")?.className).toContain("bg-success");
+    expect(screen.getByRole("button").getAttribute("aria-description")).toBe("All players are free; ready to call");
+    rerender(<CallNextButton {...base} availability={{ kind: "warn", busyPlayerIds: ["c"] }} />);
+    expect(container.querySelector("[data-call-ready]")).toBeNull();
+    rerender(<CallNextButton {...base} playersFree paused availability={{ kind: "ready" }} />);
+    expect(container.querySelector("[data-call-ready]")).toBeNull();
   });
 
   it("names when the players were notified", () => {

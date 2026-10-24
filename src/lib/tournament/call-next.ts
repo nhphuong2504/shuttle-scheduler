@@ -1,4 +1,4 @@
-import { playerOnCourt, type DeskMatchModel } from "@/lib/tournament/desk";
+import { playerOnCourt, playerStatus, type DeskMatchModel } from "@/lib/tournament/desk";
 
 /**
  * The Desk's "Call next": notify the players of a court's next match.
@@ -44,6 +44,18 @@ export function callNextAvailability<TMatch extends DeskMatchModel & { teams: (s
     return onCourt != null && onCourt.courtId !== next.courtId;
   });
   return busyPlayerIds.length ? { kind: "warn", busyPlayerIds } : { kind: "ready" };
+}
+
+/** The bell cue concerns player availability, even when the court is still occupied. */
+export function callNextPlayersFree<TMatch extends DeskMatchModel & { teams: (string | null)[] }>(
+  next: TMatch | null,
+  allMatches: readonly TMatch[],
+  restGapMinutes: number,
+  now: number,
+): boolean {
+  return next != null && next.teams[0] != null && next.teams[1] != null
+    && next.playerIds.length > 0
+    && next.playerIds.every(id => playerStatus(id, next, allMatches, restGapMinutes, now).kind === "free");
 }
 
 /** What the court the match is queued on is doing, as the dialog describes it. */

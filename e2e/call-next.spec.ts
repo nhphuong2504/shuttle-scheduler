@@ -31,6 +31,9 @@ test.describe("Call next", () => {
   test("is offered for a queued match and not for an idle court", async ({ page }) => {
     await openDesk(page);
     await expect(callButton(page, 3)).toBeEnabled();
+    await expect(callButton(page, 3).locator("[data-call-ready]")).toHaveCount(1);
+    await expect(callButton(page, 4).locator("[data-call-ready]")).toHaveCount(0);
+    await expect(callButton(page, 5).locator("[data-call-ready]")).toHaveCount(0);
     for (const idle of [6, 7, 8]) {
       await expect(callButton(page, idle), `idle Court ${idle} offered a call`).toHaveCount(0);
     }
@@ -38,6 +41,20 @@ test.describe("Call next", () => {
     await expect(
       page.getByRole("button", { name: "Court 3: free ready", exact: true }),
     ).toBeVisible();
+  });
+
+  test("shows the ready cue for a direct call even without linked recipients", async ({ page }) => {
+    await openDesk(page);
+    await page.route("**/rest/v1/rpc/desk_call_state", route => route.fulfill({
+      status: 200, contentType: "application/json", body: JSON.stringify({ players: [], records: [] }),
+    }));
+    await page.reload();
+    const button = callButton(page, 3);
+    await expect(button).toBeVisible();
+    await expect(button.locator("[data-call-ready]")).toHaveCount(1);
+    await button.click();
+    await expect(page.getByRole("dialog").getByText("Sends to 0 of 4 players")).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Send", exact: true })).toBeDisabled();
   });
 
   test("previews recipients before sending in Tournova", async ({ page }) => {

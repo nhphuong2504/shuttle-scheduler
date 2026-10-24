@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   callNextAvailability,
+  callNextPlayersFree,
   callNextContext,
   callNextMessage,
   reachableCount,
@@ -55,6 +56,33 @@ describe("call next: whether a court offers it", () => {
     const next = match({ id: "n" });
     const here = match({ id: "h", courtId: "c1", status: "in-progress", playerIds: ["a", "z"] });
     expect(callNextAvailability(next, [next, here])).toEqual({ kind: "ready" });
+  });
+});
+
+describe("call next: the all-free bell cue", () => {
+  it("requires a known match and all four doubles players to be free", () => {
+    expect(callNextPlayersFree(null, [], 10, BASE)).toBe(false);
+    const next = match({ id: "n", playerIds: ["a", "b", "c", "d"] });
+    expect(callNextPlayersFree(next, [next], 10, BASE)).toBe(true);
+    expect(callNextPlayersFree({ ...next, teams: ["t1", null] }, [next], 10, BASE)).toBe(false);
+    for (const courtId of ["c1", "c2"]) {
+      const busy = match({ id: "busy", courtId, status: "in-progress", playerIds: ["d", "z"] });
+      expect(callNextPlayersFree(next, [next, busy], 10, BASE)).toBe(false);
+    }
+  });
+
+  it("waits until the configured rest gap has completely elapsed", () => {
+    const next = match({ id: "n" });
+    const previous = match({ id: "p", status: "reported", endedAt: at(0), playerIds: ["b", "z"] });
+    expect(callNextPlayersFree(next, [next, previous], 10, BASE + 10 * 60_000 - 1)).toBe(false);
+    expect(callNextPlayersFree(next, [next, previous], 10, BASE + 10 * 60_000)).toBe(true);
+    expect(callNextPlayersFree(next, [next, previous], 30, BASE + 10 * 60_000)).toBe(false);
+  });
+
+  it("allows the cue while unrelated players are still occupying this court", () => {
+    const next = match({ id: "n" });
+    const busy = match({ id: "busy", status: "in-progress", playerIds: ["x", "y"] });
+    expect(callNextPlayersFree(next, [next, busy], 10, BASE)).toBe(true);
   });
 });
 

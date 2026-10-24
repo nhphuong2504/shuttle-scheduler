@@ -28,17 +28,19 @@ import { timeLabel } from "@/lib/tournament/format";
  * match", in the interaction colour): muted ink, no border, no fill, no shadow - it reads as a
  * labelled icon until hovered or focused. A filled or outlined chip here was the heaviest object
  * on the tile, and on an Operate screen the state pill is meant to be the loudest thing. The hit
- * area stays 44px tall. A player on another court adds an amber dot on the bell - allowed, but
- * worth a look - and the dialog says why.
+ * area stays 44px tall. The green dot means every player is free, including having
+ * completed their rest gap. It also supports calling players directly at the venue. Busy-player warnings remain in the name and dialog.
  */
 export function CallNextButton({
   availability,
+  playersFree,
   courtNumber,
   notifiedAt,
   paused,
   onOpen,
 }: {
   availability: CallNextAvailability;
+  playersFree: boolean;
   courtNumber: number | string;
   notifiedAt: number | null;
   paused: boolean;
@@ -47,6 +49,8 @@ export function CallNextButton({
 }) {
   if (availability.kind === "none") return null;
   const locked = availability.kind === "locked" || paused;
+  const readyToCall = playersFree && !locked;
+  const readyDescription = "All players are free; ready to call";
   const text = notifiedAt != null ? `Notified ${timeLabel(new Date(notifiedAt))}` : "Call next";
   const note =
     availability.kind === "locked"
@@ -65,15 +69,17 @@ export function CallNextButton({
       onClick={(event) => onOpen(event.currentTarget)}
       // The visible words lead the name, so a voice user can say what they see.
       aria-label={`${text}, Court ${courtNumber}${note ? `, ${note}` : ""}`}
-      title={note ? `${text}: ${note}` : undefined}
+      title={note ? `${text}: ${note}` : readyToCall ? readyDescription : undefined}
+      aria-description={readyToCall ? readyDescription : undefined}
       className="h-11 gap-1.5 px-3 text-sm font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
     >
       <span className="relative inline-flex">
         <Bell aria-hidden="true" className="size-4" />
-        {availability.kind === "warn" && !locked ? (
+        {readyToCall ? (
           <span
             aria-hidden="true"
-            className="absolute -right-1 -top-1 size-2 rounded-full bg-warn-foreground"
+            data-call-ready
+            className="pointer-events-none absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-success ring-[1.5px] ring-surface"
           />
         ) : null}
       </span>

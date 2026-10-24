@@ -62,8 +62,13 @@ receive it in their account's Notifications inbox. There is no email, SMS or bro
 Call next is enabled by default. Apply its database migration before deploying the client.
 
 The button is offered only to tournament editors. It is locked while disconnected or
-when the sides are unknown. Calling ahead while the court is busy, or a player is on
-another court, is allowed. Only a Ready court proposes “come now”; all others propose
+when the sides are unknown. A green dot on the bell means all players are free (nobody
+is on court, including this court, or still within their configured rest gap). It also
+supports calling players directly at the venue, so linked accounts and reach loading do
+not affect the cue. The cue is a static 6px success-green dot at the bell's upper-right corner,
+with a 1.5px surface ring to separate it from the icon. It stays hidden while the button is locked. It can appear while unrelated players occupy the court, since calling
+ahead is allowed. Busy-player warnings stay in the dialog and button description.
+Calling ahead while the court is busy, or a player is on another court, is allowed. Only a Ready court proposes “come now”; all others propose
 “be ready near the court”. A match that moves or starts closes its old preview.
 
 The preview lists each player's whereabouts and either Tournova or No linked account.

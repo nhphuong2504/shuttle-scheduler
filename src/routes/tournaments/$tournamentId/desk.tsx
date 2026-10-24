@@ -128,6 +128,7 @@ import {
 import { nextPausedSince } from "@/lib/tournament/desk-paused";
 import {
   callNextAvailability,
+  callNextPlayersFree,
   callNextContext,
   callNextMessage,
 } from "@/lib/tournament/call-next";
@@ -919,6 +920,7 @@ function Desk() {
                   <span className="absolute bottom-4 right-1 z-10">
                     <CallNextButton
                       availability={callNext}
+                      playersFree={callNextPlayersFree(state.next, dayMatches, state.next ? restMinutesFor(state.next) : 0, viewNow)}
                       courtNumber={court.number}
                       notifiedAt={notifiedAtFor(state.next.id)}
                       paused={paused || calls.sending}
