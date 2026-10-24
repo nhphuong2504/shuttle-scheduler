@@ -92,6 +92,23 @@ test("the app clock is pinned to the fixture reference", async ({ page }) => {
 /** The state vocabulary as the aria-label spells it: hyphens replaced by spaces. */
 const ariaState = (state: CourtState) => state.replace("-", " ");
 
+/**
+ * The desk's Refresh control, resolved to the copy that is actually on screen.
+ *
+ * The Desk renders its controls twice - once in the page header, once in the console bar -
+ * and lets a media query decide which is shown, so that moving them needs no measurement.
+ * The hidden copy is `display: none` and so out of the accessibility tree, which is why
+ * `getByRole` normally finds one. Under load it does not hold: the tree is read at one
+ * moment and the click acts at the next, and a resolution that landed on the copy the
+ * breakpoint was about to hide leaves the click waiting on a `display: none` button until
+ * it times out.
+ *
+ * `:visible` puts that decision back inside the retry - each attempt resolves the selector
+ * again and picks the copy that is on screen now - and `aria-busy` identifies the control
+ * without naming it, which matters because its label is the thing under test.
+ */
+const refreshButton = (page: Page) => page.locator("button[aria-busy]:visible");
+
 test("Refresh fetches new court data and shows progress", async ({ page }) => {
   await installAppMock(page, { preset: "states", role: "user" });
   await page.goto(routes.desk);
@@ -106,30 +123,36 @@ test("Refresh fetches new court data and shows progress", async ({ page }) => {
       body: JSON.stringify(courts.map((court) => court.number === 6 ? { ...court, number: 9 } : court)),
     });
   });
+  const refresh = refreshButton(page);
   try {
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Refreshing…", exact: true })).toBeDisabled();
+    await refresh.click();
+    // One control, three facts: it is busy, it is locked, and it says so. The label is
+    // asserted through the same locator rather than a second one, because a label-only
+    // locator is a second element to resolve in the middle of the re-render.
+    await expect(refresh).toBeDisabled();
+    await expect(refresh).toHaveAttribute("aria-busy", "true");
+    await expect(refresh).toHaveText("Refreshing…");
   } finally {
     release();
   }
   await expect(page.locator('[data-court-number="9"]')).toBeVisible();
   await expect(page.locator('[data-court-number="6"]')).toHaveCount(0);
   await expect(page.getByText("Desk updated.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+  await expect(refresh).toBeEnabled();
+  await expect(refresh).toHaveText("Refresh");
 });
 
 test("Refresh explains when the desk is offline", async ({ page, context }) => {
   await installAppMock(page, { preset: "states", role: "user" });
   await page.goto(routes.desk);
-  const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+  const refresh = refreshButton(page);
   await expect(refresh).toBeVisible();
   await expect(page.locator('[data-court-number="6"]')).toBeVisible();
   await context.setOffline(true);
   try {
     // Going offline re-renders the desk: the badge, the paused bar above the board and the
-    // Refresh button's own variant all change at once, so the button moves under the
-    // pointer. Clicking into that re-render is a race the test loses under load - wait for
-    // the pause to land, then click the button it left behind.
+    // Refresh button's own variant all change at once. Wait for the pause to land, then
+    // click the button it left behind.
     await expect(page.locator("[data-desk-paused]")).toBeVisible();
     await refresh.click();
     await expect(page.getByText("You are offline. Reconnect to refresh the desk.", { exact: true })).toBeVisible();
