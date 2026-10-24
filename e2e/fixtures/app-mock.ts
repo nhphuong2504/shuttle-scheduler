@@ -190,6 +190,17 @@ export interface AppMockOptions {
    * number that is only right if the break was taken off.
    */
   dayBreaks?: readonly MockDayBreak[];
+
+  /**
+   * What `tournament_completion_check` answers, when the counts *are* the point.
+   *
+   * The next-step card reads this to decide whether to offer Complete, and the Complete
+   * dialog reads it to decide what it may allow - so a spec about either names the counts
+   * it is about instead of trying to reach them by editing the board. Left out, the fixture's
+   * own match rows are counted the way the database counts them (voids and byes excluded from
+   * `total`), which is what a running tournament needs: it is not complete, so no card.
+   */
+  completion?: { on_court: number; unplayed: number; total: number };
 }
 
 /**
@@ -386,6 +397,40 @@ export function mockEscapes(page: Page): readonly string[] {
 }
 
 /**
+ * What is left to play, counted the way `tournament_completion_counts` counts it.
+ *
+ * Derived from the fixture's own match rows rather than written as a constant, because the
+ * board the spec is looking at is the thing the answer is about: a card offering "Complete
+ * tournament" over a court that is still live would be the mock disagreeing with itself, not
+ * a state the app can produce.
+ *
+ * Two details mirror the SQL exactly. The tables are the four that hold matches, so a stage
+ * the fixture does not populate simply contributes nothing. And a bye counts as `bye`, not as
+ * `scheduled`, even though `desk-mock.ts` stores it as a scheduled row with `is_bye` - the
+ * database writes the status, so a fixture that read only `status` would count every bye as a
+ * match still waiting to be played and no fixture would ever look finished.
+ */
+function completionCounts(tables: Record<string, unknown[]>): {
+  on_court: number;
+  unplayed: number;
+  total: number;
+} {
+  let onCourt = 0;
+  let unplayed = 0;
+  let total = 0;
+  for (const table of ["placement_matches", "tier_draw_matches", "pool_matches", "draw_matches"]) {
+    for (const row of tables[table] ?? []) {
+      const { status, is_bye: isBye } = row as { status?: unknown; is_bye?: unknown };
+      const word = isBye === true ? "bye" : status;
+      if (word === "in-progress") onCourt += 1;
+      if (word === "scheduled") unplayed += 1;
+      if (word !== "void" && word !== "bye") total += 1;
+    }
+  }
+  return { on_court: onCourt, unplayed, total };
+}
+
+/**
  * Installs the mock on a page. Safe to call more than once, and safe to call again to
  * switch preset: Playwright resolves routes last-registered-first, so a later call wins.
  */
@@ -404,6 +449,7 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
     startPolicy,
     dayBreaks,
     demo,
+    completion: completionOverride,
   } = options;
 
   if (!INSTALLED.has(page)) {
@@ -599,6 +645,19 @@ export async function installAppMock(page: Page, options: AppMockOptions = {}): 
      */
     if (target === "rpc/set_tournament_start_policy") {
       await rpc(null);
+      return;
+    }
+    /**
+     * What is left to play, for the next-step card and the Complete dialog.
+     *
+     * One answer for both, because they are one question: the card offers Complete on
+     * `on_court` and `unplayed` both being zero, and the dialog blocks on the first of
+     * those and warns on the second. A spec that wants the card offered says so with
+     * `completion` rather than editing the board into a finished state, which would change
+     * every other read on the page as well.
+     */
+    if (target === "rpc/tournament_completion_check") {
+      await rpc(completionOverride ?? completionCounts(fixture.tables));
       return;
     }
     /**

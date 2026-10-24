@@ -44,6 +44,16 @@ export interface NextStepInput {
   /** Placement matches that exist, and how many of them have a court and a time. */
   placementMatches: number;
   scheduledPlacementMatches: number;
+  /**
+   * Every match the tournament has, across all its stages, and what is left of them.
+   *
+   * `total` counts the ones that were ever going to be played - voids and byes are out -
+   * so `onCourt === 0 && unplayed === 0 && total > 0` means the last match has been
+   * finished. That, and not the calendar, is what says a tournament is over: one that
+   * finishes early is done, and one whose last day has gone with matches still unplayed
+   * is not.
+   */
+  matches: { total: number; onCourt: number; unplayed: number };
 }
 
 export interface NextStep {
@@ -63,10 +73,13 @@ export function organiserNextStep(input: NextStepInput): NextStep | null {
   if (input.status === "completed") return null;
 
   if (input.status === "in_progress") {
-    if (input.phase === "past_last_day") {
+    // The last match has been settled. Completion is offered on what has been played, not
+    // on what the clock says: a tournament can finish early, and its last day passing is
+    // no evidence that anything is left to close.
+    if (input.matches.total > 0 && input.matches.onCourt === 0 && input.matches.unplayed === 0) {
       return {
         stage: "complete",
-        title: "The last day is over",
+        title: "Every match has been played",
         detail: "Complete the tournament to close it and lock every result.",
         actionLabel: "Complete tournament",
         target: { kind: "complete" },
@@ -75,7 +88,8 @@ export function organiserNextStep(input: NextStepInput): NextStep | null {
     return {
       stage: "run",
       title: "The tournament is running",
-      detail: "Call and score matches from the Desk. Complete it once the last match is done.",
+      detail:
+        "Call and score matches from the Desk. Complete it once the last match is played.",
       actionLabel: "Open the Desk",
       target: "desk",
     };

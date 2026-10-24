@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { useCompleteTournament } from "@/components/tournament-setup/use-complete-tournament";
 import { Button } from "@/components/ui/button";
+import { fetchCompletionCheck } from "@/lib/tournament/actions";
 import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import {
   usePlacementEntrants,
@@ -30,6 +32,11 @@ const SECTION_PATHS = {
  * which is the moderator's surface and carries no tournament-wide guidance. It reads counts
  * that the workspace already fetches (the registration queue and the summary share the
  * shell's cache entries) and hands them to `organiserNextStep`, which owns the order.
+ *
+ * A running tournament is the one case the page cannot answer on its own: whether every
+ * match has been played is a count across four match tables, so it comes from
+ * `tournament_completion_check` - the same read the Complete dialog uses, which is what
+ * keeps "the card offers Complete" and "the dialog is ready to complete" the same fact.
  */
 export function NextStepCard() {
   const { tournamentId, tournament } = useTournamentContext();
@@ -39,9 +46,19 @@ export function NextStepCard() {
   const matches = usePlacementMatches().data;
   const complete = useCompleteTournament(tournamentId, tournament?.name ?? "");
 
+  const status = summary ? normalizeTournamentStatus(summary.status) : null;
+  const completion = useQuery({
+    queryKey: ["next-step-completion", tournamentId],
+    queryFn: () => fetchCompletionCheck(tournamentId as string),
+    enabled: !!tournamentId && status === "in_progress",
+  });
+
   const step = useMemo(() => {
     // Wait for every input: a guess made from half the counts would name the wrong step.
     if (!summary || !queue.data || !entrants || !matches) return null;
+    // The same for the completion counts, and only for a running tournament - every other
+    // rung is answered by rows the shell has already read.
+    if (status === "in_progress" && !completion.data) return null;
     const active = entrants.filter((entrant) => !entrant.excluded);
     return organiserNextStep({
       status: normalizeTournamentStatus(summary.status),
@@ -52,14 +69,19 @@ export function NextStepCard() {
       unseededEntrants: active.filter((entrant) => entrant.seed == null).length,
       placementMatches: matches.length,
       scheduledPlacementMatches: matches.filter((match) => match.scheduled_time).length,
+      matches: {
+        total: completion.data?.total ?? 0,
+        onCourt: completion.data?.onCourt ?? 0,
+        unplayed: completion.data?.unplayed ?? 0,
+      },
     });
-  }, [summary, queue.data, entrants, matches]);
+  }, [summary, queue.data, entrants, matches, status, completion.data]);
 
   if (!step || !tournamentId) return null;
   // A running tournament's next step is "keep running it", which the Desk already is; drawing
   // it above every organiser page for days is noise. It speaks again when there is a real act
-  // to take (Complete, once the last day has passed).
-  if (step.stage === "run" && summary && normalizeTournamentStatus(summary.status) === "in_progress") {
+  // to take (Complete, once every match is played).
+  if (step.stage === "run" && status === "in_progress") {
     return null;
   }
 

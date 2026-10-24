@@ -47,6 +47,14 @@ export interface AppMockOptions {
   /** The fixture tournament's `block_start_on_short_rest`. `false` (the column's default) by default. */
   startPolicy?: boolean;
   /**
+   * What `tournament_completion_check` answers, when the counts are the point.
+   *
+   * The next-step card reads this to decide whether to offer Complete, so a spec about that
+   * card names the counts it is about. Left out, the fixture's own match rows are counted the
+   * way the database counts them, which for a running tournament means "not complete".
+   */
+  completion?: { on_court: number; unplayed: number; total: number };
+  /**
    * Serve the fixture tournament as sample data (`tournaments.is_demo`).
    *
    * Both reads carry it, because both surfaces name the tournament: the summary card draws

@@ -890,9 +890,10 @@ test.describe("the registration queue", () => {
   test("keeps the organiser's next step off a running tournament and off the Desk", async ({
     page,
   }) => {
-    // The fixture tournament is running: its next step is "keep running it", which the Desk
-    // already is, so no card is drawn above the organiser pages. The other rungs are pinned
-    // in next-step.test.ts and, with an upcoming tournament, in public-surfaces.spec.ts.
+    // The fixture tournament is running with matches left, so its next step is "keep running
+    // it", which the Desk already is - no card above the organiser pages. The other rungs are
+    // pinned in next-step.test.ts, and the finished tournament's card has its own describe
+    // below, because that answer comes from `tournament_completion_check` rather than the rows.
     await page.goto(routes.registrations, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Awaiting a decision" })).toBeVisible();
@@ -970,6 +971,56 @@ test.describe("the registration queue", () => {
     await settleAnimations(page, "main");
 
     expect(violationIds(await scan(page))).toEqual([]);
+  });
+});
+
+/**
+ * The organiser's next step once the last match has been played.
+ *
+ * This is the one rung the page's own rows cannot answer: whether anything is left to play is
+ * a count across four match tables, so the card asks `tournament_completion_check`. The
+ * fixture's board is mid-play, so `completion` is what supplies the finished tournament -
+ * and the point is that the same board with only that answer changed flips the card on and
+ * off, which is the distinction it exists to make.
+ *
+ * The calendar is deliberately not part of it. The fixture's last day is today, so a rule
+ * keyed on "past the last day" could never fire here and this spec would pass without the
+ * card ever being drawn.
+ */
+test.describe("the organiser's next step once every match is played", () => {
+  test.use({
+    appMock: {
+      preset: "layout",
+      role: "admin",
+      completion: { on_court: 0, unplayed: 0, total: 13 },
+    },
+  });
+
+  test("offers Complete above the organiser pages, and opens the dialog from there", async ({
+    page,
+  }) => {
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    const card = page.getByTestId("next-step");
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("Every match has been played");
+    await expect(card).toContainText("Complete the tournament to close it and lock every result.");
+
+    // The button is not a link: completing is a decision taken in a dialog, so the card must
+    // not navigate away from the page the organiser is on.
+    await card.getByRole("button", { name: "Complete tournament" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Completing locks every result and closes the tournament.");
+    await expect(dialog).toContainText("All 13 matches are played.");
+    await expect(dialog.getByRole("button", { name: "Complete tournament" })).toBeEnabled();
+  });
+
+  test("still keeps it off the Desk", async ({ page }) => {
+    await page.goto(routes.desk, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("next-step")).toHaveCount(0);
   });
 });
 

@@ -124,6 +124,11 @@ For a caller who may edit, `WorkspaceShell` also draws the **Next step** card
 ([`next-step.ts`](../src/lib/tournament/next-step.ts)) above the organiser pages - Registrations,
 Entries, Placement, Schedule, Setup, Access - and never on the Desk, Scores, Knockout or the
 participant page. It names the one step the order of work says is next, and points; it moves nothing.
+Its last rung, **Complete tournament**, is answered by what has been played rather than by the
+calendar: `tournament_completion_check` reports every match across the stages as settled, and the
+card offers the act then. A tournament that finishes early is offered it early, and one whose last
+day has gone with matches still unplayed is not - it can still be completed from Setup, where the
+dialog says how many matches would stay unplayed.
 
 The workspace nav is split by the edit right, not by the session. A caller who may edit gets
 the operational six (`desk`, `entries`, `placement`, `knockout`, `schedule`, `scores`) plus the

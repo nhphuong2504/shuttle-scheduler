@@ -13,6 +13,7 @@ function input(over: Partial<NextStepInput> = {}): NextStepInput {
     unseededEntrants: 0,
     placementMatches: 12,
     scheduledPlacementMatches: 12,
+    matches: { total: 12, onCourt: 0, unplayed: 12 },
     ...over,
   };
 }
@@ -67,9 +68,54 @@ describe("organiserNextStep", () => {
     expect(step?.target).toBe("desk");
   });
 
-  it("offers Complete once the last day has passed", () => {
-    const step = organiserNextStep(input({ status: "in_progress", phase: "past_last_day" }));
+  it("offers Complete once every match has been played", () => {
+    const step = organiserNextStep(
+      input({
+        status: "in_progress",
+        phase: "live",
+        matches: { total: 12, onCourt: 0, unplayed: 0 },
+      }),
+    );
     expect(step?.stage).toBe("complete");
     expect(step?.target).toEqual({ kind: "complete" });
+  });
+
+  it("does not offer Complete while a match is still on court", () => {
+    expect(
+      stage({ status: "in_progress", matches: { total: 12, onCourt: 1, unplayed: 0 } }),
+    ).toBe("run");
+  });
+
+  it("does not offer Complete while a match is still unplayed", () => {
+    expect(
+      stage({ status: "in_progress", matches: { total: 12, onCourt: 0, unplayed: 1 } }),
+    ).toBe("run");
+  });
+
+  it("does not offer Complete for a tournament with nothing to play", () => {
+    // Every match was voided or a bye, so `total` is zero and there is no last match to
+    // point at. Completing is still possible from Setup; the card does not claim it.
+    expect(stage({ status: "in_progress", matches: { total: 0, onCourt: 0, unplayed: 0 } })).toBe(
+      "run",
+    );
+  });
+
+  it("offers Complete after the last match even when the calendar says otherwise", () => {
+    // The point of reading the matches rather than the clock: a tournament that finishes
+    // early is over, and one whose last day has passed with matches left is not.
+    expect(
+      stage({
+        status: "in_progress",
+        phase: "live",
+        matches: { total: 12, onCourt: 0, unplayed: 0 },
+      }),
+    ).toBe("complete");
+    expect(
+      stage({
+        status: "in_progress",
+        phase: "past_last_day",
+        matches: { total: 12, onCourt: 0, unplayed: 4 },
+      }),
+    ).toBe("run");
   });
 });
