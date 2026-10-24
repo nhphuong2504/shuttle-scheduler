@@ -1,46 +1,17 @@
 ﻿entrant_id,category,seed,seed_locked_at,tier,excluded,skill_level,team
-dda9db5c-7ecc-4f59-b5fe-be7ab9fb96bb,MS,1,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Do Nam
-b84c601d-726f-4782-8dbf-fa69050a4b53,MS,2,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Duong Thanh
-66afa334-96f0-48fd-ac4f-bd673fc1b031,MS,3,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Vu Duc
-585f0632-e28e-44ed-be79-7fba6c13a452,MS,4,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Do Huy
-b2166666-fab3-4ab5-8270-17fbf3e4eb0f,MS,5,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Mai Khoa
-bdcb7e54-3c7b-402d-8fc5-689015a6efd8,MS,6,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Cao Binh
-2fd5d35b-841c-4b50-be22-7088cfe44a04,MS,7,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Dang Manh
-f2165230-b81c-46be-b5e3-6c5148f3834e,MS,8,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Dinh Minh
-12c1e47e-ff18-4c7b-ba61-cd213d658354,MS,9,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Do Anh
-ef98294f-2500-457e-99b0-98845e379d31,MS,10,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Dang Nam
-d915bbef-e545-4b6d-bed3-aec72b700b51,MS,11,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Ho Thien
-cb3fd2e6-6ca8-476c-90c7-ed34afab3868,MS,12,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Ho Viet
-98db1355-f2c4-4a12-b67a-36fc03e5cd72,MS,13,2026-10-23T20:02:18.318214+00:00,,false,intermediate,Bui Minh
-e128af1e-d290-413e-97e9-63d264d79251,MD,1,2026-10-23T20:02:23.374249+00:00,D,false,intermediate,Do Anh / Duong Khang
-dc5630b5-2a6c-41ac-a0e3-066f1f1d8766,MD,2,2026-10-23T20:02:23.374249+00:00,A,false,intermediate,Cao Binh / Hoang Vinh
-a3953eab-16b6-44cd-bb0c-1cc126f675e3,MD,3,2026-10-23T20:02:23.374249+00:00,A,false,intermediate,Ho Viet / Huynh Anh
-d588eac3-eba7-4efc-9593-d90c7d971524,MD,4,2026-10-23T20:02:23.374249+00:00,B,false,intermediate,Dang Manh / Vo Bao
-a275a2ac-8f36-4c62-8b3b-b8b95e02ab1b,MD,5,2026-10-23T20:02:23.374249+00:00,A,false,intermediate,Do Huy / Duong Duy
-4d031e67-2607-4cf1-9625-d20217fe9ee3,MD,6,2026-10-23T20:02:23.374249+00:00,B,false,intermediate,Dang Nam / Do Nam
-d7409cf5-63d6-4292-a433-f7fc684eddbb,MD,7,2026-10-23T20:02:23.374249+00:00,D,false,intermediate,Bui Minh / Dinh Minh
-47fc93d4-039e-4376-b2cd-4300adfea49a,MD,8,2026-10-23T20:02:23.374249+00:00,C,false,intermediate,Duong Thanh / Cao Thien
-d2cb183b-44cf-4fdc-8c5d-ecc10732ed04,MD,9,2026-10-23T20:02:23.374249+00:00,D,false,intermediate,Mai Khoa / Duong Manh
-be9403e1-4ccd-4d07-a3ea-0b66ea621154,XD,1,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Cao Binh / Do Van
-0c49c20d-2720-4014-baca-9b7cc762a521,XD,2,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Hoang Vinh / Bui Yen
-d43c05f9-ee2e-4478-a2e2-e7f411a1363d,XD,3,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Do Anh / Ly Ngoc
-8ea41bcf-4c55-4a44-8d98-de11455ebbd5,XD,4,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Cao Thien / Ly Van
-0cecf064-c3ff-430e-bb2a-bb1b4ae3617d,XD,5,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Dang Manh / Huynh Trang
-23aa4e37-61cb-4d84-b9a7-331c004aae35,XD,6,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Do Hieu / Ngo Thu
-2e8362e4-3e99-4032-ac2d-fb2d5ca3475c,XD,7,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Ho Duc / Cao Huong
-b4a6985a-7466-4aec-b8c8-e0956f21b425,XD,8,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Bui Minh / Dinh Giang
-32655d09-ab94-4c21-a717-e22ca0909102,XD,9,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Duong Thanh / Le Nhung
-4190d6c7-052a-4214-9cea-8edb68f4212e,XD,10,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Vo Bao / Le Tram
-a24f24f5-13e9-444a-bd05-e19c30b63588,XD,11,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Duong Duy / Cao Thao
-a3bc203c-1e03-4a36-b1e9-0911e66675ce,XD,12,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Dang Nam / Truong Diep
-1998fc75-a40b-433f-af26-7104401539f0,XD,13,2026-10-23T20:02:26.726005+00:00,,false,intermediate,Do Huy / Bui Nguyet
-1a99be27-674c-4f1d-b65d-a834920ef0d6,WD,1,2026-10-23T20:02:24.609082+00:00,B,false,intermediate,Ly Ngoc / Duong Linh
-c8a2c338-2ea6-47df-9ceb-6c08f47a297b,WD,2,2026-10-23T20:02:24.609082+00:00,A,false,intermediate,Do Van / Ly Van
-a0305353-f31d-4843-938e-392ac963f2ce,WD,3,2026-10-23T20:02:24.609082+00:00,B,false,intermediate,Bui Nguyet / Le Tram
-afb7b823-7880-4bde-88c8-141c041b62f8,WD,4,2026-10-23T20:02:24.609082+00:00,A,false,intermediate,Dinh Giang / Cao Thao
-9d383733-55e6-47ff-9cf6-4221cf5a44f8,WD,5,2026-10-23T20:02:24.609082+00:00,D,false,intermediate,Huynh Trang / Le Xuan
-b470c896-1c58-4f04-8cd7-5d684728e99a,WD,6,2026-10-23T20:02:24.609082+00:00,C,false,intermediate,Le Nhung / Dinh Nhung
-5518263c-4563-407b-b308-dc151370ad05,WD,7,2026-10-23T20:02:24.609082+00:00,D,false,intermediate,Truong Diep / Bui Yen
+dda9db5c-7ecc-4f59-b5fe-be7ab9fb96bb,MS,1,2026-10-23T20:02:18.318214+00:00,A,false,intermediate,Do Nam
+b84c601d-726f-4782-8dbf-fa69050a4b53,MS,2,2026-10-23T20:02:18.318214+00:00,A,false,intermediate,Duong Thanh
+66afa334-96f0-48fd-ac4f-bd673fc1b031,MS,3,2026-10-23T20:02:18.318214+00:00,A,false,intermediate,Vu Duc
+585f0632-e28e-44ed-be79-7fba6c13a452,MS,4,2026-10-23T20:02:18.318214+00:00,B,false,intermediate,Do Huy
+b2166666-fab3-4ab5-8270-17fbf3e4eb0f,MS,5,2026-10-23T20:02:18.318214+00:00,D,false,intermediate,Mai Khoa
+bdcb7e54-3c7b-402d-8fc5-689015a6efd8,MS,6,2026-10-23T20:02:18.318214+00:00,B,false,intermediate,Cao Binh
+2fd5d35b-841c-4b50-be22-7088cfe44a04,MS,7,2026-10-23T20:02:18.318214+00:00,B,false,intermediate,Dang Manh
+f2165230-b81c-46be-b5e3-6c5148f3834e,MS,8,2026-10-23T20:02:18.318214+00:00,C,false,intermediate,Dinh Minh
+12c1e47e-ff18-4c7b-ba61-cd213d658354,MS,9,2026-10-23T20:02:18.318214+00:00,C,false,intermediate,Do Anh
+ef98294f-2500-457e-99b0-98845e379d31,MS,10,2026-10-23T20:02:18.318214+00:00,C,false,intermediate,Dang Nam
+d915bbef-e545-4b6d-bed3-aec72b700b51,MS,11,2026-10-23T20:02:18.318214+00:00,D,false,intermediate,Ho Thien
+cb3fd2e6-6ca8-476c-90c7-ed34afab3868,MS,12,2026-10-23T20:02:18.318214+00:00,B,false,intermediate,Ho Viet
+98db1355-f2c4-4a12-b67a-36fc03e5cd72,MS,13,2026-10-23T20:02:18.318214+00:00,D,false,intermediate,Bui Minh
 c848d0ab-a06f-4aee-af65-319322fca477,WS,1,2026-10-23T20:02:21.711439+00:00,A,false,intermediate,Truong Diep
 c9ff84bc-0748-4258-86d1-35b48b8e15d2,WS,2,2026-10-23T20:02:21.711439+00:00,A,false,intermediate,Do Van
 8d17c39b-0e21-4f74-a19b-e90098004b2e,WS,3,2026-10-23T20:02:21.711439+00:00,B,false,intermediate,Dinh Giang
@@ -50,3 +21,32 @@ c986bb46-d7b0-4d25-b362-76ca3eb66ff3,WS,5,2026-10-23T20:02:21.711439+00:00,A,fal
 da18907d-e5fb-4089-be11-254870a79942,WS,7,2026-10-23T20:02:21.711439+00:00,C,false,intermediate,Le Nhung
 2167d128-0df4-41ea-aff3-a91e2dcd0e91,WS,8,2026-10-23T20:02:21.711439+00:00,D,false,intermediate,Bui Nguyet
 cd617a94-523b-4e6f-842b-38640b2f8bdb,WS,9,2026-10-23T20:02:21.711439+00:00,D,false,intermediate,Huynh Trang
+e128af1e-d290-413e-97e9-63d264d79251,MD,1,2026-10-23T20:02:23.374249+00:00,D,false,intermediate,Do Anh / Duong Khang
+dc5630b5-2a6c-41ac-a0e3-066f1f1d8766,MD,2,2026-10-23T20:02:23.374249+00:00,A,false,intermediate,Cao Binh / Hoang Vinh
+a3953eab-16b6-44cd-bb0c-1cc126f675e3,MD,3,2026-10-23T20:02:23.374249+00:00,A,false,intermediate,Ho Viet / Huynh Anh
+d588eac3-eba7-4efc-9593-d90c7d971524,MD,4,2026-10-23T20:02:23.374249+00:00,B,false,intermediate,Dang Manh / Vo Bao
+a275a2ac-8f36-4c62-8b3b-b8b95e02ab1b,MD,5,2026-10-23T20:02:23.374249+00:00,A,false,intermediate,Do Huy / Duong Duy
+4d031e67-2607-4cf1-9625-d20217fe9ee3,MD,6,2026-10-23T20:02:23.374249+00:00,B,false,intermediate,Dang Nam / Do Nam
+d7409cf5-63d6-4292-a433-f7fc684eddbb,MD,7,2026-10-23T20:02:23.374249+00:00,D,false,intermediate,Bui Minh / Dinh Minh
+47fc93d4-039e-4376-b2cd-4300adfea49a,MD,8,2026-10-23T20:02:23.374249+00:00,C,false,intermediate,Duong Thanh / Cao Thien
+d2cb183b-44cf-4fdc-8c5d-ecc10732ed04,MD,9,2026-10-23T20:02:23.374249+00:00,D,false,intermediate,Mai Khoa / Duong Manh
+1a99be27-674c-4f1d-b65d-a834920ef0d6,WD,1,2026-10-23T20:02:24.609082+00:00,B,false,intermediate,Ly Ngoc / Duong Linh
+c8a2c338-2ea6-47df-9ceb-6c08f47a297b,WD,2,2026-10-23T20:02:24.609082+00:00,A,false,intermediate,Do Van / Ly Van
+a0305353-f31d-4843-938e-392ac963f2ce,WD,3,2026-10-23T20:02:24.609082+00:00,B,false,intermediate,Bui Nguyet / Le Tram
+afb7b823-7880-4bde-88c8-141c041b62f8,WD,4,2026-10-23T20:02:24.609082+00:00,A,false,intermediate,Dinh Giang / Cao Thao
+9d383733-55e6-47ff-9cf6-4221cf5a44f8,WD,5,2026-10-23T20:02:24.609082+00:00,D,false,intermediate,Huynh Trang / Le Xuan
+b470c896-1c58-4f04-8cd7-5d684728e99a,WD,6,2026-10-23T20:02:24.609082+00:00,C,false,intermediate,Le Nhung / Dinh Nhung
+5518263c-4563-407b-b308-dc151370ad05,WD,7,2026-10-23T20:02:24.609082+00:00,D,false,intermediate,Truong Diep / Bui Yen
+be9403e1-4ccd-4d07-a3ea-0b66ea621154,XD,1,2026-10-23T20:02:26.726005+00:00,A,false,intermediate,Cao Binh / Do Van
+0c49c20d-2720-4014-baca-9b7cc762a521,XD,2,2026-10-23T20:02:26.726005+00:00,A,false,intermediate,Hoang Vinh / Bui Yen
+d43c05f9-ee2e-4478-a2e2-e7f411a1363d,XD,3,2026-10-23T20:02:26.726005+00:00,A,false,intermediate,Do Anh / Ly Ngoc
+8ea41bcf-4c55-4a44-8d98-de11455ebbd5,XD,4,2026-10-23T20:02:26.726005+00:00,C,false,intermediate,Cao Thien / Ly Van
+0cecf064-c3ff-430e-bb2a-bb1b4ae3617d,XD,5,2026-10-23T20:02:26.726005+00:00,B,false,intermediate,Dang Manh / Huynh Trang
+23aa4e37-61cb-4d84-b9a7-331c004aae35,XD,6,2026-10-23T20:02:26.726005+00:00,C,false,intermediate,Do Hieu / Ngo Thu
+2e8362e4-3e99-4032-ac2d-fb2d5ca3475c,XD,7,2026-10-23T20:02:26.726005+00:00,A,false,intermediate,Ho Duc / Cao Huong
+b4a6985a-7466-4aec-b8c8-e0956f21b425,XD,8,2026-10-23T20:02:26.726005+00:00,D,false,intermediate,Bui Minh / Dinh Giang
+32655d09-ab94-4c21-a717-e22ca0909102,XD,9,2026-10-23T20:02:26.726005+00:00,D,false,intermediate,Duong Thanh / Le Nhung
+4190d6c7-052a-4214-9cea-8edb68f4212e,XD,10,2026-10-23T20:02:26.726005+00:00,D,false,intermediate,Vo Bao / Le Tram
+a24f24f5-13e9-444a-bd05-e19c30b63588,XD,11,2026-10-23T20:02:26.726005+00:00,B,false,intermediate,Duong Duy / Cao Thao
+a3bc203c-1e03-4a36-b1e9-0911e66675ce,XD,12,2026-10-23T20:02:26.726005+00:00,D,false,intermediate,Dang Nam / Truong Diep
+1998fc75-a40b-433f-af26-7104401539f0,XD,13,2026-10-23T20:02:26.726005+00:00,B,false,intermediate,Do Huy / Bui Nguyet

@@ -1,9 +1,14 @@
 {
-  "exportedAt": "2026-10-23 22:06:36.010773+00",
+  "exportedAt": "2026-10-24T21:58:18.009Z",
   "source": {
     "project": "dzilzdxzdrrbdimhbiwv",
     "tournamentId": "93034e9a-aab3-4fc1-80c5-36e5b7209c09",
-    "name": "Viet Nam Open 2026"
+    "name": "Viet Nam Open 2026",
+    "venueTimezone": "America/Chicago",
+    "status": "in_progress",
+    "startsOn": "2026-10-23",
+    "endsOn": "2026-10-24",
+    "statusNote": "Every match is decided; the stored tournament status is still in_progress because completing the tournament is an operator action."
   },
   "settings": {
     "venueTimezone": "America/Chicago",
@@ -12,164 +17,832 @@
     "knockoutSlotMinutes": 20,
     "knockoutRestGapMinutes": 10,
     "courts": 8,
-    "maxCategoriesPerPlayer": 3
+    "maxCategoriesPerPlayer": 3,
+    "placement": {
+      "gamesTo": 21,
+      "winBy": 2,
+      "bestOf": 1
+    },
+    "knockout": {
+      "gamesTo": 21,
+      "winBy": 2,
+      "bestOf": 3
+    }
   },
   "counts": {
-    "matches": 51,
-    "reported": 46,
-    "scheduled": 5,
-    "inProgress": 0,
+    "placementMatches": 51,
+    "placementReported": 51,
+    "drawMatches": 39,
+    "drawPlayed": 31,
+    "drawByes": 8,
+    "matchesPlayed": 82,
+    "draws": 20,
+    "championsCrowned": 20,
     "entrants": 51,
     "teams": 51,
     "players": 40,
-    "activityRows": 352,
-    "activityAttached": 320,
-    "activityOrphaned": 32
+    "activityRows": 598,
+    "activityAttached": 575,
+    "activityOrphaned": 23,
+    "resultCorrections": 0,
+    "nightsCrossed": 0
   },
   "perCategory": [
     {
       "category": "MS",
       "entryType": "individual",
       "entrants": 13,
-      "matches": 13,
-      "reported": 10,
-      "round1": 6,
-      "round2": 7,
-      "makeups": 2,
-      "crossovers": 1
+      "placement": {
+        "matches": 13,
+        "reported": 13,
+        "round1": 6,
+        "round2": 7,
+        "makeups": 2,
+        "crossovers": 1
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 12,
+        "played": 9,
+        "byes": 3,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Do Nam",
+            "final": {
+              "sideA": "Do Nam",
+              "sideB": "Duong Thanh",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 4,
+            "entrants": 4,
+            "matches": 3,
+            "played": 3,
+            "byes": 0,
+            "champion": "Do Huy",
+            "final": {
+              "sideA": "Do Huy",
+              "sideB": "Cao Binh",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Dinh Minh",
+            "final": {
+              "sideA": "Dinh Minh",
+              "sideB": "Dang Nam",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 23,
+                  "b": 21
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "D",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Mai Khoa",
+            "final": {
+              "sideA": "Mai Khoa",
+              "sideB": "Ho Thien",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
     },
     {
       "category": "WS",
       "entryType": "individual",
       "entrants": 9,
-      "matches": 9,
-      "reported": 9,
-      "round1": 4,
-      "round2": 5,
-      "makeups": 2,
-      "crossovers": 1
+      "placement": {
+        "matches": 9,
+        "reported": 9,
+        "round1": 4,
+        "round2": 5,
+        "makeups": 2,
+        "crossovers": 1
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 7,
+        "played": 5,
+        "byes": 2,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Truong Diep",
+            "final": {
+              "sideA": "Truong Diep",
+              "sideB": "Do Van",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 2,
+            "entrants": 2,
+            "matches": 1,
+            "played": 1,
+            "byes": 0,
+            "champion": "Dinh Giang",
+            "final": {
+              "sideA": "Dinh Giang",
+              "sideB": "Ho Thuy",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 1,
+            "entrants": 1,
+            "matches": 0,
+            "played": 0,
+            "byes": 0,
+            "champion": "Le Nhung",
+            "final": null,
+            "decidedWithoutAMatch": true
+          },
+          {
+            "tier": "D",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Dang Diep",
+            "final": {
+              "sideA": "Dang Diep",
+              "sideB": "Bui Nguyet",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 2,
+                  "b": 21
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
     },
     {
       "category": "MD",
       "entryType": "pair",
       "entrants": 9,
-      "matches": 9,
-      "reported": 9,
-      "round1": 4,
-      "round2": 5,
-      "makeups": 2,
-      "crossovers": 1
+      "placement": {
+        "matches": 9,
+        "reported": 9,
+        "round1": 4,
+        "round2": 5,
+        "makeups": 2,
+        "crossovers": 1
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 7,
+        "played": 5,
+        "byes": 2,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Do Huy / Duong Duy",
+            "final": {
+              "sideA": "Cao Binh / Hoang Vinh",
+              "sideB": "Do Huy / Duong Duy",
+              "winnerSide": "B",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 4,
+                  "b": 21
+                },
+                {
+                  "a": 2,
+                  "b": 21
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 2,
+            "entrants": 2,
+            "matches": 1,
+            "played": 1,
+            "byes": 0,
+            "champion": "Dang Manh / Vo Bao",
+            "final": {
+              "sideA": "Dang Manh / Vo Bao",
+              "sideB": "Dang Nam / Do Nam",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 11
+                },
+                {
+                  "a": 21,
+                  "b": 1
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 1,
+            "entrants": 1,
+            "matches": 0,
+            "played": 0,
+            "byes": 0,
+            "champion": "Duong Thanh / Cao Thien",
+            "final": null,
+            "decidedWithoutAMatch": true
+          },
+          {
+            "tier": "D",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Do Anh / Duong Khang",
+            "final": {
+              "sideA": "Do Anh / Duong Khang",
+              "sideB": "Bui Minh / Dinh Minh",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 21,
+                  "b": 3
+                },
+                {
+                  "a": 21,
+                  "b": 5
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
     },
     {
       "category": "WD",
       "entryType": "pair",
       "entrants": 7,
-      "matches": 7,
-      "reported": 7,
-      "round1": 3,
-      "round2": 4,
-      "makeups": 2,
-      "crossovers": 0
+      "placement": {
+        "matches": 7,
+        "reported": 7,
+        "round1": 3,
+        "round2": 4,
+        "makeups": 2,
+        "crossovers": 0
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 3,
+        "played": 3,
+        "byes": 0,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 2,
+            "entrants": 2,
+            "matches": 1,
+            "played": 1,
+            "byes": 0,
+            "champion": "Do Van / Ly Van",
+            "final": {
+              "sideA": "Do Van / Ly Van",
+              "sideB": "Dinh Giang / Cao Thao",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 2,
+            "entrants": 2,
+            "matches": 1,
+            "played": 1,
+            "byes": 0,
+            "champion": "Ly Ngoc / Duong Linh",
+            "final": {
+              "sideA": "Ly Ngoc / Duong Linh",
+              "sideB": "Bui Nguyet / Le Tram",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 22,
+                  "b": 20
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 1,
+            "entrants": 1,
+            "matches": 0,
+            "played": 0,
+            "byes": 0,
+            "champion": "Le Nhung / Dinh Nhung",
+            "final": null,
+            "decidedWithoutAMatch": true
+          },
+          {
+            "tier": "D",
+            "bracketSize": 2,
+            "entrants": 2,
+            "matches": 1,
+            "played": 1,
+            "byes": 0,
+            "champion": "Huynh Trang / Le Xuan",
+            "final": {
+              "sideA": "Huynh Trang / Le Xuan",
+              "sideB": "Truong Diep / Bui Yen",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 14,
+                  "b": 21
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
     },
     {
       "category": "XD",
       "entryType": "pair",
       "entrants": 13,
-      "matches": 13,
-      "reported": 11,
-      "round1": 6,
-      "round2": 7,
-      "makeups": 2,
-      "crossovers": 1
+      "placement": {
+        "matches": 13,
+        "reported": 13,
+        "round1": 6,
+        "round2": 7,
+        "makeups": 2,
+        "crossovers": 1
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 10,
+        "played": 9,
+        "byes": 1,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 4,
+            "entrants": 4,
+            "matches": 3,
+            "played": 3,
+            "byes": 0,
+            "champion": "Cao Binh / Do Van",
+            "final": {
+              "sideA": "Cao Binh / Do Van",
+              "sideB": "Hoang Vinh / Bui Yen",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 4
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 4,
+            "entrants": 3,
+            "matches": 3,
+            "played": 2,
+            "byes": 1,
+            "champion": "Dang Manh / Huynh Trang",
+            "final": {
+              "sideA": "Dang Manh / Huynh Trang",
+              "sideB": "Duong Duy / Cao Thao",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 15
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 2,
+            "entrants": 2,
+            "matches": 1,
+            "played": 1,
+            "byes": 0,
+            "champion": "Cao Thien / Ly Van",
+            "final": {
+              "sideA": "Cao Thien / Ly Van",
+              "sideB": "Do Hieu / Ngo Thu",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 4
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "D",
+            "bracketSize": 4,
+            "entrants": 4,
+            "matches": 3,
+            "played": 3,
+            "byes": 0,
+            "champion": "Dang Nam / Truong Diep",
+            "final": {
+              "sideA": "Dang Nam / Truong Diep",
+              "sideB": "Duong Thanh / Le Nhung",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
     }
   ],
-  "day1": {
-    "date": "2026-10-23",
-    "windowLocal": "15:04:00–17:00:00",
-    "matchesStarted": 46,
-    "firstStartLocal": "2026-10-23 15:04:52",
-    "lastStartLocal": "2026-10-23 16:53:05",
-    "lastEndLocal": "2026-10-23 16:59:06",
-    "onCourtMinutes": 545,
-    "courtCapacityMinutes": 928,
-    "utilization": 0.588,
-    "overranSlot": 41,
-    "maxOverrunMin": 6.8
+  "stages": {
+    "placement": {
+      "slotMinutes": 10,
+      "duration": {
+        "n": 51,
+        "meanMin": 11.8,
+        "medianMin": 11.7,
+        "minMin": 6,
+        "maxMin": 16.8
+      },
+      "overrun": {
+        "matches": 46,
+        "share": 0.902,
+        "meanMin": 2.3,
+        "meanAllMin": 1.8,
+        "maxMin": 6.8
+      },
+      "startDelay": {
+        "n": 51,
+        "meanMin": 0.9,
+        "medianMin": 0.5,
+        "minMin": -3.7,
+        "maxMin": 9.6
+      },
+      "drift": {
+        "n": 51,
+        "meanMin": 47.9,
+        "medianMin": 2.9,
+        "minMin": 0,
+        "maxMin": 1146,
+        "moved": 42,
+        "movedMeanMin": 58.1,
+        "intraDay": {
+          "n": 49,
+          "meanMin": 3.2,
+          "medianMin": 2.9,
+          "minMin": 0,
+          "maxMin": 8.5,
+          "moved": 40,
+          "movedMeanMin": 3.9
+        }
+      }
+    },
+    "knockout": {
+      "slotMinutes": 20,
+      "duration": {
+        "n": 31,
+        "meanMin": 24.2,
+        "medianMin": 21.6,
+        "minMin": 8.2,
+        "maxMin": 47.5
+      },
+      "overrun": {
+        "matches": 27,
+        "share": 0.871,
+        "meanMin": 5.5,
+        "meanAllMin": 4.2,
+        "maxMin": 27.5
+      },
+      "startDelay": {
+        "n": 29,
+        "meanMin": 2.7,
+        "medianMin": 0.6,
+        "minMin": -10.6,
+        "maxMin": 14.6
+      },
+      "drift": {
+        "n": 29,
+        "meanMin": 23.6,
+        "medianMin": 11.4,
+        "minMin": 0,
+        "maxMin": 180.2,
+        "moved": 26,
+        "movedMeanMin": 26.4,
+        "intraDay": {
+          "n": 29,
+          "meanMin": 23.6,
+          "medianMin": 11.4,
+          "minMin": 0,
+          "maxMin": 180.2,
+          "moved": 26,
+          "movedMeanMin": 26.4
+        }
+      }
+    }
   },
-  "duration": {
-    "matches": 46,
-    "meanMin": 11.9,
-    "minMin": 6,
-    "maxMin": 16.8,
-    "overSlot": 41
-  },
-  "drift": {
-    "movedMatches": 38,
-    "maxMin": 8.5,
-    "meanMin": 4
-  },
-  "spill": [
+  "days": [
     {
-      "match": "MS round2 r2-1",
-      "court": 3,
-      "firstPublishedLocal": "2026-10-24 12:01:00",
-      "nowScheduledLocal": "2026-10-24 12:01:00",
-      "movedMin": 0
+      "date": "2026-10-23",
+      "windowLocal": "15:04–17:00",
+      "courts": 8,
+      "matchesStarted": 46,
+      "byStage": {
+        "placement": 46,
+        "knockout": 0
+      },
+      "firstStartLocal": "15:04:52",
+      "lastStartLocal": "16:53:05",
+      "lastEndLocal": "16:59:06",
+      "courtMinutes": 545.4,
+      "courtCapacityMinutes": 928,
+      "utilization": 0.5877,
+      "activeMinutes": 114.2,
+      "activeUtilization": 0.5968
     },
     {
-      "match": "MS round2 r2-4",
-      "court": 1,
-      "firstPublishedLocal": "2026-10-24 12:16:00",
-      "nowScheduledLocal": "2026-10-24 12:16:00",
-      "movedMin": 0
-    },
-    {
-      "match": "MS round2 r2-makeup-2",
-      "court": 2,
-      "firstPublishedLocal": "2026-10-24 12:11:00",
-      "nowScheduledLocal": "2026-10-24 12:11:00",
-      "movedMin": 0
-    },
+      "date": "2026-10-24",
+      "windowLocal": "12:01–18:30",
+      "courts": 8,
+      "matchesStarted": 36,
+      "byStage": {
+        "placement": 5,
+        "knockout": 31
+      },
+      "firstStartLocal": "12:01:07",
+      "lastStartLocal": "16:28:20",
+      "lastEndLocal": "16:44:07",
+      "courtMinutes": 808.3,
+      "courtCapacityMinutes": 3112,
+      "utilization": 0.2597,
+      "activeMinutes": 283,
+      "activeUtilization": 0.357
+    }
+  ],
+  "total": {
+    "matchesPlayed": 82,
+    "courtMinutes": 1353.7,
+    "courtCapacityMinutes": 4040,
+    "utilization": 0.3351
+  },
+  "driftNote": "Placement drift excludes the two matches carried across the day boundary; their 19-hour figure is a planning decision, not intra-day reflow. Knockout drift includes time spent waiting for feeder results, because a bracket match is published before both sides are known.",
+  "carried": [
     {
       "match": "XD round2 r2-5",
-      "court": 2,
       "firstPublishedLocal": "2026-10-23 16:55:00",
-      "nowScheduledLocal": "2026-10-24 12:01:00",
-      "movedMin": 1146
+      "playedLocal": "2026-10-24 12:01:10",
+      "driftMin": 1146
     },
     {
       "match": "XD round2 r2-makeup-2",
-      "court": 1,
       "firstPublishedLocal": "2026-10-23 17:01:00",
-      "nowScheduledLocal": "2026-10-24 12:01:00",
-      "movedMin": 1140
+      "playedLocal": "2026-10-24 12:01:07",
+      "driftMin": 1140
     }
   ],
-  "remaining": [
-    {
-      "match": "MS round2 r2-1",
-      "court": 3,
-      "scheduled": "2026-10-24T17:01:00+00:00"
+  "restGaps": {
+    "sameDayPlayerTurnarounds": 177,
+    "minMin": 4.6,
+    "medianMin": 17,
+    "underFiveMinutes": 1,
+    "underTenMinutes": 52,
+    "tightest": [
+      {
+        "player": "Bui Nguyet",
+        "gapMin": 4.6,
+        "from": "XD round1 r1-6",
+        "to": "WD round2 r2-makeup-1"
+      },
+      {
+        "player": "Do Van",
+        "gapMin": 5.1,
+        "from": "XD round1 r1-1",
+        "to": "WD round2 r2-1"
+      },
+      {
+        "player": "Duong Thanh",
+        "gapMin": 5.2,
+        "from": "MD round2 r2-2",
+        "to": "MS round2 r2-2"
+      },
+      {
+        "player": "Do Anh",
+        "gapMin": 5.2,
+        "from": "MD round2 r2-3",
+        "to": "MS round2 r2-3"
+      },
+      {
+        "player": "Ho Viet",
+        "gapMin": 5.2,
+        "from": "MD round2 r2-3",
+        "to": "MS round2 r2-2"
+      }
+    ],
+    "note": "Consecutive matches for the same player on the same day, measured from the previous ended_at to the next started_at. The applicable gap depends on the later match's stage: 5 minutes placement, 10 minutes knockout. The desk may start a match early."
+  },
+  "activity": {
+    "byAction": {
+      "court-moved": 125,
+      "started": 82,
+      "time-shifted": 309,
+      "reported": 82
     },
-    {
-      "match": "MS round2 r2-4",
-      "court": 1,
-      "scheduled": "2026-10-24T17:16:00+00:00"
+    "byTable": {
+      "placement_matches": 359,
+      "tier_draw_matches": 239
     },
-    {
-      "match": "MS round2 r2-makeup-2",
-      "court": 2,
-      "scheduled": "2026-10-24T17:11:00+00:00"
-    },
-    {
-      "match": "XD round2 r2-5",
-      "court": 2,
-      "scheduled": "2026-10-24T17:01:00+00:00"
-    },
-    {
-      "match": "XD round2 r2-makeup-2",
-      "court": 1,
-      "scheduled": "2026-10-24T17:01:00+00:00"
+    "byDate": {
+      "2026-10-23": 352,
+      "2026-10-24": 246
     }
+  },
+  "byes": [
+    "MS draw A r1 s1",
+    "MS draw C r1 s1",
+    "MS draw D r1 s1",
+    "WS draw A r1 s1",
+    "WS draw D r1 s1",
+    "MD draw A r1 s1",
+    "MD draw D r1 s1",
+    "XD draw B r1 s1"
+  ],
+  "remaining": [],
+  "notes": [
+    "Two knockout matches (MS draw A, round 1; XD draw C, round 1) were started without a published scheduled_time: the draw was built moments earlier and the desk started the match immediately. Their time-derived columns are blank, not zero.",
+    "One time-shifted row moved a match earlier: XD r2-makeup-2 was published on day 2 at 12:01, pulled back to 17:01 on day 1 at 16:36, and returned to day 2 at 16:47. That is the only negative shift in the trail.",
+    "Twenty-three activity rows at 15:03:07 belong to an abandoned build whose matches were deleted; they are attached = false. The nine 16:23-16:47 rows that the day-1 snapshot read as orphaned are tier-draw placements and are attached here; that snapshot's attached flag only checked the placement table."
   ]
 }
