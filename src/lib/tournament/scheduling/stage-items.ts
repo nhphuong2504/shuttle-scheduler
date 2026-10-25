@@ -179,14 +179,18 @@ export function placementItems(input: {
   return matches
     .filter((match) => match.status !== "void")
     .map((match) => {
-      // Fixed round-one feeders have already finished before a round-two row exists.
-      // Represent them as a time floor: a prior day's fixed anchors may not be in
-      // today's solver problem, but their result/rest still binds this match.
+      // A decided prerequisite becomes a time floor rather than a dependency: a prior day's
+      // decided rows are not in today's solver problem, and a dependency on a match the
+      // problem does not contain fails the whole plan (`unknown-dependency`). That is how
+      // the held entrant's second make-up match, carried to day two while its round-two
+      // prerequisites were played on day one, stopped every automatic pass on Viet Nam Open
+      // 2026's second morning. A round-one feeder also carries the rest gap, because its
+      // round-two child shares a player with it; a make-up prerequisite is an ordering rule
+      // only, and a shared player's rest is still applied by the decided row's own anchor
+      // whenever it is on the same day.
       const decidedSources = match.prerequisite_ids.flatMap((id) => {
         const source = byId.get(id);
-        return source?.stage === "round1" &&
-          source.winner_id &&
-          (source.status === "reported" || source.status === "walkover")
+        return source?.winner_id && (source.status === "reported" || source.status === "walkover")
           ? [source]
           : [];
       });
@@ -200,7 +204,8 @@ export function placementItems(input: {
           slotMinutes,
           now,
         });
-        return range ? Math.max(floor, range.end + input.restGap * MINUTE) : floor;
+        const rest = source.stage === "round1" ? input.restGap * MINUTE : 0;
+        return range ? Math.max(floor, range.end + rest) : floor;
       }, 0);
       const { playerIds, playersKnown } = playerLookup([match.entrant_a_id, match.entrant_b_id]);
       const fixed = isFixed(match.status);

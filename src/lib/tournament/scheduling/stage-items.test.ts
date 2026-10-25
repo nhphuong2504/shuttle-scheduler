@@ -109,6 +109,37 @@ describe("placementItems stage identity", () => {
       eligibleFrom: Date.parse("2026-09-18T00:10:00Z"),
     });
   });
+
+  it("turns a decided round-two prerequisite into a floor at its end, not a dependency", () => {
+    // The second make-up match waits on other round-two matches. Played on an earlier day, they
+    // are not in the day's problem, and naming one as a dependency failed the whole plan
+    // (`unknown-dependency`) - Viet Nam Open 2026, day two, 12:12 to 12:19. The wait is an
+    // ordering rule, so the floor is the end itself: no rest is owed to a match the entrant
+    // may not have played in.
+    const firstMakeup = {
+      ...placementMatch("makeup-1", "round2"),
+      status: "reported",
+      winner_id: "makeup-1-a",
+      ended_at: "2026-09-17T21:43:00Z",
+    };
+    const secondMakeup = {
+      ...placementMatch("makeup-2", "round2"),
+      prerequisite_ids: ["makeup-1"],
+    };
+    const items = placementItems({
+      matches: [firstMakeup, secondMakeup],
+      playerLookup,
+      courtNumberById: EMPTY_COURTS,
+      categoryOrder: EMPTY_ORDER,
+      slotMinutes: 10,
+      restGap: 5,
+      now: NOW,
+    });
+    expect(items.find((i) => i.id === "makeup-2")).toMatchObject({
+      dependencies: [],
+      eligibleFrom: Date.parse("2026-09-17T21:43:00Z"),
+    });
+  });
   it("keys a match by its category and its own round", () => {
     const items = placementItems({
       matches: [placementMatch("m1", "round1"), placementMatch("m2", "round2")],

@@ -458,8 +458,18 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
    * colliding one). They are taken out of the problem entirely: never moved, never planned.
    */
   const dropIds = new Set<string>();
-  const release = (item: StageItem): void => {
-    if (placeReady) dropIds.add(item.id);
+  /**
+   * The court windows of rows dropped for colliding, which `place_ready_matches` still counts as
+   * occupied (`placement_occupied_matches` reads every scheduled row). Without them the planner saw
+   * the court free and the server answered `court_busy` to every retry of the same plan: on Viet Nam
+   * Open 2026's second day an overdue match blocked by a busy player left court 2 looking empty, and
+   * the knockout match planned onto it was never written.
+   */
+  const droppedWindows: { item: StageItem; start: number; end: number }[] = [];
+  const release = (item: StageItem, window?: { start: number; end: number }): void => {
+    if (!placeReady) return;
+    dropIds.add(item.id);
+    if (window) droppedWindows.push({ item, ...window });
   };
   const freezeIds = placeReady
     ? new Set(committedById.keys())
@@ -576,7 +586,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     // physical impossibility the problem validator rejects.
     const busy = decidedWindowsByCourt.get(item.courtNumber ?? -1) ?? [];
     if (busy.some((window) => start < window.end && window.start < end)) {
-      release(item);
+      release(item, { start, end });
       continue;
     }
 
@@ -635,7 +645,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       decidedOccupancies.some((occupancy) => collidesWith(candidate, occupancy)) ||
       acceptedPins.some((occupancy) => collidesWith(candidate, occupancy))
     ) {
-      release(candidate.item);
+      release(candidate.item, { start: candidate.start, end: candidate.end });
       continue;
     }
     acceptedPins.push({
@@ -646,6 +656,57 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       rest: restRulesOf(candidate.item),
     });
     frozenWindow.set(candidate.item.id, { start: candidate.start, end: candidate.end });
+  }
+
+  /**
+   * Court-only holds for the dropped rows: the parts of each window no decided match, accepted pin
+   * or earlier hold already covers, as fixed items with no participants. Fixed so the solver routes
+   * around them, participant-free so they cannot reintroduce the collision that dropped the row, and
+   * clipped so two fixed items never overlap on one court (the problem validator refuses that).
+   */
+  const courtHolds: StageItem[] = [];
+  const takenByCourt = new Map<number, { start: number; end: number }[]>();
+  const taken = (courtNumber: number) => {
+    let list = takenByCourt.get(courtNumber);
+    if (!list) {
+      list = [
+        ...(decidedWindowsByCourt.get(courtNumber) ?? []),
+        ...acceptedPins
+          .filter((pin) => pin.courtNumber === courtNumber)
+          .map((pin) => ({ start: pin.start, end: pin.end })),
+      ];
+      takenByCourt.set(courtNumber, list);
+    }
+    return list;
+  };
+  for (const { item, start, end } of droppedWindows) {
+    if (item.courtNumber == null) continue;
+    const covered = taken(item.courtNumber)
+      .filter((window) => window.start < end && start < window.end)
+      .sort((a, b) => a.start - b.start);
+    const free: { start: number; end: number }[] = [];
+    let cursor = start;
+    for (const window of covered) {
+      if (window.start > cursor) free.push({ start: cursor, end: window.start });
+      cursor = Math.max(cursor, window.end);
+    }
+    if (cursor < end) free.push({ start: cursor, end });
+    free.forEach((segment, index) => {
+      courtHolds.push({
+        id: `${item.id}:court-hold:${index}`,
+        categoryId: item.categoryId,
+        participantIds: [],
+        participantsKnown: true,
+        durationMinutes: Math.max(1, Math.round((segment.end - segment.start) / MINUTE)),
+        groupKey: item.groupKey,
+        sequence: 0,
+        fixed: true,
+        start: segment.start,
+        end: segment.end,
+        courtNumber: item.courtNumber,
+      });
+      taken(item.courtNumber!).push(segment);
+    });
   }
 
   const applyFreeze = (item: StageItem): StageItem => {
@@ -681,10 +742,14 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     .filter((item) => !dropIds.has(item.id))
     .map(withoutDropped)
     .map(applyFreeze);
-  const knockoutAll = knockoutRaw
-    .filter((item) => !dropIds.has(item.id))
-    .map(withoutDropped)
-    .map(applyFreeze);
+  const knockoutAll = [
+    ...knockoutRaw
+      .filter((item) => !dropIds.has(item.id))
+      .map(withoutDropped)
+      .map(applyFreeze),
+    // Both passes read the other stage's fixed rows, so the holds need only one list.
+    ...courtHolds,
+  ];
 
   const run = runPlanDays({
     orderedDays,

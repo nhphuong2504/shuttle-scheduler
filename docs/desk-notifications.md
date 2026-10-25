@@ -97,6 +97,15 @@ The selected day is the dark one - foreground fill, surface text - rather than t
 purple means "act", and choosing which day to look at is navigation. The rest of the bar is the
 day's pace: expected finish, closing time, and matches done.
 
+## Ready matches with no time
+
+A danger bar over the board, editors only, while any ready match has no court and time: "N ready
+matches have no time yet", then why (the last automatic pass's problem: it failed, it was refused and
+will retry, or what is left unplaced and why) and a link to review the schedule. It appears at once
+when the last pass reported a problem, and otherwise once the same set has waited a minute. The
+offline bar takes its place while the Desk is paused. Level: Notice. See scheduling-decisions.md
+section 32.
+
 ## Court board
 
 Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.

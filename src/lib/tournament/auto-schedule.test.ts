@@ -6,6 +6,7 @@ import {
   type RetryState,
   SETTLE_MS,
   attemptResult,
+  autoScheduleProblem,
   describeUnplaced,
   eventsUnderWay,
   hasBuiltSchedule,
@@ -14,6 +15,7 @@ import {
   runAutoSchedule,
   singleFlight,
   type AutoScheduleDeps,
+  type AutoScheduleOutcome,
   type FreshSchedulingRows,
 } from "./auto-schedule";
 import type { PlacementSchedulePlan } from "./placement-schedule";
@@ -279,5 +281,42 @@ describe("describeUnplaced", () => {
     for (const reason of ["no_courts", "past_closing", "held_behind_placement", "data"] as const) {
       expect(describeUnplaced([u(reason)])?.actionLabel).not.toMatch(/place/i);
     }
+  });
+});
+
+describe("autoScheduleProblem", () => {
+  const outcome = (partial: Partial<AutoScheduleOutcome> = {}): AutoScheduleOutcome => ({
+    ran: true,
+    generated: { roundOne: 0, roundTwo: 0, draws: 0 },
+    placed: 0,
+    declined: 0,
+    unplaced: 0,
+    reasons: [],
+    transient: 0,
+    ...partial,
+  });
+
+  it("names a pass that threw, with the error it threw", () => {
+    expect(autoScheduleProblem(null, new Error("Invalid scheduling problem (7 issues)"))).toEqual({
+      kind: "error",
+      detail: "Automatic scheduling failed: Invalid scheduling problem (7 issues)",
+    });
+  });
+
+  it("says a refused pass will try again", () => {
+    expect(autoScheduleProblem(outcome({ declined: 1, transient: 1 }), null)?.kind).toBe("declined");
+  });
+
+  it("words what is left unplaced in the Schedule page's terms", () => {
+    expect(
+      autoScheduleProblem(outcome({ unplaced: 1, reasons: [{ matchId: "m1", reason: "past_closing" }] }), null),
+    ).toEqual({
+      kind: "unplaced",
+      detail: describeUnplaced([{ matchId: "m1", reason: "past_closing" }])!.detail,
+    });
+  });
+
+  it("has nothing to say when the pass placed everything", () => {
+    expect(autoScheduleProblem(outcome({ placed: 3 }), null)).toBeNull();
   });
 });
