@@ -162,6 +162,17 @@ test("Refresh explains when the desk is offline", async ({ page, context }) => {
   }
 });
 
+test("an idle court offers no match, even while a ready one has no court", async ({ page }) => {
+  // The preset holds a ready pairing with no court (desk-mock, match 7). An idle tile used to
+  // offer it as "Place on this court" and start it there, which is how a match the plan had not
+  // placed was started on Viet Nam Open 2026's day two. The tile now has nothing to open.
+  await installAppMock(page, { preset: "states" });
+  await page.goto(routes.desk);
+  const idle = page.getByRole("button", { name: "Court 6: idle", exact: true });
+  await expect(idle).toBeDisabled();
+  await expect(page.getByText(/Place on this court|Ready to place/)).toHaveCount(0);
+});
+
 test("court labels stay on one line in the running order at every density", async ({ page }) => {
   await installAppMock(page, { preset: "states", role: "user" });
   for (const width of [320, 390, 768, 1024, 1440]) {

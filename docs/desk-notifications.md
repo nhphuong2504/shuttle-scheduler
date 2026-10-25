@@ -129,8 +129,8 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 - **Every tile gives its next match's published time**: "Next 14:50: A vs B", on a busy court
   as on a free one. On a busy court that time may already have passed; the match waits for the
   court to clear.
-- **A busy court with nothing queued says "Nothing queued".** The "Ready to place" pairing - a
-  ready match with no court - is offered on free courts only: a busy court cannot take it.
+- **A court with nothing queued says "Nothing queued"**, and an idle tile opens nothing. A ready
+  match with no court is not offered on any tile; the stranded notice above the board reports it.
 - **Playing and Overrun name the next match and stop there** — no "Ready now", no reason it
   is not ready. That line answers "can the queued match start now", which a court that still
   has a match on it cannot honestly answer; it is drawn on Ready and Waiting only.
