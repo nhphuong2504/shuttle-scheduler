@@ -173,6 +173,18 @@ test("an idle court offers no match, even while a ready one has no court", async
   await expect(page.getByText(/Place on this court|Ready to place/)).toHaveCount(0);
 });
 
+test("a match dialog on the Desk has no move control", async ({ page }) => {
+  // Moving a match by hand was the other way to start one off the plan: move it onto an idle
+  // court, then start it. Moving is the Schedule's now.
+  await installAppMock(page, { preset: "states" });
+  await page.goto(routes.desk);
+  await page.getByRole("button", { name: "Court 3: free ready", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Move \/ delay/ })).toHaveCount(0);
+  await expect(dialog.getByText("Check constraints and update")).toHaveCount(0);
+});
+
 test("court labels stay on one line in the running order at every density", async ({ page }) => {
   await installAppMock(page, { preset: "states", role: "user" });
   for (const width of [320, 390, 768, 1024, 1440]) {

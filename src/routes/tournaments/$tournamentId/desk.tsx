@@ -32,12 +32,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { PickerInput } from "@/components/ui/picker-input";
 import {
   assertMatchUnchanged,
   reportDrawMatch,
   reportPoolMatch,
-  rescheduleMatch,
   resolveMatchException,
   startMatch,
   type ScheduleImpact,
@@ -46,7 +44,6 @@ import {
   MAX_ENDED_MINUTES_AGO,
   reportPlacementMatch,
   reportTierDrawMatch,
-  reschedulePlacementMatch,
   resetPlacementResult,
   resetTierDrawResult,
   scheduleImpactNote,
@@ -1160,11 +1157,10 @@ export function MatchOperationsDialog({
   /** Every write is off while one is in flight, and while live updates are paused. */
   const busy = working || pausedSince != null;
   const [confirmRestOpen, setConfirmRestOpen] = useState(false);
-  const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | "move" | null>(null);
+  const [exceptionMode, setExceptionMode] = useState<"walkover" | "void" | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [note, setNote] = useState("");
   const [winnerId, setWinnerId] = useState(match.teams[0] ?? "");
-  const [moveCourtId, setMoveCourtId] = useState(courtId ?? "");
   /**
    * When the match finished: just now, a fixed number of minutes ago, or a clock time.
    *
@@ -1177,7 +1173,6 @@ export function MatchOperationsDialog({
   const [finishOpen, setFinishOpen] = useState(false);
   const [finishClock, setFinishClock] = useState("");
   const finishClockFieldId = useId();
-  const [moveTime, setMoveTime] = useState(() => localDateTimeValue(match.scheduled));
   const table = deskKindTable(match.kind) as
     "pool_matches" | "draw_matches" | "placement_matches" | "tier_draw_matches";
   const isPlacement = isPlacementKind(match.kind);
@@ -1583,37 +1578,6 @@ export function MatchOperationsDialog({
     }
   };
 
-  const moveMatch = async () => {
-    if (!moveCourtId || !moveTime) {
-      toast.error("Select a court and time.");
-      return;
-    }
-    setBusy(true);
-    try {
-      if (isPlacement) {
-        await reschedulePlacementMatch(
-          table as "placement_matches" | "tier_draw_matches",
-          match.id,
-          moveCourtId,
-          new Date(moveTime).toISOString(),
-        );
-      } else {
-        await rescheduleMatch(
-          table as "pool_matches" | "draw_matches",
-          match.id,
-          moveCourtId,
-          new Date(moveTime).toISOString(),
-        );
-      }
-      toast.success("Match court and time updated");
-      onDone();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not move the match");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const placementExplanation = placementMatchExplanation(match.placementContext, nameA, nameB);
 
   return (
@@ -1916,47 +1880,32 @@ export function MatchOperationsDialog({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        {!isReported && canEdit ? (
+        {!isReported && canEdit && !isPlacement ? (
           <div className="border-t border-hairline pt-3">
             <p className="mb-2 text-sm font-semibold text-muted-foreground">
               More actions
             </p>
-            <div className="grid grid-cols-3 gap-2">
-              {!isPlacement ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-11 w-full text-sm"
-                    disabled={busy}
-                    onClick={() =>
-                      setExceptionMode(exceptionMode === "walkover" ? null : "walkover")
-                    }
-                  >
-                    Walkover
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-11 w-full text-sm"
-                    disabled={busy}
-                    onClick={() => setExceptionMode(exceptionMode === "void" ? null : "void")}
-                  >
-                    Void
-                  </Button>
-                </>
-              ) : null}
-              {match.status === "scheduled" && canEdit ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-11 w-full text-sm"
-                  disabled={busy}
-                  onClick={() => setExceptionMode(exceptionMode === "move" ? null : "move")}
-                >
-                  Move / delay
-                </Button>
-              ) : null}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-11 w-full text-sm"
+                disabled={busy}
+                onClick={() =>
+                  setExceptionMode(exceptionMode === "walkover" ? null : "walkover")
+                }
+              >
+                Walkover
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-11 w-full text-sm"
+                disabled={busy}
+                onClick={() => setExceptionMode(exceptionMode === "void" ? null : "void")}
+              >
+                Void
+              </Button>
             </div>
 
             {exceptionMode === "walkover" || exceptionMode === "void" ? (
@@ -1993,47 +1942,6 @@ export function MatchOperationsDialog({
               </div>
             ) : null}
 
-            {exceptionMode === "move" ? (
-              <div className="mt-3 grid gap-2 rounded-lg bg-muted/50 p-3 sm:grid-cols-2">
-                <label className="block text-sm font-medium">
-                  Court
-                  <select
-                    className="mt-1 h-11 w-full rounded-md border border-input bg-background px-3 text-base"
-                    value={moveCourtId}
-                    onChange={(event) => setMoveCourtId(event.target.value)}
-                  >
-                    <option value="">Select court</option>
-                    {courts.map((court) => (
-                      <option key={court.id} value={court.id}>
-                        Court {court.number}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="block text-sm font-medium">
-                  {/* Not wrapped around the field: the picker button inside would become
-                      part of the label's text. */}
-                  <label htmlFor="desk-move-time">Start time</label>
-                  <PickerInput
-                    id="desk-move-time"
-                    className="mt-1 h-11"
-                    inputClassName="text-base"
-                    type="datetime-local"
-                    pickerLabel="Open the calendar and time picker for the start time"
-                    value={moveTime}
-                    onChange={(event) => setMoveTime(event.target.value)}
-                  />
-                </div>
-                <Button
-                  className="h-11 text-sm sm:col-span-2"
-                  size="sm"
-                  disabled={busy || !moveCourtId || !moveTime}
-                  onClick={moveMatch}
-                >
-                  Check constraints and update
-                </Button>
-              </div>
-            ) : null}
           </div>
         ) : null}
         {canClearResult ? (
@@ -2226,10 +2134,4 @@ function impactMessage(prefix: string, impact: ScheduleImpact): string {
   if (impact.direction === "mixed") return `${prefix}. ${count} rescheduled ${distance}.`;
   if (impact.direction === "later") return `${prefix}. ${count} delayed ${distance}.`;
   return `${prefix}. ${count} moved ${impact.direction} ${distance}.`;
-}
-
-function localDateTimeValue(value: string | null): string {
-  const date = value ? new Date(value) : new Date();
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
