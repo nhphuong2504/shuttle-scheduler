@@ -33,9 +33,18 @@ export interface StartRestWarning {
   requiredMinutes: number;
 }
 
+/** A match this one waits on that has not finished. */
+export interface StartPrerequisite {
+  matchId: string;
+  /** Its court while it is being played; null when it has not started. */
+  courtNumber: number | null;
+}
+
 export interface StartConstraints {
   /** Hard blockers — a player physically cannot start this match right now. */
   conflicts: StartConflict[];
+  /** Hard blockers — a match this one must follow is not over. Absent where nothing waits. */
+  prerequisites?: StartPrerequisite[] | undefined;
   /** Soft warnings — starting is allowed, but a player hasn't had the configured rest gap. */
   warnings: StartRestWarning[];
 }

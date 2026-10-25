@@ -20,6 +20,9 @@ Colour is never the only channel: every row carries words, and chips carry a gly
 | Condition | Source | Level | Desk behaviour |
 | --- | --- | --- | --- |
 | A player is on another court | `checkStartConstraints` and `assert_can_start_match` | Block | Start disabled. "{name} is playing on Court N right now. This match can start once they finish." |
+| A match it waits on is not over (`prerequisite_ids`) | `unfinishedPrerequisite` | Block | Start disabled; the tile reads "Waits for the match on Court N". "This match waits for the match on Court N. It can start once that one is over." |
+| The match has no court or time, or the start names another court | `start_placement_match` / `start_tier_draw_match` | Block | Not offered by the Desk; the server refuses a client that sends it. |
+| Opened from the Scores page | `allowStart={false}` | Block | No Start button; the dialog says "Start it from the Desk." Results are still entered there. |
 | Short rest, tournament refuses it (`block_start_on_short_rest`) | server ignores `p_ignore_rest` | Block | Start disabled. Row says the tournament doesn't allow starting before the full rest. |
 | Short rest, tournament allows it | `startCheck.warnings` | Warning | Dialog "Players haven't had full rest", "Start anyway" / "Don't start" |
 | Schedule conflict on this match | `schedule_conflicts` | Warning | Dialog "Schedule conflict"; the match stays flagged until the schedule is fixed |
@@ -129,8 +132,8 @@ Five states keep their names: Playing, Overrun, Ready, Waiting, Idle.
 - **Every tile gives its next match's published time**: "Next 14:50: A vs B", on a busy court
   as on a free one. On a busy court that time may already have passed; the match waits for the
   court to clear.
-- **A busy court with nothing queued says "Nothing queued".** The "Ready to place" pairing - a
-  ready match with no court - is offered on free courts only: a busy court cannot take it.
+- **A court with nothing queued says "Nothing queued"**, and an idle tile opens nothing. A ready
+  match with no court is not offered on any tile; the stranded notice above the board reports it.
 - **Playing and Overrun name the next match and stop there** — no "Ready now", no reason it
   is not ready. That line answers "can the queued match start now", which a court that still
   has a match on it cannot honestly answer; it is drawn on Ready and Waiting only.

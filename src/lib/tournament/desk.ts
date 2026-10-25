@@ -71,10 +71,15 @@ export interface DeskMatchModel {
   endedAt: string | null;
   scheduled: string | null;
   playerIds: string[];
+  /**
+   * Matches this one must wait for (`prerequisite_ids`): the held entrant's second make-up match
+   * waits on the first and on other round-two matches. Absent for every kind that has none.
+   */
+  prerequisiteIds?: readonly string[] | undefined;
 }
 
 export interface MatchReadiness {
-  state: "ready" | "resting" | "player-busy" | "teams-missing";
+  state: "ready" | "resting" | "player-busy" | "waiting-prerequisite" | "teams-missing";
   readyAt: number | null;
   playerId: string | null;
   blockingMatchId: string | null;
@@ -178,6 +183,28 @@ export function playerStatus(
   return { kind: "free" };
 }
 
+/**
+ * The first match this one waits on that is not over yet, or null.
+ *
+ * Reported and walkover are over; void constrains nothing, the same as the server's order check.
+ * A prerequisite missing from `allMatches` is on another day, which is an earlier one, so it is
+ * over too. Without this the tile read "Ready now" while a prerequisite was still on court, and
+ * the held entrant's second make-up match was started before two of the matches it waits on had
+ * finished (Viet Nam Open 2026, WS, day one 16:34).
+ */
+export function unfinishedPrerequisite<TMatch extends DeskMatchModel>(
+  match: DeskMatchModel,
+  allMatches: readonly TMatch[],
+): TMatch | null {
+  for (const id of match.prerequisiteIds ?? []) {
+    const prerequisite = allMatches.find((other) => other.id === id);
+    if (!prerequisite) continue;
+    if (["reported", "walkover", "void"].includes(prerequisite.status)) continue;
+    return prerequisite;
+  }
+  return null;
+}
+
 export function getMatchReadiness(
   match: DeskMatchModel,
   allMatches: DeskMatchModel[],
@@ -207,6 +234,18 @@ export function getMatchReadiness(
         remainingMinutes: 0,
       };
     }
+  }
+
+  const waitingOn = unfinishedPrerequisite(match, allMatches);
+  if (waitingOn) {
+    return {
+      state: "waiting-prerequisite",
+      readyAt: null,
+      playerId: null,
+      blockingMatchId: waitingOn.id,
+      blockingCourtId: waitingOn.status === "in-progress" ? waitingOn.courtId : null,
+      remainingMinutes: 0,
+    };
   }
 
   let latestReadyAt = 0;

@@ -28,8 +28,9 @@ import {
  *      match, or when the target court is occupied. The desk's `checkStartConstraints` warned
  *      about both, but two desks race through a stale tab, so the database has to say no.
  *   2. `shift_live_schedule_core` accepts an `in-progress` source now, so starting a match late
- *      - or on a different court than it was published on - reflows the rest of the day the way
- *      reporting a result already did. `live-reflow.test.ts` pins the finished-source rules
+ *      reflows the rest of the day the way reporting a result already did. (Starting one on a
+ *      different court than it was published on is refused since
+ *      `20261025000000_start_only_placed_matches.sql`; cases (vi) and (vii).) `live-reflow.test.ts` pins the finished-source rules
  *      (cases (a)-(j), still run by this suite); these are the in-progress ones.
  *
  * THE VIRTUAL CLOCK, AND WHY THE DAY IS IN 2099
@@ -190,8 +191,8 @@ async function placeMatch(
  * same call reads it. Without it the wall clock - 2026 against a 2099 fixture - would be the
  * source's start and drag the day back with it.
  *
- * `court` moves the match when it differs from where it was published, which is the desk's
- * "start it on another court" path; passing the row's own court id (or null) leaves it.
+ * `court` is the court the start names. It must be the row's own (or null): a different one is
+ * refused, see case (vi).
  */
 async function startAt(matchId: string, court: string | null, startedAt: string): Promise<void> {
   const { error } = await serviceClient()
@@ -353,49 +354,53 @@ describe("starting a match", () => {
     expect(times.get(m3)).toBe(iso("10:15"));
   }, 120_000);
 
-  it("(vi) reflows the target court when a match starts on a different court", async () => {
-    // Published on court one at 10:00, started on court two at 10:20. The reflow has to key its
-    // queue on the *target* court, and on the earlier of the published time and the actual start,
-    // or m2 - published at 10:05, already sitting where the match now physically is - is missed.
-    //
-    //   m1 10:00  published court one, starts court two at 10:20.
-    //   m2 10:05  court two   floor is m1's expected end 10:40, so it moves to 10:40.
-    //   m3 10:30  court two   rides behind m2: 10:40 + 20 = 11:00.
-    //   m4 10:30  court one   the court the match left: nothing reaches it.
-    const seeded = await seed({ label: "vi", entrants: 8 });
+  it("(vi) refuses a start on a court other than the match's own, and leaves it where it is", async () => {
+    // `20261025000000_start_only_placed_matches.sql`: a match starts where the schedule placed it.
+    // Starting it elsewhere used to move it there; on Viet Nam Open 2026 that is how a match was
+    // played off the plan. The refusal names the court it is on.
+    const seeded = await seed({ label: "vi", entrants: 4 });
     const m1 = await placeMatch(seeded, { key: "vi-1", a: 0, b: 1, court: 1, at: iso("10:00") });
     const m2 = await placeMatch(seeded, { key: "vi-2", a: 2, b: 3, court: 2, at: iso("10:05") });
-    const m3 = await placeMatch(seeded, { key: "vi-3", a: 4, b: 5, court: 2, at: iso("10:30") });
-    const m4 = await placeMatch(seeded, { key: "vi-4", a: 6, b: 7, court: 1, at: iso("10:30") });
 
     const target = seeded.courtIdByNumber.get(2);
-    await startAt(m1, target as string, iso("10:20"));
+    await expect(startAt(m1, target as string, iso("10:20"))).rejects.toThrow(
+      /scheduled on Court 1\. Start it there/i,
+    );
 
     const row = await rowOf(m1);
-    // The match is on the court it was started on, at the time it was published.
-    expect(row.court_id).toBe(target);
-    expect(new Date(row.scheduled_time as string).toISOString()).toBe(iso("10:00"));
+    expect(row.status).toBe("scheduled");
+    expect(row.court_id).toBe(seeded.courtIdByNumber.get(1));
+    // Nothing reflowed: the court it was aimed at is as it was.
+    expect((await timesOf([m2])).get(m2)).toBe(iso("10:05"));
 
-    const times = await timesOf([m2, m3, m4]);
-    // The match it would have landed on top of is pushed to its expected finish.
-    expect(times.get(m2)).toBe(iso("10:40"));
-    // And that court's tail follows, preserving the sequence.
-    expect(times.get(m3)).toBe(iso("11:00"));
-    // The court it left is not part of the chain.
-    expect(times.get(m4)).toBe(iso("10:30"));
+    // Its own court, named or not, still starts it.
+    await startAt(m1, seeded.courtIdByNumber.get(1) as string, iso("10:20"));
+    expect((await rowOf(m1)).status).toBe("in-progress");
   }, 120_000);
 
-  it("(vi) control: leaves the target court alone when the move does not collide", async () => {
-    // The mirror of the case above: the match moves to court two but its own published time is
-    // late enough that court two's next match already sits past its expected finish. The queue
-    // reaches the row; nothing pushes it.
-    const seeded = await seed({ label: "vi2", entrants: 6 });
-    const m1 = await placeMatch(seeded, { key: "vi2-1", a: 0, b: 1, court: 1, at: iso("10:00") });
-    const m2 = await placeMatch(seeded, { key: "vi2-2", a: 2, b: 3, court: 2, at: iso("11:00") });
+  it("(vii) refuses a start for a match with no court or no time", async () => {
+    // An idle court on the Desk used to start the first ready match with no time on itself. The
+    // match is placed from the Schedule first now, and the server refuses it until then.
+    const seeded = await seed({ label: "vii", entrants: 4 });
+    const m1 = await placeMatch(seeded, { key: "vii-1", a: 0, b: 1, court: 1, at: iso("10:00") });
+    const m2 = await placeMatch(seeded, { key: "vii-2", a: 2, b: 3, court: 2, at: iso("10:00") });
+    const unplace = async (
+      id: string,
+      patch: { court_id?: null; scheduled_time: null },
+    ) => {
+      const { error } = await serviceClient().from("placement_matches").update(patch).eq("id", id);
+      if (error) throw new Error(`unplacing failed: ${error.message}`);
+    };
+    await unplace(m1, { court_id: null, scheduled_time: null });
+    await unplace(m2, { scheduled_time: null });
 
-    const target = seeded.courtIdByNumber.get(2);
-    await startAt(m1, target as string, iso("10:20"));
-
-    expect((await timesOf([m2])).get(m2)).toBe(iso("11:00"));
+    for (const [id, court] of [
+      [m1, seeded.courtIdByNumber.get(3) as string],
+      [m1, null],
+      [m2, null],
+    ] as const) {
+      await expect(startAt(id, court, iso("10:20"))).rejects.toThrow(/no court and time yet/i);
+      expect((await rowOf(id)).status).toBe("scheduled");
+    }
   }, 120_000);
 });

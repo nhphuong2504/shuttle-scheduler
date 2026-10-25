@@ -548,8 +548,11 @@ used to be pressed for happens on its own, and the button is left for deliberate
   would finish at least 30 minutes sooner, place every match and move at least one, says so with the cost
   stated (`buildRebuildSuggestion`) and opens the usual rebuild preview. It never applies anything, and it
   stays quiet when the unplaced-matches notice is showing.
-- **The Desk** lists a ready match with no time at all in its "ready, unassigned" pool (after every
-  timed one), so it can still be dispatched while nothing has placed it.
+- **The Desk** does not dispatch a ready match with no time. It used to offer one on every idle court
+  ("Place on this court") and start it there; that is how a match the plan had not placed was played
+  on Viet Nam Open 2026's day two. A match starts only on its own court now, and the server refuses
+  one with no court or time (`20261025000000_start_only_placed_matches.sql`); an unplaced match is the
+  stranded notice's to report (section 32) and the Schedule's to place.
 - **The settings panel is the first build's page.** On a tournament that has never been built it opens
   itself, because the days, the per-day courts, the hours, the breaks and the match settings in it are
   the whole job on a first pass. It closes itself when that build succeeds: everything in it has been

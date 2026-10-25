@@ -197,6 +197,7 @@ export function buildDeskMatches(sources: DeskMatchSources): DeskMatch[] {
         scheduled: match.scheduled_time,
         teams,
         playerIds: playersOf(teams),
+        prerequisiteIds: match.prerequisite_ids ?? [],
         tag: placementMatchLabel(match.stage, catMap.get(match.category_id)?.code),
         placementContext: placementMatchContext(match, sources.placementMatches ?? []),
         categoryId: match.category_id,
