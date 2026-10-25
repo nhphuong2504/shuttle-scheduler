@@ -1,15 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import {
   INITIAL_RETRY,
   attemptResult,
+  autoScheduleProblem,
   eventsUnderWay,
   planRetry,
   runAutoSchedule,
   singleFlight,
   type AutoScheduleOutcome,
+  type AutoScheduleProblem,
   type RetryState,
 } from "@/lib/tournament/auto-schedule";
 import {
@@ -61,11 +63,45 @@ export function autoScheduleMessage(outcome: AutoScheduleOutcome): string | null
  * always reads current data.
  */
 const executors: (() => Promise<AutoScheduleOutcome | null>)[] = [];
+
+/**
+ * The last pass's problem, shared by every mounted page. Module-level for the same reason as the
+ * flight: there is one pass, whoever started it, so there is one answer to "did it work".
+ */
+let lastProblem: AutoScheduleProblem | null = null;
+const problemListeners = new Set<() => void>();
+function publishProblem(next: AutoScheduleProblem | null): void {
+  if (next?.kind === lastProblem?.kind && next?.detail === lastProblem?.detail) return;
+  lastProblem = next;
+  for (const listener of problemListeners) listener();
+}
+
 const flight = singleFlight<AutoScheduleOutcome | null>(async () => {
   // The most recently mounted instance wins; one unmounting never strands the others.
   const current = executors[executors.length - 1];
-  return current ? current() : null;
+  if (!current) return null;
+  try {
+    const outcome = await current();
+    // A pass that could not run (no editor, no schedule yet) says nothing either way.
+    if (outcome) publishProblem(autoScheduleProblem(outcome, null));
+    return outcome;
+  } catch (error) {
+    publishProblem(autoScheduleProblem(null, error));
+    throw error;
+  }
 });
+
+/** Why the last automatic pass left ready matches without a time, or null when it did not. */
+export function useAutoScheduleProblem(): AutoScheduleProblem | null {
+  return useSyncExternalStore(
+    (listener) => {
+      problemListeners.add(listener);
+      return () => problemListeners.delete(listener);
+    },
+    () => lastProblem,
+    () => null,
+  );
+}
 
 /** Registers this component's executor, built from the data it can see right now. */
 function useAutoScheduleExecutor() {
@@ -214,11 +250,21 @@ export function useAutoScheduleReconciler(): void {
     if (!ids.length) return null;
     // Everything a new answer could depend on: the days they could go on and the courts and
     // breaks of those days. A change to any of it is a new situation, not a repeat.
+    //
+    // So is play moving on. A match starting or finishing frees or takes courts and players, and
+    // an answer that failed a moment ago can succeed now: on Viet Nam Open 2026's second morning
+    // the pass failed until the day's last placement match started, but nothing asked again for
+    // another four minutes, until an unrelated result was saved.
+    const progress = [...(placementMatches ?? []), ...(tierMatches ?? [])]
+      .filter((match) => match.status !== "scheduled")
+      .map((match) => `${match.id}:${match.status}`)
+      .sort();
     const context = JSON.stringify([
       (days ?? []).map((d) => [d.id, d.date, d.start_time, d.end_time]),
       (courts ?? []).map((c) => c.id).sort(),
       (dayCourts ?? []).map((r) => `${r.day_id}:${r.court_id}`).sort(),
       (dayBreaks ?? []).map((b) => `${b.day_id}:${b.start_time}-${b.end_time}`).sort(),
+      progress,
     ]);
     return `${context}|${ids.join(",")}`;
   }, [

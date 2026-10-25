@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ClipboardEvent } from "react";
 import { toast } from "sonner";
@@ -9,7 +9,11 @@ import { Page, Panel } from "@/components/app-shell";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { Button } from "@/components/ui/button";
 import { InfoNote } from "@/components/ui/info-note";
-import { useAutoSchedule, useAutoScheduleReconciler } from "@/hooks/useAutoSchedule";
+import {
+  useAutoSchedule,
+  useAutoScheduleProblem,
+  useAutoScheduleReconciler,
+} from "@/hooks/useAutoSchedule";
 import {
   Dialog,
   DialogContent,
@@ -147,6 +151,9 @@ import {
   resolveSelectedDay,
 } from "@/lib/tournament/day-scope";
 import { courtsForDay, dayWindowBounds } from "@/lib/tournament/scheduling/day-plan";
+
+/** How long a ready match may sit without a time before the Desk says so on its own. */
+const STRANDED_NOTICE_MS = 60_000;
 
 export const Route = createFileRoute("/tournaments/$tournamentId/desk")({
   head: () => ({
@@ -532,6 +539,30 @@ function Desk() {
     });
 
   /**
+   * Ready matches that automatic scheduling has left without a time, said out loud.
+   *
+   * A pass that fails is silent by design (the result it followed is already saved), so the pool
+   * above used to be the only trace: on Viet Nam Open 2026's second morning five knockout matches
+   * sat in it for eleven minutes while every pass threw, and it read as an ordinary pool. The
+   * notice appears as soon as a pass reports a problem, or once the same set has waited a minute.
+   */
+  const autoProblem = useAutoScheduleProblem();
+  const strandedKey = readyUnassigned
+    .map((match) => match.id)
+    .sort()
+    .join(",");
+  const [stranded, setStranded] = useState<{ key: string; since: number }>({ key: "", since: 0 });
+  useEffect(() => {
+    setStranded((previous) =>
+      previous.key === strandedKey ? previous : { key: strandedKey, since: Date.now() },
+    );
+  }, [strandedKey]);
+  const showStranded =
+    canEdit &&
+    readyUnassigned.length > 0 &&
+    (autoProblem != null || viewNow - stranded.since >= STRANDED_NOTICE_MS);
+
+  /**
    * Call next is available to anyone who may edit this tournament.
    */
   const offerCallNext = canEdit;
@@ -697,6 +728,27 @@ function Desk() {
             Minutes and times below are as of then and may be out of date
             {canEdit ? ", and starting, scoring and moving matches is paused" : ""}. Retrying on its
             own; Refresh tries now.
+          </p>
+        ) : showStranded ? (
+          <p
+            role="status"
+            data-testid="desk-stranded-notice"
+            className="rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger-foreground desk-console:flex-none"
+          >
+            <span className="font-semibold">
+              {readyUnassigned.length} ready match{readyUnassigned.length === 1 ? " has" : "es have"} no
+              time yet.
+            </span>{" "}
+            {autoProblem?.detail ?? "Automatic scheduling has not placed them."}{" "}
+            {tournament ? (
+              <Link
+                to="/tournaments/$tournamentId/schedule"
+                params={{ tournamentId: tournament.id }}
+                className="font-semibold underline underline-offset-2"
+              >
+                Review the schedule
+              </Link>
+            ) : null}
           </p>
         ) : null}
 

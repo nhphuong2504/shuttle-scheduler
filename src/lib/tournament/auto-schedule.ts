@@ -171,6 +171,38 @@ export function singleFlight<T>(run: () => Promise<T>): () => Promise<T> {
   };
 }
 
+/**
+ * Why the last automatic pass left ready matches without a time, or null when it did not.
+ *
+ * The pass swallows its own failures so a saved result is never reported as failed, which also
+ * made them invisible: on Viet Nam Open 2026's second morning every pass threw for seven minutes
+ * and the Desk showed the stranded matches as an ordinary "Ready to place" pool. This is the part
+ * of the outcome the Desk now says out loud.
+ */
+export interface AutoScheduleProblem {
+  kind: "error" | "declined" | "unplaced";
+  detail: string;
+}
+
+export function autoScheduleProblem(
+  outcome: AutoScheduleOutcome | null,
+  error: unknown,
+): AutoScheduleProblem | null {
+  if (error !== undefined && error !== null) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { kind: "error", detail: `Automatic scheduling failed: ${message}` };
+  }
+  if (!outcome) return null;
+  if (outcome.transient > 0) {
+    return {
+      kind: "declined",
+      detail: "Automatic scheduling was refused because a court or player became busy. It will try again.",
+    };
+  }
+  const notice = describeUnplaced(outcome.reasons);
+  return notice ? { kind: "unplaced", detail: notice.detail } : null;
+}
+
 // ---------------------------------------------------------------------------
 // Saying what is left, in the organiser's terms
 // ---------------------------------------------------------------------------

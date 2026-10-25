@@ -677,3 +677,28 @@ seconds before had left microsecond times behind. Neither side was wrong in its 
   corrected" rows behind.
 - **Reflow.** A shifted time is still computed in microseconds and truncated when written, so the stored value
   is at most 0.999 ms before the instant it was computed from. Anything that reads it back sees the stored value.
+
+## 32. Automatic placement that fails is fixed, and says so when it cannot be
+
+Viet Nam Open 2026's second morning (`analysis/viet-nam-open-2026/audit.md`) had two automatic passes
+that left ready matches without a time and told nobody. Both are reproduced on the real state by
+`scheduling/viet-nam-open-replay.test.ts`, whose fixture is the export's `desk_activity` replayed to
+each instant.
+
+- **A decided prerequisite is a floor, whatever its stage.** The second make-up match was carried to
+  day two; its round-two prerequisites had been played on day one. Only round-one sources were turned
+  into floors (section 30), so the others stayed dependencies on rows the day's problem does not hold,
+  and every pass threw `unknown-dependency` from 12:12 to 12:19 - until the day's last placement match
+  started. A round-one floor still adds the rest gap (its child shares a player); any other decided
+  prerequisite floors at its end, because the wait is an ordering rule and a same-day decided row's
+  own anchor still applies a shared player's rest.
+- **A dropped row still holds its court.** `place-ready` takes a published row out of the problem when
+  it collides with decided history or another pin (an overdue match whose player is on court
+  elsewhere). The server still counts that row's court window (`placement_occupied_matches`), so a
+  slot planned into it was refused as `court_busy` on every retry. The free parts of a dropped row's
+  window are now fixed, participant-free court holds.
+- **A failed pass is retried as play moves on, and the Desk says so.** The reconciler's situation now
+  includes which matches have started or finished, so a pass that failed is tried again on the next
+  start or result instead of waiting for the set of unplaced matches to change. The last pass's
+  problem is published (`useAutoScheduleProblem`), and the Desk shows it over the board when ready
+  matches have no time - at once when a pass reported a problem, otherwise after a minute.
