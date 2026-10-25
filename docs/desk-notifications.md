@@ -21,6 +21,7 @@ Colour is never the only channel: every row carries words, and chips carry a gly
 | --- | --- | --- | --- |
 | A player is on another court | `checkStartConstraints` and `assert_can_start_match` | Block | Start disabled. "{name} is playing on Court N right now. This match can start once they finish." |
 | A match it waits on is not over (`prerequisite_ids`) | `unfinishedPrerequisite` | Block | Start disabled; the tile reads "Waits for the match on Court N". "This match waits for the match on Court N. It can start once that one is over." |
+| The match has no court or time, or the start names another court | `start_placement_match` / `start_tier_draw_match` | Block | Not offered by the Desk; the server refuses a client that sends it. |
 | Opened from the Scores page | `allowStart={false}` | Block | No Start button; the dialog says "Start it from the Desk." Results are still entered there. |
 | Short rest, tournament refuses it (`block_start_on_short_rest`) | server ignores `p_ignore_rest` | Block | Start disabled. Row says the tournament doesn't allow starting before the full rest. |
 | Short rest, tournament allows it | `startCheck.warnings` | Warning | Dialog "Players haven't had full rest", "Start anyway" / "Don't start" |

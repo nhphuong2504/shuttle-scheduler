@@ -237,6 +237,13 @@ describe("incremental placement RPCs", () => {
       .limit(1)
       .single();
     if (court.error) throw court.error;
+    // A match starts only where it is placed (`20261025000000_start_only_placed_matches.sql`), so
+    // the child is given that court and a time first; the race is the start against the correction.
+    const placed = await serviceClient()
+      .from("placement_matches")
+      .update({ court_id: court.data.id, scheduled_time: new Date().toISOString() })
+      .eq("id", child.id);
+    if (placed.error) throw placed.error;
     const [start, correction] = await Promise.all([
       owner.client.rpc("start_placement_match", {
         p_match_id: child.id,

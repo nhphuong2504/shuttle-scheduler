@@ -2976,3 +2976,54 @@ describe("match result history migration", () => {
     expect(sql).toMatch(/public\.current_profile_id\(\)/);
   });
 });
+
+describe("start only placed matches migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261025000000_start_only_placed_matches.sql"), "utf8");
+  const executable = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  const fn = (name: string) => functionSource(executable, name);
+  const starts = [
+    "start_placement_match(p_match_id uuid, p_court_id uuid DEFAULT NULL::uuid)",
+    "start_tier_draw_match(p_match_id uuid, p_court_id uuid DEFAULT NULL::uuid)",
+  ];
+
+  it("checks the match is placed, under the schedule locks, before it writes", () => {
+    for (const name of starts) {
+      const body = fn(name);
+      const guard = body.indexOf("assert_match_placed_for_start");
+      expect(guard, name).toBeGreaterThan(body.indexOf("hashtext('schedule:2')"));
+      expect(guard, name).toBeLessThan(body.search(/\bUPDATE public\.(placement|tier_draw)_matches/));
+    }
+  });
+
+  it("never moves a match to the court the request names", () => {
+    for (const name of starts) {
+      expect(fn(name), name).not.toMatch(/court_id\s*=\s*COALESCE/);
+    }
+  });
+
+  it("keeps everything the previous start bodies guaranteed", () => {
+    for (const name of starts) {
+      const body = fn(name);
+      expect(body, name).toMatch(/can_edit_tournament/);
+      expect(body, name).toMatch(/lock_tournament_lifecycle_shared/);
+      expect(body, name).toMatch(/assert_tournament_can_start_match/);
+      expect(body, name).toMatch(/mark_tournament_started/);
+      expect(body, name).toMatch(/assert_can_start_match/);
+      expect(body, name).toMatch(/shift_live_schedule_after_match/);
+    }
+    expect(fn(starts[1]!)).toMatch(/entrant_a_id IS NOT NULL/);
+  });
+
+  it("refuses a match with no court or time, and a court that is not its own", () => {
+    const guard = fn("assert_match_placed_for_start");
+    expect(guard).toMatch(/p_court_id IS NULL OR p_scheduled_time IS NULL/);
+    expect(guard).toMatch(/p_requested_court IS NOT NULL AND p_requested_court <> p_court_id/);
+    expect(executable).toMatch(
+      /REVOKE ALL ON FUNCTION public\.assert_match_placed_for_start\(uuid, timestamptz, uuid\)\s+FROM PUBLIC, anon, authenticated/,
+    );
+  });
+});
