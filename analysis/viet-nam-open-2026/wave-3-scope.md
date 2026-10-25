@@ -40,7 +40,7 @@ Tóm lại: Đợt 1–2 làm cho lịch **không sai** nữa. Đợt 3 cho ngư
 
 - Desk tính trạng thái sân bằng `deriveCourtState` (`src/lib/tournament/desk.ts:284`). Nó chỉ xem **trận sớm nhất** đang `scheduled` của sân. Nếu trận đó bị chặn, sân hiện *Waiting* kèm lý do, ví dụ "A. Nguyen, on Court 2". Lý do do `getMatchReadiness` tính (`desk.ts:208`), theo thứ tự: thiếu đội → VĐV đang ở sân khác (`player-busy`) → trận tiên quyết chưa xong (`waiting-prerequisite`, Đợt 2) → VĐV đang nghỉ (`resting`) → sẵn sàng.
 - Desk không đếm sân đã bị chặn bao lâu, và không đề xuất gì.
-- Reflow (`shift_live_schedule_core`, bản mới nhất ở `supabase/migrations/20261023000000_prerequisite_order.sql:236`) chỉ đưa vào hàng đợi những trận có giờ công bố **sau** trận vừa bắt đầu hoặc vừa xong (các lệnh `INSERT INTO live_schedule_queue`, dòng 538–585). Trận đã quá giờ đứng trước, nên không bao giờ được dời. Đó là lý do WD A đứng ở 12:21 suốt 99 phút.
+- Reflow (`shift_live_schedule_core`, bản mới nhất ở `supabase/migrations/20261023000000_prerequisite_order.sql:236`) chỉ đưa vào hàng đợi những trận có giờ công bố **sau** trận vừa bắt đầu hoặc vừa xong (các lệnh `INSERT INTO live_schedule_queue`, dòng 538–585). Trận đã quá giờ đứng trước, nên không bao giờ được dời. Đó là lý do WD A đứng ở 12:25 (giờ công bố sau lần dời cuối) suốt 99 phút.
 - Muốn dời một trận thì có hai đường, đều không hợp:
   - **Rebuild** (trang Schedule): giải lại mọi trận chưa đánh, nên kéo trận khác lên sớm.
   - **`reschedule_placement_match`** (`20260927000000_tournova_role_redesign.sql:2309`): dời một trận tới sân và giờ cho trước. Hàm này không kiểm tra thứ tự trận tiên quyết, giờ đóng cửa, hay "không sớm hơn giờ đã công bố". Đợt 2 đã gỡ nó khỏi Desk.
@@ -81,15 +81,16 @@ Phát lại trạng thái lúc 12:40 ngày 2 (từ `tournament.json` và `desk-a
 
 Với (b): nếu trận đầu hàng **bắt đầu được** thì không hiện thẻ, dù sân có nhiều trận quá giờ. Sân đó chỉ đang trễ, không bị kẹt.
 
-**Thẻ tính sẵn phương án trước khi hỏi.** Desk chạy thử `planPlacementSchedule({ mode: "place-ready" })` trên dữ liệu đang có, với trận kẹt được coi như chưa có sân và giờ (chỉ trong bộ nhớ, không ghi gì). Kết quả chạy thử phải thoả cả ba điều kiện, nếu không thì thẻ không đưa ra nút "Dời":
+**Thẻ tính sẵn phương án trước khi hỏi.** Desk chạy thử `planPlacementSchedule({ mode: "place-ready" })` trên dữ liệu đang có, với trận kẹt được coi như chưa có sân và giờ (chỉ trong bộ nhớ, không ghi gì). Kết quả chạy thử phải thoả cả bốn điều kiện, nếu không thì thẻ không đưa ra nút "Dời":
 
 1. đúng **một** trận đổi chỗ, là trận kẹt;
 2. giờ mới **muộn hơn** giờ cũ. Điều này luôn đúng: trận kẹt đã quá giờ, còn chế độ `place-ready` không xếp trận nào trước thời điểm hiện tại. Server vẫn kiểm tra lại (xem phần RPC bên dưới);
-3. có chỗ trong hôm nay. Nếu chỉ có chỗ ở ngày mai, thẻ nói rõ "sang 12:01 ngày mai" và vẫn cho chọn. Nếu là ngày cuối và không còn chỗ, thẻ không có nút "Dời" mà dẫn sang thẻ cuối ngày (mục 3.2).
+3. trận được thả không làm hỏng thứ tự với trận khác. Nếu chạy thử trả về `out_of_order` (trận kẹt là trận tiên quyết của một trận đã công bố, và chỗ mới lại nằm sau trận đó), thẻ không có nút "Dời" mà dẫn sang Schedule;
+4. có chỗ trong hôm nay. Nếu chỉ có chỗ ở ngày mai, thẻ nói rõ "sang 12:01 ngày mai" và vẫn cho chọn. Nếu là ngày cuối và không còn chỗ, thẻ không có nút "Dời" mà dẫn sang thẻ cuối ngày (mục 3.2).
 
 **Người vận hành thấy gì.** Thẻ nằm ở vùng thông báo phía trên bảng sân, cùng chỗ với thông báo đỏ của Đợt 1 (`desk.tsx:724`). Câu chữ gợi ý (giao diện bằng tiếng Anh):
 
-> **Court 2 is stuck.** WD A R1 was due at 12:21 and can't start: Ly Van is playing on Court 6.
+> **Court 2 is stuck.** WD A R1 was due at 12:25 and can't start: Ly Van is playing on Court 6.
 > Move it to **Court 5 at 13:55** (90 min later)? Court 2's next match can then go ahead. No other match changes. Its 4 players will be told.
 > **[Move WD A R1]**  [Not now]
 
@@ -128,7 +129,7 @@ Trận kẹt có thể là trận knockout (`tier_draw_matches`, như WD Draw A)
 
 **Hiện tại không có thông báo tự động nào khi giờ thay đổi.** VĐV chỉ thấy giờ mới trên bảng công khai. Hộp thư trong ứng dụng (`player_notifications`, `20261024000000_in_app_call_next.sql`) chỉ nhận lời gọi "Call next" do người vận hành bấm tay, và mỗi dòng phải gắn với một `match_calls`.
 
-Đề xuất cho Đợt 3: khi RPC ở trên dời một trận, nó ghi luôn một mục vào hộp thư của các VĐV có tài khoản liên kết, ví dụ "Your match WD A R1 moved to Court 5 at 13:55 (was 12:21)." Cần một migration nhỏ: thêm cột `kind` (`call` | `schedule-change`) cho `match_calls`, để Desk không hiểu nhầm đây là một lần "Call next". VĐV không có tài khoản liên kết thì thẻ nói rõ "2 players have no linked account: tell them at the desk."
+Đề xuất cho Đợt 3: khi RPC ở trên dời một trận, nó ghi luôn một mục vào hộp thư của các VĐV có tài khoản liên kết, ví dụ "Your match WD A R1 moved to Court 5 at 13:55 (was 12:25)." Cần một migration nhỏ: thêm cột `kind` (`call` | `schedule-change`) cho `match_calls`, để Desk không hiểu nhầm đây là một lần "Call next". VĐV không có tài khoản liên kết thì thẻ nói rõ "2 players have no linked account: tell them at the desk."
 
 Chỉ những lần dời do **thẻ quyết định** gây ra mới gửi thông báo. Các lần reflow dời giờ thông thường vẫn như hiện nay (chỉ đổi trên bảng). Xem câu hỏi 4.
 
@@ -141,7 +142,7 @@ Chỉ những lần dời do **thẻ quyết định** gây ra mới gửi thôn
 
 #### Phạm vi sửa
 
-- `src/lib/tournament/stuck-court.ts` (mới): hàm thuần `findStuckCourts(courtStates, now, lastReleaseByCourt)` trả về các sân kẹt và lý do; hàm `planRelease(...)` chạy thử `place-ready` với trận được thả và kiểm tra ba điều kiện.
+- `src/lib/tournament/stuck-court.ts` (mới): hàm thuần `findStuckCourts(courtStates, now, lastReleaseByCourt)` trả về các sân kẹt và lý do; hàm `planRelease(...)` chạy thử `place-ready` với trận được thả và kiểm tra bốn điều kiện.
 - `desk.tsx`: vùng thông báo, thẻ, gọi RPC, toast. Desk đã có đủ dữ liệu cho bộ lập lịch, vì `useAutoScheduleExecutor` (`src/hooks/useAutoSchedule.ts`) dùng cùng nguồn. Nên tách phần dựng đầu vào bộ lập lịch ra để dùng chung, thay vì chép lại.
 - `src/lib/tournament/placement-actions.ts`: hàm gọi RPC.
 - Migration mới: `release_and_place_matches`, hành động `released` trong `desk_activity`, cột `kind` cho `match_calls`.
@@ -195,8 +196,12 @@ Gia hạn 30 phút và chỉ thả đúng những trận bị tràn là đủ.
 
 **Khi nào hiện thẻ:**
 
-- Ngày đang xem không phải ngày cuối, và lần tự xếp vừa đặt ít nhất một trận sẵn sàng sang ngày sau, **trong khi hôm nay vẫn chưa qua giờ đóng cửa**; hoặc
+- Ngày đang xem không phải ngày cuối, và có trận **bị tự xếp đẩy từ hôm nay sang ngày sau** (xem "Dấu vết trận bị tràn" bên dưới), **trong khi hôm nay vẫn chưa qua giờ đóng cửa**; hoặc
 - Ngày đang xem là ngày cuối, và có trận sẵn sàng bị để trống với lý do `past_closing`.
+
+**Dấu vết trận bị tràn — phải lưu trên server.** Desk cần biết trận nào ở ngày mai là do lần tự xếp hôm nay *đẩy sang*, và trận nào vốn được lần build đầu tiên chủ ý đặt ở ngày mai. Nhìn lịch thì không phân biệt được: cả hai đều là "trận sẵn sàng có giờ ở ngày sau". Nếu nhầm, thẻ sẽ đề nghị kéo cả những trận vốn thuộc ngày mai về tối nay, tức là dời sớm một giờ đã hứa, và câu "won't fit before 17:00" sẽ sai. Kết quả của lần tự xếp chỉ nằm trong trình duyệt đã chạy nó, mất khi tải lại trang và máy Desk thứ hai không thấy. `desk_activity` hiện cũng không ghi ai là người ghi (dòng `court-moved` chỉ có giờ và sân mới).
+
+Đề xuất: thêm cột `deferred_from_day_id` cho `placement_matches` và `tier_draw_matches`. `place_ready_matches` ghi cột này khi nó đặt một trận vào một ngày **sau** ngày đang diễn ra, và ngày đang diễn ra chưa đóng cửa. Lần build đầu và rebuild đi qua `apply_placement_day_schedule`, không ghi cột này, và rebuild xoá nó (rebuild là một kế hoạch có chủ ý). Cột cũng bị xoá khi trận được kéo về hoặc bắt đầu. Thẻ chỉ dùng những trận có `deferred_from_day_id` bằng hôm nay.
 
 **Hệ thống tính sẵn.** Desk chạy thử `place-ready`. Các trận bị tràn được coi như chưa có giờ, giờ đóng hôm nay được nới dần **mỗi lần 5 phút**, tới tối đa giờ đóng ban đầu + "Gia hạn tối đa". Desk dừng ở mức nới **nhỏ nhất** mà:
 
@@ -254,10 +259,10 @@ Ngày cuối không có mức gia hạn nào đủ: thẻ chỉ báo, và giữ 
 #### Phạm vi sửa
 
 - `src/lib/tournament/day-extension.ts` (mới): hàm thuần `planDayExtension(...)` chạy thử theo bước 5 phút và trả về mức nhỏ nhất, hoặc "không có".
-- `src/lib/tournament/auto-schedule.ts` / `src/hooks/useAutoSchedule.ts`: lần tự xếp báo thêm những trận nó vừa đặt sang ngày sau (hiện chỉ có `reasons` cho trận bị để trống).
+- `src/lib/tournament/data.ts` và mô hình trận của Desk: đọc `deferred_from_day_id`.
 - `desk.tsx`: thẻ, nút, toast.
 - `placement-scheduler.tsx`: ô "Max extension" cạnh giờ đóng cửa của mỗi ngày; hiển thị "extended from 17:00" khi ngày đã được gia hạn.
-- Migration: hai cột mới cho `tournament_days`; tham số gia hạn cho RPC ở mục 3.1.
+- Migration: hai cột mới cho `tournament_days`; cột `deferred_from_day_id` và thân mới của `place_ready_matches` (ghi cột) và `apply_placement_day_schedule` (xoá cột); tham số gia hạn cho RPC ở mục 3.1.
 - Tài liệu: `scheduling-decisions.md` (§28 "Automatic placement never runs past the close" cần thêm một câu về thẻ cuối ngày), `desk-notifications.md`.
 
 #### Kiểm thử
@@ -278,9 +283,9 @@ Ngày cuối không có mức gia hạn nào đủ: thẻ chỉ báo, và giữ 
 
 #### Hai lựa chọn, với số liệu Viet Nam Open
 
-Đếm lại trên 309 dòng `time-shifted`, theo từng trận (mỗi trận nhớ giờ đang công bố của nó):
+Đếm lại trên 309 dòng `time-shifted`, theo từng trận (mỗi trận nhớ giờ đang công bố của nó). Đây là **ước lượng**: phép đếm phát lại đúng chuỗi dời đã xảy ra, trong khi một lần không ghi sẽ làm các lần reflow sau bắt đầu từ con số khác, nên số thật sẽ hơi khác:
 
-| Cách | Số lần ghi | Giảm | Giờ công bố so với giờ thật của mô hình | `schedule_conflicts` |
+| Cách | Số lần ghi (ước lượng) | Giảm | Giờ công bố so với giờ thật của mô hình | `schedule_conflicts` |
 | --- | ---: | ---: | --- | --- |
 | Hiện tại | 309 | — | Đúng tới mili-giây | Không đổi |
 | **(1) Chỉ làm tròn lên phút** | 196 | −37% | Muộn hơn tối đa 59 giây (không bao giờ sớm hơn) | **Không cần đổi** |
@@ -394,9 +399,9 @@ npm run integration:target -- use staging
 
 1. **Ngưỡng kích hoạt gỡ trận kẹt:** quá giờ ≥ 15 phút *hoặc* sân có ≥ 2 trận quá giờ, và trong cả hai trường hợp trận đầu hàng phải đang bị chặn (VĐV ở sân khác hoặc trận tiên quyết chưa xong). Đồng ý cách hiểu "trận đầu hàng bắt đầu được thì không hiện thẻ, dù có 2 trận quá giờ"?
 2. **Thời gian chờ 10 phút** tính theo **sân** (đề xuất) hay theo trận? Và lưu trên server qua `desk_activity` (đề xuất, hai máy Desk thấy giống nhau) hay chỉ trong trình duyệt?
-3. **Cuối ngày, ngày thường: (A) hay (B)?** Đề xuất (A): trận vẫn tự tràn sang ngày mai như hiện nay, thẻ đề nghị kéo về tối nay, và cú bấm của người vận hành là sự đồng ý dời sớm. (B) là giữ lại chưa công bố cho tới khi có người quyết.
-4. **Báo cho VĐV:** đồng ý thêm mục "lịch thay đổi" vào hộp thư ứng dụng hiện có (thêm cột `kind` cho `match_calls`), và chỉ gửi cho những lần dời do thẻ quyết định gây ra? Hay muốn gửi cho mọi lần dời giờ ≥ 2 phút? (Gửi cho mọi lần thì ở Viet Nam Open sẽ là khoảng 123 lần dời, nhân với số VĐV.)
-5. **Làm tròn giờ: lựa chọn (1) hay (2)?** (1) chỉ làm tròn lên phút: giảm 37%, không phải đụng tới `schedule_conflicts`. (2) làm tròn lên + ngưỡng 2 phút: giảm 60%, nhưng giờ trên bảng có thể sớm hơn thực tế tới dưới 2 phút, và `schedule_conflicts` cần dung sai. Đề xuất (2), như đã thống nhất, với dung sai chỉ khi một bên là giờ thật.
+3. **Cuối ngày, ngày thường: (A) hay (B)?** Đề xuất (A): trận vẫn tự tràn sang ngày mai như hiện nay, thẻ đề nghị kéo về tối nay, và cú bấm của người vận hành là sự đồng ý dời sớm. (B) là giữ lại chưa công bố cho tới khi có người quyết. Với (A), server phải đánh dấu trận nào bị tràn (cột `deferred_from_day_id`), để thẻ không bao giờ kéo về những trận vốn được xếp cho ngày mai.
+4. **Báo cho VĐV:** đồng ý thêm mục "lịch thay đổi" vào hộp thư ứng dụng hiện có (thêm cột `kind` cho `match_calls`), và chỉ gửi cho những lần dời do thẻ quyết định gây ra? Hay muốn gửi cho mọi lần dời giờ ≥ 2 phút? (Gửi cho mọi lần thì ở Viet Nam Open sẽ là khoảng 123 lần dời (ước lượng), nhân với số VĐV.)
+5. **Làm tròn giờ: lựa chọn (1) hay (2)?** (1) chỉ làm tròn lên phút: giảm khoảng 37% (ước lượng), không phải đụng tới `schedule_conflicts`. (2) làm tròn lên + ngưỡng 2 phút: giảm khoảng 60% (ước lượng), nhưng giờ trên bảng có thể sớm hơn thực tế tới dưới 2 phút, và `schedule_conflicts` cần dung sai. Đề xuất (2), như đã thống nhất, với dung sai chỉ khi một bên là giờ thật.
 6. **Dữ liệu cũ có số giây:** để nguyên (đề xuất) hay sửa lại một lần bằng migration?
 7. **"Gia hạn tối đa" mặc định 30 phút** cho mọi ngày, kể cả ngày cuối? Và xếp được một phần (ví dụ 3/5 trận) thì **không** đề nghị gia hạn, đúng không?
 8. **Đồng ý câu chữ bổ sung cho AGENTS.md** ở mục 3.4?
