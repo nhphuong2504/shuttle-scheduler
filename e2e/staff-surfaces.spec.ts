@@ -466,6 +466,39 @@ test.describe("staff surfaces", () => {
     await expect(group.getByLabel("Finish time")).toBeVisible();
   });
 
+  test("the score dialog records results but leaves starting to the Desk", async ({ page }) => {
+    /**
+     * The Scores page opens any match and runs none of the Desk's start checks, so it used to be
+     * a way to start a match that was not its court's next one, or one with no court at all.
+     * Starting is the Desk's alone now: a match that has not started says where to start it.
+     */
+    await openStaffShell(page);
+    await page.goto(routes.scores, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+
+    let checked = 0;
+    for (const tab of [/group/i, /knockout/i]) {
+      const tabControl = page.getByRole("tab", { name: tab });
+      if ((await tabControl.count()) === 0) continue;
+      await tabControl.click();
+      const openers = page.getByRole("button", { name: /^open$/i });
+      const total = await openers.count();
+      for (let i = 0; i < total; i++) {
+        await openers.nth(i).click();
+        const dialog = page.getByRole("dialog");
+        await expect(dialog).toBeVisible();
+        if ((await dialog.getByText("Not started", { exact: true }).count()) > 0) {
+          await expect(dialog.getByRole("button", { name: /Start match/ })).toHaveCount(0);
+          await expect(dialog.getByText("Start it from the Desk.")).toBeVisible();
+          checked++;
+        }
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+      }
+    }
+    expectPresent(checked > 0, "A match that has not started, on the Scores page");
+  });
+
   test("the score filters are a named group of pressed buttons", async ({ page }) => {
     /**
      * The two filter rows on the score desk were a flat set of buttons whose selected one was

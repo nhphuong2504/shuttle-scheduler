@@ -1067,6 +1067,7 @@ export function MatchOperationsDialog({
   courtNumber,
   courts,
   canEdit,
+  allowStart = true,
   startCheck,
   blockStartOnShortRest = false,
   conflicts,
@@ -1091,6 +1092,12 @@ export function MatchOperationsDialog({
    * the tournament or does not.
    */
   canEdit: boolean;
+  /**
+   * Whether this surface may start the match. The Desk starts a court's own next match, from its
+   * tile, after its start checks; the Scores page opens any match and runs none of them, so it
+   * records results and leaves starting to the Desk.
+   */
+  allowStart?: boolean;
   startCheck: StartConstraints | null;
   /** The tournament's start policy: when on, the server refuses a start on short rest. */
   blockStartOnShortRest?: boolean;
@@ -1799,6 +1806,8 @@ export function MatchOperationsDialog({
             >
               Save correction
             </Button>
+          ) : notStarted && !allowStart ? (
+            <p className="flex-1 text-sm text-muted-foreground">Start it from the Desk.</p>
           ) : notStarted ? (
             <Button
               className="h-12 flex-1 text-lg font-semibold shadow-md"

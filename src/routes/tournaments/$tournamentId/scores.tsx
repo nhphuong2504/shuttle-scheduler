@@ -814,9 +814,9 @@ function MatchesPage() {
              *
              * The conflict overlay belongs to the control desk, where the board is read
              * as a running order; this page is a list of results to enter. An empty list
-             * keeps this dialog's behaviour exactly as it was - the Start button here
-             * neither opens the conflict confirmation nor adds the toast clause - while
-             * the shared component still owns the flow for the desk that does.
+             * keeps the report flow free of the conflict clause, while the shared component
+             * still owns the flow for the desk that does. Starting is the Desk's alone: it
+             * starts a court's own next match after its checks, and this page runs none.
              */
             <MatchOperationsDialog
               key={selectedMatch.id}
@@ -829,6 +829,7 @@ function MatchesPage() {
               }
               courts={courts ?? []}
               canEdit={canEdit}
+              allowStart={false}
               startCheck={null}
               conflicts={[]}
               onConflictsAfterReport={async () => 0}

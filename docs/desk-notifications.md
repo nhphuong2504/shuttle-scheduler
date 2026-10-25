@@ -20,6 +20,7 @@ Colour is never the only channel: every row carries words, and chips carry a gly
 | Condition | Source | Level | Desk behaviour |
 | --- | --- | --- | --- |
 | A player is on another court | `checkStartConstraints` and `assert_can_start_match` | Block | Start disabled. "{name} is playing on Court N right now. This match can start once they finish." |
+| Opened from the Scores page | `allowStart={false}` | Block | No Start button; the dialog says "Start it from the Desk." Results are still entered there. |
 | Short rest, tournament refuses it (`block_start_on_short_rest`) | server ignores `p_ignore_rest` | Block | Start disabled. Row says the tournament doesn't allow starting before the full rest. |
 | Short rest, tournament allows it | `startCheck.warnings` | Warning | Dialog "Players haven't had full rest", "Start anyway" / "Don't start" |
 | Schedule conflict on this match | `schedule_conflicts` | Warning | Dialog "Schedule conflict"; the match stays flagged until the schedule is fixed |
