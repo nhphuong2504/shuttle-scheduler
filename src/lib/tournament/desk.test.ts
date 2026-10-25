@@ -74,6 +74,54 @@ describe("desk readiness", () => {
       remainingMinutes: 6,
     });
   });
+
+  it("holds a match whose prerequisite is still on court, and names that court", () => {
+    // Viet Nam Open 2026, WS, day one: the second make-up match read "Ready now" at 16:34
+    // while two of the round-two matches it waits on were still being played.
+    const prerequisite = match({
+      id: "r2-1",
+      courtId: "c2",
+      status: "in-progress",
+      startedAt: at(0),
+      playerIds: ["p7", "p8"],
+    });
+    const target = match({ id: "makeup-2", playerIds: ["p1", "p2"], prerequisiteIds: ["r2-1"] });
+
+    expect(getMatchReadiness(target, [target, prerequisite], 5, base + 6 * 60_000)).toMatchObject({
+      state: "waiting-prerequisite",
+      blockingMatchId: "r2-1",
+      blockingCourtId: "c2",
+    });
+    expect(deriveCourtState("c1", [target, prerequisite], () => 10, () => 5, base).state).toBe(
+      "free-blocked",
+    );
+  });
+
+  it("does not wait on a prerequisite that is over, void, or on an earlier day", () => {
+    const reported = match({ id: "a", status: "reported", endedAt: at(-30), playerIds: ["p7"] });
+    const walkover = match({ id: "b", status: "walkover", playerIds: ["p8"] });
+    const voided = match({ id: "c", status: "void", playerIds: ["p9"] });
+    const target = match({
+      id: "makeup-2",
+      playerIds: ["p1", "p2"],
+      // "d" is not among this day's matches: it was played on an earlier day.
+      prerequisiteIds: ["a", "b", "c", "d"],
+    });
+
+    expect(
+      getMatchReadiness(target, [target, reported, walkover, voided], 5, base).state,
+    ).toBe("ready");
+  });
+
+  it("waits on a prerequisite that has not started, without naming a court", () => {
+    const prerequisite = match({ id: "r2-3", courtId: "c4", status: "scheduled", playerIds: ["p7"] });
+    const target = match({ id: "makeup-2", playerIds: ["p1"], prerequisiteIds: ["r2-3"] });
+
+    expect(getMatchReadiness(target, [target, prerequisite], 5, base)).toMatchObject({
+      state: "waiting-prerequisite",
+      blockingCourtId: null,
+    });
+  });
 });
 
 describe("desk court state", () => {

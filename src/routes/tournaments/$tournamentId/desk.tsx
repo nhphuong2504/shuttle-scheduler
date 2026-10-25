@@ -111,6 +111,7 @@ import {
   deskKindTable,
   isPlacementKind,
   playerStatus,
+  unfinishedPrerequisite,
   type DeskMatchModel,
   type MatchReadiness,
 } from "@/lib/tournament/desk";
@@ -394,7 +395,21 @@ function Desk() {
       tournament?.knockout_rest_gap_minutes ?? 30,
     );
 
-    return checkStartConstraints(targetPlayerIds, requiredRestMinutes, others);
+    const waitingOn = unfinishedPrerequisite(current, allMatches);
+    return {
+      ...checkStartConstraints(targetPlayerIds, requiredRestMinutes, others),
+      prerequisites: waitingOn
+        ? [
+            {
+              matchId: waitingOn.id,
+              courtNumber:
+                waitingOn.status === "in-progress" && waitingOn.courtId
+                  ? (courtMap.get(waitingOn.courtId)?.number ?? null)
+                  : null,
+            },
+          ]
+        : [],
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, allMatches, teamMap, courtMap, tournament]);
 
@@ -1768,8 +1783,21 @@ export function MatchOperationsDialog({
         ) : null}
         {!isReported &&
         match.status !== "in-progress" &&
-        (startCheck?.conflicts.length || startCheck?.warnings.length) ? (
+        (startCheck?.conflicts.length ||
+          startCheck?.prerequisites?.length ||
+          startCheck?.warnings.length) ? (
           <ul className="space-y-1.5 text-sm">
+            {(startCheck?.prerequisites ?? []).map((p, i) => (
+              <li
+                key={`prerequisite-${i}`}
+                className="rounded-md bg-danger-surface px-3 py-1.5 text-danger-foreground"
+              >
+                {p.courtNumber
+                  ? `This match waits for the match on Court ${p.courtNumber}.`
+                  : "This match waits for an earlier match that has not finished."}{" "}
+                It can start once that one is over.
+              </li>
+            ))}
             {(startCheck?.conflicts ?? []).map((c, i) => (
               <li
                 key={`conflict-${i}`}
@@ -1811,7 +1839,13 @@ export function MatchOperationsDialog({
           ) : notStarted ? (
             <Button
               className="h-12 flex-1 text-lg font-semibold shadow-md"
-              disabled={!canEdit || busy || !!startCheck?.conflicts.length || restBlocked}
+              disabled={
+                !canEdit ||
+                busy ||
+                !!startCheck?.conflicts.length ||
+                !!startCheck?.prerequisites?.length ||
+                restBlocked
+              }
               onClick={() => {
                 // Both are acknowledgement gates, not blocks: a hard physical conflict
                 // has already disabled this button above, and the server still refuses
@@ -2036,6 +2070,10 @@ function readinessReason(
       return `${who}on Court ${
         readiness.blockingCourtId ? (courts.get(readiness.blockingCourtId)?.number ?? "?") : "?"
       }`;
+    case "waiting-prerequisite":
+      return readiness.blockingCourtId
+        ? `Waits for the match on Court ${courts.get(readiness.blockingCourtId)?.number ?? "?"}`
+        : "Waits for an earlier match to finish";
     case "teams-missing":
       return "Teams not assigned";
   }
