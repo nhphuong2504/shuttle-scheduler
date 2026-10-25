@@ -2976,3 +2976,24 @@ describe("match result history migration", () => {
     expect(sql).toMatch(/public\.current_profile_id\(\)/);
   });
 });
+
+describe("drop reassign_court_matches migration", () => {
+  const dir = join(__dirname, "../../../supabase/migrations");
+  const sql = readFileSync(join(dir, "20261025010000_drop_reassign_court_matches.sql"), "utf8");
+
+  it("drops the function by its full signature and checks it is gone", () => {
+    expect(sql).toMatch(
+      /DROP FUNCTION IF EXISTS public\.reassign_court_matches\(uuid, uuid, uuid, uuid\);/,
+    );
+    expect(sql).toMatch(/RAISE EXCEPTION 'reassign_court_matches is still defined'/);
+  });
+
+  it("is the last word on the function: no later migration defines it again", () => {
+    const later = readdirSync(dir)
+      .filter((name) => name.endsWith(".sql") && name > "20261025010000")
+      .map((name) => readFileSync(join(dir, name), "utf8"));
+    for (const body of later) {
+      expect(body).not.toMatch(/FUNCTION public\.reassign_court_matches/);
+    }
+  });
+});

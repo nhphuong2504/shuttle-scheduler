@@ -109,27 +109,6 @@ export async function shiftTournamentDays(
   });
 }
 
-/**
- * Moves one day's unstarted matches off a failed court onto another the day already uses.
- *
- * Refused while the source court is playing, and when the target already has matches that day:
- * stacking a second schedule onto one court would create the overlap conflicts the scheduler
- * exists to remove.
- */
-export async function reassignCourtMatches(
-  tournamentId: string,
-  dayId: string,
-  fromCourtId: string,
-  toCourtId: string,
-): Promise<number> {
-  return rpcReturning<number>("reassign_court_matches", {
-    p_tournament_id: tournamentId,
-    p_day_id: dayId,
-    p_from_court_id: fromCourtId,
-    p_to_court_id: toCourtId,
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Shape conversion
 //
