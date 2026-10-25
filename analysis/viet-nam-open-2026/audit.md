@@ -2,6 +2,8 @@
 
 *Ngày audit: 2026-10-24. Dữ liệu: snapshot `analysis/viet-nam-open-2026` (commit `faed7f6`). Code đối chiếu: `main` @ `d63b94a`. Toàn bộ giờ là giờ địa phương `America/Chicago`.*
 
+> **Cập nhật 2026-10-25.** Sau khi chạy lại chính bộ xếp lịch của ứng dụng trên trạng thái thật của giải, nguyên nhân gốc của A3 đã được xác định, và nó cũng là điểm khởi đầu của A1. Xem **§8**. Các lỗi này đã được sửa ở Đợt 1 (nhánh `fix/scheduler-silent-failures`) và Đợt 2 (nhánh `feat/desk-start-guard`).
+
 **Ký hiệu loại phát hiện:** `BUG` lỗi · `LIMIT` giới hạn của thuật toán/thiết kế · `UX` trải nghiệm vận hành · `EXPECTED` đúng thiết kế · `OPT` cơ hội tối ưu · `CONFIG` do cấu hình thử nghiệm · `SIM` hiện vật của việc mô phỏng.
 **Mức bằng chứng:** **[Sự kiện]** đọc thẳng từ dữ liệu · **[Suy luận]** rút ra từ dữ liệu và code · **[Giả thuyết]** chưa kiểm chứng được bằng dữ liệu hiện có.
 
@@ -40,7 +42,7 @@ Ngày 2, một lần bắt đầu trận ngoài kế hoạch đã làm sân 2 đ
 1. **Trận quá giờ bị chặn làm "đóng băng" một sân** (§6-A1). `BUG`/`LIMIT` + `UX`, **P0**.
 2. **Trận được bắt đầu khi chưa có giờ công bố thì reflow không nhìn thấy** (§6-A2). Hai trận ngày 2 rơi vào trường hợp này, và một trong hai là nguyên nhân gốc của #1. `BUG`, **P0**.
 3. **Lịch gắn cứng vào sân, Desk chỉ hiện một trận cho mỗi sân.** Trận sẵn sàng phải chờ sau một trận chạy quá giờ trên sân của nó trong khi 4–7 sân khác trống (§6-A6). `LIMIT` + `UX`, **P0/P1**.
-4. **Tự xếp lịch (place-ready) có lúc im lặng không xếp.** Các trận nhánh XD không có giờ trong khoảng 11 phút; `MS draw A r1 s2` không bao giờ được xếp giờ (§6-A3). Chưa xác định được nguyên nhân. **P1**.
+4. **Tự xếp lịch (place-ready) có lúc im lặng không xếp.** Các trận nhánh XD không có giờ trong khoảng 11 phút; `MS draw A r1 s2` không bao giờ được xếp giờ (§6-A3). ~~Chưa xác định được nguyên nhân. **P1**.~~ **Đã xác định (§8): bộ xếp lịch bị crash, và đây chính là điểm khởi đầu của #1. `BUG`, P0, đã sửa ở Đợt 1.**
 5. **Ngày 1 không thể chứa đủ 51 trận placement.** Đây là giới hạn công suất do cấu hình (cửa sổ 116 phút, slot 10 phút trong khi trận thực tế trung bình 11,8 phút, VĐV đánh tới 3 nội dung), không phải lỗi thuật toán. Dù vậy hệ thống không cảnh báo trước được điều này (§6-A4, §6-A11). `CONFIG` + `UX`, **P1**.
 
 ---
@@ -316,7 +318,7 @@ Mỗi lần trong số này, hệ thống đều đã có đủ dữ liệu đ�
    - Nhánh MS được xếp lúc 12:30:52, nhưng **MS A r1 s2 bị bỏ sót**. Lúc đó Duong Thanh và Vu Duc đều rảnh, sân 7 và 8 trống, và có khe 12:31–12:51 trước trận XD D r1 s2 của Duong Thanh lúc 13:09.
 2. **Lý tưởng.** Trận sẵn sàng có giờ trong vòng vài giây. Nếu không xếp được thì có lý do hiện ra.
 3. **Thực tế.** Không có dấu vết. Bộ thử lại (settle 1,5 giây, rồi 2/8/30 giây, tối đa 3 lần) chỉ chạy khi Desk hoặc trang Schedule đang mở. Một câu trả lời "bền vững" chỉ được thử một lần cho mỗi "tình huống".
-4. **Root cause.** **[Giả thuyết, chưa kiểm chứng được]** Có ba khả năng:
+4. **Root cause.** **[Đã xác định, xem §8]** Không phải các giả thuyết dưới đây. Nhánh XD: bộ xếp lịch bị crash (`unknown-dependency`) từ 12:12 tới 12:19. MS A r1 s2: bộ xếp lịch và server nhìn trạng thái sân 2 khác nhau. Các giả thuyết ban đầu, giữ lại để đối chiếu:
    - (a) Ba kết quả trong 7 giây (12:12:30/33/37) bị `singleFlight` gộp lại, và lần chạy sinh nhánh lập kế hoạch với cache chưa làm mới.
    - (b) Kết quả được nhập từ trang Scores, nơi không gắn reconciler.
    - (c) Server từ chối (`player_busy`/`court_busy`) và lần thử cuối rơi vào khoảng người vận hành đã bắt đầu trận.
@@ -468,3 +470,39 @@ Bốn kết quả được nhập trong 17 giây, rồi 24 phút không có lầ
 - Sau đó chạy lại một giải thử theo P2-16, rồi mới dùng cho giải thật.
 
 Nếu buộc phải dùng ngay, cần một người trực trang Schedule, theo dõi các sân "free-blocked" quá 10 phút, và sẵn sàng Rebuild. Tránh bắt đầu trận từ pool "ready, unassigned" khi VĐV của trận đó đã có giờ ở sân khác.
+
+---
+
+## 8. Cập nhật 2026-10-25: nguyên nhân gốc đã được xác định bằng cách chạy lại thuật toán
+
+**Phương pháp.** Từ `tournament.json` và `desk-activity.csv`, trạng thái của giải được dựng lại tại từng thời điểm: trạng thái, sân và giờ công bố của mọi trận. Sau đó chính hàm `planPlacementSchedule({ mode: "place-ready" })` của ứng dụng được chạy trên trạng thái đó. Lần chạy lúc 12:23:24 cho ra **đúng 5 trận XD mà Desk đã ghi nhận**, khớp tới từng sân và từng phút. Như vậy phép chạy lại là thuật toán thật trên trạng thái thật **[Sự kiện]**. Ba thời điểm sáng ngày 2 hiện là test hồi quy (`src/lib/tournament/scheduling/viet-nam-open-replay.test.ts`).
+
+### 8.1 Ba lỗi
+
+| # | Lỗi | Bằng chứng | Hệ quả |
+| --- | --- | --- | --- |
+| L1 | **Bộ xếp lịch crash khi trận tiên quyết đã đánh ở ngày trước.** Trận makeup-2 tràn sang ngày 2 vẫn khai báo các trận vòng 2 của ngày 1 là trận phụ thuộc. Code chỉ đổi trận tiên quyết thuộc *vòng 1* thành mốc "không sớm hơn giờ X" (`stage-items.ts`). Bài toán của ngày 2 không chứa các trận ngày 1, nên phép kiểm tra đầu vào ném `unknown-dependency`. | Chạy lại lúc 12:12:35, 12:14:15 và 12:16:00 đều ném lỗi. Lúc 12:20 thì không, vì trận placement cuối cùng của ngày 2 đã bắt đầu lúc 12:19:32 nên bước xếp placement bị bỏ qua. | Mọi lần tự xếp lịch từ 12:12 tới 12:19 đều thất bại. 5 trận nhánh XD không có giờ trong 11 phút. |
+| L2 | **Bộ xếp lịch và server nhìn sân khác nhau.** Ở chế độ place-ready, trận WD A (quá giờ, bị chặn vì Ly Van đang đánh) bị loại khỏi bài toán, nên bộ xếp lịch coi sân 2 là trống. Server vẫn tính sân 2 bị WD A chiếm. | Chạy lại lúc 12:30:52: bộ xếp lịch đặt MS A r1 s2 vào **sân 2 lúc 12:31**, chồng lên khung giờ WD A đang giữ. Server trả `court_busy`, và mỗi lần thử lại cho ra đúng kế hoạch đó. | MS A r1 s2 không bao giờ có giờ. Người vận hành tự bắt đầu nó lúc 12:31:46. Trường hợp này vô hại. |
+| L3 | **Thất bại không để lại dấu vết.** `useAutoSchedule` nuốt lỗi. Bộ thử lại dừng sau 3 lần và chỉ thử tiếp khi danh sách trận chưa xếp thay đổi. | Từ 12:15 tới 12:23 không có lần thử nào, dù từ 12:19:32 việc xếp đã có thể thành công. | Trên Desk, các trận này trông như một danh sách "Ready to place" bình thường. |
+
+### 8.2 Chuỗi nhân quả của sự cố sân 2 (A1), đã được chứng minh
+
+1. 12:12:34: nhánh XD được tạo. Bộ xếp lịch crash (L1). Các trận XD nằm trong danh sách "Ready to place".
+2. 12:14: người vận hành bắt đầu XD C r1 s1 từ danh sách đó, trên sân trống số 6. Ly Van bị kẹt trong trận này, trong khi đã có lịch WD A lúc 12:21 ở sân 2 (A2).
+3. **Nếu không crash** thì sao? Chạy lại lúc 12:12:35 với L1 đã vá: XD C r1 s1 được xếp **lúc 12:52 ở sân 6**, sau trận WD A của Ly Van. Nó sẽ không nằm trong danh sách để bị bắt đầu lúc 12:14, và WD A sẽ đánh đúng 12:21 **[Sự kiện, theo phép chạy lại]**.
+4. Phần còn lại diễn ra như A1: reflow không dời trận quá giờ, Desk chỉ cho thấy một trận mỗi sân, sân 2 đứng yên 99 phút.
+
+Vì vậy nhận định ở §0, "một lần bắt đầu trận ngoài kế hoạch đã làm sân 2 đứng yên", là đúng, nhưng chưa đủ: **lần bắt đầu đó do lỗi của hệ thống mời gọi**. Người vận hành đã làm đúng điều Desk hiển thị.
+
+### 8.3 Đính chính một số nhận định khác
+
+- **A4 (MS bị tràn sang ngày 2).** Không hoàn toàn là giới hạn công suất. Chạy lại một lần rebuild toàn bộ lúc 16:04 ngày 1, vẫn giữ giờ đóng cửa 17:00, thì cả **3 trận MS vòng 2 vẫn nằm lại ngày 1**. Chế độ tự xếp từng trận (place-ready) giữ cố định mọi trận đã công bố, nên không tìm được chỗ. Đánh đổi là rebuild đó đổi giờ 14 trận. Còn nếu kéo dài giờ đóng cửa tới 17:30 và chỉ gỡ 5 trận bị tràn ra để xếp lại, thì cả 5 trận vào ngày 1 (trận cuối xong 17:21) mà **không trận nào khác đổi giờ**.
+- **Rebuild toàn bộ để gỡ sân 2.** Chạy lại lúc 12:40, rebuild đổi giờ 10 trận, trong đó 6 trận bị kéo *sớm hơn* 32–59 phút. Nếu chỉ gỡ trận bị kẹt (WD A) ra rồi để tự xếp lại, chỉ 1 trận đổi giờ. Đây là cơ sở cho hướng "gỡ trận kẹt" của Đợt 3.
+
+### 8.4 Đã sửa ở đâu
+
+| Đợt | Nhánh | Nội dung |
+| --- | --- | --- |
+| 1 | `fix/scheduler-silent-failures` | Sửa L1 (`stage-items.ts`): mọi trận tiên quyết đã đánh xong đều thành mốc thời gian. Sửa L2 (`placement-schedule.ts`): trận bị loại khỏi bài toán vẫn giữ sân của nó. Sửa L3: báo lỗi trên Desk, và thử lại mỗi khi có trận bắt đầu hoặc kết thúc. Thêm test hồi quy chạy lại dữ liệu giải. "Will it fit?" dùng độ dài trận lấy từ setting. |
+| 2 | `feat/desk-start-guard` | Đóng các đường bắt đầu trận ngoài lịch: sân trống không mời bắt đầu trận; trang Scores không còn nút Start; bỏ dời sân và giờ bằng tay; server từ chối trận chưa có giờ hoặc bị truyền sai sân. Không hiện "Ready" khi trận tiên quyết chưa xong (A8). |
+| 3 (đang lập phạm vi) | — | Gỡ trận kẹt, thẻ quyết định cuối ngày, làm tròn giờ công bố (A1, A4, A5, A7). |
