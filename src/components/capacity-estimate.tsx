@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 export function CapacityEstimate({
   entrantsPerEvent,
   courtHoursOffered,
+  placementSlotMinutes,
+  knockoutSlotMinutes,
   inline = false,
   className,
 }: {
@@ -21,11 +23,22 @@ export function CapacityEstimate({
   entrantsPerEvent: readonly number[];
   /** Court time the configured days offer, after breaks. */
   courtHoursOffered: number;
+  /**
+   * The tournament's own match lengths. Required: the defaults belong to a plan with no
+   * settings yet, and pricing a configured tournament at them answered a different question.
+   */
+  placementSlotMinutes: number;
+  knockoutSlotMinutes: number;
   /** Drawn as a row inside another panel instead of a box of its own. */
   inline?: boolean;
   className?: string;
 }) {
-  const estimate = estimateCapacity({ entrantsPerEvent, courtHoursOffered });
+  const estimate = estimateCapacity({
+    entrantsPerEvent,
+    courtHoursOffered,
+    placementSlotMinutes,
+    knockoutSlotMinutes,
+  });
   const hours1 = (value: number) => (Math.round(value * 10) / 10).toString();
 
   return (
@@ -62,9 +75,16 @@ export function CapacityEstimate({
           </p>
           <p>
             Needed time counts the group-stage matches (each active entry plays two) and splits the
-            knockout draws evenly, so the knockout figure is a guess until the draws are set.
+            knockout draws evenly, so the knockout figure is a guess until the draws are set. Each
+            match is priced at the match length set for its stage.
           </p>
           <p>Offered time is each day&apos;s courts times its hours, less breaks.</p>
+          <p>
+            It compares totals only. It does not check each day on its own, players entered in
+            several events (their matches cannot overlap and need rest between them), or rounds
+            that must wait for the one before. A day can still run out of time when the totals
+            fit.
+          </p>
         </InfoNote>
       </span>
     </p>

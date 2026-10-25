@@ -283,9 +283,13 @@ The Schedule page shows a rough count of court time needed against court time of
 the tournament, with nothing typed: the needed side from the active entries per event, the
 offered side from each configured day's courts times its window less its breaks. It counts a
 field of N >= 3 as N placement matches plus an even split of the knockout draws, and prices them
-at the default 20 / 25 minute slots. Nothing is saved and the scheduler does not read it. It
+at the tournament's own placement and knockout match lengths. Nothing is saved and the scheduler does not read it. It
 states "needs X court-hours, has Y" and nothing about utilisation, which was removed from the
 forecast on purpose.
+
+It compares totals only, and its (i) says so. It does not check each day on its own, players entered
+in several events, or the round-two and knockout gates, so a day can run out of time while the totals
+fit: Viet Nam Open 2026's day 1 had enough court-hours but not enough time for its busiest players.
 
 It is shown for as long as the tournament is being run — before it starts and throughout it — and
 dropped only once the tournament is completed. Mid-event it is still a planning line: it says

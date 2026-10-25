@@ -1833,11 +1833,13 @@ export function PlacementScheduler() {
               <ConnectionBadge status={realtime.status} lastUpdatedAt={realtime.lastUpdatedAt} />
             </span>
           )}
-          {canEdit && capacity ? (
+          {canEdit && capacity && tournament ? (
             <CapacityEstimate
               inline
               entrantsPerEvent={capacity.fields}
               courtHoursOffered={capacity.offered}
+              placementSlotMinutes={tournament.group_slot_minutes}
+              knockoutSlotMinutes={tournament.knockout_slot_minutes}
             />
           ) : null}
         </div>

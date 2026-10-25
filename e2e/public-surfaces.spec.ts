@@ -1001,12 +1001,14 @@ test.describe("Whether a tournament's entries fit, on the Schedule page", () => 
    *
    * Entries: 12 teams over the two events, 6 each and none withdrawn, so the needed side is
    * 12 placement matches (six per field) plus four knockout matches - a field of 6 splits
-   * into draws of 3/3/1/1, and a draw of n plays n - 1 - priced at 20 and 25 minutes:
-   * (12 x 20 + 4 x 25) / 60 = 5.7 court-hours.
+   * into draws of 3/3/1/1, and a draw of n plays n - 1 - priced at the fixture's own match
+   * lengths, 20 minutes placement and 15 knockout: (12 x 20 + 4 x 15) / 60 = 5 court-hours.
+   * The defaults (20 / 25) would read 5.7, which is how a failure here says the settings were
+   * not read.
    *
    * Offered: 8 courts over the fixture's one day, 00:00 to 23:59, so 8 x 1439 / 60 = 191.9.
    */
-  const FITS = "About 16 matches need 5.7 court-hours; the days offer 191.9. That should fit.";
+  const FITS = "About 16 matches need 5 court-hours; the days offer 191.9. That should fit.";
 
   test("counts the real field sizes against the configured days, and asks for nothing", async ({
     page,
@@ -1039,7 +1041,7 @@ test.describe("Whether a tournament's entries fit, on the Schedule page", () => 
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByTestId("capacity-estimate")).toContainText(
-      "About 16 matches need 5.7 court-hours; the days offer 183.9. That should fit.",
+      "About 16 matches need 5 court-hours; the days offer 183.9. That should fit.",
     );
   });
 
