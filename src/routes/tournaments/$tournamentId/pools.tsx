@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { generatePoolsForCategory, setManualRankOverride } from "@/lib/tournament/actions";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import {
   indexBy,
   teamLabel,
@@ -64,7 +65,7 @@ function PoolsPage() {
       subtitle="Pools of four, or five when the entry count needs it."
     >
       <div className="space-y-6">
-        {(categories ?? []).map((c) => {
+        {(categories ?? []).slice().sort(compareEventOrder).map((c) => {
           const catTeams = (teams ?? []).filter((t) => t.category_id === c.id && !t.withdrawn);
           const catPools = (pools ?? []).filter((p) => p.category_id === c.id);
           return (

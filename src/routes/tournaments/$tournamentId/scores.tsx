@@ -16,6 +16,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import {
   indexBy,
   teamLabel,
@@ -511,7 +512,7 @@ function MatchesPage() {
               <FilterChip active={categoryId === "all"} onClick={() => setCategoryId("all")}>
                 All events
               </FilterChip>
-              {(categories ?? []).map((c) => (
+              {(categories ?? []).slice().sort(compareEventOrder).map((c) => (
                 <FilterChip
                   key={c.id}
                   active={categoryId === c.id}

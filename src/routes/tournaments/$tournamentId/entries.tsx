@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { PlayerPicker } from "@/components/player-picker";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -206,11 +207,12 @@ function EntriesPage() {
 
   // A category the tournament does not run is hidden from the entry forms, but any that
   // already hold entries stay visible so existing entries can never disappear from the desk.
+  // The list reads in the standard event order, the same as every other page that names events.
   const listedCategories = useMemo(
     () =>
-      (categories ?? []).filter(
-        (c) => c.active || (teams ?? []).some((t) => t.category_id === c.id),
-      ),
+      (categories ?? [])
+        .filter((c) => c.active || (teams ?? []).some((t) => t.category_id === c.id))
+        .sort(compareEventOrder),
     [categories, teams],
   );
 

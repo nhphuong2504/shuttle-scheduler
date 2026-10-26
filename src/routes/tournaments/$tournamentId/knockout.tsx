@@ -5,6 +5,7 @@ import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { KnockoutBracket } from "@/components/knockout-bracket";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS } from "@/lib/tournament/competition-format";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import { bracketNote, bracketRounds, buildCategoryView } from "@/lib/tournament/placement-actions";
 import {
   indexBy,
@@ -78,7 +79,10 @@ function KnockoutPage() {
   const playerMap = useMemo(() => indexBy(players), [players]);
   const teamMap = useMemo(() => indexBy(teams), [teams]);
 
-  const live = (categories ?? []).filter((category) => category.active);
+  // The standard event order, so this page reads MS -> WS -> MD -> WD -> XD like the others.
+  const live = (categories ?? [])
+    .filter((category) => category.active)
+    .sort(compareEventOrder);
   const wrongFormat = tournament != null && tournament.format !== "two_round_placement";
 
   return (

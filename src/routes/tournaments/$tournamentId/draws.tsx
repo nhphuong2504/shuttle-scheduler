@@ -8,6 +8,7 @@ import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { drawGate, generateDrawsForCategory } from "@/lib/tournament/actions";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import {
   indexBy,
   teamLabel,
@@ -115,7 +116,7 @@ function DrawsPage() {
       subtitle="A = pool winners, B = runners-up, C = thirds, D = fourths and below."
     >
       <div className="space-y-8">
-        {(categories ?? []).map((c) => {
+        {(categories ?? []).slice().sort(compareEventOrder).map((c) => {
           const catPools = (pools ?? []).filter((p) => p.category_id === c.id);
           const catPoolMatches = (poolMatches ?? []).filter((m) => m.category_id === c.id);
           const gate = drawGate(catPools, entries ?? [], catPoolMatches);
