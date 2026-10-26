@@ -187,3 +187,14 @@ export function mergedOccupancyMinutes(
   }
   return total / 60_000;
 }
+
+/**
+ * `start` on the next multiple of `granularityMs`, or unchanged when no grid applies.
+ *
+ * Rounded up, never to nearest: a solver only ever reaches a candidate by advancing past whatever
+ * blocked it, so rounding down could step back into the blocking interval.
+ */
+export function alignUp(start: number, granularityMs: number | null | undefined): number {
+  if (!granularityMs || granularityMs <= 0) return start;
+  return Math.ceil(start / granularityMs) * granularityMs;
+}

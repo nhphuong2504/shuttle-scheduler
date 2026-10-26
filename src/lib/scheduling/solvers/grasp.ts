@@ -40,7 +40,7 @@ import {
   objectiveOrderOf,
   type SolutionMetrics,
 } from "../metrics";
-import { fitsInWindows } from "../time";
+import { alignUp, fitsInWindows } from "../time";
 import {
   dependenciesSatisfied,
   describeDeadlock,
@@ -165,9 +165,14 @@ function nextEvent(
   scheduledEnd: ReadonlyMap<string, number>,
 ): number | null {
   const hardEnd = indexes.problem.hardEnd ?? null;
+  const granularity = indexes.problem.startGranularityMs;
   let next = Number.POSITIVE_INFINITY;
-  const consider = (value: number | undefined | null) => {
-    if (value == null || !Number.isFinite(value)) return;
+  const consider = (raw: number | undefined | null) => {
+    if (raw == null || !Number.isFinite(raw)) return;
+    // On the grid, a match can only start at the next multiple at or after the moment it becomes
+    // possible. `currentTime` is always on the grid, so anything later than it rounds to at least
+    // one step on and the run cannot stall.
+    const value = alignUp(raw, granularity);
     if (value <= currentTime) return;
     if (hardEnd != null && value > hardEnd) return;
     if (value < next) next = value;
@@ -244,7 +249,7 @@ function runOnce(
   }
 
   const trace: SolverTraceEntry[] = [];
-  let currentTime = problem.floor;
+  let currentTime = alignUp(problem.floor, problem.startGranularityMs);
   let iterations = 0;
   let deadlockReason: string | null = null;
 

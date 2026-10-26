@@ -500,6 +500,10 @@ export function validateSolution(
       if (hardEnd != null && assignment.end > hardEnd) {
         violations.push({ kind: "hard-end", matchId: match.id });
       }
+      const granularity = problem.startGranularityMs;
+      if (granularity && assignment.start % granularity !== 0) {
+        violations.push({ kind: "off-granularity", matchId: match.id });
+      }
     }
 
     // Availability and breaks bind work the solver chooses. A fixed match is decided history —

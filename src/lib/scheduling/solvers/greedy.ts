@@ -31,7 +31,7 @@ import {
   type Solution,
 } from "../domain";
 import { buildSolution } from "../metrics";
-import { nextWindowStartAtOrAfter } from "../time";
+import { alignUp, nextWindowStartAtOrAfter } from "../time";
 import {
   allDependenciesKnown,
   dependenciesSatisfied,
@@ -99,9 +99,13 @@ function earliestStartOnResource(
   const windows = indexes.openByResource.get(resourceId) ?? [];
   const hardEnd = indexes.problem.hardEnd ?? null;
   const occupancies = decidedByResource.get(resourceId);
+  const granularity = indexes.problem.startGranularityMs;
   let start = lowerBound;
 
   for (let step = 0; step < MAX_GAP_STEPS; step++) {
+    // Every advance below lands on a real boundary, which may be any millisecond; the grid is
+    // re-applied before each check so the start returned is always on it.
+    start = alignUp(start, granularity);
     if (hardEnd != null && start + durationMs > hardEnd) return null;
 
     const windowStart = nextWindowStartAtOrAfter(start, durationMs, windows);

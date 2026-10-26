@@ -216,6 +216,8 @@ function toProblem(input: DayCompositionInput, policy: SchedulingPolicy): Schedu
     planningEnd: input.planningEnd,
     hardEnd: input.hardEnd ?? null,
     floor: input.floor,
+    // A tournament publishes whole minutes (`published-time.ts`), so the solver may only choose them.
+    startGranularityMs: MINUTE_MS,
     ...(unavailable.length ? { unavailable } : {}),
     objective: policy.objective,
   };

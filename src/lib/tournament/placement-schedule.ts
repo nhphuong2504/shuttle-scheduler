@@ -26,7 +26,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-import { compareIds, normalizeBreaks, relateToDecided } from "@/lib/scheduling";
+import { compareIds, forbiddenStartInterval, normalizeBreaks, relateToDecided } from "@/lib/scheduling";
 import type {
   BaselineSlot,
   CandidateInterval,
@@ -47,6 +47,7 @@ import type {
   TournamentDay,
   TournamentDayBreak,
 } from "./data";
+import { ceilToMinute, SCHEDULE_SHIFT_THRESHOLD_MS } from "./published-time";
 import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
 import { MIN_ENTRANTS_FOR_ROUND_TWO } from "./placement-actions";
 import { bracketRoundCount, isTierMatchReady } from "./tier-draw";
@@ -531,6 +532,47 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   }
 
   const rawById = new Map([...placementRaw, ...knockoutRaw].map((item) => [item.id, item]));
+
+  /**
+   * Where a published row stands once the reflow's tolerance is allowed for.
+   *
+   * The reflow does not write a move under `SCHEDULE_SHIFT_THRESHOLD_MS`, so a published time may sit
+   * up to that much inside a real finish - the court's previous match, or a shared player's rest after
+   * one. That is the reflow declining to announce a small move, not a collision, and treating it as
+   * one dropped the row from `place-ready` (its players then looked free, and every slot planned for
+   * them was refused) and released it from a rebuild's freeze. So the row is taken where that move
+   * would have put it: past every decided window it touches, rounded up to the minute, as long as
+   * that is less than the threshold away. Further than that it is a real collision and the published
+   * time is returned unchanged, for the checks below to treat as one.
+   */
+  const settledStart = (item: StageItem, published: number): number => {
+    const interval: CandidateInterval = {
+      durationMinutes: item.durationMinutes,
+      ...restRulesOf(item),
+    };
+    let start = published;
+    for (let step = 0; step < 16; step += 1) {
+      const end = start + item.durationMinutes * MINUTE;
+      let needed = start;
+      for (const window of decidedWindowsByCourt.get(item.courtNumber ?? -1) ?? []) {
+        if (start < window.end && window.start < end) needed = Math.max(needed, window.end);
+      }
+      for (const occupancy of decidedOccupancies) {
+        for (const id of item.participantIds) {
+          if (!occupancy.participantIds.includes(id)) continue;
+          const decided: DecidedInterval = { start: occupancy.start, end: occupancy.end, ...occupancy.rest };
+          if (relateToDecided(start, interval, decided, id) === "conflict") {
+            needed = Math.max(needed, forbiddenStartInterval(interval, decided, id).hi);
+          }
+        }
+      }
+      if (needed === start) return start;
+      start = ceilToMinute(needed);
+      if (start - published >= SCHEDULE_SHIFT_THRESHOLD_MS) return published;
+    }
+    return published;
+  };
+
   /** Rows the freeze would pin, minus the ones whose current time is no longer legal. */
   const candidates: FreezeCandidate[] = [];
   for (const item of [...placementRaw, ...knockoutRaw]) {
@@ -562,7 +604,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       continue;
     }
 
-    const start = committed.start;
+    const start = settledStart(item, committed.start);
     const end = start + item.durationMinutes * MINUTE;
 
     if (!placeReady) {

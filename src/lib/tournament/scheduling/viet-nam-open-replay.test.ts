@@ -132,7 +132,7 @@ describe("Viet Nam Open 2026, day two: automatic placement on the real state", (
     // Draw C was placed after Ly Van's published 12:21 match, so it would never have sat in the
     // pool to be started by hand at 12:14.
     expect(describeSlots(snapshot, result.knockoutNewPayload)).toContain(
-      "XD Draw C r1 s1 · Court 6 · 12:52",
+      "XD Draw C r1 s1 · Court 6 · 12:53",
     );
     expect(describeSlots(snapshot, result.knockoutNewPayload)).toHaveLength(6);
   });
@@ -141,13 +141,18 @@ describe("Viet Nam Open 2026, day two: automatic placement on the real state", (
     const snapshot = fixture.snapshots.realPlacement;
     const result = plan(snapshot);
 
+    // The desk recorded 13:23:03 (three of them), 13:22:55 and 13:09:32. Starts are now chosen on
+    // whole minutes (section 33), so each is the recorded time rounded up, on the same court.
     expect(describeSlots(snapshot, result.knockoutNewPayload)).toEqual([
-      "XD Draw A r1 s1 · Court 2 · 13:23",
-      "XD Draw A r1 s2 · Court 4 · 13:23",
-      "XD Draw B r1 s2 · Court 1 · 13:22",
-      "XD Draw D r1 s1 · Court 3 · 13:23",
-      "XD Draw D r1 s2 · Court 5 · 13:09",
+      "XD Draw A r1 s1 · Court 2 · 13:24",
+      "XD Draw A r1 s2 · Court 4 · 13:24",
+      "XD Draw B r1 s2 · Court 1 · 13:23",
+      "XD Draw D r1 s1 · Court 3 · 13:24",
+      "XD Draw D r1 s2 · Court 5 · 13:10",
     ]);
+    for (const slot of result.knockoutNewPayload) {
+      expect(Date.parse(slot.scheduled_time as string) % 60_000).toBe(0);
+    }
   });
 
   it("does not plan onto a court an overdue match still holds", () => {

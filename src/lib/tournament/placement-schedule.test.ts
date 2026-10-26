@@ -2812,6 +2812,73 @@ describe("place-ready when a held match is a prerequisite", () => {
   });
 });
 
+describe("a published time the reflow left inside a real finish (section 33)", () => {
+  // `played` ran 40 seconds past 10:00, and the reflow did not move `held` off 10:00: a one-minute
+  // move is under the threshold, so it is not written. That is a tolerance, not a collision.
+  const played = placementMatch("played", "round1", "e1", "e2", {
+    status: "reported",
+    court_id: "c1",
+    scheduled_time: "2026-09-17T09:30:00",
+    started_at: "2026-09-17T09:30:00",
+    ended_at: new Date("2026-09-17T10:00:40").toISOString(),
+  });
+
+  it("keeps the row as an anchor in place-ready, where the move would have put it", () => {
+    const held = placementMatch("held", "round1", "e3", "e4", {
+      court_id: "c1",
+      scheduled_time: new Date("2026-09-17T10:00:00").toISOString(),
+    });
+    // Shares team 3's players with `held`, so it must wait for held's end plus the rest gap. Were
+    // `held` dropped, its players would look free and this would be planned on top of it.
+    const next = placementMatch("next", "round1", "e3", "e2");
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [played, held, next],
+      now: new Date("2026-09-17T10:00:50").getTime(),
+    });
+
+    expect(result.frozenMatchIds).toContain("held");
+    expect(result.placementNewPayload.some((slot) => slot.match_id === "held")).toBe(false);
+    const slot = result.placementNewPayload.find((entry) => entry.match_id === "next");
+    // held taken at 10:01 for 30 minutes, then 20 minutes' rest.
+    expect(Date.parse(slot?.scheduled_time as string)).toBeGreaterThanOrEqual(
+      new Date("2026-09-17T10:51:00").getTime(),
+    );
+  });
+
+  it("still pins the row in a rebuild instead of releasing it", () => {
+    const held = placementMatch("held", "round1", "e3", "e4", {
+      court_id: "c1",
+      scheduled_time: new Date("2026-09-17T10:01:00").toISOString(),
+    });
+    const late = { ...played, ended_at: new Date("2026-09-17T10:01:30").toISOString() };
+    const result = plan({
+      placementMatches: [late, held],
+      now: new Date("2026-09-17T10:00:40").getTime(),
+    });
+
+    expect(result.frozenMatchIds).toContain("held");
+    const slot = result.placementSlotPayload.find((entry) => entry.match_id === "held");
+    expect(slot?.scheduled_time && new Date(slot.scheduled_time).getTime()).toBe(
+      new Date("2026-09-17T10:02:00").getTime(),
+    );
+  });
+
+  it("treats a gap of the threshold or more as the collision it is", () => {
+    const held = placementMatch("held", "round1", "e3", "e4", {
+      court_id: "c1",
+      scheduled_time: new Date("2026-09-17T09:58:00").toISOString(),
+    });
+    const result = plan({
+      mode: "place-ready",
+      placementMatches: [played, held],
+      now: new Date("2026-09-17T10:00:50").getTime(),
+    });
+
+    expect(result.frozenMatchIds).not.toContain("held");
+  });
+});
+
 /**
  * Viet Nam Open 2026, Men's Doubles. The held entrant's second make-up match waits for the first
  * (`prerequisite_ids`), but the second was published first (11:35, court 1) and the first was

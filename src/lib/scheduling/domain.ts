@@ -187,6 +187,14 @@ export interface SchedulingProblem {
   hardEnd?: number | null | undefined;
   /** Earliest a non-fixed match may start. */
   floor: number;
+  /**
+   * When set, every non-fixed start is a whole multiple of this many milliseconds since the epoch:
+   * a tournament publishes whole minutes, so its problems pass 60 000. Candidate starts are rounded
+   * UP to the next multiple and then checked against every constraint as usual, so the grid can
+   * only make a start later, never let it break a rule. Fixed matches and anchors keep their exact
+   * times - they are history or published, not chosen here. Omitted means any millisecond.
+   */
+  startGranularityMs?: number | undefined;
   /** Global unavailable windows, applied to every resource. */
   unavailable?: readonly TimeWindow[] | undefined;
   /** Ordered criteria, highest priority first. Defaults to DEFAULT_OBJECTIVE_ORDER. */
@@ -216,7 +224,8 @@ export type ViolationKind =
   | "fixed-moved"
   | "fixed-unscheduled"
   | "hard-end"
-  | "dependency";
+  | "dependency"
+  | "off-granularity";
 
 export interface Violation {
   kind: ViolationKind;
