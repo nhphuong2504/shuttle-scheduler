@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { InfoNote } from "@/components/ui/info-note";
-import { entrantCountNote } from "@/lib/tournament/competition-format";
 import { compareEventOrder } from "@/lib/tournament/event-order";
 import {
   buildCategoryView,
@@ -279,9 +278,9 @@ function CategorySection({
     return teamId ? teamLabel(teamMap.get(teamId), playerMap) : "TBC";
   };
 
-  // The placement stage holds an odd entrant, so this is informational, never a
-  // blocker. See `entrantCountNote`.
-  const oddNote = entrantCountNote(view.active.length);
+  // The placement stage holds an odd entrant rather than issuing a bye. That is said on the
+  // held entrant's own row ("Why X plays both matches in Round 2"), not in a banner here: the
+  // field is odd for most events, so a banner repeated the same paragraph down the page.
 
   async function run(work: () => Promise<unknown>, success: string) {
     try {
@@ -319,12 +318,6 @@ function CategorySection({
           ) : null}
         </div>
       </div>
-
-      {oddNote ? (
-        <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          {oddNote}
-        </p>
-      ) : null}
 
       {view.active.length === 0 ? (
         <Panel>

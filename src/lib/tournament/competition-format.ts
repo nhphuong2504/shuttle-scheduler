@@ -19,6 +19,11 @@
  * plays two make-up matches in round two, one against a round-one winner and one
  * against a round-one loser. Every entrant therefore plays exactly twice and
  * reaches a draw with a complete record.
+ *
+ * That rule is stated here and, at the point of use, on the held entrant's own row
+ * ("Why X plays both matches in Round 2"). It is deliberately not printed as a banner
+ * above each event: the field is odd for most events, so a banner repeated the same
+ * paragraph down the page while telling the organiser nothing to do about it.
  */
 
 export type PlacementRecord = "WW" | "WL" | "LW" | "LL";
@@ -142,22 +147,4 @@ export function isSupportedFormat(format: string | null | undefined): boolean {
 /** A one-line explanation of the placement rule, for dense UI. */
 export function placementRuleSummary(): string {
   return PLACEMENT_TIERS.map((entry) => `${entry.record} → ${entry.tier}`).join(", ");
-}
-
-/**
- * How an odd entry count is handled.
- *
- * This used to be a blocker: two rounds only produce WW/WL/LW/LL for an even
- * field, and the fix was undecided. It is decided now — the placement stage holds
- * one entrant rather than issuing a bye, so an odd count needs no special casing
- * anywhere. This function returns a host-facing explanation of that, or null when
- * the count is even, so the UI can still call attention to the held entrant.
- */
-export function entrantCountNote(entrantCount: number | null): string | null {
-  if (entrantCount == null || entrantCount <= 2) return null;
-  if (entrantCount % 2 === 0) return null;
-  return (
-    "One entrant is held out of round one and plays both of their placement matches in round two, " +
-    "so nobody has a bye and everyone still plays exactly twice."
-  );
 }
