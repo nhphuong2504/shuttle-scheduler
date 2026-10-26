@@ -42,6 +42,21 @@ export function InfoNote({
         className="max-w-xs space-y-2 text-sm"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
+        /**
+         * Focus leaving is not a reason to close.
+         *
+         * The content is portalled to `document.body`, so inside a modal `Dialog` it sits
+         * outside that dialog's focus scope: opening moved focus into the note, the
+         * dialog's trapped scope pulled it straight back, and the move out read as a
+         * dismissal. Open and close landed in the same tick, so the reader saw nothing -
+         * in every Call next dialog, and in any other note rendered inside one.
+         *
+         * A click elsewhere still closes it: that arrives as `pointerDownOutside`, a
+         * separate dismissal this does not touch. So does the (i) itself, which toggles.
+         * Escape is the one that does not reach here - the enclosing dialog claims the key
+         * first, so it closes the dialog and the note with it.
+         */
+        onFocusOutside={(event) => event.preventDefault()}
       >
         {children}
       </PopoverContent>
