@@ -8,10 +8,10 @@ import type { ScheduleConflict, ScheduleConflictKind } from "./data";
  * desk, the organiser's Schedule page and their unit tests all have to agree about what a
  * kind is called and how a list of them reads.
  *
- * Nothing here re-derives a conflict: the kind is taken as given from the RPC. The
- * `detail` column is deliberately *not* rendered - it carries shortened match ids for
- * debugging rather than a sentence a moderator can act on - so a surface that showed it
- * would leak a database id into the UI.
+ * Nothing here re-derives a conflict: the kind, the other match, the player and the minutes are
+ * taken as given from the RPC. The `detail` column is deliberately *not* rendered - it carries
+ * shortened match ids for debugging rather than a sentence a moderator can act on - so a surface
+ * that showed it would leak a database id into the UI.
  */
 
 /**
@@ -134,28 +134,88 @@ export function summarizeConflicts(
   return { reasons, more, text };
 }
 
-/** One kind's conflicts, ready to render as a section of the organiser's block. */
-export interface ConflictKindGroup {
-  kind: ScheduleConflictKind;
-  label: string;
-  conflicts: ScheduleConflict[];
+/** How a conflict sentence names the things it points at. */
+export interface ConflictWording {
+  /** A match as the reader knows it, for the match on the other side of the conflict. */
+  matchLabel: (matchId: string) => string;
+  /** A player's name, for the player short of rest; null when the name is not known. */
+  playerName: (playerId: string) => string | null;
+}
+
+const minutesText = (minutes: number) => `${minutes} min`;
+
+/**
+ * One conflict as a sentence: what is wrong, with whom, and by how much.
+ *
+ * The RPC names the other match, the player and the minutes (`related_match_id`, `player_id`,
+ * `minutes`), so a row reads "Overlaps WS r2-1 on the same court by 3 min" rather than only its kind.
+ * A row without them - an older server, or a kind that has no other side - falls back to the kind's
+ * label, which is still true, only less specific.
+ */
+export function describeConflict(conflict: ScheduleConflict, wording: ConflictWording): string {
+  const minutes = conflict.minutes ?? null;
+  const other = conflict.related_match_id ? wording.matchLabel(conflict.related_match_id) : null;
+  switch (conflict.conflict_kind) {
+    case "court_overlap":
+      if (other && minutes != null) return `Overlaps ${other} on the same court by ${minutesText(minutes)}`;
+      break;
+    case "rest_shortfall": {
+      if (other && minutes != null) {
+        const who = (conflict.player_id && wording.playerName(conflict.player_id)) || "A player";
+        return `${who} would rest ${minutesText(minutes)} less than required after ${other}`;
+      }
+      break;
+    }
+    case "break":
+      if (minutes != null) return `Runs ${minutesText(minutes)} into a break`;
+      break;
+    case "past_closing":
+      if (minutes != null) return `Ends ${minutesText(minutes)} after the courts close`;
+      break;
+    case "before_prerequisite":
+      if (other && minutes != null) return `Starts ${minutesText(minutes)} before ${other} is due to end`;
+      break;
+  }
+  return CONFLICT_KIND_LABEL[conflict.conflict_kind];
+}
+
+/** Every conflict of one match as sentences, in the canonical kind order. */
+export function describeConflicts(
+  conflicts: readonly ScheduleConflict[],
+  wording: ConflictWording,
+): string[] {
+  return sortConflicts(conflicts).map((conflict) => describeConflict(conflict, wording));
+}
+
+/** One match with everything wrong with it, ready to render as a line of the organiser's block. */
+export interface ConflictMatchGroup {
+  matchId: string;
+  courtId: string | null;
+  scheduledTime: string | null;
+  reasons: string[];
 }
 
 /**
- * The conflicts grouped by kind for the organiser's Schedule block.
+ * The conflicts grouped by match for the organiser's Schedule block, earliest first.
  *
- * The RPC already returns one row per (match, kind), so each group's rows are distinct
- * matches. Empty kinds are omitted rather than rendered as an empty section, and the groups
- * come back in `CONFLICT_KIND_ORDER` so the block does not reshuffle between renders.
+ * By match rather than by kind: a match with two reasons used to appear under two headings, so the
+ * reader counted it twice and read neither reason next to the other. One line per match, its
+ * reasons beneath it, matches the headline, which already counts matches.
  */
-export function groupConflictsByKind(
+export function groupConflictsForReview(
   conflicts: readonly ScheduleConflict[],
-): ConflictKindGroup[] {
-  const sorted = sortConflicts(conflicts);
-  return CONFLICT_KIND_ORDER.flatMap((kind) => {
-    const group = sorted.filter((conflict) => conflict.conflict_kind === kind);
-    return group.length ? [{ kind, label: CONFLICT_KIND_LABEL[kind], conflicts: group }] : [];
-  });
+  wording: ConflictWording,
+): ConflictMatchGroup[] {
+  const groups = [...groupConflictsByMatch(conflicts).entries()].map(([matchId, rows]) => ({
+    matchId,
+    courtId: rows[0]?.court_id ?? null,
+    scheduledTime: rows[0]?.scheduled_time ?? null,
+    reasons: describeConflicts(rows, wording),
+  }));
+  const time = (value: string | null) => (value ? Date.parse(value) || 0 : 0);
+  return groups.sort(
+    (a, b) => time(a.scheduledTime) - time(b.scheduledTime) || (a.matchId < b.matchId ? -1 : a.matchId > b.matchId ? 1 : 0),
+  );
 }
 
 /**

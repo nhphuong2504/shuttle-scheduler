@@ -1916,6 +1916,10 @@ export type Database = {
           ended_at: string | null
           match_id: string
           match_table: string
+          minutes: number | null
+          player_id: string | null
+          related_match_id: string | null
+          related_match_table: string | null
           scheduled_time: string | null
         }[]
       }

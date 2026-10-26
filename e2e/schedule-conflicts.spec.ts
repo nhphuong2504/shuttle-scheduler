@@ -85,6 +85,9 @@ test.describe("the organiser's conflict block", () => {
           conflict(fixtureMatchId(11), "court_overlap", {
             court_id: fixtureCourtId(7),
             scheduled_time: "2026-10-10T14:00:00.000Z",
+            related_match_table: "tier_draw_matches",
+            related_match_id: fixtureMatchId(12),
+            minutes: 3,
           }),
           conflict(fixtureMatchId(12), "rest_shortfall", {
             court_id: fixtureCourtId(8),
@@ -94,7 +97,7 @@ test.describe("the organiser's conflict block", () => {
       },
     });
 
-    test("counts the matches, groups them by reason, and points at Rebuild schedule", async ({
+    test("counts the matches, says what is wrong with each, and points at Rebuild schedule", async ({
       page,
     }) => {
       await page.goto(routes.schedule, { waitUntil: "load" });
@@ -114,8 +117,9 @@ test.describe("the organiser's conflict block", () => {
       await headline.click();
       await expect(headline).toHaveAttribute("aria-expanded", "true");
 
-      // Grouped by kind, each group named and each line naming the match and its court.
-      await expect(block.getByText("Same court and time as another match").first()).toBeVisible();
+      // One line per match, naming its court, with what is wrong beneath it: the other match and
+      // the minutes when the RPC sends them, the kind's own label when it does not.
+      await expect(block.getByText(/^Overlaps .+ on the same court by 3 min$/).first()).toBeVisible();
       await expect(block.getByText("A player won't have had full rest").first()).toBeVisible();
       await expect(block.getByText(/Court 7/).first()).toBeVisible();
       await expect(block.getByText(/Court 8/).first()).toBeVisible();

@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { SCHEDULE_SHIFT_THRESHOLD_MS } from "./published-time";
+
 /**
  * Contract tests for the hardening migration and the role-redesign migration. They
  * document required RPC/RLS behavior so a live database can be checked without
@@ -3025,5 +3027,75 @@ describe("start only placed matches migration", () => {
     expect(executable).toMatch(
       /REVOKE ALL ON FUNCTION public\.assert_match_placed_for_start\(uuid, timestamptz, uuid\)\s+FROM PUBLIC, anon, authenticated/,
     );
+  });
+});
+
+describe("whole-minute published times migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "20261026000000_whole_minute_published_times.sql"),
+    "utf8",
+  );
+  /** A function's text, from its CREATE to the next CREATE or the first REVOKE after it. */
+  const body = (name: string) => {
+    const start = sql.search(new RegExp(`CREATE (OR REPLACE )?FUNCTION public\\.${name}\\(`));
+    expect(start).toBeGreaterThan(-1);
+    const ends = [
+      sql.slice(start + 1).search(/\nCREATE (OR REPLACE )?FUNCTION/),
+      sql.slice(start + 1).search(/\nREVOKE ALL/),
+    ]
+      .filter((index) => index > -1)
+      .map((index) => index + start + 1);
+    return sql.slice(start, Math.min(...ends));
+  };
+
+  it("keeps the threshold the planner mirrors", () => {
+    const minutes = /SELECT interval '(\d+) minutes'/.exec(body("schedule_shift_threshold"))?.[1];
+    expect(Number(minutes) * 60_000).toBe(SCHEDULE_SHIFT_THRESHOLD_MS);
+  });
+
+  it("rounds a moved start up to the minute, and leaves an unmoved one exactly where it was", () => {
+    const core = body("shift_live_schedule_core");
+    const leaveAlone = core.indexOf("EXIT WHEN next_start IS NOT DISTINCT FROM current_match.shifted_time;");
+    const round = core.indexOf("v_rounded := public.ceil_to_minute(next_start);");
+    expect(leaveAlone).toBeGreaterThan(-1);
+    expect(round).toBeGreaterThan(leaveAlone);
+    // The rounded start goes back through the walls: the rounding sits inside the loop around them.
+    expect(core.lastIndexOf("    LOOP\n", round)).toBeGreaterThan(-1);
+    expect(body("ceil_to_minute")).toMatch(/date_trunc\('minute', p_time\) \+ interval '1 minute'/);
+  });
+
+  it("writes a move only at the threshold, unless leaving it would contradict a time it writes", () => {
+    const core = body("shift_live_schedule_core");
+    expect(core).toMatch(/dirty = \(next_start - current_match\.original_time\) >= v_threshold/);
+    expect(core).toMatch(/v_threshold interval := public\.schedule_shift_threshold\(\)/);
+    // The fix-up pass: a skipped row overlapping a written one, by court, rest or prerequisite.
+    expect(core).toMatch(/SET dirty = true\s+WHERE w\.movable\s+AND NOT w\.held\s+AND NOT w\.dirty/);
+    expect(core).toMatch(/o\.match_id = ANY\(w\.prereq_ids\)/);
+    // Everything the previous body pinned is still there.
+    expect(core).toMatch(/source_status = 'in-progress'/);
+    expect(core).toMatch(/prereq\.court_id = current_match\.court_id/);
+  });
+
+  it("reports only what the plan gets wrong: no running-long, no running match past the close", () => {
+    const conflicts = body("schedule_conflicts");
+    // A match on court holds its planned span; "until now" was the running-long report.
+    expect(conflicts).not.toMatch(/statement_timestamp\(\)/);
+    expect(conflicts).toMatch(/WHEN m\.st = 'in-progress' THEN COALESCE\(m\.started, m\.sched\) \+ \(m\.planned_end - m\.sched\)/);
+    const pastClosing = conflicts.slice(conflicts.indexOf("'past_closing'::text"));
+    expect(pastClosing.slice(0, pastClosing.indexOf("UNION ALL"))).toMatch(/WHERE e\.is_scheduled/);
+    // The tolerance applies only against a real time; two published times compare strictly.
+    expect(conflicts).toMatch(/AND \(p\.b_scheduled OR p\.overlap >= v_tolerance\)/);
+    expect(conflicts).toMatch(/AND \(r\.prev_scheduled OR \(r\.prev_end \+ r\.rest_gap\) - r\.eff_start >= v_tolerance\)/);
+    expect(conflicts).toMatch(/AND \(pre\.is_scheduled OR pre\.eff_end - e\.eff_start >= v_tolerance\)/);
+    expect(conflicts).toMatch(/IF NOT public\.can_edit_tournament\(p_tournament_id\)/);
+  });
+
+  it("re-creates the conflict report with its grants, and keeps the reflow internal", () => {
+    expect(sql).toMatch(/DROP FUNCTION IF EXISTS public\.schedule_conflicts\(uuid\);/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.schedule_conflicts\(uuid\) FROM anon, PUBLIC;/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.schedule_conflicts\(uuid\) TO authenticated;/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.shift_live_schedule_core\(text, uuid\) FROM anon, authenticated, PUBLIC;/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.shift_live_schedule_core\(text, uuid\) TO service_role;/);
+    expect(sql).toMatch(/DO \$verify\$/);
   });
 });

@@ -6,8 +6,9 @@ import {
   CONFLICT_KIND_ORDER,
   conflictedMatchCount,
   conflictKindLabels,
-  groupConflictsByKind,
+  describeConflict,
   groupConflictsByMatch,
+  groupConflictsForReview,
   sortConflicts,
   summarizeConflicts,
 } from "./schedule-conflicts";
@@ -25,6 +26,10 @@ function conflict(
     ended_at: null,
     conflict_kind: kind,
     detail: "",
+    related_match_table: null,
+    related_match_id: null,
+    player_id: null,
+    minutes: null,
     ...extra,
   };
 }
@@ -128,17 +133,72 @@ describe("summarizeConflicts", () => {
   });
 });
 
-describe("groupConflictsByKind", () => {
-  it("groups in the canonical order and drops kinds with no conflicts", () => {
-    const groups = groupConflictsByKind([
-      conflict("m1", "past_closing"),
-      conflict("m2", "court_overlap", { scheduled_time: "2026-10-10T09:00:00.000Z" }),
-      conflict("m1", "court_overlap"),
+const wording = {
+  matchLabel: (id: string) => ({ m1: "WS r2-1", m2: "XD r2-4", m3: "MS r2-2" })[id] ?? id,
+  playerName: (id: string) => (id === "p1" ? "Bui Nguyet" : null),
+};
+
+describe("describeConflict", () => {
+  it("says what is wrong, with whom and by how much", () => {
+    expect(
+      describeConflict(conflict("m2", "court_overlap", { related_match_id: "m1", minutes: 3 }), wording),
+    ).toBe("Overlaps WS r2-1 on the same court by 3 min");
+    expect(
+      describeConflict(
+        conflict("m2", "rest_shortfall", { related_match_id: "m1", player_id: "p1", minutes: 4 }),
+        wording,
+      ),
+    ).toBe("Bui Nguyet would rest 4 min less than required after WS r2-1");
+    expect(describeConflict(conflict("m2", "past_closing", { minutes: 6 }), wording)).toBe(
+      "Ends 6 min after the courts close",
+    );
+    expect(describeConflict(conflict("m2", "break", { minutes: 5 }), wording)).toBe(
+      "Runs 5 min into a break",
+    );
+    expect(
+      describeConflict(
+        conflict("m2", "before_prerequisite", { related_match_id: "m3", minutes: 2 }),
+        wording,
+      ),
+    ).toBe("Starts 2 min before MS r2-2 is due to end");
+  });
+
+  it("names a player it cannot resolve generically, and falls back to the kind without details", () => {
+    expect(
+      describeConflict(
+        conflict("m2", "rest_shortfall", { related_match_id: "m1", player_id: "p9", minutes: 1 }),
+        wording,
+      ),
+    ).toBe("A player would rest 1 min less than required after WS r2-1");
+    expect(describeConflict(conflict("m2", "court_overlap"), wording)).toBe(
+      CONFLICT_KIND_LABEL.court_overlap,
+    );
+  });
+});
+
+describe("groupConflictsForReview", () => {
+  it("gives one line per match, earliest first, with every reason beneath it", () => {
+    const groups = groupConflictsForReview(
+      [
+        conflict("m1", "past_closing", { minutes: 6, scheduled_time: "2026-10-10T16:55:00.000Z" }),
+        conflict("m2", "court_overlap", {
+          scheduled_time: "2026-10-10T09:00:00.000Z",
+          related_match_id: "m3",
+          minutes: 1,
+        }),
+        conflict("m1", "court_overlap", {
+          scheduled_time: "2026-10-10T16:55:00.000Z",
+          related_match_id: "m2",
+          minutes: 2,
+        }),
+      ],
+      wording,
+    );
+    expect(groups.map((group) => group.matchId)).toEqual(["m2", "m1"]);
+    expect(groups[1]?.reasons).toEqual([
+      "Overlaps XD r2-4 on the same court by 2 min",
+      "Ends 6 min after the courts close",
     ]);
-    expect(groups.map((group) => group.kind)).toEqual(["court_overlap", "past_closing"]);
-    expect(groups[0]?.label).toBe("Same court and time as another match");
-    expect(groups[0]?.conflicts.map((row) => row.match_id)).toEqual(["m2", "m1"]);
-    expect(groups[1]?.conflicts).toHaveLength(1);
   });
 });
 

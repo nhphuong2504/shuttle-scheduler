@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createPlayer, createTeam } from "@/lib/tournament/actions";
 import { fetchCourts, fetchPlacementEntrants } from "@/lib/tournament/data";
 import { reportPlacementMatch, syncPlacementEntrants } from "@/lib/tournament/placement-actions";
+import { ceilToMinute } from "@/lib/tournament/published-time";
 
 import {
   createIdentity,
@@ -354,9 +355,10 @@ describe("reporting a result that finished N minutes ago", () => {
     // would fail the next assertion.
     expect(ended).toBeLessThan(Date.now() - (minutesAgo - 2) * 60_000);
 
-    // The reflow moved the successor to exactly the source's real end, not to now().
+    // The reflow moved the successor to the source's real end - published on the next whole
+    // minute (section 33) - not to now().
     expect(new Date(successorRow.scheduled_time as string).toISOString()).toBe(
-      new Date(sourceRow.ended_at as string).toISOString(),
+      new Date(ceilToMinute(Date.parse(sourceRow.ended_at as string))).toISOString(),
     );
     expect(Date.parse(successorRow.scheduled_time as string)).toBeGreaterThan(
       successorAt.getTime(),

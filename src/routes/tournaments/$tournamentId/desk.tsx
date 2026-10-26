@@ -126,7 +126,7 @@ import { MatchIdentity } from "@/components/match-identity";
 import { placementMatchExplanation } from "@/lib/tournament/placement-presentation";
 import {
   conflictedMatchCount,
-  conflictKindLabels,
+  describeConflicts,
   groupConflictsByMatch,
 } from "@/lib/tournament/schedule-conflicts";
 import { nextPausedSince } from "@/lib/tournament/desk-paused";
@@ -1056,6 +1056,10 @@ function Desk() {
               startCheck={startCheck}
               blockStartOnShortRest={tournament?.block_start_on_short_rest ?? false}
               conflicts={conflictsByMatch.get(current.id) ?? []}
+              conflictMatchLabel={(id) => {
+                const other = allMatches.find((m) => m.id === id);
+                return other ? `${label(other.teams[0])} vs ${label(other.teams[1])}` : "another match";
+              }}
               onConflictsAfterReport={conflictsAfterReportInDay}
               playerMap={playerMap}
               scoringRule={ruleFor(current.kind)}
@@ -1086,6 +1090,7 @@ export function MatchOperationsDialog({
   startCheck,
   blockStartOnShortRest = false,
   conflicts,
+  conflictMatchLabel = () => "another match",
   onConflictsAfterReport,
   playerMap,
   scoringRule,
@@ -1124,6 +1129,8 @@ export function MatchOperationsDialog({
    * but they are distinct facts, and only the physical ones disable the Start button.
    */
   conflicts: ScheduleConflict[];
+  /** Names the match on the other side of a conflict, for the confirmation's sentences. */
+  conflictMatchLabel?: (matchId: string) => string;
   /** Re-reads the conflicts after a reported result and returns how many remain, day-scoped. */
   onConflictsAfterReport: () => Promise<number>;
   playerMap: Map<string, Player>;
@@ -1234,7 +1241,10 @@ export function MatchOperationsDialog({
    * organiser resolves the schedule afterwards. `allConflictReasons` is what the dialog
    * lists.
    */
-  const allConflictReasons = conflictKindLabels(conflicts);
+  const allConflictReasons = describeConflicts(conflicts, {
+    matchLabel: conflictMatchLabel,
+    playerName: (id) => playerMap.get(id)?.name ?? null,
+  });
   const hasScheduleConflict = allConflictReasons.length > 0;
   const restWarningCount = startCheck?.warnings.length ?? 0;
   /**

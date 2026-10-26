@@ -621,7 +621,101 @@ describe("live reflow", () => {
     }
     const times = await timesOf([m1, m2]);
     expect(times.get(m1)).toBe("2020-01-04T09:00:00.123Z");
-    // The reflow moved m2 behind the finish, to the same truncated instant.
-    expect(times.get(m2)).toBe("2020-01-04T09:25:06.310Z");
+    // The reflow moved m2 behind the finish, and published it on the next whole minute (section 33).
+    expect(times.get(m2)).toBe("2020-01-04T09:26:00.000Z");
+  });
+
+  it("(m) does not write a move under two minutes, and the conflict report tolerates it", async () => {
+    // m1 runs 40 seconds past its slot. m2's start is computed at 09:20:40, published as 09:21 -
+    // one minute from where it stands, which is not worth a changed board. It keeps 09:20, and the
+    // 40 seconds it now sits inside m1's real finish is the reflow's tolerance, not a conflict.
+    const seeded = await seed({ label: "m", entrants: 4 });
+    const m1 = await placeMatch(seeded, { key: "m-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const m2 = await placeMatch(seeded, { key: "m-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:20") });
+
+    await reportAt(m1, "2020-01-04T09:20:40Z", seeded.tournamentId);
+
+    const times = await timesOf([m2]);
+    expect(times.get(m2)).toBe(iso(DAY1, "09:20"));
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    expect(conflicts.filter((row) => row.match_id === m2)).toEqual([]);
+  });
+
+  it("(n) writes a move of two minutes or more, on a whole minute", async () => {
+    const seeded = await seed({ label: "n", entrants: 4 });
+    const m1 = await placeMatch(seeded, { key: "n-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const m2 = await placeMatch(seeded, { key: "n-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:20") });
+
+    // 09:21:10 rounds up to 09:22, two minutes after 09:20.
+    await reportAt(m1, "2020-01-04T09:21:10Z", seeded.tournamentId);
+
+    const times = await timesOf([m2]);
+    expect(times.get(m2)).toBe(iso(DAY1, "09:22"));
+  });
+
+  it("(n) control: writes a small move after all when the published time would overlap one it writes", async () => {
+    // The threshold is a tolerance against real finishes, not between published times. m2 moves two
+    // minutes and is written (09:22-09:42); m3, published at 09:41, would move one minute - not
+    // enough on its own, but leaving it would publish two overlapping matches on court one.
+    const seeded = await seed({ label: "n2", entrants: 6 });
+    const m1 = await placeMatch(seeded, { key: "n2-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const m2 = await placeMatch(seeded, { key: "n2-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:20") });
+    const m3 = await placeMatch(seeded, { key: "n2-3", a: 4, b: 5, court: 1, at: iso(DAY1, "09:41") });
+
+    await reportAt(m1, "2020-01-04T09:22:00Z", seeded.tournamentId);
+
+    const times = await timesOf([m2, m3]);
+    expect(times.get(m2)).toBe(iso(DAY1, "09:22"));
+    expect(times.get(m3)).toBe(iso(DAY1, "09:42"));
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    expect(conflicts.filter((row) => row.match_id === m2 || row.match_id === m3)).toEqual([]);
+  });
+
+  it("(o) does not flag the match behind one that is still on court and running long", async () => {
+    // Running long is the Desk's Overrun. The reflow re-times m2 when m1's result lands, so a
+    // conflict raised minute by minute while m1 plays only reported the delay. m1 started at 09:00
+    // and the wall clock is years later: under the old rule m1 held its court "until now".
+    const seeded = await seed({ label: "o", entrants: 4 });
+    const m1 = await placeMatch(seeded, { key: "o-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
+    const m2 = await placeMatch(seeded, { key: "o-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:20") });
+
+    await startPlacementMatch(m1, null);
+    const { error } = await serviceClient()
+      .from("placement_matches")
+      .update({ started_at: iso(DAY1, "09:00") })
+      .eq("id", m1);
+    if (error) throw new Error(`setting the virtual start failed: ${error.message}`);
+
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    expect(conflicts.filter((row) => row.match_id === m1 || row.match_id === m2)).toEqual([]);
+  });
+
+  it("(p) still flags two published matches that overlap by a minute, and names the other one", async () => {
+    // Two published times are compared strictly: an overlap between them is the plan's own mistake.
+    const seeded = await seed({ label: "p", entrants: 4 });
+    const m1 = await placeMatch(seeded, { key: "p-1", a: 0, b: 1, court: 1, at: iso(DAY1, "12:00") });
+    const m2 = await placeMatch(seeded, { key: "p-2", a: 2, b: 3, court: 1, at: iso(DAY1, "12:19") });
+
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    const onM2 = conflicts.find((row) => row.match_id === m2 && row.conflict_kind === "court_overlap");
+    expect(onM2?.related_match_id).toBe(m1);
+    expect(onM2?.minutes).toBe(1);
+    const onM1 = conflicts.find((row) => row.match_id === m1 && row.conflict_kind === "court_overlap");
+    expect(onM1?.related_match_id).toBe(m2);
+  });
+
+  it("(q) names the player and the match they come off for a rest shortfall", async () => {
+    const seeded = await seed({ label: "q", entrants: 3 });
+    const first = await placeMatch(seeded, { key: "q-1", a: 0, b: 1, court: 1, at: iso(DAY1, "13:00") });
+    // Entrant 0 again, straight after the slot on another court: no rest at all.
+    const second = await placeMatch(seeded, { key: "q-2", a: 0, b: 2, court: 2, at: iso(DAY1, "13:20") });
+
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    const row = conflicts.find(
+      (conflict) => conflict.match_id === second && conflict.conflict_kind === "rest_shortfall",
+    );
+    expect(row?.related_match_id).toBe(first);
+    expect(row?.player_id).toBeTruthy();
+    expect(row?.minutes).toBeGreaterThanOrEqual(1);
   });
 });

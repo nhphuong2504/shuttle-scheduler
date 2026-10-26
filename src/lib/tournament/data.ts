@@ -111,6 +111,13 @@ export interface ScheduleConflict {
   ended_at: string | null;
   conflict_kind: ScheduleConflictKind;
   detail: string;
+  /** The other side: the match sharing the court, the one the player comes off, or the one waited on. */
+  related_match_table: string | null;
+  related_match_id: string | null;
+  /** The player short of rest, for `rest_shortfall`. */
+  player_id: string | null;
+  /** How bad it is, in whole minutes rounded up: overlap, missing rest, time past the close. */
+  minutes: number | null;
 }
 
 async function must<T>(

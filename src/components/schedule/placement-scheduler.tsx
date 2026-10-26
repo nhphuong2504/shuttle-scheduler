@@ -71,8 +71,8 @@ import { buildRebuildSuggestion, type RebuildSuggestion } from "@/lib/tournament
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 import {
   conflictedMatchCount,
-  groupConflictsByKind,
-  type ConflictKindGroup,
+  groupConflictsForReview,
+  type ConflictMatchGroup,
 } from "@/lib/tournament/schedule-conflicts";
 import { dayIdForTime } from "@/lib/tournament/day-scope";
 import { projectedFinishFromRemainingMatches } from "@/lib/tournament/schedule-diff";
@@ -144,7 +144,7 @@ function normalizeTime(value: string) {
 /**
  * The organiser's block: every match that cannot run as published, and the one way to fix it.
  *
- * Read-only, and deliberately so. It names the matches, groups them by reason, and points at
+ * Read-only, and deliberately so. It names the matches, says what is wrong with each, and points at
  * the existing "Rebuild schedule" control rather than offering a second button - the page has
  * one way to replan, and a block that re-applied a plan itself would be a second, hidden one.
  * It says plainly that nothing has changed yet, because a warning that looks like an action
@@ -164,7 +164,7 @@ function ConflictOverview({
   courtNumberLabel,
 }: {
   count: number;
-  groups: ConflictKindGroup[];
+  groups: ConflictMatchGroup[];
   matchLabel: (matchId: string) => string;
   courtNumberLabel: (courtId: string | null) => string | null;
 }) {
@@ -212,30 +212,23 @@ function ConflictOverview({
       {open ? (
         <div className="mt-3 border-t border-warn-border pt-3">
           <ul className="space-y-3">
-            {groups.map((group) => (
-              <li key={group.kind}>
-                <p className="text-t4 font-semibold uppercase tracking-wide text-warn-foreground">
-                  {group.label}
-                </p>
-                <ul className="mt-1 space-y-1">
-                  {group.conflicts.map((conflict) => {
-                    const court = courtNumberLabel(conflict.court_id);
-                    return (
-                      <li
-                        key={`${conflict.match_table}:${conflict.match_id}:${conflict.conflict_kind}:${conflict.detail}`}
-                        className="text-sm text-warn-foreground"
-                      >
-                        <span className="font-medium">{matchLabel(conflict.match_id)}</span>
-                        {court ? <span>, {court}</span> : null}
-                        {conflict.scheduled_time ? (
-                          <span>, {timeLabel(conflict.scheduled_time)}</span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </li>
-            ))}
+            {groups.map((group) => {
+              const court = courtNumberLabel(group.courtId);
+              return (
+                <li key={group.matchId} className="text-sm text-warn-foreground">
+                  <p>
+                    <span className="font-medium">{matchLabel(group.matchId)}</span>
+                    {court ? <span>, {court}</span> : null}
+                    {group.scheduledTime ? <span>, {timeLabel(group.scheduledTime)}</span> : null}
+                  </p>
+                  <ul className="mt-0.5 list-disc space-y-0.5 pl-5">
+                    {group.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
           </ul>
           <p className="mt-3 text-sm text-warn-foreground">
             Rebuild schedule will replan these matches. Nothing changes until you run it.
@@ -391,7 +384,6 @@ export function PlacementScheduler() {
   const scheduleConflicts = useScheduleConflicts();
   const conflicts = scheduleConflicts.data ?? [];
   const conflictMatchCount = conflictedMatchCount(conflicts);
-  const conflictGroups = groupConflictsByKind(conflicts);
   const categoryMap = useMemo(() => indexBy(categories), [categories]);
   const entrantTeam = useMemo(
     () => new Map((entrants ?? []).map((entrant) => [entrant.id, entrant.team_id])),
@@ -1773,7 +1765,10 @@ export function PlacementScheduler() {
         {canEdit && conflictMatchCount > 0 ? (
           <ConflictOverview
             count={conflictMatchCount}
-            groups={conflictGroups}
+            groups={groupConflictsForReview(conflicts, {
+              matchLabel,
+              playerName: (id) => playerMap.get(id)?.name ?? null,
+            })}
             matchLabel={matchLabel}
             courtNumberLabel={courtNumberLabel}
           />

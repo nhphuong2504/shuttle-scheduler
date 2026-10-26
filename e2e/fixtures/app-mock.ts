@@ -219,6 +219,10 @@ export interface MockScheduleConflictRow {
   ended_at: string | null;
   conflict_kind: string;
   detail: string;
+  related_match_table?: string | null;
+  related_match_id?: string | null;
+  player_id?: string | null;
+  minutes?: number | null;
 }
 
 /**
