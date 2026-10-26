@@ -4,17 +4,11 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatusPill } from "@/components/app-shell";
+import { RebuildPreviewDialog } from "@/components/schedule/rebuild-preview";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { PickerInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
+import type { DayFinishComparison, PlanChange } from "@/lib/tournament/schedule-diff";
 import { useScopedAccess, useScopedTournament } from "@/lib/tournament/data";
 import {
   applyDayPlan,
@@ -40,7 +34,7 @@ import {
   type StageName,
   type TournamentDay,
 } from "@/lib/tournament/data";
-import { formatProjectedFinishDelta } from "@/lib/tournament/schedule-diff";
+import { formatProjectedFinishDelta, startsSoon } from "@/lib/tournament/schedule-diff";
 import { dayDateLabel, timeLabel } from "@/lib/tournament/format";
 
 /**
@@ -103,7 +97,6 @@ export function DayPlanner() {
   const [drafts, setDrafts] = useState<Record<string, DayWindow>>({});
   const [windowUnlocked, setWindowUnlocked] = useState(false);
   const [previewPlan, setPreviewPlan] = useState<{ plan: DayPlan; key: string } | null>(null);
-  const [showAllChanges, setShowAllChanges] = useState(false);
 
   const tournamentDays = useMemo(() => days ?? [], [days]);
   const dayCount = tournament?.day_count ?? tournamentDays.length;
@@ -184,6 +177,31 @@ export function DayPlanner() {
     if (draw) return `${label(draw.team_a_id)} vs ${label(draw.team_b_id)}`;
     return matchId.slice(0, 8);
   };
+
+  /**
+   * The compact identity of a move - `MS R2`, `MD R1` - for the rebuild preview.
+   *
+   * The pairing is the long string on the row, so the identity is what an organiser scans for:
+   * the event and the round, not two full team names.
+   */
+  const matchIdentity = (matchId: string): string => {
+    const pool = poolMatchMap.get(matchId);
+    if (pool) {
+      const code = catMap.get(pool.category_id)?.code ?? "";
+      return [code, `R${pool.round}`].filter(Boolean).join(" ");
+    }
+    const draw = (drawMatches ?? []).find((m) => m.id === matchId);
+    if (draw) {
+      const code = catMap.get(drawCategory.get(draw.draw_id) ?? "")?.code ?? "";
+      return [code, `R${draw.round}`].filter(Boolean).join(" ");
+    }
+    return "Match";
+  };
+
+  const describeChange = (change: PlanChange) => ({
+    identity: matchIdentity(change.matchId),
+    names: matchLabel(change.matchId),
+  });
 
   const validateWindow = (dayNumber: number, window: DayWindow) => {
     const validDate = /^\d{4}-\d{2}-\d{2}$/.test(window.date);
@@ -286,7 +304,6 @@ export function DayPlanner() {
       const plan = await computePlan(target);
       if (plan.blocked.length > 0) {
         setPreviewPlan({ plan, key: target.key });
-        setShowAllChanges(false);
         return;
       }
       await finishApply(target.day, plan);
@@ -305,7 +322,6 @@ export function DayPlanner() {
     try {
       const plan = await computePlan(target);
       setPreviewPlan({ plan, key: target.key });
-      setShowAllChanges(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not plan the rebuild");
     } finally {
@@ -316,6 +332,22 @@ export function DayPlanner() {
 
   const applyPreview = async () => {
     if (!previewPlan || previewPlan.plan.blocked.length > 0) return;
+    // The same second look the placement editor asks for: a move that lands on a match starting
+    // within the hour is felt at the desk, and the published time does not come back.
+    const soon = previewChanges.filter((change) => change.startsSoon);
+    if (soon.length > 0) {
+      const confirmed = window.confirm(
+        `This rebuild moves ${soon.length} match${soon.length === 1 ? "" : "es"} that start${
+          soon.length === 1 ? "s" : ""
+        } within the hour.\n\n` +
+          `${soon
+            .slice(0, 3)
+            .map((change) => `${matchLabel(change.matchId)} — ${timeLabel(change.toStart)}`)
+            .join("\n")}\n\n` +
+          "The desk may already be calling them at their published time. Apply the rebuild anyway?",
+      );
+      if (!confirmed) return;
+    }
     setBusy(true);
     try {
       const day = tournamentDays.find((d) => d.day_number === previewPlan.plan.day);
@@ -328,16 +360,54 @@ export function DayPlanner() {
     }
   };
 
-  const visibleChanges = previewPlan
-    ? showAllChanges
-      ? previewPlan.plan.diff.changes
-      : previewPlan.plan.diff.changes.filter((change) => change.kind !== "unchanged")
-    : [];
-
   const previewDay = previewPlan
     ? tournamentDays.find((d) => d.day_number === previewPlan.plan.day)
     : undefined;
-  const previewWindow = previewDay ? windowFor(previewDay) : null;
+
+  /**
+   * The plan's changes, with the one thing the shared diff cannot know: whether each move lands on
+   * a match that starts soon.
+   *
+   * The round-robin planner does not compute that count, so it is derived here from the same
+   * helper the placement plan uses. The clock is read once, on the render that opens the dialog,
+   * so every row in it is judged against the same instant.
+   */
+  const previewChanges: PlanChange[] = useMemo(() => {
+    if (!previewPlan) return [];
+    const now = Date.now();
+    return previewPlan.plan.diff.changes.map((change) => ({
+      ...change,
+      startsSoon: startsSoon(change.fromStart, now),
+    }));
+  }, [previewPlan]);
+
+  /**
+   * The plan's own comparison, in the shape the shared preview draws.
+   *
+   * This editor plans one day at a time, so the list holds at most one entry - which is why the
+   * dialog hides the day table for it and leads with the verdict. The numbers come from the plan's
+   * summary, the same ones the toast and the panel above use.
+   */
+  const previewDays: DayFinishComparison[] = previewPlan && previewDay
+    ? [
+        {
+          dayNumber: previewDay.day_number,
+          date: previewDay.date,
+          finishNowMs: previewPlan.plan.summary.currentProjectedFinish
+            ? Date.parse(previewPlan.plan.summary.currentProjectedFinish)
+            : null,
+          finishAfterMs: previewPlan.plan.summary.projectedFinish
+            ? Date.parse(previewPlan.plan.summary.projectedFinish)
+            : null,
+          moved: previewPlan.plan.diff.changes.filter(
+            (change) => change.kind !== "unchanged" && change.kind !== "newly-placed",
+          ).length,
+          newlyPlaced: previewPlan.plan.diff.newlyPlacedCount,
+          largestShiftMinutes: previewPlan.plan.diff.largestShiftMinutes,
+          overrunAfterMinutes: previewPlan.plan.summary.overrunMinutes,
+        },
+      ]
+    : [];
 
   return (
     <Page
@@ -640,142 +710,26 @@ export function DayPlanner() {
         </Panel>
       </div>
 
-      <Dialog open={!!previewPlan} onOpenChange={(open) => !open && setPreviewPlan(null)}>
-        <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-2xl">
-          {previewPlan ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Rebuild preview</DialogTitle>
-                <DialogDescription>
-                  Nothing is written until you apply. Anchors stay fixed; only scheduled matches may
-                  move.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-3 overflow-y-auto pr-1">
-                <div className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm">
-                  <p className="font-score">
-                    {previewPlan.plan.summary.anchorCount} anchors kept,{" "}
-                    {previewPlan.plan.summary.placed} matches replanned,{" "}
-                    {previewPlan.plan.diff.movedCount} moving
-                  </p>
-                  {previewPlan.plan.summary.projectedFinish ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Projected finish {timeLabel(previewPlan.plan.summary.projectedFinish)}
-                      {previewPlan.plan.summary.overrunMinutes > 0
-                        ? `, ${previewPlan.plan.summary.overrunMinutes} min past ${previewWindow?.end ?? "day end"}`
-                        : ""}
-                      {previewPlan.plan.summary.remainingUtilization != null
-                        ? `, ${Math.round(previewPlan.plan.summary.remainingUtilization * 100)}% of remaining window`
-                        : ""}
-                      {previewPlan.plan.summary.projectedFinishDeltaMinutes != null ? (
-                        <>
-                          {", "}
-                          {formatProjectedFinishDelta(
-                            previewPlan.plan.summary.projectedFinishDeltaMinutes,
-                          )}
-                          {previewPlan.plan.summary.currentProjectedFinish
-                            ? ` (current ${timeLabel(previewPlan.plan.summary.currentProjectedFinish)})`
-                            : ""}
-                        </>
-                      ) : null}
-                    </p>
-                  ) : null}
-                </div>
-
-                {previewPlan.plan.blocked.length > 0 ? (
-                  <div className="rounded-md bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
-                    <p className="font-semibold">
-                      {previewPlan.plan.blocked.length} match
-                      {previewPlan.plan.blocked.length === 1 ? "" : "es"} could not be placed.
-                    </p>
-                    {previewPlan.plan.summary.diagnostics?.deadlockReason ? (
-                      <p className="mt-1 text-sm">
-                        {previewPlan.plan.summary.diagnostics.deadlockReason}
-                      </p>
-                    ) : null}
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {previewPlan.plan.blocked.map((matchId) => (
-                        <li key={matchId}>{matchLabel(matchId)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {previewPlan.plan.awaitingTeams.length > 0 ? (
-                  <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                    {previewPlan.plan.awaitingTeams.length} match
-                    {previewPlan.plan.awaitingTeams.length === 1 ? "" : "es"} awaiting team
-                    assignment and will stay unscheduled.
-                  </div>
-                ) : null}
-
-                {previewPlan.plan.blocked.length === 0 ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">
-                        {showAllChanges ? "Full plan" : "Changes only"} ({visibleChanges.length})
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowAllChanges((value) => !value)}
-                      >
-                        {showAllChanges ? "Show changes only" : "Show full plan"}
-                      </Button>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto rounded-md border border-hairline">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Match</th>
-                            <th className="w-28">Time</th>
-                            <th className="w-40">Court</th>
-                            <th className="w-16">Shift</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visibleChanges.map((change) => (
-                            <tr key={change.matchId}>
-                              <td className="text-sm">{matchLabel(change.matchId)}</td>
-                              <td className="font-score text-sm">
-                                {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
-                                {timeLabel(change.toStart)}
-                              </td>
-                              <td className="whitespace-nowrap font-score text-sm">
-                                {change.fromCourtNumber != null
-                                  ? `Court ${change.fromCourtNumber}`
-                                  : "—"}{" "}
-                                → Court {change.toCourtNumber}
-                              </td>
-                              <td className="font-score text-sm">
-                                {change.shiftMinutes > 0 ? "+" : ""}
-                                {change.shiftMinutes || "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" disabled={busy} onClick={() => setPreviewPlan(null)}>
-                  Keep current schedule
-                </Button>
-                <Button
-                  disabled={busy || previewPlan.plan.blocked.length > 0}
-                  onClick={() => void applyPreview()}
-                >
-                  Apply rebuild
-                </Button>
-              </DialogFooter>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <RebuildPreviewDialog
+        open={!!previewPlan}
+        onOpenChange={(next) => {
+          if (!next) setPreviewPlan(null);
+        }}
+        invariant="Anchors stay fixed; only scheduled matches may move."
+        summary={previewPlan?.plan.summary ?? null}
+        days={previewDays}
+        changes={previewChanges}
+        describe={describeChange}
+        blocked={{
+          count: previewPlan?.plan.blocked.length ?? 0,
+          reason: previewPlan?.plan.summary.diagnostics?.deadlockReason ?? null,
+          labels: (previewPlan?.plan.blocked ?? []).map((matchId) => matchLabel(matchId)),
+        }}
+        awaitingTeams={previewPlan?.plan.awaitingTeams.length ?? 0}
+        busy={busy}
+        onCancel={() => setPreviewPlan(null)}
+        onApply={() => void applyPreview()}
+      />
     </Page>
   );
 }

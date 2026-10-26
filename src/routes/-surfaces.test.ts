@@ -82,9 +82,15 @@ describe("schedule tab owns tournament-wide planning", () => {
     expect(schedule).not.toMatch(/Round 1|Round 2/);
   });
 
-  it("previews per-day changes from the plan's own diff", () => {
-    expect(schedule).toMatch(/previewDayChanges/);
-    expect(schedule).toMatch(/plan\.diff\.changes/);
+  it("draws the plan's own comparison rather than deriving a second one", () => {
+    // The preview used to compute its per-day changes here, from `plan.diff.changes` plus the
+    // day list. That was a second definition of "which day a match lands on", and it had the
+    // first build reporting every newly placed match as a move. The plan now carries
+    // `dayFinishes` and each change carries its own day, so this page only passes them on.
+    expect(schedule).toMatch(/<RebuildPreviewDialog/);
+    expect(schedule).toMatch(/days=\{preview\?\.plan\.dayFinishes/);
+    expect(schedule).toMatch(/changes=\{preview\?\.plan\.diff\.changes/);
+    expect(schedule).not.toMatch(/previewDayChanges/);
   });
 
   it("waits for every planner input before it will build", () => {

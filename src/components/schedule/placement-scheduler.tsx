@@ -9,6 +9,7 @@ import { CapacityEstimate } from "@/components/capacity-estimate";
 import { ConnectionBadge } from "@/components/connection-badge";
 import { MatchFormatCard } from "@/components/match-format";
 import { PlayingDayPicker } from "@/components/schedule/playing-day-picker";
+import { RebuildPreviewDialog } from "@/components/schedule/rebuild-preview";
 import { ScheduledFinish } from "@/components/schedule-status";
 import { Button } from "@/components/ui/button";
 import {
@@ -74,9 +75,10 @@ import {
   groupConflictsForReview,
   type ConflictMatchGroup,
 } from "@/lib/tournament/schedule-conflicts";
-import { dayIdForTime } from "@/lib/tournament/day-scope";
 import { projectedFinishFromRemainingMatches } from "@/lib/tournament/schedule-diff";
 import { roundName } from "@/lib/tournament/draws";
+import { placementMatchLabel as placementIdentityLabel } from "@/lib/tournament/placement-presentation";
+import { type PlanChange } from "@/lib/tournament/schedule-diff";
 import { ruleForStage, type ScoringRule } from "@/lib/tournament/scoring";
 import { buildStageProgress } from "@/lib/tournament/stage-progress";
 import { cn } from "@/lib/utils";
@@ -340,7 +342,6 @@ export function PlacementScheduler() {
     plan: PlacementSchedulePlan;
     outcome: StageGenerationOutcome | null;
   } | null>(null);
-  const [showAllChanges, setShowAllChanges] = useState(false);
   /** Day windows, courts, breaks, timings and scoring are setup, not day-to-day desk work. */
   const [showSettings, setShowSettings] = useState(false);
   /** The one playing day whose own hours, courts and breaks are open for editing. */
@@ -1042,42 +1043,6 @@ export function PlacementScheduler() {
   }, [tournament, placementMatches, tierMatches]);
 
   /**
-   * Per-day changes for the rebuild preview.
-   *
-   * Built from the plan's own diff rather than from a second comparison, so the preview cannot
-   * disagree with the table below it. Capacity and utilization are deliberately absent: the
-   * preview answers "what moves, and does the result fit the window?", not "how full is each
-   * day?".
-   */
-  const previewDayChanges = useMemo(() => {
-    const plan = preview?.plan;
-    if (!plan) return [];
-    const idByNumber = new Map(plannerDays.map((day) => [day.day_number, day.id]));
-    return plan.days.map((fill) => {
-      // `fill.day` is the day number, so the plan's own numbering identifies the day without
-      // re-deriving it from a timestamp.
-      const dayId = idByNumber.get(fill.day) ?? String(fill.day);
-      const moved = plan.diff.changes.filter(
-        (change) =>
-          change.kind !== "unchanged" &&
-          dayIdForTime(plannerDays, Date.parse(change.toStart)) === dayId,
-      );
-      return {
-        dayId,
-        date: fill.date,
-        placed: fill.placed,
-        lastFinish: fill.lastFinish,
-        overrunMinutes: fill.overrunMinutes,
-        moving: moved.length,
-        largestShift: moved.reduce(
-          (max, change) => Math.max(max, Math.abs(change.shiftMinutes)),
-          0,
-        ),
-      };
-    });
-  }, [preview, plannerDays]);
-
-  /**
    * Tournament progress by event, stage and round.
    *
    * Read-only oversight: what already exists in each stage, how much of it is done, and whether
@@ -1244,6 +1209,33 @@ export function PlacementScheduler() {
 
   const matchLabel = (matchId: string) =>
     placementMatchLabel(matchId, placementMatches ?? [], tierMatches ?? [], labelEntrant);
+
+  /**
+   * The compact identity of a match - `MD R1`, `Draw A, Semifinal` - for the rebuild preview.
+   *
+   * The preview lists moves, and a row needs to be findable before it is readable: the event and
+   * the round is what an organiser scans for, and two full pairings per row push the time and
+   * court into a second line. The pairing is still there, as the row's title and second line.
+   */
+  const matchIdentity = (matchId: string): string => {
+    const placement = (placementMatches ?? []).find((match) => match.id === matchId);
+    if (placement) {
+      const code = categoryMap.get(placement.category_id)?.code ?? "";
+      return placementIdentityLabel(placement.stage, code) || "Match";
+    }
+    const tier = (tierMatches ?? []).find((match) => match.id === matchId);
+    if (tier) {
+      const draw = (draws ?? []).find((entry) => entry.id === tier.draw_id);
+      const round = draw ? roundName(draw.bracket_size, tier.round) : `R${tier.round}`;
+      return `Draw ${draw?.tier ?? "?"}, ${round}`;
+    }
+    return "Match";
+  };
+
+  const describeChange = (change: PlanChange) => ({
+    identity: matchIdentity(change.matchId),
+    names: matchLabel(change.matchId),
+  });
 
   /** The venue court's number, for the conflict block's lines; a row may name no court. */
   const courtNumberLabel = (courtId: string | null): string | null => {
@@ -1580,7 +1572,6 @@ export function PlacementScheduler() {
       // desk needs to see which match is stuck before anything moves.
       if (plan.blocked.length > 0) {
         setPreview({ plan, outcome });
-        setShowAllChanges(false);
         return;
       }
       await finishApply(plan, outcome);
@@ -1634,7 +1625,6 @@ export function PlacementScheduler() {
       const { outcome, fresh } = await generateWhatIsMissing(await freshSchedulingData());
       const plan = await computePlan(fresh);
       setPreview({ plan, outcome });
-      setShowAllChanges(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not plan the rebuild");
     } finally {
@@ -1644,6 +1634,24 @@ export function PlacementScheduler() {
 
   const applyPreview = async () => {
     if (!preview || preview.plan.blocked.length > 0) return;
+    // A move that lands on a match starting within the hour is felt at the desk, and the times
+    // published to players do not come back. That is the one case worth a second look; every
+    // other rebuild is an ordinary improvement the organiser already asked for.
+    const soon = preview.plan.summary.movesSoonCount ?? 0;
+    if (soon > 0) {
+      const soonest = preview.plan.diff.changes
+        .filter((change) => change.startsSoon)
+        .map((change) => `${matchLabel(change.matchId)} — ${timeLabel(change.toStart)}`)
+        .slice(0, 3);
+      const confirmed = window.confirm(
+        `This rebuild moves ${soon} match${soon === 1 ? "" : "es"} that start${
+          soon === 1 ? "s" : ""
+        } within the hour.\n\n` +
+          `${soonest.join("\n")}\n\n` +
+          "The desk may already be calling them at their published time. Apply the rebuild anyway?",
+      );
+      if (!confirmed) return;
+    }
     setBusy(true);
     try {
       await finishApply(preview.plan, preview.outcome);
@@ -1654,12 +1662,6 @@ export function PlacementScheduler() {
       setBusy(false);
     }
   };
-
-  const visibleChanges = preview
-    ? showAllChanges
-      ? preview.plan.diff.changes
-      : preview.plan.diff.changes.filter((change) => change.kind !== "unchanged")
-    : [];
 
   /**
    * Discards the placement and knockout schedule, and keeps the seed order.
@@ -2521,162 +2523,29 @@ export function PlacementScheduler() {
         ) : null}
       </div>
 
-      <Dialog open={!!preview} onOpenChange={(open) => !open && setPreview(null)}>
-        <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-2xl">
-          {preview ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Rebuild preview</DialogTitle>
-                <DialogDescription>
-                  Nothing is written until you apply. Anchors stay fixed; only matches still to be
-                  played may move.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-3 overflow-y-auto pr-1">
-                <div className="rounded-md border border-hairline bg-surface px-3 py-2 text-sm">
-                  <p className="font-score">
-                    {preview.plan.summary.anchorCount} anchors kept, {preview.plan.summary.placed}{" "}
-                    matches replanned, {preview.plan.diff.movedCount} moving
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    The table below shows how each day's finish changes.
-                  </p>
-                </div>
-
-                {previewDayChanges.length ? (
-                  <div className="overflow-hidden rounded-md border border-hairline">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Day</th>
-                          <th className="w-20">Placed</th>
-                          <th className="w-24">Last finish</th>
-                          <th className="w-20">Moving</th>
-                          <th className="w-20">Largest</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {previewDayChanges.map((row) => (
-                          <tr key={row.dayId}>
-                            <td className="text-sm">
-                              {dayDateLabel(row.date)}
-                              {row.overrunMinutes > 0 ? (
-                                <span className="ml-2 text-sm text-warn-foreground">
-                                  {row.overrunMinutes} min past close
-                                </span>
-                              ) : null}
-                            </td>
-                            <td className="font-score text-sm">{row.placed}</td>
-                            <td className="font-score text-sm">
-                              {row.lastFinish ? timeLabel(row.lastFinish) : "—"}
-                            </td>
-                            <td className="font-score text-sm">{row.moving}</td>
-                            <td className="font-score text-sm">
-                              {row.largestShift ? `${row.largestShift} min` : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : null}
-
-                {preview.plan.blocked.length > 0 ? (
-                  <div className="rounded-md bg-danger-surface px-3 py-2 text-sm text-danger-foreground">
-                    <p className="font-semibold">
-                      {preview.plan.blocked.length} match
-                      {preview.plan.blocked.length === 1 ? "" : "es"} could not be placed.
-                    </p>
-                    {preview.plan.blockedReason ? (
-                      <p className="mt-1 text-sm">{preview.plan.blockedReason}</p>
-                    ) : preview.plan.summary.diagnostics?.deadlockReason ? (
-                      <p className="mt-1 text-sm">
-                        {preview.plan.summary.diagnostics.deadlockReason}
-                      </p>
-                    ) : null}
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {preview.plan.blocked.map((matchId) => (
-                        <li key={matchId}>{matchLabel(matchId)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {preview.plan.awaitingTeams.length > 0 ? (
-                  <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                    {preview.plan.awaitingTeams.length} match
-                    {preview.plan.awaitingTeams.length === 1 ? "" : "es"} waiting on a bracket and
-                    will stay unscheduled.
-                  </div>
-                ) : null}
-
-                {preview.plan.blocked.length === 0 ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">
-                        {showAllChanges ? "Full plan" : "Changes only"} ({visibleChanges.length})
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowAllChanges((value) => !value)}
-                      >
-                        {showAllChanges ? "Show changes only" : "Show full plan"}
-                      </Button>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto rounded-md border border-hairline">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>Match</th>
-                            <th className="w-28">Time</th>
-                            <th className="w-40">Court</th>
-                            <th className="w-16">Shift</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visibleChanges.map((change) => (
-                            <tr key={change.matchId}>
-                              <td className="text-sm">{matchLabel(change.matchId)}</td>
-                              <td className="font-score text-sm">
-                                {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
-                                {timeLabel(change.toStart)}
-                              </td>
-                              <td className="whitespace-nowrap font-score text-sm">
-                                {change.fromCourtNumber != null
-                                  ? `Court ${change.fromCourtNumber}`
-                                  : "—"}{" "}
-                                → Court {change.toCourtNumber}
-                              </td>
-                              <td className="font-score text-sm">
-                                {change.shiftMinutes > 0 ? "+" : ""}
-                                {change.shiftMinutes || "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" disabled={busy} onClick={() => setPreview(null)}>
-                  Keep current schedule
-                </Button>
-                <Button
-                  disabled={busy || preview.plan.blocked.length > 0}
-                  onClick={() => void applyPreview()}
-                >
-                  Apply rebuild
-                </Button>
-              </DialogFooter>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <RebuildPreviewDialog
+        open={!!preview}
+        onOpenChange={(next) => {
+          if (!next) setPreview(null);
+        }}
+        invariant="Anchors stay fixed; only matches still to be played may move."
+        summary={preview?.plan.summary ?? null}
+        days={preview?.plan.dayFinishes ?? []}
+        changes={preview?.plan.diff.changes ?? []}
+        describe={describeChange}
+        blocked={{
+          count: preview?.plan.blocked.length ?? 0,
+          reason:
+            preview?.plan.blockedReason ??
+            preview?.plan.summary.diagnostics?.deadlockReason ??
+            null,
+          labels: (preview?.plan.blocked ?? []).map((matchId) => matchLabel(matchId)),
+        }}
+        awaitingTeams={preview?.plan.awaitingTeams.length ?? 0}
+        busy={busy}
+        onCancel={() => setPreview(null)}
+        onApply={() => void applyPreview()}
+      />
     </Page>
   );
 }

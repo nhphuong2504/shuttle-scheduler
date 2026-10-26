@@ -38,6 +38,29 @@ test.describe("the placement format gets the placement scheduler", () => {
     await expect(page.getByText(DAY_PLANNER_VIEW, { exact: false })).toHaveCount(0);
   });
 
+  /**
+   * The preview is where an organiser accepts or refuses a replan, so what it has to show is the
+   * *change*: the finish they have against the finish they would get, and the moves grouped by
+   * the day they land on. It used to show only the proposed schedule.
+   */
+  test("previews the change as a comparison, with its moves grouped by day", async ({ page }) => {
+    await page.goto(routes.schedule, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /Rebuild schedule|Build schedule/ }).first().click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.getByText("Rebuild preview", { exact: true })).toBeVisible();
+    // The dry-run promise is the property the whole panel is built on.
+    await expect(dialog.getByText(/Nothing is written until you apply/)).toBeVisible();
+    // A verdict line, not a plan dump: it says what would move.
+    await expect(dialog.getByText(/would move|Nothing would move/)).toBeVisible();
+    // The moves are grouped under their day, and carry both the old and the new value.
+    await expect(dialog.getByRole("heading", { name: /Oct/ })).toBeVisible();
+    await expect(dialog.getByRole("columnheader", { name: "Shift" })).toBeVisible();
+    // The refusal is named beside the control it disables rather than only in the body.
+    await expect(dialog.getByRole("button", { name: "Keep current schedule" })).toBeEnabled();
+  });
+
   test("shows both placement rounds in progress and explains the remaining feeder slots", async ({
     page,
   }) => {
