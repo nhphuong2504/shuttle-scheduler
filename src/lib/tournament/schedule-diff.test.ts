@@ -66,6 +66,45 @@ describe("diffPlan", () => {
     expect(diff.newlyPlacedCount).toBe(1);
     expect(diff.largestShiftMinutes).toBe(20);
   });
+
+  /**
+   * The database's timestamptz is `2026-09-12T10:00:00+00:00`; the planner's is
+   * `2026-09-12T10:00:00.000Z`. Comparing those as strings called every match a move, which put
+   * a row in the rebuild preview for every match in the tournament with a shift of zero minutes
+   * beside it.
+   */
+  it("does not call a match moved when only its time's serialisation differs", () => {
+    const current = [
+      { id: "same", scheduled_time: "2026-09-12T10:00:00+00:00", court_id: "c1" },
+      { id: "nudged", scheduled_time: "2026-09-12T10:20:00+00:00", court_id: "c1" },
+    ];
+    const slots = [
+      slot("same", "2026-09-12T10:00:00.000Z", "c1", 1),
+      slot("nudged", "2026-09-12T10:26:00.000Z", "c1", 1),
+    ];
+    const diff = diffPlan(current, slots, new Set(), courtNumberById);
+
+    expect(diff.changes.find((change) => change.matchId === "same")).toMatchObject({
+      kind: "unchanged",
+      shiftMinutes: 0,
+    });
+    expect(diff.changes.find((change) => change.matchId === "nudged")).toMatchObject({
+      kind: "time-moved",
+      shiftMinutes: 6,
+    });
+    // Only the real move counts, so the preview has one row and the verdict says one.
+    expect(diff.movedCount).toBe(1);
+    expect(diff.largestShiftMinutes).toBe(6);
+  });
+
+  it("still sees a move that crosses a whole-minute boundary", () => {
+    const current = [{ id: "m1", scheduled_time: "2026-09-12T10:00:14+00:00", court_id: "c1" }];
+    const slots = [slot("m1", "2026-09-12T10:01:00.000Z", "c1", 1)];
+    const diff = diffPlan(current, slots, new Set(), courtNumberById);
+
+    expect(diff.changes[0]?.kind).toBe("time-moved");
+    expect(diff.changes[0]?.shiftMinutes).toBe(1);
+  });
 });
 
 describe("projectedFinishFromRemainingMatches", () => {

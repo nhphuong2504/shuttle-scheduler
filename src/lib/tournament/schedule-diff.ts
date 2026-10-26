@@ -170,13 +170,30 @@ function courtNumber(
   return courtNumberById.get(courtId) ?? null;
 }
 
+/**
+ * Whether two serialisations name the same instant.
+ *
+ * The database returns a `timestamptz` as `2026-10-26T20:03:00+00:00`; the planner produces
+ * `slot.start.toISOString()`, which is `2026-10-26T20:03:00.000Z`. Comparing the strings says
+ * "changed" for a match that has not budged, so every row in a preview looked like a move - with
+ * a shift of zero minutes beside it. The comparison is by instant, and the string form is only a
+ * fallback for a value that will not parse.
+ */
+function sameInstant(a: string | null, b: string | null): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  const at = Date.parse(a);
+  const bt = Date.parse(b);
+  if (Number.isFinite(at) && Number.isFinite(bt)) return at === bt;
+  return a === b;
+}
+
 function classifyChange(
   fromStart: string | null,
   toStart: string,
   fromCourt: number | null,
   toCourt: number,
 ): PlanChangeKind {
-  const timeChanged = fromStart !== toStart;
+  const timeChanged = !sameInstant(fromStart, toStart);
   const courtChanged = fromCourt !== toCourt;
   if (!fromStart && fromCourt == null) return "newly-placed";
   if (timeChanged && courtChanged) return "both-moved";

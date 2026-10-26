@@ -162,6 +162,22 @@ describe("RebuildPreviewDialog", () => {
     expect(within(dialog).getAllByText("Starts within the hour").length).toBe(2);
   });
 
+  it("lists only the matches that actually change", () => {
+    // The plan returns every movable match, including the ones it left exactly where they were.
+    // A preview that listed those would put a row in front of the organiser for every match in
+    // the tournament, each with a shift of zero beside it.
+    const { dialog } = renderPreview({
+      changes: [
+        change({ matchId: "moved" }),
+        change({ matchId: "still", kind: "unchanged", shiftMinutes: 0 }),
+      ],
+      summary: summary({ movedCount: 1 }),
+    });
+
+    expect(within(dialog).getAllByRole("row")).toHaveLength(2); // one header row, one move
+    expect(within(dialog).getByText("1 match would move.")).toBeTruthy();
+  });
+
   it("does not print a move table when nothing moves", () => {
     const { dialog } = renderPreview({
       changes: [change({ kind: "newly-placed", fromStart: null })],
