@@ -193,14 +193,22 @@ export function RebuildPreviewDialog(props: RebuildPreviewProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-2xl">
+      {/*
+        `grid-rows-[auto_minmax(0,1fr)_auto]` is what keeps the footer on screen.
+        The dialog is a grid capped at 85vh with `overflow-hidden`, and a grid item's default
+        `min-height: auto` refuses to shrink below its content - so a long plan grew the middle
+        row past the cap and the buttons were clipped off the bottom edge, unreachable. Stating
+        the rows makes the middle one the only thing that gives, and `min-h-0` lets the body
+        scroll instead of pushing.
+      */}
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] max-h-[85vh] overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Rebuild preview</DialogTitle>
           <DialogDescription>
             Nothing is written until you apply. {props.invariant}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 overflow-y-auto pr-1">
+        <div data-preview-body className="min-h-0 space-y-4 overflow-y-auto pr-1">
           <div
             className={cn(
               "rounded-lg border px-3 py-2.5",
@@ -221,10 +229,12 @@ export function RebuildPreviewDialog(props: RebuildPreviewProps) {
                 <thead>
                   <tr>
                     <th>Day</th>
-                    <th className="w-28">Finish now</th>
-                    <th className="w-28">Finish after</th>
-                    <th className="w-20">Moves</th>
-                    <th className="w-32">Largest shift (min)</th>
+                    <th className="w-24">Finish now</th>
+                    <th className="w-24">Finish after</th>
+                    <th className="w-16">Moves</th>
+                    {/* The largest single shift is per row in the list below; on a phone it is
+                        the column that pushes the table past the dialog, so it goes. */}
+                    <th className="hidden w-32 sm:table-cell">Largest shift (min)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -245,7 +255,7 @@ export function RebuildPreviewDialog(props: RebuildPreviewProps) {
                         {day.finishAfterMs != null ? timeLabel(new Date(day.finishAfterMs)) : "—"}
                       </td>
                       <td className="font-score text-sm">{day.moved}</td>
-                      <td className="font-score text-sm">
+                      <td className="hidden font-score text-sm sm:table-cell">
                         {day.largestShiftMinutes > 0 ? day.largestShiftMinutes : "—"}
                       </td>
                     </tr>
@@ -295,8 +305,45 @@ export function RebuildPreviewDialog(props: RebuildPreviewProps) {
                         {plural(rows.length, "move", "moves")}
                       </span>
                     </h3>
+                    {/*
+                      A table needs room for four columns; a phone does not have it, and the
+                      version that tried clipped Court and Shift off the right edge. Below `sm`
+                      each move is one block: identity and pairing, then the two facts that
+                      changed. The table returns where it fits.
+                    */}
                     <div className="overflow-hidden rounded-md border border-hairline">
-                      <table className="data-table">
+                      <ul className="divide-y divide-hairline sm:hidden">
+                        {rows.map((change) => {
+                          const { identity, names } = describe(change);
+                          return (
+                            <li key={change.matchId} className="space-y-1 px-3 py-2.5">
+                              <p className="text-sm" title={names}>
+                                <span className="font-semibold">{identity}</span>{" "}
+                                <span className="text-muted-foreground">{names}</span>
+                              </p>
+                              <p className="font-score text-sm">
+                                {change.fromStart ? timeLabel(change.fromStart) : "—"} →{" "}
+                                {timeLabel(change.toStart)}
+                                <span className="ml-2 text-muted-foreground">
+                                  {change.fromCourtNumber != null
+                                    ? `Court ${change.fromCourtNumber}`
+                                    : "—"}{" "}
+                                  → Court {change.toCourtNumber}
+                                </span>
+                                <span className="ml-2 font-semibold">
+                                  {shiftLabel(change.shiftMinutes)}
+                                </span>
+                              </p>
+                              {change.startsSoon ? (
+                                <p className="text-sm font-semibold text-warn-foreground">
+                                  Starts within the hour
+                                </p>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <table className="data-table hidden sm:table">
                         <thead>
                           <tr>
                             <th>Match</th>
@@ -345,15 +392,20 @@ export function RebuildPreviewDialog(props: RebuildPreviewProps) {
           )}
         </div>
 
-        <DialogFooter className="items-center gap-2 sm:justify-between">
+        {/*
+          The reason a plan cannot be applied sits beside the control it disables, not only in the
+          body: a disabled button whose cause has scrolled out of view is a dead end. The footer is
+          its own grid row, so it stays put while the plan above it scrolls.
+        */}
+        <DialogFooter className="items-center gap-2 sm:flex-row sm:justify-between sm:space-x-0">
           {applyReason ? (
-            <p id="apply-blocked-reason" className="text-sm text-danger-foreground">
+            <p id="apply-blocked-reason" className="text-sm text-danger-foreground sm:flex-1">
               {applyReason}
             </p>
           ) : (
-            <span />
+            <span className="hidden sm:block sm:flex-1" />
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
             <Button variant="outline" disabled={props.busy} onClick={props.onCancel}>
               Keep current schedule
             </Button>

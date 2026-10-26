@@ -61,6 +61,58 @@ test.describe("the placement format gets the placement scheduler", () => {
     await expect(dialog.getByRole("button", { name: "Keep current schedule" })).toBeEnabled();
   });
 
+  /**
+   * The dialog is capped at 85vh with `overflow-hidden`, so a body that will not shrink pushes the
+   * footer past the bottom edge - the buttons became unreachable and part of the plan was cut.
+   * Measured rather than eyeballed: the Apply button has to be inside the dialog and on screen.
+   */
+  test("keeps its buttons on screen when the plan is taller than the dialog", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 480 });
+    await page.goto(routes.schedule, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /Rebuild schedule|Build schedule/ }).first().click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    const apply = dialog.getByRole("button", { name: "Apply rebuild" });
+    await expect(apply).toBeVisible();
+
+    const dialogBox = await dialog.boundingBox();
+    const applyBox = await apply.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect(applyBox).not.toBeNull();
+    // Inside the dialog and inside the viewport: the bug was that the footer escaped both.
+    expect(applyBox!.y + applyBox!.height).toBeLessThanOrEqual(dialogBox!.y + dialogBox!.height);
+    expect(applyBox!.y + applyBox!.height).toBeLessThanOrEqual(480);
+    // Full height, not squashed into a strip: a collapsed footer would pass the two checks above.
+    expect(applyBox!.height).toBeGreaterThanOrEqual(40);
+
+    // The body scrolls instead of being cut: its content is taller than its box.
+    const scrolls = await dialog.evaluate((el) => {
+      const body = el.querySelector<HTMLElement>("[data-preview-body]");
+      return body ? { client: body.clientHeight, scroll: body.scrollHeight } : null;
+    });
+    expect(scrolls).not.toBeNull();
+    expect(scrolls!.scroll).toBeGreaterThan(scrolls!.client);
+  });
+
+  /**
+   * A four-column table does not fit a phone, and the version that tried clipped Court and Shift
+   * off the right edge. Below `sm` each move is one block instead.
+   */
+  test("shows each move as a block on a phone rather than a clipped table", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto(routes.schedule, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /Rebuild schedule|Build schedule/ }).first().click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.getByRole("columnheader", { name: "Shift" })).toBeHidden();
+    // The facts the table would have carried are on the row itself.
+    const row = dialog.getByRole("listitem").filter({ hasText: /Court \d+ → Court \d+/ });
+    await expect(row).toBeVisible();
+    await expect(row.getByText(/^\+\d+ min$/)).toBeVisible();
+  });
+
   test("shows both placement rounds in progress and explains the remaining feeder slots", async ({
     page,
   }) => {

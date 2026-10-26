@@ -158,7 +158,8 @@ describe("RebuildPreviewDialog", () => {
 
   it("marks a move that starts within the hour", () => {
     const { dialog } = renderPreview({ changes: [change({ startsSoon: true })] });
-    expect(within(dialog).getByText("Starts within the hour")).toBeTruthy();
+    // Once for the phone block, once for the desktop table: only one is displayed at a time.
+    expect(within(dialog).getAllByText("Starts within the hour").length).toBe(2);
   });
 
   it("does not print a move table when nothing moves", () => {
