@@ -745,3 +745,30 @@ that match's result ran the reflow. Migration `20261026000000_whole_minute_publi
   the report orders a player's matches by start time, so the overdue one is never "after" the other. That is
   Wave 3 item 3.1's problem, which is paused.
 
+
+## 34. A rebuild preview is a comparison, and it is priced in matches the desk is about to call
+
+The preview used to render the plan's own finishes and leave the current schedule implicit, so an
+organiser could see that day two would end at 17:05 and not whether that was better or worse than the
+17:41 they had. The plan now carries both halves: `currentProjectedFinish` comes from `currentFinishFor`,
+the same function the page header reads, so the two cannot disagree. Each day reports its finish now
+against its finish after (`compareDayFinishes`), and `placement-schedule.ts` no longer nulls the two
+fields on the belief that the per-day table showed the difference - it showed only the new number.
+
+- **Moves are not placements.** A first build places everything; reporting that as "N moving" told the
+  organiser a schedule they never had was being taken away. `movedCount` excludes `newly-placed`, and the
+  preview's per-day `moved`/`newlyPlaced` are counted once, in the plan.
+- **The cost is the near term.** Moving a match two days out is administrative; moving one that starts in
+  twelve minutes changes what the desk is about to call. `startsSoon` marks any move whose published start
+  is within `SOON_MINUTES` of `now` - the same threshold `rebuild-suggestion.ts` uses to invite the
+  organiser in, so the invitation and the price cannot disagree. A rebuild that moves one of those asks for
+  a second, explicit confirmation naming the matches.
+- **Attribution is the planner's.** A move's day comes from `sliceRowsByDay`, not from a calendar date
+  comparison: the last day may overrun past midnight, and a match at 00:20 belongs to the day that had
+  already opened.
+- **One panel, two formats.** `RebuildPreviewDialog` is shared by the placement and round-robin editors.
+  They used to draw two dialogs with one title and different amounts of information. The round-robin
+  planner does not compute `movesSoonCount`; it derives `startsSoon` per change from the same helper.
+- **A blocked plan is named beside the control it disables.** The reason sits in the footer and the Apply
+  button points at it with `aria-describedby`, rather than leaving a dead control with its cause scrolled
+  out of view.
