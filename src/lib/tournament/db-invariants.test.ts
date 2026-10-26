@@ -1,9 +1,23 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync as readFileIgnoringLineEndings, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { SCHEDULE_SHIFT_THRESHOLD_MS } from "./published-time";
+
+/**
+ * A migration's source, with its line endings normalised to LF.
+ *
+ * GitHub checks these files out with LF; a Windows checkout with `core.autocrlf=true` -
+ * which is the default there, and this repository has no `.gitattributes` overriding it -
+ * writes them with CRLF. An assertion that matches a literal `\n` therefore passes on CI
+ * and fails on the machine the migration was written on. A few genuinely need the literal,
+ * because where a statement sits relative to a loop or a lock is part of what they pin
+ * (see the whole-minute block at the end of this file), so normalising at the read makes
+ * those assertions depend on the SQL rather than on the checkout.
+ */
+const readFileSync = (path: string, encoding: "utf8") =>
+  readFileIgnoringLineEndings(path, encoding).replace(/\r\n/g, "\n");
 
 /**
  * Contract tests for the hardening migration and the role-redesign migration. They
