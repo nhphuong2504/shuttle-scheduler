@@ -9,7 +9,8 @@ function input(over: Partial<NextStepInput> = {}): NextStepInput {
     phase: "upcoming",
     registrationState: "closed",
     pendingRequests: 0,
-    activeEntrants: 8,
+    entries: 8,
+    placementEntrants: 8,
     unseededEntrants: 0,
     placementMatches: 12,
     scheduledPlacementMatches: 12,
@@ -26,7 +27,7 @@ describe("organiserNextStep", () => {
   });
 
   it("puts waiting requests first, before anything else is missing", () => {
-    expect(stage({ pendingRequests: 3, activeEntrants: 0, registrationState: "open" })).toBe(
+    expect(stage({ pendingRequests: 3, entries: 0, registrationState: "open" })).toBe(
       "review_requests",
     );
     expect(organiserNextStep(input({ pendingRequests: 1 }))?.target).toBe("registrations");
@@ -38,7 +39,28 @@ describe("organiserNextStep", () => {
   });
 
   it("asks for entries when the roster is empty", () => {
-    expect(stage({ activeEntrants: 0 })).toBe("add_entries");
+    expect(stage({ entries: 0, placementEntrants: 0 })).toBe("add_entries");
+  });
+
+  it("asks for the entries to be synced, not added again, when Placement has not seen them", () => {
+    // The state a tournament sits in between adding entries and pressing "Sync entrants":
+    // a full roster, an empty placement field. Telling the organiser to add the entries they
+    // have just added sent them back to the page they came from.
+    const step = organiserNextStep(input({ entries: 172, placementEntrants: 0, unseededEntrants: 0 }));
+    expect(step?.stage).toBe("sync_entrants");
+    expect(step?.target).toBe("placement");
+    expect(step?.title).not.toMatch(/entered yet/i);
+    expect(step?.detail).toMatch(/^172 entries are registered but not in the placement stage/);
+  });
+
+  it("counts only the entries Placement is still missing, and says so for one", () => {
+    const step = organiserNextStep(input({ entries: 9, placementEntrants: 8, unseededEntrants: 0 }));
+    expect(step?.stage).toBe("sync_entrants");
+    expect(step?.detail).toMatch(/^1 entry is registered but not in the placement stage/);
+  });
+
+  it("asks for seeds once every entry has reached Placement", () => {
+    expect(stage({ entries: 8, placementEntrants: 8, unseededEntrants: 8 })).toBe("seed");
   });
 
   it("asks for seeds while any entrant is unseeded", () => {

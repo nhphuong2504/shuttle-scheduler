@@ -17,6 +17,7 @@ export type NextStepStage =
   | "review_requests"
   | "registration_open"
   | "add_entries"
+  | "sync_entrants"
   | "seed"
   | "schedule"
   | "run"
@@ -37,9 +38,18 @@ export interface NextStepInput {
   registrationState: RegistrationState;
   /** Requests waiting for a decision. */
   pendingRequests: number;
-  /** Entrants the tournament is actually running (not withdrawn). */
-  activeEntrants: number;
-  /** Of those, how many have no seed yet. */
+  /**
+   * Entries registered for the tournament: active teams, not withdrawn.
+   *
+   * This is what the Entries page lists, and it is *not* the same thing as the placement
+   * field. A team becomes a placement entrant only when `sync_placement_entrants` runs for
+   * its event, so "no one is entered" and "nothing has reached Placement" are two different
+   * states with two different remedies - adding a team, versus syncing the ones that exist.
+   */
+  entries: number;
+  /** Of those, how many have reached the placement stage and are not waived. */
+  placementEntrants: number;
+  /** Of the placement entrants, how many have no seed yet. */
   unseededEntrants: number;
   /** Placement matches that exist, and how many of them have a court and a time. */
   placementMatches: number;
@@ -117,13 +127,28 @@ export function organiserNextStep(input: NextStepInput): NextStep | null {
     };
   }
 
-  if (input.activeEntrants === 0) {
+  if (input.entries === 0) {
     return {
       stage: "add_entries",
       title: "No one is entered yet",
       detail: "Add the players or teams who are playing.",
       actionLabel: "Add entries",
       target: "entries",
+    };
+  }
+
+  // Entries exist but the placement stage has not been given them yet. Nothing happens
+  // automatically here, on purpose: a late team must be synced deliberately (see
+  // `docs/roster-freeze.md`). Telling the organiser to add the entries they just added was
+  // the card's mistake, so the remedy is named precisely - the sync, not the entries page.
+  if (input.placementEntrants < input.entries) {
+    const missing = input.entries - input.placementEntrants;
+    return {
+      stage: "sync_entrants",
+      title: "Bring the entries into Placement",
+      detail: `${plural(missing, "entry is", "entries are")} registered but not in the placement stage yet. Sync entrants in each event so they can be seeded.`,
+      actionLabel: "Go to Placement",
+      target: "placement",
     };
   }
 

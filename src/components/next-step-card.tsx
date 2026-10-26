@@ -9,6 +9,7 @@ import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import {
   usePlacementEntrants,
   usePlacementMatches,
+  useTeams,
   useTournamentContext,
   useTournamentRegistrationQueue,
   useTournamentSummary,
@@ -42,6 +43,7 @@ export function NextStepCard() {
   const { tournamentId, tournament } = useTournamentContext();
   const summary = useTournamentSummary(tournamentId).data;
   const queue = useTournamentRegistrationQueue(tournamentId, { enabled: true });
+  const teams = useTeams().data;
   const entrants = usePlacementEntrants().data;
   const matches = usePlacementMatches().data;
   const complete = useCompleteTournament(tournamentId, tournament?.name ?? "");
@@ -55,17 +57,22 @@ export function NextStepCard() {
 
   const step = useMemo(() => {
     // Wait for every input: a guess made from half the counts would name the wrong step.
-    if (!summary || !queue.data || !entrants || !matches) return null;
+    if (!summary || !queue.data || !teams || !entrants || !matches) return null;
     // The same for the completion counts, and only for a running tournament - every other
     // rung is answered by rows the shell has already read.
     if (status === "in_progress" && !completion.data) return null;
     const active = entrants.filter((entrant) => !entrant.excluded);
+    // The Entries page's roster, which is what "has anyone entered" actually asks. A team
+    // only reaches Placement once somebody syncs it, so counting entrants alone reported an
+    // empty roster for a tournament with a full one.
+    const entries = teams.filter((team) => !team.withdrawn).length;
     return organiserNextStep({
       status: normalizeTournamentStatus(summary.status),
       phase: tournamentPhase(summary),
       registrationState: normalizeRegistrationState(summary.registration_state),
       pendingRequests: queue.data.pending.length,
-      activeEntrants: active.length,
+      entries,
+      placementEntrants: active.length,
       unseededEntrants: active.filter((entrant) => entrant.seed == null).length,
       placementMatches: matches.length,
       scheduledPlacementMatches: matches.filter((match) => match.scheduled_time).length,
@@ -75,7 +82,7 @@ export function NextStepCard() {
         unplayed: completion.data?.unplayed ?? 0,
       },
     });
-  }, [summary, queue.data, entrants, matches, status, completion.data]);
+  }, [summary, queue.data, teams, entrants, matches, status, completion.data]);
 
   if (!step || !tournamentId) return null;
   // A running tournament's next step is "keep running it", which the Desk already is; drawing
