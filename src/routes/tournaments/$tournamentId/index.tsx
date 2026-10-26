@@ -11,6 +11,7 @@ import {
   TournamentStatusPill,
 } from "@/components/app-shell";
 import { tournamentPhase } from "@/lib/tournament/phase";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,14 +145,23 @@ function TournamentPage() {
   const choosable = useMemo(() => choosableCategories(categories, usage), [categories, usage]);
   const selectableIds = useMemo(() => new Set(choosable.map((c) => c.id)), [choosable]);
   /**
-   * The events on offer: switched on, in the host's own order, and *including* the ones that
-   * are already full.
+   * The events on offer: switched on, and in the standard order rather than the order they were
+   * added in.
    *
-   * A full event is drawn disabled with its reason rather than omitted. Hiding it would send
-   * a participant looking for the event they came for - "where is Mixed Doubles?" - when the
-   * honest answer, which the panel can give, is that it is full.
+   * `categories` arrives ordered by `sort_order`, which records the order the setup toggles were
+   * pressed. That is a fact about how the tournament was configured, not about the tournament: a
+   * host who switched WS on before MS would show a participant Women's Singles first, while the
+   * organiser's own pages list MS first. A participant reads this list to find an event, so it
+   * uses the same order everywhere else does.
+   *
+   * Events that are already full are included and drawn disabled rather than omitted. Hiding one
+   * would send a participant looking for the event they came for - "where is Mixed Doubles?" -
+   * when the honest answer, which the panel can give, is that it is full.
    */
-  const events = useMemo(() => categories.filter((c) => c.active), [categories]);
+  const events = useMemo(
+    () => categories.filter((c) => c.active).sort(compareEventOrder),
+    [categories],
+  );
   const cap = tournament?.max_categories_per_player ?? null;
 
   const open = state !== null && isRegistrationOpen(state);

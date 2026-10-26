@@ -1201,7 +1201,7 @@ test.describe("Setting up a completed tournament", () => {
 test.describe("The window is open", () => {
   test.use({ appMock: { preset: "layout", role: "user", registrationState: "open" } });
 
-  test("draws the events the window opens, in the host's own order", async ({ page }) => {
+  test("draws the events the window opens, in the standard order", async ({ page }) => {
     await page.goto(routes.tournament, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
 
@@ -1222,6 +1222,57 @@ test.describe("The window is open", () => {
     await page.getByRole("button", { name: /Men's Doubles/ }).click();
     await expect(send).toBeEnabled();
     await expect(page.getByText("1 event selected, up to 3 per player")).toBeVisible();
+  });
+
+  /**
+   * A participant reads this list to find an event. Ordering it by the sequence the host pressed
+   * the setup toggles in would list Women's Singles first for a field entered WS-first, while
+   * every operator page lists MS first.
+   */
+  test("lists the events MS, WS, MD, WD, XD whatever order the host added them in", async ({
+    page,
+  }) => {
+    await page.goto(routes.tournament, { waitUntil: "load" });
+
+    const codes = ["XD", "WD", "MD", "WS", "MS"];
+    const names: Record<string, string> = {
+      MS: "Men's Singles",
+      WS: "Women's Singles",
+      MD: "Men's Doubles",
+      WD: "Women's Doubles",
+      XD: "Mixed Doubles",
+    };
+    await page.route("**/rest/v1/categories?*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          codes.map((code, index) => ({
+            id: `cat-${code}`,
+            tournament_id: "fixture",
+            code,
+            name: names[code],
+            entry_type: code.endsWith("S") ? "individual" : "pair",
+            sort_order: index + 1,
+            active: true,
+            max_entries: null,
+            gender: "open",
+            created_at: "2026-01-01T00:00:00.000Z",
+          })),
+        ),
+      }),
+    );
+    await page.reload({ waitUntil: "networkidle" });
+
+    const choices = page.locator("form li button");
+    await expect(choices).toHaveCount(5);
+    await expect(choices).toHaveText([
+      /Men's Singles/,
+      /Women's Singles/,
+      /Men's Doubles/,
+      /Women's Doubles/,
+      /Mixed Doubles/,
+    ]);
   });
 
   test("asks a visitor to sign in, carrying this page as the place to come back to", async ({

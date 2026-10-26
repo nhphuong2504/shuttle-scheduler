@@ -75,3 +75,44 @@ describe("resultCounts", () => {
     expect(resultCounts(input as never)).toEqual({ played: 1, walkovers: 1, unplayed: 1 });
   });
 });
+
+describe("buildResultsCsv ordering", () => {
+  const configured = (code: string, index: number) => ({
+    id: `c-${code}`,
+    code,
+    name: code,
+    sort_order: index + 1,
+  });
+
+  it("lists events MS, WS, MD, WD, XD whatever order they were configured in", () => {
+    // A spreadsheet read against the app should read in the same order as the app. The
+    // configured order records the sequence the setup toggles were pressed in, so it cannot
+    // decide this.
+    const codes = ["XD", "WD", "MD", "WS", "MS"];
+    const csv = buildResultsCsv({
+      ...(input as never as Record<string, unknown>),
+      categories: codes.map(configured),
+      placementMatches: codes.map((code) => ({
+        id: `m-${code}`,
+        category_id: `c-${code}`,
+        stage: "round1",
+        generation_key: "r1-1",
+        entrant_a_id: "e1",
+        entrant_b_id: "e2",
+        winner_id: null,
+        status: "scheduled",
+        games: [],
+      })),
+      tierMatches: [],
+      draws: [],
+    } as never);
+
+    const events = csv
+      .split("\r\n")
+      .slice(1)
+      .filter(Boolean)
+      .map((line) => line.slice(0, 2));
+
+    expect(events).toEqual(["MS", "WS", "MD", "WD", "XD"]);
+  });
+});

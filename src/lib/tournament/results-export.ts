@@ -1,5 +1,6 @@
 import { PLACEMENT_TIERS } from "@/lib/tournament/competition-format";
 import { roundName } from "@/lib/tournament/draws";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import { gamesLabel, parseGames } from "@/lib/tournament/format";
 import {
   indexBy,
@@ -71,7 +72,9 @@ export function buildResultsCsv(input: ResultsExportInput): string {
     status === "reported" ? gamesLabel(parseGames(games)) : "";
 
   const rows: string[][] = [];
-  const categories = [...input.categories].sort((a, b) => a.sort_order - b.sort_order);
+  // The standard event order, so a spreadsheet of results reads MS, WS, MD, WD, XD whatever
+  // order the events were configured in - the same order the organiser's pages use.
+  const categories = [...input.categories].sort(compareEventOrder);
 
   for (const category of categories) {
     const event = `${category.code} ${category.name}`;
