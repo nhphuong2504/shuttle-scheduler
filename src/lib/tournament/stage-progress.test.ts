@@ -725,15 +725,66 @@ describe("round-robin stage progress", () => {
 // ---------------------------------------------------------------------------
 
 describe("stage progress assembly", () => {
-  it("orders events by the configured category order", () => {
+  it("orders events MS, WS, MD, WD, XD whatever order they were added in", () => {
+    // The configured order here is deliberately the reverse of the standard one: it is what a
+    // tournament built by pressing the toggles in a different order stores.
     const rows = buildStageProgress({
       categories: [
-        category({ id: "cat1", code: "MS", sort_order: 2 }),
-        category({ id: "cat2", code: "WS", sort_order: 1 }),
+        category({ id: "cat1", code: "XD", sort_order: 1 }),
+        category({ id: "cat2", code: "WD", sort_order: 2 }),
+        category({ id: "cat3", code: "MD", sort_order: 3 }),
+        category({ id: "cat4", code: "WS", sort_order: 4 }),
+        category({ id: "cat5", code: "MS", sort_order: 5 }),
       ],
       categoryOrder: new Map([
-        ["cat1", 2],
-        ["cat2", 1],
+        ["cat1", 1],
+        ["cat2", 2],
+        ["cat3", 3],
+        ["cat4", 4],
+        ["cat5", 5],
+      ]),
+      entrants: ["cat1", "cat2", "cat3", "cat4", "cat5"].flatMap((categoryId, index) => [
+        entrant(`e${index}a`, 1, { category_id: categoryId }),
+        entrant(`e${index}b`, 2, { category_id: categoryId }),
+      ]),
+      placementMatches: [],
+    });
+
+    expect([...new Set(rows.map((row) => row.eventLabel))]).toEqual([
+      "MS",
+      "WS",
+      "MD",
+      "WD",
+      "XD",
+    ]);
+  });
+
+  it("keeps the pipeline order inside one event", () => {
+    const rows = buildStageProgress({
+      categories: [category({ id: "cat1", code: "MS", sort_order: 1 })],
+      categoryOrder: new Map([["cat1", 1]]),
+      entrants: [
+        entrant("e1", 1, { category_id: "cat1" }),
+        entrant("e2", 2, { category_id: "cat1" }),
+        entrant("e3", 3, { category_id: "cat1" }),
+        entrant("e4", 4, { category_id: "cat1" }),
+      ],
+      placementMatches: [],
+    });
+
+    const stages = rows.filter((row) => row.eventLabel === "MS").map((row) => row.stageLabel);
+    expect(stages).toEqual(["Round 1", "Round 2", "Knockout"]);
+  });
+
+  it("falls back to the configured order for an event outside the standard five", () => {
+    const rows = buildStageProgress({
+      categories: [
+        category({ id: "cat1", code: "ZZ", sort_order: 1 }),
+        category({ id: "cat2", code: "MS", sort_order: 2 }),
+      ],
+      categoryOrder: new Map([
+        ["cat1", 1],
+        ["cat2", 2],
       ]),
       entrants: [
         entrant("e1", 1, { category_id: "cat1" }),
@@ -744,7 +795,8 @@ describe("stage progress assembly", () => {
       placementMatches: [],
     });
 
-    expect([...new Set(rows.map((row) => row.eventLabel))]).toEqual(["WS", "MS"]);
+    // The standard events come first; anything else follows in its own configured order.
+    expect([...new Set(rows.map((row) => row.eventLabel))]).toEqual(["MS", "ZZ"]);
   });
 
   it("returns nothing for a tournament with no stages", () => {

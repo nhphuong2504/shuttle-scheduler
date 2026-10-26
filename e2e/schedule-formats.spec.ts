@@ -113,6 +113,63 @@ test.describe("the placement format gets the placement scheduler", () => {
     await expect(row.getByText(/^\+\d+ min$/)).toBeVisible();
   });
 
+  /**
+   * Stage progress lists the events in the standard order, not the order they were configured.
+   *
+   * The fixture's two events are MD then XD by `sort_order`. Five are routed in reverse, so the
+   * test fails if the panel is reading the configured order - which is what it used to do.
+   */
+  test("orders stage progress MS, WS, MD, WD, XD whatever the configured order is", async ({
+    page,
+  }) => {
+    const fixture = deskFixture("layout", "admin");
+    const base = fixture.tables["categories"] as Record<string, unknown>[];
+    const template = base[0]!;
+    const codes = ["XD", "WD", "MD", "WS", "MS"];
+    const routed = codes.map((code, index) => ({
+      ...template,
+      id: `cat-${code}`,
+      code,
+      name: code,
+      sort_order: index + 1,
+      active: true,
+    }));
+    const entrants = routed.flatMap((category) =>
+      [1, 2].map((seed) => ({
+        id: `entrant-${String(category["code"])}-${seed}`,
+        tournament_id: category["tournament_id"],
+        category_id: category["id"],
+        team_id: `team-${String(category["code"])}-${seed}`,
+        seed,
+        seed_locked_at: null,
+        excluded: false,
+        skill_level: "B",
+        tier: null,
+        created_at: "2026-01-01T00:00:00.000Z",
+      })),
+    );
+
+    for (const [table, rows] of [
+      ["categories", routed],
+      ["placement_entrants", entrants],
+      ["placement_matches", []],
+      ["tier_draws", []],
+      ["tier_draw_matches", []],
+    ] as const) {
+      await page.route(`**/rest/v1/${table}?*`, (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(rows) }),
+      );
+    }
+
+    await page.goto(routes.schedule, { waitUntil: "networkidle" });
+    const panel = page.locator("section", {
+      has: page.getByRole("heading", { name: "Stage progress" }),
+    });
+    await expect(panel).toBeVisible();
+
+    await expect(panel.locator("h3")).toHaveText(["MS", "WS", "MD", "WD", "XD"]);
+  });
+
   test("shows both placement rounds in progress and explains the remaining feeder slots", async ({
     page,
   }) => {

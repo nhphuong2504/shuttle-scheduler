@@ -56,6 +56,7 @@ import type {
   TierDrawMatch,
 } from "./data";
 import { buildCategoryView } from "./placement-actions";
+import { eventRank } from "./event-order";
 import { poolIsComplete } from "./standings";
 import { bracketRoundCount } from "./tier-draw";
 
@@ -513,7 +514,13 @@ export function buildStageProgress(input: StageProgressInput): StageProgressRow[
   return drafts
     .sort(
       (a, b) =>
-        (orderByCode.get(a.eventLabel ?? "") ?? 0) - (orderByCode.get(b.eventLabel ?? "") ?? 0) ||
+        // The standard event order first, so this list reads MS -> WS -> MD -> WD -> XD whatever
+        // order the events were added in. `categoryOrder` records the order the setup toggles
+        // were pressed, which is a fact about how the tournament was configured rather than about
+        // the tournament - reading it alone listed a field entered WS-first with singles reversed.
+        eventRank(a.eventLabel ?? "") - eventRank(b.eventLabel ?? "") ||
+        (orderByCode.get(a.eventLabel ?? "") ?? 0) -
+          (orderByCode.get(b.eventLabel ?? "") ?? 0) ||
         (a.eventLabel ?? "").localeCompare(b.eventLabel ?? "") ||
         a.order - b.order ||
         (a.roundLabel ?? "").localeCompare(b.roundLabel ?? ""),
