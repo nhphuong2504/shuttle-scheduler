@@ -568,9 +568,10 @@ used to be pressed for happens on its own, and the button is left for deliberate
 The planner has to say when a running match ends, because it holds its court and its players until then.
 `inProgressEnd` (`src/lib/tournament/in-progress.ts`) is the one answer: `max(start + slot, now)`, in whole
 milliseconds. A match inside its slot ends when the slot is up; one that has overrun is taken as ending now,
-since nothing says when. It is the model the live reflow (`shift_live_schedule_core`),
-`placement_occupied_matches` and `schedule_conflicts` already used, and it is now also the Desk's finish
-forecast and the Schedule page's projected finish.
+since nothing says when. It is the model the live reflow (`shift_live_schedule_core`) and
+`placement_occupied_matches` already used, and it is now also the Desk's finish forecast and the Schedule
+page's projected finish. `schedule_conflicts` used it too until section 33: the conflict report asks whether
+the plan contradicts itself, not when a match will end, so it now gives a running match its planned span.
 
 - **What it replaced.** The planner used to model every running match as `now + slot`: a full slot from the
   moment of planning however long it had been playing. That reserved court and player time that had already
@@ -580,8 +581,7 @@ forecast and the Schedule page's projected finish.
 - **It is a planning estimate, not a lock.** Whether another match may START on a court is decided by status
   alone (`assert_can_start_match`): a court with a match in progress is busy until it is reported, whatever
   the estimate says. An overrun therefore never lets two matches share a court. At worst the next match is
-  published for a moment when the court is still busy; the reflow pushes it later and the conflict report
-  flags it, exactly as they did before.
+  published for a moment when the court is still busy; the reflow pushes it later when the result lands.
 - **Pins.** A pinned next match is kept when it starts at or after the running match's modelled end, and
   released when it would overlap it. With the shorter end more pins qualify than before.
 - **No margin on purpose.** A cushion for overruns (for example +5 minutes) was measured and gives back idle
@@ -705,3 +705,43 @@ each instant.
   start or result instead of waiting for the set of unplaced matches to change. The last pass's
   problem is published (`useAutoScheduleProblem`), and the Desk shows it over the board when ready
   matches have no time - at once when a pass reported a problem, otherwise after a minute.
+
+## 33. Published times are whole minutes, and only a move worth announcing is written
+
+Viet Nam Open 2026 (`analysis/viet-nam-open-2026`, Wave 3 item 3.3) published 307 of its 309 reflowed times
+with seconds (14:03:14), and 186 of the 309 moves were under a minute: the board changed after almost every
+result and the activity log was mostly noise. Replaying the two days minute by minute, `schedule_conflicts`
+raised 64 conflicts; 62 were a match still on court running past its slot, and 61 cleared on their own when
+that match's result ran the reflow. Migration `20261026000000_whole_minute_published_times.sql`.
+
+- **One threshold, three readers.** `schedule_shift_threshold()` is 2 minutes, mirrored by
+  `SCHEDULE_SHIFT_THRESHOLD_MS` in `src/lib/tournament/published-time.ts` and pinned equal by
+  `db-invariants.test.ts`. The reflow, the conflict report and the planner all read it.
+- **Round up, never to nearest.** A start rounded down could begin before a court is free or a player has
+  rested. `ceil_to_minute()` in SQL, `ceilToMinute()` in TypeScript.
+- **The reflow.** A match the floors move is published on a whole minute, and the rounded start goes back
+  through the break and fixed-window walls, because a minute later can touch either. A match nothing moved
+  keeps its stored time exactly: rounding an untouched row would read as a move and, near the close, hold it.
+  A move under the threshold, measured from the published time, is computed but not written, and the cascade
+  still follows the computed time. The gap never builds past the threshold, because every run measures from
+  the stored time. One exception: a skipped row whose published time would overlap, on its court, a row the
+  same run writes - or sit inside a shared player's rest from it, or start before a written prerequisite
+  ends - is written after all, because the tolerance is against real times, never between published ones.
+- **The planner.** Tournament problems set `startGranularityMs: 60 000`: greedy and GRASP round every
+  candidate start up to the grid and then check it as usual, so the grid only ever makes a start later; the
+  independent validator reports an off-grid start (`off-granularity`). A published row up to the threshold
+  inside a decided window is taken where the reflow's move would have put it (`settledStart`) rather than
+  dropped from `place-ready` or released from a rebuild's freeze.
+- **The conflict report** names only what the plan gets wrong. A match on court holds its real start plus
+  one slot (running long is the Desk's Overrun, not a fault in the plan); `past_closing` is reported only for
+  a match that has not started; against a real start or finish, a gap under the threshold is the reflow's
+  tolerance. Two published times are compared strictly. Each row names the other match, the player and the
+  minutes, and the Schedule block shows one line per match with its reasons as sentences
+  (`docs/desk-notifications.md`). On the Viet Nam Open replay this leaves 5 of the 64 reports, all real: two
+  hand-edits past the close, and three matches the reflow held at it.
+- **Not backfilled.** Rows written before this keep their seconds; a tournament under way would otherwise see
+  its times change for no reason. A row with seconds is left alone until something moves it.
+- **Known gap.** A match already overdue whose player then goes on court elsewhere is still not reported:
+  the report orders a player's matches by start time, so the overdue one is never "after" the other. That is
+  Wave 3 item 3.1's problem, which is paused.
+

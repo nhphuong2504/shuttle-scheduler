@@ -32,20 +32,32 @@ Colour is never the only channel: every row carries words, and chips carry a gly
 
 ## Schedule conflict reasons
 
-One list, grouped in the Schedule block (organiser). The desk no longer draws a chip on the
-court tile; a moderator only meets a conflict in the start confirmation dialog. Defined in
-`src/lib/tournament/schedule-conflicts.ts`.
+One line per match in the Schedule block (organiser), earliest first, with every reason beneath
+it. The desk no longer draws a chip on the court tile; a moderator only meets a conflict in the
+start confirmation dialog, which lists the same sentences. Defined in
+`src/lib/tournament/schedule-conflicts.ts` (`describeConflict`).
 
-| Kind | Reads as |
-| --- | --- |
-| `court_overlap` | Same court and time as another match |
-| `rest_shortfall` | A player won't have had full rest |
-| `break` | Scheduled during a break |
-| `past_closing` | Ends after the courts close |
-| `before_prerequisite` | Scheduled before a match it depends on |
+| Kind | Reads as | When the RPC names the other side and the minutes |
+| --- | --- | --- |
+| `court_overlap` | Same court and time as another match | Overlaps {match} on the same court by N min |
+| `rest_shortfall` | A player won't have had full rest | {Player} would rest N min less than required after {match} |
+| `break` | Scheduled during a break | Runs N min into a break |
+| `past_closing` | Ends after the courts close | Ends N min after the courts close |
+| `before_prerequisite` | Scheduled before a match it depends on | Starts N min before {match} is due to end |
 
-These are planning conflicts. They do not mean the match is physically impossible; that is
-the Block rows above. Organiser headline: "N matches need schedule review".
+These are planning conflicts: places where the published plan contradicts itself or a real start
+or finish, and the reflow will not fix it on its own. They do not mean the match is physically
+impossible; that is the Block rows above. Organiser headline: "N matches need schedule review".
+
+What is deliberately **not** a conflict (scheduling-decisions.md section 33):
+
+- **A match running long.** A match on court holds its real start plus one slot. Running past it is
+  the tile's Overrun, and the reflow re-times the matches behind it when the result lands. On Viet
+  Nam Open 2026 this one change took the replay from 64 reports to 5, all of them real.
+- **A match already on court that will finish after the close.** It cannot be moved.
+- **A published time under two minutes inside a real start or finish.** The reflow does not write
+  a move that small, and the report gives it the same tolerance. Two published times are still
+  compared strictly.
 
 ## Removed: Needs action and Up next
 

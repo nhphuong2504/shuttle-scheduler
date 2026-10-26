@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { SCHEDULE_SHIFT_THRESHOLD_MS } from "@/lib/tournament/published-time";
+
 import {
   DEMO_MATCHES,
   DEMO_REST,
@@ -22,6 +24,13 @@ describe("schedule demo", () => {
 
   it("only ever moves a match later", () => {
     for (const { m, start } of after) expect(start).toBeGreaterThanOrEqual(m.start);
+  });
+
+  it("shows only moves the reflow would write: whole minutes, never under the threshold", () => {
+    for (const { m, start } of after) {
+      expect(Number.isInteger(start)).toBe(true);
+      if (start !== m.start) expect((start - m.start) * 60_000).toBeGreaterThanOrEqual(SCHEDULE_SHIFT_THRESHOLD_MS);
+    }
   });
 
   it("never moves a played or live match", () => {
