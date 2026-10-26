@@ -1,6 +1,8 @@
 # Đợt 3 — Gỡ trận kẹt, quyết định cuối ngày, giờ công bố tròn phút
 
-*Bản đề xuất để duyệt. Chưa sửa code. Tiếp nối Đợt 1 (nhánh `fix/scheduler-silent-failures`), Đợt 2 (nhánh `feat/desk-start-guard`) và báo cáo [audit.md](audit.md).*
+*Trạng thái (26/10): **3.1 và 3.2 tạm dừng**. **3.3 đã duyệt** — chọn A+B (làm tròn lên + ngưỡng 2 phút), không sửa dữ liệu cũ — và gộp thêm phần sửa `schedule_conflicts` (mục 3.3.1). Làm trên nhánh `feat/whole-minute-times`.*
+
+*Bản đề xuất ban đầu. Tiếp nối Đợt 1 (nhánh `fix/scheduler-silent-failures`), Đợt 2 (nhánh `feat/desk-start-guard`) và báo cáo [audit.md](audit.md).*
 
 ## 1. Mục tiêu
 
@@ -308,6 +310,8 @@ Vì sao **không** làm trong trigger mili-giây: trigger đó chạy cho mọi 
 
 - Nếu giờ mới (đã làm tròn) chênh với giờ đang công bố **dưới 2 phút**, reflow không ghi trận đó, và trận giữ giờ cũ.
 - Phần tính toán bên trong vẫn dùng giờ chính xác, nên các trận phía sau vẫn được tính đúng.
+- Bộ lập lịch phía trình duyệt cũng phải biết ngưỡng này. Nếu không, chế độ `place-ready` sẽ coi một trận lệch 40 giây là "va chạm với lịch sử" và bỏ nó khỏi bài toán, còn rebuild sẽ không giữ (pin) nó. Ngưỡng là một hằng số dùng chung giữa SQL và TypeScript.
+- Reflow chỉ làm tròn khi trận thật sự bị dời. Một trận đang lưu 16:50:30 (dữ liệu cũ) mà không bị dời thì giữ nguyên, để không bị coi là "vượt giờ đóng" chỉ vì làm tròn.
 - Độ lệch không cộng dồn: mỗi lần reflow đều so với giờ đang lưu, nên khi tổng độ lệch đạt 2 phút thì trận được ghi.
 
 **`schedule_conflicts` dùng cùng ngưỡng.** Một trận giữ giờ cũ có thể bắt đầu sớm hơn giờ kết thúc *thật* của trận trước tới dưới 2 phút. Nếu không có dung sai, trận đó sẽ bị báo `court_overlap` hoặc `rest_shortfall` ngay, mà thật ra không có gì sai.
@@ -337,6 +341,37 @@ Vì sao **không** làm trong trigger mili-giây: trigger đó chạy cho mọi 
 - **Unit**: bộ lập lịch không bao giờ trả về giờ có số giây; làm tròn lên chứ không xuống; các test hiện có của `placement-schedule.test.ts` và replay vẫn qua (một số kỳ vọng giờ sẽ phải đổi sang phút nguyên. Mỗi chỗ đổi phải đúng là làm tròn lên của giá trị cũ).
 - **Integration** (`integration/live-reflow.test.ts`): dời 40 giây thì không ghi; dời 2 phút 10 giây thì ghi và ra phút nguyên; ba lần dời 50 giây liên tiếp thì ghi ở lần thứ ba; `schedule_conflicts` không báo cho trận giữ giờ cũ lệch 90 giây so với giờ kết thúc thật, nhưng vẫn báo hai giờ công bố chồng nhau 1 phút.
 - Chạy lại các test hiện có về reflow (`live-reflow`, `start-match-checks`, `placement-feeders`), vì đây là vùng rủi ro cao.
+
+### 3.3.1 Gộp vào 3.3: `schedule_conflicts` chỉ báo lỗi thật
+
+#### Hiện tại báo thừa
+
+Dựng lại hai ngày Viet Nam Open theo từng phút và tính lại `schedule_conflicts` đúng như SQL hiện tại:
+
+| | Số lần |
+| --- | ---: |
+| Tổng số lần báo (một trận, một loại lỗi, từ lúc hiện tới lúc mất) | 64 |
+| Do một trận **đang đánh quá giờ** gây ra | 62 |
+| Tự mất khi reflow chạy, không ai làm gì | 61 |
+| Bắt đầu chỉ vì thời gian trôi qua | 54 |
+| Kéo dài dưới 5 phút | 84% |
+
+Nguyên nhân: với trận đang đánh, hàm coi giờ kết thúc là "bây giờ" khi trận đã quá slot (`GREATEST(planned_end, now)`). Mỗi phút trận chạy quá, các trận sau nó bị báo "chồng sân" hoặc "nghỉ thiếu", dù reflow chắc chắn sẽ dời chúng khi có kết quả. Đó là **trễ**, Desk đã báo bằng Overrun, không phải lỗi lịch.
+
+Ngoài ra:
+
+- `past_closing` được báo cả cho trận **đang đánh**, là trận không dời được nữa.
+- Mỗi dòng chỉ ghi loại lỗi và tên trận, không nói trận nào gây ra, VĐV nào, thiếu bao nhiêu phút.
+- Danh sách nhóm theo loại lỗi, nên một trận có hai lý do xuất hiện hai lần.
+
+#### Thay đổi
+
+1. **Trận đang đánh được tính theo khoảng kế hoạch:** từ giờ bắt đầu thật, kéo dài đúng một slot, không dùng "bây giờ". Chạy quá giờ là việc của Desk (Overrun), không phải lỗi lịch. Chạy thử trên cùng dữ liệu: **64 → 5 lần báo, cả 5 đều là lỗi thật** (hai lần sửa tay sang sau 17:00, và ba trận bị reflow giữ lại vì sẽ vượt giờ đóng).
+2. **`past_closing` chỉ cho trận chưa bắt đầu.**
+3. **Dung sai 2 phút khi một bên là giờ thật** (mục 3.3, cùng một hằng số với reflow).
+4. **Nói rõ lỗi:** RPC trả thêm trận liên quan, VĐV liên quan (với nghỉ thiếu) và số phút. Trang Schedule gom theo **trận**, mỗi trận một dòng kèm các lý do viết thành câu, ví dụ "Bui Nguyet will have rested 3 min less than required after WS r2-1".
+
+Giới hạn vẫn còn: một trận đã quá giờ mà VĐV đi đánh trận khác sau đó (ca WD A kẹt 98 phút) vẫn không được báo. Đó là việc của 3.1.
 
 ### 3.4 Câu chữ trong AGENTS.md
 
