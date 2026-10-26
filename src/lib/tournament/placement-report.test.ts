@@ -28,7 +28,6 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 import {
   addPlacementEntrant,
-  reassignCourtMatches,
   reportPlacementMatch,
   reportTierDrawMatch,
   shiftTournamentDays,
@@ -139,17 +138,6 @@ describe("the mid-tournament payloads", () => {
       p_tournament_id: "t1",
       p_from_date: "2099-03-01",
       p_delta_days: 7,
-    });
-  });
-
-  it("reassigns within one day, between two named courts", async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: 2, error: null });
-    await expect(reassignCourtMatches("t1", "day-1", "court-broken", "court-3")).resolves.toBe(2);
-    expect(mocks.rpc).toHaveBeenCalledWith("reassign_court_matches", {
-      p_tournament_id: "t1",
-      p_day_id: "day-1",
-      p_from_court_id: "court-broken",
-      p_to_court_id: "court-3",
     });
   });
 

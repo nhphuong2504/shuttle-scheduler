@@ -1813,15 +1813,6 @@ export type Database = {
         Args: { p_from_date: string; p_delta_days: number; p_tournament_id: string }
         Returns: number
       }
-      reassign_court_matches: {
-        Args: {
-          p_day_id: string
-          p_from_court_id: string
-          p_to_court_id: string
-          p_tournament_id: string
-        }
-        Returns: number
-      }
       reschedule_live_match: {
         Args: {
           p_court_id: string

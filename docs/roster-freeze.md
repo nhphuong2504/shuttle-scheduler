@@ -14,10 +14,10 @@ and [`placement-actions.ts`](../src/lib/tournament/placement-actions.ts).
 | Withdraw a team | The Entries button flags `teams.withdrawn`; **Sync entrants** waives the placement entrant, so the team leaves the field | The same button calls `withdraw_placement_team`: the flag, the waiver, a walkover for every unplayed match, the bracket advance and the day's reflow, in one transaction. Refused while one of its matches is on court |
 | Add a late team | A new team has no placement entrant and no seed, so the seed lock reads as broken until it is synced and seeded | `add_placement_entrant` adds it as the lowest seed. Refused once any placement match exists - the pairing is then a fact, and adding a team is a re-draw |
 | Move the rest of the tournament | The days and the window are edited one at a time; matches do not follow | `shift_tournament_days(from, delta)` moves the window, every day from `from` on, and their unplayed matches. Refused once anything from that day on has been played |
-| A court fails | The day's court set is replaced and the matches on the removed court are left behind | `reassign_court_matches(day, from, to)` moves that day's unstarted matches onto another court the day already uses. Refused while the source court is playing, and when the target already has matches |
+| A court fails | The day's court set is replaced and the matches on the removed court are left behind | Not supported as its own act. Remove the court from the day on the Schedule page and review a rebuild. `reassign_court_matches` was dropped (`20261025010000_drop_reassign_court_matches.sql`): it needed a court with nothing scheduled all day, which a full venue never has, and no surface ever called it |
 | Record a walkover | | The Desk's walkover action (`resolve_match_exception`), still available per match |
 
-## What the four RPCs guarantee
+## What the three RPCs guarantee
 
 Each does the whole act in one transaction, so there is no window in which a withdrawn team still
 holds a court, or a moved day has matches on the old date.
@@ -33,9 +33,6 @@ holds a court, or a moved day has matches on the old date.
 - **A day shift preserves the venue's wall clock**, not the session's. `scheduled_time + interval
   'n days'` keeps the *session* timezone's clock, so a shift across a DST boundary would move every
   match an hour on the venue's clock; the function converts through `venue_timezone` instead.
-- **A court move is all-or-nothing for the day.** The target must be a court the day uses and must
-  have no scheduled matches that day, because stacking a second schedule onto one court creates
-  exactly the overlaps the scheduler exists to remove.
 
 ## What is built beside the RPCs
 
