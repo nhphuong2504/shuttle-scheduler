@@ -10,15 +10,18 @@
  * Pure: the caller does the dry-run plan and passes in what it found.
  */
 
-import type { SchedulePlanDiff } from "./schedule-diff";
+import { SOON_MINUTES, type SchedulePlanDiff } from "./schedule-diff";
 
 const MINUTE = 60_000;
 
 /** A rebuild must finish at least this much sooner before it is worth a mention. */
 export const MIN_FINISH_GAIN_MINUTES = 30;
 
-/** A match starting within this long counts as "soon" when the cost is stated. */
-export const SOON_MINUTES = 60;
+/**
+ * Shown when the cost is stated. The threshold itself lives in `schedule-diff`, so the preview
+ * that marks a row "starts in 12 min" and the card that counts those rows cannot disagree.
+ */
+export { SOON_MINUTES };
 
 export interface RebuildSuggestion {
   /** Minutes sooner the whole queue would finish. */

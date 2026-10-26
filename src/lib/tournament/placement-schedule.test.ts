@@ -2963,3 +2963,117 @@ describe("place-ready never puts a match after one that waits on it", () => {
     expect(result.unplaced).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// What the rebuild preview reads
+// ---------------------------------------------------------------------------
+
+/**
+ * The preview is a comparison, so the plan has to carry both halves of it.
+ *
+ * These pin the data the dialog renders rather than the dialog: the finish it would replace, the
+ * per-day before/after, and the difference between "moves" and "is placed for the first time".
+ */
+describe("the schedule a rebuild would replace", () => {
+  const iso = (minutesAfterStart: number) =>
+    new Date(DAY_START + minutesAfterStart * MINUTE).toISOString();
+
+  function alreadyScheduled() {
+    return [
+      placementMatch("r1-1", "round1", "e1", "e2", {
+        court_id: "c1",
+        scheduled_time: iso(0),
+      }),
+      placementMatch("r1-2", "round1", "e3", "e4", {
+        court_id: "c2",
+        scheduled_time: iso(0),
+      }),
+    ];
+  }
+
+  it("reports the finish of the schedule it would replace, not only its own", () => {
+    const result = plan({
+      placementMatches: alreadyScheduled(),
+      now: DAY_START + 10 * MINUTE,
+    });
+
+    expect(result.summary.projectedFinish).not.toBeNull();
+    expect(result.summary.currentProjectedFinish).not.toBeNull();
+    // Both are real instants, and the delta between them is a number, not null.
+    expect(result.summary.projectedFinishDeltaMinutes).not.toBeNull();
+    const delta =
+      Date.parse(result.summary.projectedFinish as string) -
+      Date.parse(result.summary.currentProjectedFinish as string);
+    expect(result.summary.projectedFinishDeltaMinutes).toBe(Math.round(delta / MINUTE));
+  });
+
+  it("counts a first placement as newly placed, never as a move", () => {
+    // Nothing has a court or time yet, so this is a first build: every row is new. Calling that
+    // "N moving" would tell the organiser a schedule they never had is being taken away.
+    const result = plan({ placementMatches: [], now: DAY_START });
+
+    expect(result.summary.movedCount).toBe(0);
+    expect(result.summary.newlyPlacedCount).toBe(result.summary.placed);
+    expect(result.summary.movesSoonCount).toBe(0);
+    expect(result.diff.changes.every((change) => change.kind === "newly-placed")).toBe(true);
+    expect(result.diff.changes.every((change) => change.startsSoon === false)).toBe(true);
+  });
+
+  it("compares each day's finish before and after, and separates moves from new rows", () => {
+    const result = plan({
+      placementMatches: alreadyScheduled(),
+      now: DAY_START + 10 * MINUTE,
+    });
+
+    expect(result.dayFinishes).toHaveLength(1);
+    const [day] = result.dayFinishes;
+    expect(day?.dayNumber).toBe(1);
+    expect(day?.finishNowMs).not.toBeNull();
+    expect(day?.finishAfterMs).not.toBeNull();
+    expect(day?.moved).toBe(result.summary.movedCount);
+    expect(day?.newlyPlaced).toBe(0);
+  });
+
+  it("labels every change with the day it lands on", () => {
+    const result = plan({
+      placementMatches: alreadyScheduled(),
+      now: DAY_START + 10 * MINUTE,
+    });
+
+    expect(result.diff.changes.length).toBeGreaterThan(0);
+    for (const change of result.diff.changes) {
+      expect(change.dayNumber).toBe(1);
+    }
+  });
+
+  it("keeps two days apart, by the planner's own attribution", () => {
+    const second: TournamentDay = {
+      ...DAY,
+      id: "d2",
+      day_number: 2,
+      date: "2026-09-18",
+    };
+    const { teams, entrants } = fourTeams();
+    const result = planPlacementSchedule({
+      tournament: tournament({ day_count: 2 }),
+      days: [DAY, second],
+      allCourts: [court(1), court(2)],
+      teams,
+      entrants,
+      draws: [tierDraw("A")],
+      placementMatches: [],
+      tierMatches: [],
+      categoryOrder: new Map([["cat1", 1]]),
+      options: FAST,
+      now: DAY_START,
+    });
+
+    // Nothing is placed on a day with no stage, so a two-day tournament puts the whole
+    // placement field on day one and leaves day two empty. Both days are still reported.
+    expect(result.dayFinishes.map((entry) => entry.dayNumber)).toEqual([1, 2]);
+    const dayTwo = result.dayFinishes.find((entry) => entry.dayNumber === 2);
+    expect(dayTwo?.finishNowMs).toBeNull();
+    expect(dayTwo?.finishAfterMs).toBeNull();
+    expect(dayTwo?.moved).toBe(0);
+  });
+});

@@ -12,6 +12,25 @@ export interface PlanChange {
   fromCourtNumber: number | null;
   toCourtNumber: number;
   shiftMinutes: number;
+  /**
+   * The tournament day this match lands on after the plan, by the planner's own attribution rule
+   * (the last day that had already opened, `sliceRowsByDay`). Null for a plan that is not
+   * day-scoped, which is why the preview groups by it rather than requiring it.
+   *
+   * Without it a list of moves carries bare `HH:MM` values across several days, and a reader
+   * cannot tell which day a time belongs to.
+   */
+  dayNumber?: number | null;
+  /**
+   * Whether the match starts within `SOON_MINUTES` of the moment the plan was made.
+   *
+   * This is the cost a rebuild is really paid in: moving a match that starts in twelve minutes
+   * is a different act from moving one on Thursday. The invitation card already counts these
+   * (`rebuild-suggestion.ts`); the preview has to show them, or it prices every move the same.
+   */
+  startsSoon?: boolean;
+  /** True for a row the plan places for the first time, which is not a move. */
+  isNew?: boolean;
 }
 
 export interface SchedulePlanDiff {
@@ -68,6 +87,79 @@ export function formatProjectedFinishDelta(deltaMinutes: number): string {
   const abs = Math.abs(deltaMinutes);
   if (deltaMinutes > 0) return `${abs} min later than the current schedule`;
   return `${abs} min earlier than the current schedule`;
+}
+
+/**
+ * When the schedule as it stands would finish, across both stages.
+ *
+ * This is the number a rebuild has to be read against, and it is deliberately one function: the
+ * page header and the preview both call it, so "the schedule finishes at 13:11" cannot mean one
+ * thing above the dialog and another inside it. Each stage is measured with its own slot length,
+ * and the later of the two wins, because the two run on the same court pool.
+ *
+ * Matches with no time contribute nothing - they are not part of a finish that is already
+ * claimed to exist.
+ */
+export function currentFinishFor(input: {
+  placementMatches: readonly RemainingMatchRow[];
+  tierMatches: readonly RemainingMatchRow[];
+  placementSlotMinutes: number;
+  knockoutSlotMinutes: number;
+  now?: number;
+}): number | null {
+  const now = input.now ?? Date.now();
+  const placement = projectedFinishFromRemainingMatches(
+    input.placementMatches,
+    input.placementSlotMinutes,
+    now,
+  );
+  const knockout = projectedFinishFromRemainingMatches(
+    input.tierMatches,
+    input.knockoutSlotMinutes,
+    now,
+  );
+  return Math.max(placement ?? 0, knockout ?? 0) || null;
+}
+
+/** The threshold the invitation card uses, so "soon" means one thing across both surfaces. */
+export const SOON_MINUTES = 60;
+
+/**
+ * Whether a match's current start is close enough that moving it is felt at the desk.
+ *
+ * A match with no start (one the plan places for the first time) is not "soon": there is no
+ * published time to be read off the running order yet.
+ */
+export function startsSoon(
+  fromStart: string | null,
+  now: number,
+  soonMinutes = SOON_MINUTES,
+): boolean {
+  if (fromStart == null) return false;
+  const ms = Date.parse(fromStart);
+  if (!Number.isFinite(ms)) return false;
+  const ahead = ms - now;
+  return ahead <= soonMinutes * 60_000;
+}
+
+/**
+ * How one day's finish compares, before and after a plan.
+ *
+ * `moved` counts matches that already had a court and a time and get a different one. `newlyPlaced`
+ * is kept apart on purpose: a first build places everything, and reporting that as "moves" would
+ * tell the organiser that a schedule they never had is being taken away from them.
+ */
+export interface DayFinishComparison {
+  dayNumber: number;
+  /** The day's date, `YYYY-MM-DD`, as configured. */
+  date: string;
+  finishNowMs: number | null;
+  finishAfterMs: number | null;
+  moved: number;
+  newlyPlaced: number;
+  /** The largest single shift among this day's moves, in minutes. */
+  largestShiftMinutes: number;
+  overrunAfterMinutes: number;
 }
 
 function courtNumber(

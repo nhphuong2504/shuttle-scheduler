@@ -457,6 +457,16 @@ export interface ScheduleSummary {
   projectedFinish: string | null;
   currentProjectedFinish: string | null;
   projectedFinishDeltaMinutes: number | null;
+  /**
+   * How many moves land on a match that starts within the hour.
+   *
+   * The cost of a rebuild is paid here, not in the total: a match the desk is about to call is a
+   * different thing to move than one two days out. Optional so the round-robin path, which does
+   * not compute it, is unaffected.
+   */
+  movesSoonCount?: number;
+  /** Rows the plan places for the first time. Not moves - a first build is not a change. */
+  newlyPlacedCount?: number;
   overrunMinutes: number;
   diagnostics?: SolverDiagnostics | undefined;
 }

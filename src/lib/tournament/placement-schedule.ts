@@ -48,7 +48,15 @@ import type {
   TournamentDayBreak,
 } from "./data";
 import { ceilToMinute, SCHEDULE_SHIFT_THRESHOLD_MS } from "./published-time";
-import { diffPlan, type SchedulePlanDiff } from "./schedule-diff";
+import {
+  currentFinishFor,
+  diffPlan,
+  projectedFinishFromRemainingMatches,
+  startsSoon,
+  type DayFinishComparison,
+  type PlanChange,
+  type SchedulePlanDiff,
+} from "./schedule-diff";
 import { MIN_ENTRANTS_FOR_ROUND_TWO } from "./placement-actions";
 import { bracketRoundCount, isTierMatchReady } from "./tier-draw";
 import {
@@ -248,6 +256,14 @@ export interface PlacementSchedulePlan {
   unplaced: UnplacedMatch[];
   /** Why the scheduler could not place something, for the desk-facing error. */
   blockedReason: string | null;
+  /**
+   * Each day's finish before and after this plan, for the rebuild preview.
+   *
+   * One entry per configured day, in the planner's own order. The preview needs the two numbers
+   * side by side; deriving them in the component would be a second definition of "finish", and
+   * the first thing that would drift from the one the plan reports.
+   */
+  dayFinishes: DayFinishComparison[];
 }
 
 /**
@@ -852,6 +868,56 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   const diff = diffPlan(existing, run.allSlots, fixedSet, courtNumberById);
   diff.unplaceable = blocked;
 
+  /**
+   * The schedule this plan would replace.
+   *
+   * A preview that shows only the proposed schedule cannot answer the one question it exists for
+   * - whether the change is an improvement. The comparison was deliberately dropped here once, on
+   * the belief that the per-day table showed it; the table showed the new finish only. Both
+   * numbers come from `currentFinishFor`, the same function this page's header reads, so the two
+   * cannot disagree.
+   */
+  const currentFinishMs = currentFinishFor({
+    placementMatches,
+    tierMatches,
+    placementSlotMinutes: placementSlot,
+    knockoutSlotMinutes: knockoutSlot,
+    now,
+  });
+  const plannedFinishMs = run.lastFinishMs ?? null;
+  const projectedFinishDeltaMinutes =
+    currentFinishMs != null && plannedFinishMs != null
+      ? Math.round((plannedFinishMs - currentFinishMs) / MINUTE)
+      : null;
+
+  // Each move is labelled with the day it lands on, and whether it starts soon enough to be felt
+  // at the desk. Filled after the diff rather than inside it, because only this layer knows the
+  // days and the clock the plan was computed against.
+  const changeDayNumber = new Map<string, number>();
+  for (const slice of sliceRowsByDay(diff.changes, orderedDays, (change) => new Date(change.toStart))) {
+    for (const change of slice.rows) changeDayNumber.set(change.matchId, slice.day.day_number);
+  }
+  for (const change of diff.changes) {
+    change.dayNumber = changeDayNumber.get(change.matchId) ?? null;
+    change.startsSoon = startsSoon(change.fromStart, now);
+    change.isNew = change.kind === "newly-placed";
+  }
+
+  const dayFinishes = compareDayFinishes({
+    days: orderedDays,
+    placementMatches,
+    tierMatches,
+    placementSlotMinutes: placementSlot,
+    knockoutSlotMinutes: knockoutSlot,
+    slots: run.allSlots,
+    changes: diff.changes,
+    now,
+  });
+
+  const moves = diff.changes.filter(
+    (change) => change.kind !== "unchanged" && change.kind !== "newly-placed",
+  );
+
   const summary: ScheduleSummary = {
     placed: diff.placedCount,
     anchorCount: fixedSet.size,
@@ -864,11 +930,12 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     // so a day that closes on time but cannot place everything reports no overrun. Folding the two
     // together used to make an incomplete plan claim it ran past the day end.
     overrun: run.days.some((fill) => fill.overrunMinutes > 0),
-    projectedFinish: run.lastFinishMs != null ? new Date(run.lastFinishMs).toISOString() : null,
-    // The rebuild no longer compares two finishes: the plan's own last finish is the only
-    // finish there is, and the per-day change table is what shows how the rebuild differs.
-    currentProjectedFinish: null,
-    projectedFinishDeltaMinutes: null,
+    projectedFinish: plannedFinishMs != null ? new Date(plannedFinishMs).toISOString() : null,
+    currentProjectedFinish:
+      currentFinishMs != null ? new Date(currentFinishMs).toISOString() : null,
+    projectedFinishDeltaMinutes,
+    movesSoonCount: moves.filter((change) => change.startsSoon).length,
+    newlyPlacedCount: diff.newlyPlacedCount,
     overrunMinutes:
       run.lastFinishMs != null && run.lastPlanningEndMs > 0
         ? Math.max(0, Math.round((run.lastFinishMs - run.lastPlanningEndMs) / MINUTE))
@@ -975,7 +1042,100 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     knockoutScheduledIds,
     unplaced,
     blockedReason,
+    dayFinishes,
   };
+}
+
+/**
+ * Per-day finish, before and after a plan.
+ *
+ * The preview used to render the plan's own finishes and leave the current schedule implicit,
+ * so a reader could see that day two ends at 17:05 and not whether that is better or worse than
+ * the 17:41 they have. This is the missing half.
+ *
+ * Attribution reuses `sliceRowsByDay`, the planner's own rule, rather than comparing calendar
+ * dates: the last day may overrun past midnight, and a match starting at 00:20 belongs to the day
+ * that had already opened, not to the next one.
+ */
+export function compareDayFinishes(input: {
+  days: readonly TournamentDay[];
+  placementMatches: readonly PlacementMatch[];
+  tierMatches: readonly TierDrawMatch[];
+  placementSlotMinutes: number;
+  knockoutSlotMinutes: number;
+  slots: readonly ScheduledSlot[];
+  changes: readonly PlanChange[];
+  now?: number;
+}): DayFinishComparison[] {
+  const { days } = input;
+  if (!days.length) return [];
+  const now = input.now ?? Date.now();
+
+  /** A row is attributable only when it carries an instant the rule can place. */
+  const instantOf = (match: { status: string; scheduled_time: string | null; started_at: string | null }) => {
+    const raw = match.status === "in-progress" ? (match.started_at ?? match.scheduled_time) : match.scheduled_time;
+    const ms = raw ? Date.parse(raw) : NaN;
+    return Number.isFinite(ms) ? new Date(ms) : null;
+  };
+
+  const timedPlacement = input.placementMatches.filter((match) => instantOf(match) != null);
+  const timedKnockout = input.tierMatches.filter((match) => instantOf(match) != null);
+
+  const placementSlices = sliceRowsByDay(timedPlacement, days, (match) => instantOf(match)!);
+  const knockoutSlices = sliceRowsByDay(timedKnockout, days, (match) => instantOf(match)!);
+  const slotSlices = sliceRowsByDay(
+    input.slots.filter((slot) => Number.isFinite(slot.start.getTime())),
+    days,
+    (slot) => slot.start,
+  );
+
+  /** Sorted the way `sliceRowsByDay` sorts, so index i is the same day in every list. */
+  const orderedDays = [...days].sort(
+    (a, b) =>
+      dayWindowBounds(a).start - dayWindowBounds(b).start || a.day_number - b.day_number,
+  );
+
+  return orderedDays.map((day, index) => {
+    const closeMs = dayWindowBounds(day).end;
+
+    const placementNow = projectedFinishFromRemainingMatches(
+      placementSlices[index]?.rows ?? [],
+      input.placementSlotMinutes,
+      now,
+    );
+    const knockoutNow = projectedFinishFromRemainingMatches(
+      knockoutSlices[index]?.rows ?? [],
+      input.knockoutSlotMinutes,
+      now,
+    );
+    const finishNowMs = Math.max(placementNow ?? 0, knockoutNow ?? 0) || null;
+
+    const daySlots = slotSlices[index]?.rows ?? [];
+    const finishAfterMs =
+      daySlots.length > 0
+        ? Math.max(...daySlots.map((slot) => slot.end.getTime()))
+        : null;
+
+    const changesOnDay = input.changes.filter(
+      (change) => change.dayNumber === day.day_number && change.kind !== "unchanged",
+    );
+    const movedChanges = changesOnDay.filter((change) => change.kind !== "newly-placed");
+
+    return {
+      dayNumber: day.day_number,
+      date: day.date,
+      finishNowMs,
+      finishAfterMs,
+      moved: movedChanges.length,
+      newlyPlaced: changesOnDay.length - movedChanges.length,
+      largestShiftMinutes: movedChanges.reduce(
+        (max, change) => Math.max(max, Math.abs(change.shiftMinutes)),
+        0,
+      ),
+      overrunAfterMinutes:
+        finishAfterMs != null ? Math.max(0, Math.round((finishAfterMs - closeMs) / MINUTE)) : 0,
+    };
+  });
 }
 
 /**
