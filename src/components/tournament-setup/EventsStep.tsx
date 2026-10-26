@@ -2,17 +2,13 @@ import { Check, Plus, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import type { TournamentEventInput } from "@/lib/tournament/actions";
+import { STANDARD_EVENTS, type StandardEvent } from "@/lib/tournament/event-order";
 import { FieldError, SetupSection } from "./section";
 import type { DraftForm } from "./types";
 
 type EventGender = TournamentEventInput["gender"];
 
-interface EventTemplate {
-  code: string;
-  name: string;
-  entryType: "individual" | "pair";
-  gender: EventGender;
-}
+type EventTemplate = StandardEvent;
 
 /**
  * The standard badminton events, as one-click additions.
@@ -20,15 +16,10 @@ interface EventTemplate {
  * Both the shape and who may enter are part of what the event *is*, so neither is
  * asked for: MS and WS are singles, MD, WD and XD are doubles, and each is open
  * to the gender in its name. They are carried into the stored event because entry
- * validation reads them.
+ * validation reads them. The list itself lives in `event-order`, which is also the order
+ * the placement stage lists events in - one list, so the two cannot disagree.
  */
-const EVENT_TEMPLATES: EventTemplate[] = [
-  { code: "MS", name: "Men's Singles", entryType: "individual", gender: "men" },
-  { code: "WS", name: "Women's Singles", entryType: "individual", gender: "women" },
-  { code: "MD", name: "Men's Doubles", entryType: "pair", gender: "men" },
-  { code: "WD", name: "Women's Doubles", entryType: "pair", gender: "women" },
-  { code: "XD", name: "Mixed Doubles", entryType: "pair", gender: "mixed" },
-];
+const EVENT_TEMPLATES = STANDARD_EVENTS;
 
 const MAX_CATEGORIES_PER_PLAYER = 5;
 

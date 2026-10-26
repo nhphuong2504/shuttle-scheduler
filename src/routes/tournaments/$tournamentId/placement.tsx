@@ -8,6 +8,7 @@ import { Page, EmptyState, Panel } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { InfoNote } from "@/components/ui/info-note";
 import { entrantCountNote } from "@/lib/tournament/competition-format";
+import { compareEventOrder } from "@/lib/tournament/event-order";
 import {
   buildCategoryView,
   lockPlacementSeeds,
@@ -97,7 +98,16 @@ function PlacementPage() {
 
   const refresh = () => qc.invalidateQueries();
 
-  const live = (categories ?? []).filter((category) => category.active);
+  /**
+   * The active events, in the standard order rather than the order they were added.
+   *
+   * `sort_order` is the order the toggles were pressed, which is a fact about how the
+   * tournament was set up, not about the tournament: a field entered WS before MS would
+   * otherwise list Women's Singles first here and nowhere else. See `compareEventOrder`.
+   */
+  const live = (categories ?? [])
+    .filter((category) => category.active)
+    .sort(compareEventOrder);
   const wrongFormat = tournament != null && tournament.format !== "two_round_placement";
 
   /**
