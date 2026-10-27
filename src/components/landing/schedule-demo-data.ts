@@ -2,7 +2,7 @@
  * The front door's "what happens when a match runs late" story, as data.
  *
  * It is an illustration, not a call into the scheduler, but every move in it follows the
- * live reflow's rules (`20261009010000_safe_live_schedule_reflow.sql`):
+ * live reflow's rules (`20261027000000_reflow_past_closing.sql`):
  *
  * - nothing moves until the late match's result is recorded, and then everything moves in
  *   one update;
@@ -10,19 +10,19 @@
  *   match's real end on its court, and its players' rest - so a gap can absorb a delay;
  * - a co-player's match on another court moves too, so the rest gap holds;
  * - played and live matches never move;
- * - a match that would be pushed past the day's close keeps its time instead, and the
- *   overlap that leaves is reported by `schedule_conflicts` for both still-scheduled sides,
- *   which is why the toast counts two matches for review.
+ * - a match pushed past closing still moves, preserving the court's sequence;
+ *   `schedule_conflicts` flags its new finish for the organiser to review.
  *
  * Times are minutes after 14:00. The day closes at 16:45; the rest gap is 10 minutes.
  */
 
 export const DEMO_START_MINUTE = 14 * 60;
-export const DEMO_SPAN = 165;
+export const DEMO_SPAN = 180;
+export const DEMO_CLOSE = 165;
 export const DEMO_SLOT = 25;
 export const DEMO_REST = 10;
 
-export type DemoKind = "played" | "live" | "late" | "moved" | "absorbed" | "same" | "held";
+export type DemoKind = "played" | "live" | "late" | "moved" | "absorbed" | "same";
 
 export interface DemoMatch {
   court: 1 | 2 | 3;
@@ -57,8 +57,8 @@ export const DEMO_MATCHES: readonly DemoMatch[] = [
   { court: 3, label: "Carter vs Lee", start: 35, movedTo: 47, kind: "moved", focus: [1, 3] },
   { court: 3, label: "King vs Lane", start: 60, movedTo: 72, kind: "moved", focus: [3] },
   { court: 3, label: "Ford vs Webb", start: 85, movedTo: 97, kind: "moved", focus: [3] },
-  { court: 3, label: "Hale vs Stone", start: 110, movedTo: 122, kind: "moved", review: true, focus: [3, 4] },
-  { court: 3, label: "Park vs Quinn", start: 135, kind: "held", review: true, focus: [4] },
+  { court: 3, label: "Hale vs Stone", start: 110, movedTo: 122, kind: "moved", focus: [3] },
+  { court: 3, label: "Park vs Quinn", start: 135, movedTo: 147, kind: "moved", review: true, focus: [4] },
 ];
 
 export interface DemoStep {
@@ -111,7 +111,7 @@ export const DEMO_STEPS: readonly DemoStep[] = [
     badge: "Needs your review",
     badgeTone: "review",
     title: "The hard one comes to you.",
-    body: "The last match would now end after the 16:45 close, so it keeps its time. It overlaps the match before it, and both go to schedule review.",
+    body: "The last match moves to 16:27 and is due to finish at 16:52, seven minutes after the 16:45 close. The organiser reviews the overrun; no match changes day automatically.",
   },
 ];
 
@@ -121,7 +121,7 @@ export const DEMO_LAST_STEP = DEMO_STEPS.length - 1;
 
 /** What the Desk says once the result is recorded, worded as `scheduleImpactNote` words it. */
 export const DEMO_TOAST =
-  "Result recorded. 6 later matches delayed by up to 12 min. 2 matches need schedule review.";
+  "Result recorded. 7 later matches delayed by up to 12 min. 1 match needs schedule review.";
 
 /**
  * The three things a match can be to the organiser after a late result: moved for them,

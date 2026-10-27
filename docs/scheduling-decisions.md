@@ -772,3 +772,30 @@ fields on the belief that the per-day table showed the difference - it showed on
 - **A blocked plan is named beside the control it disables.** The reason sits in the footer and the Apply
   button points at it with `aria-describedby`, rather than leaving a dead control with its cause scrolled
   out of view.
+
+## 35. Live delays continue past closing; closing is an actionable warning
+
+`20261027000000_reflow_past_closing.sql` supersedes the live reflow's held-at-closing
+policy. Previously a match whose computed finish crossed the close kept its old time,
+as did the rest of that court's tail. This deliberately left overlaps for review but
+made the published tail contradict the actual delay.
+
+Live reflow now publishes the later times and continues the cascade, including shared
+players and prerequisites on other courts. This applies on every playing day, including
+the last. `schedule_conflicts` reports `past_closing` against the newly published finish,
+including the minutes beyond the configured close. The Desk reads the updated queue;
+the organiser reviews the affected matches on Schedule and decides whether to extend
+court hours or rebuild. A projected time beyond closing does not change venue hours or
+authorise an extension.
+
+Only rows originally scoped to the source's playing day enter the cascade. Reflow does
+not choose a next day's slot, change courts, or alter a day's settings. The original
+court sequence, individual-player rest, prerequisites, breaks, fixed history, whole-minute
+rounding and publication threshold remain. Automatic placement of new matches still
+respects closing. There is no backfill: existing rows are reconsidered at the next
+ordinary start/result reflow. The landing demo shows the same policy.
+
+Regression coverage: `integration/live-reflow.test.ts` exercises the full tail past the
+close, cross-court rest propagation, final-day overflow and the existing next-day isolation,
+break, prerequisite and immutable-history cases. The event simulation no longer tolerates
+held overlaps at closing.

@@ -3134,3 +3134,37 @@ describe("drop reassign_court_matches migration", () => {
     }
   });
 });
+
+describe("live reflow past closing migration", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase/migrations/20261027000000_reflow_past_closing.sql"),
+    "utf8",
+  );
+  const core = functionSource(sql, "shift_live_schedule_core").replace(/--[^\n]*/g, "");
+
+  it("keeps the internal security boundary and existing cascade constraints", () => {
+    expect(core).toMatch(/SECURITY DEFINER\s+SET search_path = public/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\.shift_live_schedule_core\(text, uuid\) FROM anon, authenticated, PUBLIC/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.shift_live_schedule_core\(text, uuid\) TO service_role/);
+    expect(core).toMatch(/pg_advisory_xact_lock\(hashtext\('live-schedule'\)\)/);
+    expect(core).toMatch(/later\.day_id = current_match\.day_id/);
+    expect(core).toMatch(/public\.ceil_to_minute\(next_start\)/);
+    expect(core).toMatch(/prereq\.court_id = current_match\.court_id/);
+    expect(core).toMatch(/public\.tournament_day_breaks/);
+    expect(core).toMatch(/source_status = 'in-progress'/);
+    for (const alias of ["pm", "dm", "pmet", "tdm"]) {
+      expect(core).toContain(`${alias}.status = 'scheduled'`);
+    }
+  });
+
+  it("never freezes a court tail at closing and preserves publication tolerance", () => {
+    expect(core).not.toMatch(/\bheld\b|v_day_end|RAISE NOTICE/);
+    expect(core).toMatch(/dirty = \(next_start - current_match\.original_time\) >= v_threshold/);
+    expect(core).toMatch(/SET dirty = true\s+WHERE w\.movable\s+AND NOT w\.dirty/);
+    expect(core).toMatch(/o\.match_id = ANY\(w\.prereq_ids\)/);
+    // Continue propagating the computed time along the court, player and prerequisite edges.
+    expect(core).toContain("later.court_id = current_match.court_id");
+    expect(core).toContain("theirs.player_id = mine.player_id");
+    expect(core).toContain("ANY(later.prereq_ids)");
+  });
+});

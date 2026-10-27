@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 import {
+  DEMO_CLOSE,
   DEMO_LAST_STEP,
   DEMO_MATCHES,
   DEMO_RESULT_STEP,
@@ -54,7 +55,7 @@ const GROUPS: readonly { key: DemoGroup; title: string; detail: string; swatch: 
   {
     key: "review",
     title: "Your review",
-    detail: "No safe slot, so the match keeps its time and waits for you.",
+    detail: "The new finish crosses closing time. You decide how to handle it.",
     swatch:
       "bg-[repeating-linear-gradient(135deg,var(--surface)_0_4px,var(--warn-surface)_4px_8px)] ring-2 ring-inset ring-warn-foreground",
     count: "text-warn-foreground",
@@ -88,12 +89,6 @@ function look(match: DemoMatch, step: number, lit: boolean): string {
         : "border-info-border bg-info-surface text-info-foreground";
     case "absorbed":
       return resolved && lit ? "border-foreground bg-surface text-foreground" : quiet;
-    case "held":
-      if (!resolved) return lit ? "border-border-control bg-surface text-foreground" : quiet;
-      return cn(
-        "bg-[repeating-linear-gradient(135deg,var(--surface)_0_6px,var(--warn-surface)_6px_12px)] text-warn-foreground",
-        lit ? "border-2 border-warn-foreground" : "border-warn-border",
-      );
     default:
       return step === 0 ? "border-border-control bg-surface text-foreground" : quiet;
   }
@@ -102,7 +97,7 @@ function look(match: DemoMatch, step: number, lit: boolean): string {
 function label(match: DemoMatch, step: number, lit: boolean): string {
   const resolved = step >= DEMO_RESULT_STEP;
   if (match.kind === "late" && step >= 1) return `${match.label}, +12`;
-  if (match.kind === "held" && resolved) return `Review, ${match.label}`;
+  if (match.review && resolved) return `Review, ${match.label}`;
   if (match.kind === "absorbed" && resolved && lit) return `No move, ${match.label}`;
   return match.label;
 }
@@ -349,11 +344,15 @@ export function ScheduleDemo() {
                   {demoClock(now)}
                 </span>
               </div>
-              <span className="absolute right-0 -bottom-7 font-mono text-[11px] font-bold">Close 16:45</span>
+              <div
+                className="pointer-events-none absolute -top-2 -bottom-2 z-[3] border-l border-dashed border-warn-foreground"
+                style={{ left: pct(DEMO_CLOSE) }}
+              />
+              <span className="absolute -bottom-7 -translate-x-full whitespace-nowrap font-mono text-[11px] font-bold" style={{ left: pct(DEMO_CLOSE) }}>Close 16:45</span>
               {[1, 2, 3].map((court) => (
                 <div
                   key={court}
-                  className="relative h-[62px] rounded-xl bg-surface shadow-[inset_-2px_0_0_var(--foreground),inset_0_0_0_1px_var(--info-border)]"
+                  className="relative h-[62px] rounded-xl bg-surface shadow-[inset_0_0_0_1px_var(--info-border)]"
                 >
                   {resolved && (!group || group === "auto")
                     ? DEMO_MATCHES.filter((m) => m.court === court && m.movedTo != null).map((m) => (
@@ -367,7 +366,6 @@ export function ScheduleDemo() {
                   {DEMO_MATCHES.filter((m) => m.court === court).map((m) => {
                     const lit = isLit(m);
                     const { start, length } = demoPlacement(m, step);
-                    const held = m.kind === "held" && resolved;
                     const moved = resolved && m.movedTo != null;
                     const locked = demoGroup(m) === "locked";
                     return (
@@ -377,7 +375,7 @@ export function ScheduleDemo() {
                           "absolute flex items-center gap-1.5 overflow-hidden rounded-lg border px-1 text-[11px] font-bold whitespace-nowrap transition-[left,width,background-color,border-color,color,top]",
                           "sm:px-2 sm:text-xs",
                           EASE,
-                          held ? "top-[22px] -bottom-1.5 z-[5]" : "top-[7px] bottom-[7px]",
+                          "top-[7px] bottom-[7px]",
                           m.kind === "late" ? "z-[4]" : "z-[2]",
                           blockLook(m),
                         )}

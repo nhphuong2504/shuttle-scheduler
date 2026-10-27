@@ -23,7 +23,7 @@ import {
  * `shift_live_schedule_core` is the code that moves the rest of a court's day when a result
  * lands. It is arithmetic over the rows, so `simulation.test.ts` already plays a whole event
  * through it - but a simulation checks that the eventual answer is playable, not that each
- * specific rule (never earlier, never into a break, never off this day, held at the close)
+ * specific rule (never earlier, never into a break, only this day’s rows, warning past the close)
  * is what the code does. These cases pin those rules one at a time, on hand-placed matches,
  * because the rules are the whole point of the migration and a simulation is happy to be
  * right for the wrong reason.
@@ -232,31 +232,19 @@ async function placeMatch(
 }
 
 /**
- * Starts a match, reports it at a virtual finish, and lets the reflow run.
- *
- * Starting it first is what moves the tournament to `in_progress`: `start_placement_match`
- * flips an upcoming tournament as a side effect (`mark_tournament_started`), which is the
- * transition `simulation.test.ts` and `lifecycle.test.ts` get from starting their first match.
- * Reporting needs `assert_tournament_live`, so this cannot be skipped.
- *
- * The service role then writes the match's whole virtual window, `started_at` and `ended_at`
- * together, because `report_placement_result` preserves `ended_at` with `COALESCE(ended_at,
- * now())` but the start has already been stamped with the wall clock - and 2026 is not 2020.
- * A row with `started_at > ended_at` is an inverted window: the reflow reads
- * `COALESCE(fixed.actual_start, ...)` as the far edge of a done match's span, and
- * `schedule_conflicts` reads `eff_start = COALESCE(started_at, scheduled_time)`, so a played
- * match whose span ran backwards would block and be flagged against nothing. The virtual start
- * is one slot before the finish, the same length the planner gives the match. Both columns are
- * written by the service role, a fixture and never an assertion.
+ * Give the source its complete virtual window BEFORE starting it: Start also runs reflow,
+ * and a virtual start with no end would be modelled as running until the real wall clock.
+ * The real Start RPC still performs the lifecycle transition and guards; the real Report
+ * RPC then records its score and reflows again. Both preserve the fixture's timestamps.
  */
 async function reportAt(matchId: string, endedAt: string, tournamentId: string): Promise<void> {
-  await startPlacementMatch(matchId, null);
   const startedAt = new Date(Date.parse(endedAt) - SLOT_MINUTES * 60_000).toISOString();
   const { error } = await serviceClient()
     .from("placement_matches")
     .update({ ended_at: endedAt, started_at: startedAt })
     .eq("id", matchId);
   if (error) throw new Error(`setting the virtual clock failed: ${error.message}`);
+  await startPlacementMatch(matchId, null);
   await reportPlacementMatch(matchId, [{ a: 21, b: 10 }], tournamentId);
 }
 
@@ -327,19 +315,10 @@ describe("live reflow", () => {
     expect(times.get(dependent)).toBe(iso(DAY1, "09:50"));
   });
 
-  it("(d) holds the match that would run past closing time, and its court's tail with it", async () => {
-    // Day one closes at 11:00 and a placement match is 20 minutes, so the last start that
-    // finishes inside the day is 10:40.
-    //
-    //   m1 09:00 -> 10:20  source; reports forty minutes past its slot.
-    //   m2 09:30 -> 10:20  prev_end = 10:20, so GREATEST(09:30, 10:20) = 10:20; ends 10:40.
-    //   m3 10:00 -> 10:40  prev_end = 10:40, GREATEST(10:00, 10:40) = 10:40; ends 11:00, exactly
-    //                      the close, so it is inside the day and is written rather than held.
-    //   m4 10:50           prev_end = 11:00, so pushed to 11:00 and would end 11:20, past the
-    //                      close: HELD, and it keeps 10:50. The reflow moved this one, so this
-    //                      is a spill it would create - not one it merely found.
-    //   m5 10:55           the tail behind m4 on the same court: held with it, keeps 10:55.
-    const seeded = await seed({ label: "d", entrants: 10, day1End: "11:00" });
+  it("(d) shifts the full court tail past closing and reports the new finishes", async () => {
+    // Close 11:00. The source ends at 10:20; the four successors form a continuous
+    // 10:20, 10:40, 11:00, 11:20 chain instead of freezing the last two at old times.
+    const seeded = await seed({ label: "d", entrants: 10, day1End: "11:00", day2: true });
     const m1 = await placeMatch(seeded, { key: "d-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
     const m2 = await placeMatch(seeded, { key: "d-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:30") });
     const m3 = await placeMatch(seeded, { key: "d-3", a: 4, b: 5, court: 1, at: iso(DAY1, "10:00") });
@@ -350,19 +329,37 @@ describe("live reflow", () => {
     await reportAt(m1, iso(DAY1, "10:20"), seeded.tournamentId);
 
     const times = await timesOf([m2, m3, m4, m5]);
-    // Before the held point: shifted and written. m3 rides directly behind the overrun m2.
+    // Every successor moves, including those that now finish after the close.
     expect(times.get(m2)).toBe(iso(DAY1, "10:20"));
     expect(times.get(m3)).toBe(iso(DAY1, "10:40"));
-    // The spill and its court's tail: held, so unchanged at their published times.
-    expect(times.get(m4)).toBe(iso(DAY1, "10:50"));
-    expect(times.get(m5)).toBe(iso(DAY1, "10:55"));
+    // The spill and its tail remain in order after the close.
+    expect(times.get(m4)).toBe(iso(DAY1, "11:00"));
+    expect(times.get(m5)).toBe(iso(DAY1, "11:20"));
 
     const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
-    const held = conflicts.filter((row) => row.match_id === m4);
-    expect(held.length).toBeGreaterThan(0);
-    // m4 published at 10:50 runs to 11:10, past the close, so the read over the rows reports
-    // it - which is where a past-closing time belongs, held or not.
-    expect(held.map((row) => row.conflict_kind)).toContain("past_closing");
+    for (const id of [m4, m5]) {
+      const spill = conflicts.filter((row) => row.match_id === id);
+      expect(spill.map((row) => row.conflict_kind)).toEqual(["past_closing"]);
+      expect(spill[0]?.scheduled_time).toBeTruthy();
+      expect(new Date(spill[0]!.scheduled_time!).toISOString()).toBe(times.get(id));
+      expect(spill[0]?.minutes).toBe(id === m4 ? 20 : 40);
+    }
+    expect(conflicts.some((row) => row.conflict_kind === "court_overlap")).toBe(false);
+  });
+
+  it("shifts past closing on the final playing day without touching the previous day", async () => {
+    const seeded = await seed({ label: "final-close", entrants: 6, day2: true });
+    const previous = await placeMatch(seeded, { key: "final-prev", a: 4, b: 5, court: 1, at: iso(DAY1, "10:00") });
+    const source = await placeMatch(seeded, { key: "final-source", a: 0, b: 1, court: 1, at: iso(DAY2, "16:20") });
+    const tail = await placeMatch(seeded, { key: "final-tail", a: 2, b: 3, court: 1, at: iso(DAY2, "16:40") });
+    await reportAt(source, iso(DAY2, "16:55"), seeded.tournamentId);
+    const times = await timesOf([previous, tail]);
+    expect(times.get(previous)).toBe(iso(DAY1, "10:00"));
+    expect(times.get(tail)).toBe(iso(DAY2, "16:55"));
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    const spill = conflicts.filter((row) => row.match_id === tail);
+    expect(spill.map((row) => row.conflict_kind)).toEqual(["past_closing"]);
+    expect(spill[0]?.minutes).toBe(15);
   });
 
   it("(e) never pushes a match into a day break", async () => {
@@ -383,21 +380,10 @@ describe("live reflow", () => {
     expect(times.get(m2)).toBe(iso(DAY1, "11:00"));
   });
 
-  it("(f) still reflows an unrelated chain while another is held, and the held match pulls nobody", async () => {
-    // Court one's tail is held at the close, but court two's chain is pulled by a match that DID
-    // move - the source itself, whose overrun the shared player has to wait out. The held match
-    // shares a player with a match on court three, and that match must stay put: a held match
-    // never propagates.
-    //
-    //   a1 09:00 -> 10:25  source; reports twenty-five minutes past its slot.
-    //   a2 09:30 -> 10:25  prev_end = a1's real end 10:25, GREATEST(09:30, 10:25) = 10:25.
-    //   a3 10:40           prev_end = 10:25 + 20 = 10:45, so pushed to 10:45 and would end
-    //                      11:05, past the 11:00 close: HELD, and it keeps 10:40.
-    //   a4 10:55           the tail behind a3 on the same court: held with it, keeps 10:55.
-    //   b1 09:35 -> 10:35  court two, shares a player with a1: rest floor = 10:25 + 10 = 10:35,
-    //                      which fits inside the day, so court two reflows although court one
-    //                      is held.
-    //   c1 10:30           court three, shares a player with the held a3: reached by nothing.
+  it("(f) propagates a past-closing delay across courts to protect player rest", async () => {
+    // Court one continues at 10:25, 10:45, 11:05. Its 10:45 match holds entrant 4
+    // until 11:05, so court three must wait until 11:15 including ten minutes’ rest.
+    // Court two independently follows the source at 10:35.
     const seeded = await seed({ label: "f", entrants: 10, day1End: "11:00" });
     const a1 = await placeMatch(seeded, { key: "f-a1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
     const a2 = await placeMatch(seeded, { key: "f-a2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:30") });
@@ -405,21 +391,21 @@ describe("live reflow", () => {
     const a4 = await placeMatch(seeded, { key: "f-a4", a: 6, b: 7, court: 1, at: iso(DAY1, "10:55") });
     // Shares entrant 0 (a player) with the source, so the source's real end pulls it.
     const b1 = await placeMatch(seeded, { key: "f-b1", a: 0, b: 9, court: 2, at: iso(DAY1, "09:35") });
-    // Shares entrant 4 with the held a3, on its own court: it must not move.
-    const c1 = await placeMatch(seeded, { key: "f-c1", a: 4, b: 8, court: 3, at: iso(DAY1, "10:30") });
+    // Shares entrant 4 with a3: its later published slot must follow a3 plus rest.
+    const c1 = await placeMatch(seeded, { key: "f-c1", a: 4, b: 8, court: 3, at: iso(DAY1, "10:50") });
 
     await reportAt(a1, iso(DAY1, "10:25"), seeded.tournamentId);
 
     const times = await timesOf([a2, a3, a4, b1, c1]);
     expect(times.get(a2)).toBe(iso(DAY1, "10:25"));
-    // Held: pushed to 10:45, which would end past the 11:00 close, so it keeps 10:40.
-    expect(times.get(a3)).toBe(iso(DAY1, "10:40"));
-    // Its court's tail: held with it, so it keeps its published time too.
-    expect(times.get(a4)).toBe(iso(DAY1, "10:55"));
-    // Court two reflowed anyway: a1 ended at 10:25, and b1 shares a player with it.
+    expect(times.get(a3)).toBe(iso(DAY1, "10:45"));
+    expect(times.get(a4)).toBe(iso(DAY1, "11:05"));
     expect(times.get(b1)).toBe(iso(DAY1, "10:35"));
-    // Court three untouched: a held match drags nobody.
-    expect(times.get(c1)).toBe(iso(DAY1, "10:30"));
+    expect(times.get(c1)).toBe(iso(DAY1, "11:15"));
+    const conflicts = await fetchScheduleConflicts(seeded.tournamentId);
+    expect(conflicts.filter((row) => row.conflict_kind === "past_closing").map((row) => row.match_id).sort())
+      .toEqual([a3, a4, c1].sort());
+    expect(conflicts.some((row) => row.conflict_kind === "rest_shortfall" || row.conflict_kind === "court_overlap")).toBe(false);
   });
 
   it("(g) never flags a match that has already been played", async () => {
@@ -511,23 +497,8 @@ describe("live reflow", () => {
   });
 
   it("(j) leaves an already-past-closing match alone when the reflow is not moving it", async () => {
-    // The close bounds what the reflow *writes*, not what it reads. A match whose published
-    // time already crosses 11:00 is not something this run moved, so it is neither held nor
-    // written: it keeps its published time, and its court's tail is still processed normally.
-    // Reporting it is `schedule_conflicts`' `past_closing`.
-    //
-    //   m1 09:00 -> 09:40  source; reports twenty minutes past its slot.
-    //   m2 09:30 -> 09:40  prev_end = 09:40, GREATEST(09:30, 09:40) = 09:40: a normal shift that
-    //                      fits, so the case still shows the loop doing real work.
-    //   m3 10:45           prev_end = 09:40 + 20 = 10:00, so GREATEST(10:45, 10:00) = 10:45 -
-    //                      its own published time, not a move. It finishes 11:05, past the
-    //                      close, but because the reflow did not move it, it is NOT held and it
-    //                      keeps 10:45.
-    //   m4 11:10           prev_end = 10:45 + 20 = 11:05, and its published start is later still,
-    //                      so it is not moved either - kept at 11:10, not held. A same-court
-    //                      successor of a past-closing match cannot be validly pushed (its floor
-    //                      is already past the close), so "handled normally" here is left
-    //                      untouched rather than frozen as a held tail.
+    // Existing past-closing rows whose court/player floors do not change remain
+    // untouched. Warnings describe stored finishes whether or not reflow moved them.
     const seeded = await seed({ label: "j", entrants: 8, day1End: "11:00" });
     const m1 = await placeMatch(seeded, { key: "j-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
     const m2 = await placeMatch(seeded, { key: "j-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:30") });
@@ -679,10 +650,10 @@ describe("live reflow", () => {
     const m1 = await placeMatch(seeded, { key: "o-1", a: 0, b: 1, court: 1, at: iso(DAY1, "09:00") });
     const m2 = await placeMatch(seeded, { key: "o-2", a: 2, b: 3, court: 1, at: iso(DAY1, "09:20") });
 
-    await startPlacementMatch(m1, null);
+    // A read-only conflict check: seed the running row without firing a live Start reflow.
     const { error } = await serviceClient()
       .from("placement_matches")
-      .update({ started_at: iso(DAY1, "09:00") })
+      .update({ status: "in-progress", started_at: iso(DAY1, "09:00") })
       .eq("id", m1);
     if (error) throw new Error(`setting the virtual start failed: ${error.message}`);
 

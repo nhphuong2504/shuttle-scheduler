@@ -3553,3 +3553,24 @@ cannot receive calls. Existing identity linking rules are unchanged.
 Verify with `integration/call-next.test.ts` on local Supabase and the normal full gate.
 The migration checks its privileges and RLS on apply. To roll back, deploy an earlier
 client and preserve the tables to retain calls. No existing match rows are modified.
+
+## Applying `20261027000000_reflow_past_closing.sql`
+
+Replaces only the internal `shift_live_schedule_core(text, uuid)` function. Apply after
+`20261026000000_whole_minute_published_times.sql`. No schema, RLS, RPC signature or stored-row
+backfill changes. The function stays security-definer with its original locks/search path
+and service-role-only execute grant.
+
+A live delay now continues through the court tail even when it finishes past closing;
+player and prerequisite propagation also continue. The existing `schedule_conflicts`
+report flags `past_closing` using the updated times and minutes beyond closing. New-match
+placement, rebuild rules, court assignment and day settings are unchanged. No automatic
+transfer to a following playing day is introduced. Existing rows move only when a normal
+live reflow next reaches them.
+
+The migration verifies its privilege boundary and removal of the closing cap on apply.
+Run the full local gate and `npm run test:integration` against the local Supabase stack;
+`integration/live-reflow.test.ts` checks overflow on the final day as well as court tails
+and cross-court rest. To roll back, restore the `shift_live_schedule_core` definition and
+its REVOKE/GRANT from `20261026000000_whole_minute_published_times.sql`; already shifted
+rows keep their times until an operator rebuilds or a later reflow moves them.

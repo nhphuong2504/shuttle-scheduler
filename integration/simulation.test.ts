@@ -11,15 +11,12 @@ import {
   fetchCourts,
   fetchPlacementEntrants,
   fetchPlacementMatches,
-  fetchScheduleConflicts,
   fetchTierDrawMatches,
   fetchTierDraws,
   type Category,
   type Court,
   type PlacementEntrant,
   type PlacementMatch,
-  type ScheduleConflict,
-  type ScheduleConflictKind,
   type Team,
   type TierDraw,
   type TierDrawMatch,
@@ -63,9 +60,7 @@ import {
  * and repeat until a champion exists - and checks the invariants a real event depends on after
  * EVERY step rather than only at the end. A reflow bug does not show up as a wrong final
  * answer; it shows up as two matches on one court at 11:20, and only a per-step check sees it.
- * The one overlap that is *not* a bug - a match the reflow held at the day's close - is checked
- * against `schedule_conflicts` rather than waved through, and is required to be gone after every
- * Update schedule; see `assertInvariants`.
+ * Closing-time overflow is a warning, never an excuse for overlapping the court tail.
  *
  * It drives the application's own action layer (`generateMissingStages`, `planPlacementSchedule`,
  * `applyPlacementSchedulePlan`, `report*Match`) for the same reason `lifecycle.test.ts` does: a
@@ -92,9 +87,6 @@ import {
  *     each match before starting the next, so no match is in progress while a reflow runs.
  *   - Player rest gaps are reported as warnings, not failures: the reflow keeps them, but a
  *     simulated overrun can legitimately consume them.
- *   - A held overlap (a match the reflow kept at the day's close, then reported through
- *     `schedule_conflicts`) is tolerated and logged after a result, and required to be gone after
- *     every Update schedule. See `assertInvariants`.
  *   - Runs against the LOCAL stack only (AGENTS.md): `npx supabase start`,
  *     `npm run integration:target -- local`.
  */
@@ -209,8 +201,6 @@ let dayRows: TournamentDay[] = [];
 const playerIds: string[] = [];
 const random: RandomFn = mulberry32(SEED);
 const warnings: string[] = [];
-/** Held overlaps tolerated so far, so the final log shows the held mechanism ran. */
-let heldOverlaps = 0;
 /** Overlaps under the threshold the reflow computed and did not write (section 33). */
 let unannouncedShifts = 0;
 /** Set once the full run finishes, so the later steps can refuse to run on a broken one. */
@@ -318,17 +308,6 @@ async function snapshot(): Promise<Snapshot> {
     tier,
     draws,
   };
-}
-
-/**
- * The conflicts `schedule_conflicts` reports right now.
- *
- * Fetched by the caller and handed to `assertInvariants`, which is synchronous: the held-overlap
- * tolerance needs the database's own view of which still-`scheduled` matches are actionable, and the
- * RPC is the only thing that computes it.
- */
-async function conflictsNow(): Promise<ScheduleConflict[]> {
-  return fetchScheduleConflicts(tournamentId as string);
 }
 
 // --- Scheduling ------------------------------------------------------------------
@@ -457,7 +436,7 @@ function playable(snap: Snapshot): Slot[] {
  *
  * The match starts at its scheduled time or when its court frees up, whichever is later; it
  * lasts the slot plus, sometimes, an overrun. The virtual `started_at`/`ended_at` are written
- * before the report so the reflow reads them instead of the wall clock.
+ * before Start and Report so both reflows read them instead of the wall clock.
  */
 async function playMatch(slot: Slot, snap: Snapshot): Promise<{ overran: number }> {
   const { row, kind } = slot;
@@ -470,9 +449,6 @@ async function playMatch(slot: Slot, snap: Snapshot): Promise<{ overran: number 
       : 0;
   const end = start + (slotMinutes(snap.tournament, kind) + overran) * MINUTE;
 
-  if (kind === "placement") await startPlacementMatch(row.id, court);
-  else await startTierDrawMatch(row.id, court);
-
   const { error } = await serviceClient()
     .from(table)
     .update({
@@ -481,6 +457,9 @@ async function playMatch(slot: Slot, snap: Snapshot): Promise<{ overran: number 
     })
     .eq("id", row.id);
   if (error) throw new Error(`setting the virtual clock failed: ${error.message}`);
+
+  if (kind === "placement") await startPlacementMatch(row.id, court);
+  else await startTierDrawMatch(row.id, court);
 
   const rule = rulesFor(snap.tournament, kind);
   const winner: Side = random() < 0.5 ? "a" : "b";
@@ -558,87 +537,12 @@ function fmt(ms: number): string {
 }
 
 interface InvariantOptions {
-  /**
-   * The conflicts `schedule_conflicts` currently reports, so a held overlap can be recognised.
-   * Fetched by the caller because this check is synchronous and the RPC is not.
-   */
-  conflicts?: readonly ScheduleConflict[] | undefined;
-  /**
-   * Refuse every overlap between two still-`scheduled` matches. Set after Update schedule, when the
-   * reflow's held overlaps must have been resolved; left false after a bare result, when the reflow
-   * may legitimately have left one. See `assertInvariants`.
-   */
+  /** After a rebuild, even sub-threshold overlaps must have been repaired. */
   strict?: boolean | undefined;
 }
 
-/** The conflict kinds that mark a held, still-movable overlap of each shape. */
-const HELD_OVERLAP_KINDS: Record<"court" | "player", readonly ScheduleConflictKind[]> = {
-  court: ["court_overlap"],
-  player: ["rest_shortfall", "court_overlap"],
-};
-
-/** The closing instant of the day `at` falls in, or null when no configured day contains it. */
-function dayCloseFor(snap: Snapshot, at: number): number | null {
-  const key = localDate(at);
-  const day = snap.days.find((d) => d.date === key);
-  return day ? Date.parse(localToIso(day.date, day.end_time)) : null;
-}
-
 /**
- * Whether an overlap that ends in a still-`scheduled` match is the reflow's held behaviour rather
- * than a bug.
- *
- * When a result pushes the rest of a day past its close, the reflow may not move the whole day into
- * the next one, so it holds the match it cannot fit: it keeps the published time, and so does the
- * tail behind it. The held match then overlaps the match pushed in front of it - on the same court,
- * and often for the same player. That overlap is deliberate and is surfaced by `schedule_conflicts`;
- * Update schedule is what clears it. So it is tolerated only while BOTH hold:
- *
- *   (a) it genuinely could not be avoided inside the day. Pushed to start when the earlier match
- *       ends and its players have rested, the later one would still finish past its day's closing
- *       time. This is the half that
- *       keeps a real reflow bug out: a push that WOULD have fitted must have been made.
- *   (b) the database names the later match as an actionable conflict of the matching kind
- *       (`court_overlap` for a court, `rest_shortfall`/`court_overlap` for a player). An overlap no
- *       conflict row names is one the desk cannot see, so it can never be a tolerated held overlap.
- *
- * Either half failing keeps the overlap a violation. The LATER match must still be `scheduled`: it
- * is the one the desk can move, so it is the one the conflict is raised against. The EARLIER match
- * may be in any state - the usual case is the very match whose overrun triggered the reflow, which
- * is `reported` by then, and the held match left behind it overlaps it. What stays a violation is a
- * later match that is already done or on court: that is history overlapping history, a real double
- * booking the reflow can neither cause nor repair.
- */
-function isHeldOverlap(args: {
-  prev: Block;
-  cur: Block;
-  kind: "court" | "player";
-  snap: Snapshot;
-  conflicts: readonly ScheduleConflict[];
-}): boolean {
-  const { prev, cur, kind, snap, conflicts } = args;
-  if (!cur.scheduled) return false;
-  const dayClose = dayCloseFor(snap, cur.start);
-  if (dayClose == null) return false;
-  const duration = cur.end - cur.start;
-  // Where the reflow would have had to put it: after `prev`, and after each of its players has
-  // rested from the match before. A hold forced by a player's rest is as unavoidable as one forced
-  // by the court; whole-minute rounding (section 33) makes such holds a little more common.
-  let earliest = prev.end;
-  for (const other of blocksOf(snap)) {
-    if (other.id === cur.id || other.start >= cur.start) continue;
-    if (!other.players.some((player) => cur.players.includes(player))) continue;
-    earliest = Math.max(earliest, other.end + cur.restMs);
-  }
-  if (earliest + duration <= dayClose) return false;
-  return conflicts.some(
-    (conflict) =>
-      conflict.match_id === cur.id && HELD_OVERLAP_KINDS[kind].includes(conflict.conflict_kind),
-  );
-}
-
-/**
- * The second sanctioned overlap: a still-scheduled match left less than the threshold inside a
+ * The publication tolerance: a still-scheduled match left less than the threshold inside a
  * match that has really started or finished. The reflow computed the move and declined to write
  * it, because a published time is only changed when it moves by the threshold or more (section 33);
  * `schedule_conflicts` gives the same tolerance. Between two published times there is none.
@@ -654,20 +558,12 @@ function isUnannouncedShift(prev: Block, cur: Block): boolean {
  *   2. one player is never in two matches at once
  *   3. a still-scheduled match never overlaps a break (the reflow's job since the break fix)
  *
- * INVARIANTS 1 AND 2 HAVE ONE SANCTIONED EXCEPTION, AND ONLY ONE. A result can make the rest of a day
- * run past its close; the reflow will not move the day into the next one and will not refuse the
- * result, so it holds the match it cannot fit. The held match keeps its published time, and so does
- * the tail behind it, so it overlaps the match pushed in front of it - and the desk is told through
- * `schedule_conflicts` rather than the overlap being hidden. `isHeldOverlap` accepts exactly that
- * overlap and nothing else. Every other overlap - including any overlap with a match that is no
- * longer `scheduled` - is still a failure.
- *
- * After Update schedule the exception is withdrawn entirely (`strict`): the rebuild exists to resolve
- * those held overlaps, so a still-`scheduled` match overlapping another after a build is a planner
- * bug waiting for the desk, not a held match.
+ * Closing time never excuses an overlap: reflow continues past it and the conflict
+ * report warns about the finish instead. Only sub-threshold moves against an actual
+ * start/finish can remain unwritten; a rebuild removes even those.
  */
 function assertInvariants(snap: Snapshot, step: string, options: InvariantOptions = {}): void {
-  const { conflicts = [], strict = false } = options;
+  const { strict = false } = options;
   const blocks = blocksOf(snap);
   const problems: string[] = [];
 
@@ -681,9 +577,6 @@ function assertInvariants(snap: Snapshot, step: string, options: InvariantOption
       if (cur.start < prev.end) {
         if (!strict && isUnannouncedShift(prev, cur)) {
           unannouncedShifts += 1;
-        } else if (!strict && isHeldOverlap({ prev, cur, kind: "court", snap, conflicts })) {
-          heldOverlaps += 1;
-          warnings.push(`${step}: court overlap tolerated, held at the close: ${prev.label} / ${cur.label}`);
         } else {
           problems.push(`court overlap: ${prev.label} ends ${fmt(prev.end)}, ${cur.label} starts ${fmt(cur.start)}`);
         }
@@ -701,11 +594,6 @@ function assertInvariants(snap: Snapshot, step: string, options: InvariantOption
       if (cur.start < prev.end) {
         if (!strict && isUnannouncedShift(prev, cur)) {
           unannouncedShifts += 1;
-        } else if (!strict && isHeldOverlap({ prev, cur, kind: "player", snap, conflicts })) {
-          heldOverlaps += 1;
-          warnings.push(
-            `${step}: player ${player.slice(0, 8)} overlap tolerated, held at the close: ${prev.label} / ${cur.label}`,
-          );
         } else {
           problems.push(`player ${player.slice(0, 8)} double-booked: ${prev.label} / ${cur.label}`);
         }
@@ -879,7 +767,6 @@ describe("a two-day placement tournament, played end to end", () => {
     const updates: string[] = [];
     await buildSchedule();
     assertInvariants(await snapshot(), "initial build", {
-      conflicts: await conflictsNow(),
       strict: true,
     });
 
@@ -901,16 +788,15 @@ describe("a two-day placement tournament, played end to end", () => {
       if (overran > 0) overruns += 1;
       matchesPlayed += 1;
       const after = await snapshot();
-      assertInvariants(after, `match ${matchesPlayed}`, { conflicts: await conflictsNow() });
+      assertInvariants(after, `match ${matchesPlayed}`);
 
       const round = roundOf(next, after);
       if (round.done && !completed.has(round.key)) {
         completed.add(round.key);
         updates.push(round.label);
         await buildSchedule();
-        // Update schedule must have resolved every held overlap the reflow left.
+        // A rebuild also removes sub-threshold overlaps against actual times.
         assertInvariants(await snapshot(), `update schedule after ${round.label}`, {
-          conflicts: await conflictsNow(),
           strict: true,
         });
       }
@@ -966,7 +852,7 @@ describe("a two-day placement tournament, played end to end", () => {
     played = true;
     console.info(
       `[seed ${SEED}] ${matchesPlayed} matches, ${overruns} overran, ${updates.length} schedule updates, ${done.draws.length} knockout draws, ` +
-        `${heldOverlaps} held overlaps tolerated, ${unannouncedShifts} unannounced shifts, ${warnings.length} warnings`,
+        `${unannouncedShifts} unannounced shifts, ${warnings.length} warnings`,
     );
     for (const w of warnings.slice(0, 10)) console.info(`  warn: ${w}`);
   }, 900_000);
@@ -1032,7 +918,7 @@ describe("a two-day placement tournament, played end to end", () => {
     ).rejects.toThrow(/already started/i);
 
     // And the schedule is still coherent after the refused and accepted corrections.
-    assertInvariants(await snapshot(), "corrections", { conflicts: await conflictsNow() });
+    assertInvariants(await snapshot(), "corrections");
   }, 300_000);
 
   it("completes once nothing is on court", async () => {
