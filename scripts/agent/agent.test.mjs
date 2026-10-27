@@ -285,18 +285,29 @@ test("a catchable interruption records non-success and stops the running child",
   const root = fixture(t),
     driver = path.join(root, "driver.mjs");
   const runner = new URL("./runner.mjs", import.meta.url).href;
+  /*
+   * A real SIGTERM is delivered on POSIX. Windows cannot deliver a *catchable* signal to a
+   * child: `child.kill("SIGTERM")` maps to TerminateProcess, which ends the process without
+   * running a handler - measured as `close -> code=null signal=SIGTERM` - so the assertions
+   * below would be unreachable there. The driver therefore listens on stdin and emits the same
+   * event in process, which exercises the identical handler; only the delivery differs.
+   */
   writeFileSync(
     driver,
-    `import {runSteps} from ${JSON.stringify(runner)};\nconst result=await runSteps([{name:'waiting',script:'fixture',args:[]}],{root:${JSON.stringify(root)},identify:()=>({fingerprint:'same'}),invocation:()=>({command:process.execPath,args:['-e',\"console.log('child-ready');setInterval(()=>{},1000)\"]}),summary:false});process.exitCode=result.exitCode;`,
+    `import {runSteps} from ${JSON.stringify(runner)};\nprocess.stdin.setEncoding('utf8');process.stdin.once('data',()=>process.emit('SIGTERM'));\nconst result=await runSteps([{name:'waiting',script:'fixture',args:[]}],{root:${JSON.stringify(root)},identify:()=>({fingerprint:'same'}),invocation:()=>({command:process.execPath,args:['-e',"console.log('child-ready');setInterval(()=>{},1000)"]}),summary:false});process.exitCode=result.exitCode;`,
   );
-  const child = spawn(process.execPath, [driver], { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(process.execPath, [driver], { stdio: ["pipe", "pipe", "pipe"] });
   let text = "",
     sent = false;
   const timeout = setTimeout(() => child.kill("SIGKILL"), 10_000);
   child.stdout.on("data", (chunk) => {
     text += chunk;
-    if (!sent && text.includes("child-ready")) {
-      sent = true;
+    if (sent || !text.includes("child-ready")) return;
+    sent = true;
+    if (process.platform === "win32") child.stdin.end("interrupt\n");
+    else {
+      // Ending stdin keeps the driver's own listener from holding the event loop open.
+      child.stdin.end();
       child.kill("SIGTERM");
     }
   });
