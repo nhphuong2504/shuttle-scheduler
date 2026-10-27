@@ -5,6 +5,7 @@ import {
   MIN_ENTRANTS_FOR_ROUND_ONE,
   MIN_ENTRANTS_FOR_ROUND_TWO,
   bracketNote,
+  bracketProgress,
   bracketRounds,
   buildCategoryView,
   decidedWinners,
@@ -445,6 +446,26 @@ describe("draw display helpers", () => {
       "3 byes to the top seeds",
     );
     expect(bracketNote(draw("A", { entrant_count: 4, bracket_size: 4 }))).toContain("bracket of 4");
+  });
+
+  it("reports a bracket's open round and its played count, leaving byes out", () => {
+    const sixOfEight = draw("A", { entrant_count: 6, bracket_size: 8 });
+    const progress = bracketProgress(sixOfEight, [
+      tierMatch("d-A", 1, 1, { is_bye: true, note: "Bye", status: "reported", winner_id: "e1" }),
+      tierMatch("d-A", 1, 2, { status: "reported", winner_id: "e4" }),
+      tierMatch("d-A", 1, 3, { status: "live" }),
+      tierMatch("d-A", 1, 4, { is_bye: true, note: "Bye", status: "reported", winner_id: "e2" }),
+      tierMatch("d-A", 2, 1),
+    ]);
+    expect(progress).toEqual({ round: 1, played: 1, total: 5, live: 1 });
+
+    // Every written row decided and the next round not written yet: that next round is open.
+    expect(
+      bracketProgress(draw("A", { entrant_count: 2, bracket_size: 4 }), [
+        tierMatch("d-A", 1, 1, { status: "reported", winner_id: "e1" }),
+      ]).round,
+    ).toBe(2);
+    expect(bracketProgress(draw("A", { entrant_count: 2, bracket_size: 2, champion_id: "e1" }), []).round).toBeNull();
   });
 
   it("treats a tier as decided only once it has a champion", () => {
