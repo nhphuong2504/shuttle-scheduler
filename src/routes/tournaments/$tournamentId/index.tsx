@@ -1,3 +1,11 @@
+import type { MyRegistrationEntry } from "@/lib/tournament/registration";
+import { registrationKeys } from "@/lib/tournament/registration/keys";
+import {
+  submitTournamentRegistration,
+  withdrawTournamentRegistration,
+  useMyTournamentRegistration,
+} from "@/lib/tournament/registration/participant";
+import { useTournamentRegistrationState } from "@/lib/tournament/registration/window";
 import { Link, createFileRoute, useLocation } from "@tanstack/react-router";
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -18,20 +26,14 @@ import { Label } from "@/components/ui/label";
 import { useSession } from "@/hooks/useSession";
 import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import { signInSearch } from "@/lib/routing/redirect";
-import {
-  submitTournamentRegistration,
-  withdrawTournamentRegistration,
-} from "@/lib/tournament/actions";
+
 import {
   keys,
   useCategories,
-  useMyTournamentRegistration,
   useTeams,
   useTournamentContext,
-  useTournamentRegistrationState,
   useTournamentSummary,
   type Category,
-  type MyRegistrationEntry,
 } from "@/lib/tournament/data";
 import {
   capacityText,
@@ -119,8 +121,8 @@ export const Route = createFileRoute("/tournaments/$tournamentId/")({
  * unchanged by filing a request, and refetching it would only be traffic on venue wifi.
  */
 function invalidateRegistration(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({ queryKey: keys.myRegistration });
-  void queryClient.invalidateQueries({ queryKey: keys.registrationState });
+  void queryClient.invalidateQueries({ queryKey: registrationKeys.myRegistration });
+  void queryClient.invalidateQueries({ queryKey: registrationKeys.registrationState });
   void queryClient.invalidateQueries({ queryKey: keys.tournamentSummaries });
 }
 

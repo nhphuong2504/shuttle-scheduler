@@ -1,3 +1,5 @@
+import { registrationKeys } from "@/lib/tournament/registration/keys";
+import { decideTournamentRegistration, useTournamentRegistrationQueue } from "@/lib/tournament/registration/review";
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -11,13 +13,12 @@ import {
 } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { decideTournamentRegistration } from "@/lib/tournament/actions";
+
 import {
   keys,
   useCategories,
   useTeams,
   useTournamentContext,
-  useTournamentRegistrationQueue,
 } from "@/lib/tournament/data";
 import {
   capacityText,
@@ -55,7 +56,7 @@ export const Route = createFileRoute("/tournaments/$tournamentId/registrations")
  * things, and refetching more would only be traffic on venue wifi.
  */
 function invalidateAfterDecision(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({ queryKey: keys.registrationQueue });
+  void queryClient.invalidateQueries({ queryKey: registrationKeys.registrationQueue });
   void queryClient.invalidateQueries({ queryKey: keys.teams });
   void queryClient.invalidateQueries({ queryKey: keys.tournamentSummaries });
 }

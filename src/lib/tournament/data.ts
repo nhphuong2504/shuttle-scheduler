@@ -1,7 +1,6 @@
 import {
   keepPreviousData,
   useInfiniteQuery,
-  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -15,16 +14,9 @@ import {
 } from "@/lib/auth/authorization";
 import type { Database } from "@/integrations/supabase/types";
 import {
-  normalizeRegistrationDecision,
   normalizeRegistrationState,
-  type RegistrationDecision,
   type RegistrationState,
 } from "@/lib/tournament/registration-state";
-import {
-  toRegistrationQueue,
-  type RegistrationQueue,
-  type ReviewRegistrationRow,
-} from "@/lib/tournament/registration";
 
 export type Category = Database["public"]["Tables"]["categories"]["Row"];
 export type Court = Database["public"]["Tables"]["courts"]["Row"];
@@ -158,12 +150,6 @@ export const keys = {
    * different questions about the same rows.
    */
   tournamentSummaries: ["tournament_summaries"] as const,
-  /** The one-word answer from `tournament_registration_state`, per tournament. */
-  registrationState: ["registration_state"] as const,
-  /** The caller's own registration request, per tournament. */
-  myRegistration: ["my_registration"] as const,
-  /** The reviewer's queue of registration requests, per tournament. */
-  registrationQueue: ["registration_queue"] as const,
   tournamentDays: ["tournament_days"] as const,
   tournamentById: ["tournament_by_id"] as const,
   tournamentReadiness: ["tournament_readiness"] as const,
@@ -316,9 +302,12 @@ export function useTournamentDays() {
 export function useTournamentScope() {
   const scope = useTournamentContext();
   const daysQuery = useTournamentDays();
+  // Consumers use this list in effect dependencies, including while the read is pending.
+  // A new empty array on every render can repeatedly reset their derived state.
+  const days = useMemo(() => daysQuery.data ?? [], [daysQuery.data]);
   return {
     tournament: scope.tournament,
-    days: daysQuery.data ?? [],
+    days,
     loading: daysQuery.isLoading,
   };
 }
@@ -778,195 +767,6 @@ export function useTournamentSummary(tournamentId: string | null | undefined) {
       return rows[0] ?? null;
     },
   });
-}
-
-/**
- * The registration window as one word, from `tournament_registration_state`.
- *
- * Read separately from the summary even though the summary carries the same word, because
- * the Register panel's gate and its copy must come from the function that
- * `submit_tournament_registration` itself consults. The summary's copy is for a *card* -
- * "can I enter this" at a glance - and a page that offered a form on the strength of a
- * denormalised field in a list read would be one join away from disagreeing with the RPC.
- *
- * Public: the RPC is granted to `anon`, because deciding whether to register is something a
- * person may do before creating an account.
- */
-export function useTournamentRegistrationState(tournamentId: string | null | undefined) {
-  return useQuery({
-    queryKey: scopedKey(keys.registrationState, tournamentId),
-    enabled: !!tournamentId,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("tournament_registration_state", {
-        p_tournament_id: tournamentId as string,
-      });
-      if (error) throw new Error(error.message);
-      return normalizeRegistrationState(data);
-    },
-  });
-}
-
-/** One requested event, as the participant's own panel draws it. */
-export interface MyRegistrationEntry {
-  entryId: string | null;
-  categoryId: string | null;
-  categoryCode: string | null;
-  categoryName: string | null;
-  entryType: string | null;
-  partnerName: string | null;
-  partnerEmail: string | null;
-}
-
-/** The caller's own registration request for one tournament. */
-export interface MyRegistration {
-  id: string;
-  status: RegistrationDecision;
-  decidedAt: string | null;
-  decisionNote: string | null;
-  createdAt: string;
-  entries: MyRegistrationEntry[];
-}
-
-/**
- * `my_tournament_registration`'s row, in the wire shape the RPC returns.
- *
- * Declared here rather than read from the generated types because that function's `RETURNS
- * TABLE` marks every column non-null in `types.ts`, while a request awaiting a decision
- * genuinely has no `decided_at`, and a request with no entries genuinely has no entry
- * columns. Building the type from the statement instead would be the client believing a lie
- * the generator cannot avoid.
- */
-export interface MyRegistrationRow {
-  registration_id: string;
-  status: string;
-  decided_at: string | null;
-  decision_note: string | null;
-  created_at: string;
-  entry_id: string | null;
-  category_id: string | null;
-  category_code: string | null;
-  category_name: string | null;
-  entry_type: string | null;
-  partner_name: string | null;
-  partner_email: string | null;
-}
-
-/**
- * The RPC's one-row-per-entry answer, gathered into one request.
- *
- * Pure, and exported, so the gather is tested without a network: the row-per-entry shape is
- * what lets the queue and the participant's panel share one read, and the cost of it is this
- * fold. A request that somehow has no entries still produces one row with null entry columns
- * - which is what a Phase 1 row decided under the old form looks like - so an absent entry
- * must not be mistaken for an absent request.
- */
-export function toMyRegistration(
-  rows: readonly MyRegistrationRow[],
-): MyRegistration | null {
-  const first = rows[0];
-  if (!first) return null;
-
-  const entries: MyRegistrationEntry[] = [];
-  for (const row of rows) {
-    // The request's own columns repeat per row; only a row carrying an entry id adds one.
-    if (row.entry_id == null) continue;
-    entries.push({
-      entryId: row.entry_id,
-      categoryId: row.category_id,
-      categoryCode: row.category_code,
-      categoryName: row.category_name,
-      entryType: row.entry_type,
-      partnerName: row.partner_name,
-      partnerEmail: row.partner_email,
-    });
-  }
-
-  return {
-    id: first.registration_id,
-    status: normalizeRegistrationDecision(first.status),
-    decidedAt: first.decided_at,
-    decisionNote: first.decision_note,
-    createdAt: first.created_at,
-    entries,
-  };
-}
-
-/**
- * The caller's own registration for one tournament, if they have one.
- *
- * Signed-in only: the RPC resolves the caller's profile, so an anonymous request would
- * return nothing anyway, and asking while signed out would be a request whose answer can
- * only be "no".
- */
-export function useMyTournamentRegistration(tournamentId: string | null | undefined) {
-  const { signedIn } = useSession();
-  return useQuery({
-    queryKey: scopedKey(keys.myRegistration, tournamentId),
-    enabled: signedIn && !!tournamentId,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("my_tournament_registration", {
-        p_tournament_id: tournamentId as string,
-      });
-      if (error) throw new Error(error.message);
-      return toMyRegistration((data ?? []) as unknown as MyRegistrationRow[]);
-    },
-  });
-}
-
-/**
- * The reviewer's queue for one tournament: every request, split into pending work and what
- * has already been decided.
- *
- * Editor-gated at the database, so the read is only issued for a caller who can edit rather
- * than asked and refused. The page passes `{ enabled: access.can_edit }` for that reason, and
- * the shell does the same for the nav badge - so the two share one cache entry and one fetch
- * rather than each making their own.
- */
-export function useTournamentRegistrationQueue(
-  tournamentId: string | null | undefined,
-  { enabled = true }: { enabled?: boolean } = {},
-) {
-  return useQuery({
-    queryKey: scopedKey(keys.registrationQueue, tournamentId),
-    enabled: enabled && !!tournamentId,
-    queryFn: () => fetchRegistrationQueue(tournamentId as string),
-  });
-}
-
-async function fetchRegistrationQueue(tournamentId: string): Promise<RegistrationQueue> {
-  const { data, error } = await supabase.rpc("review_tournament_registrations", {
-    p_tournament_id: tournamentId,
-  });
-  if (error) throw new Error(error.message);
-  return toRegistrationQueue((data ?? []) as unknown as ReviewRegistrationRow[]);
-}
-
-/**
- * How many requests are waiting for a decision, for each of several tournaments.
- *
- * Home asks about every tournament the caller may edit, and a hook cannot be called in a loop,
- * so this is the same read as the queue above issued once per id. It shares the queue's cache
- * key, so a tournament whose queue is already open costs nothing, and the Registrations page
- * and the nav badge see the same answer. The ids passed are the caller's own, so the editor
- * gate on the read is met; an answer that fails reads as zero rather than as an error, since
- * "none waiting" is the safe thing for a summary line to say when it cannot tell.
- */
-export function usePendingRegistrationCounts(tournamentIds: readonly string[]) {
-  const results = useQueries({
-    queries: tournamentIds.map((id) => ({
-      queryKey: scopedKey(keys.registrationQueue, id),
-      queryFn: () => fetchRegistrationQueue(id),
-    })),
-  });
-  return useMemo(() => {
-    const counts = new Map<string, number>();
-    tournamentIds.forEach((id, index) => {
-      counts.set(id, results[index]?.data?.pending.length ?? 0);
-    });
-    return counts;
-    // `results` is a new array every render; its contents are what matter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournamentIds.join(","), results.map((r) => r.dataUpdatedAt).join(",")]);
 }
 
 export interface ReadinessCheck {

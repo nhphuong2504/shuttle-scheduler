@@ -1,3 +1,4 @@
+import { setRegistrationWindow } from "@/lib/tournament/registration/window";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -44,7 +45,6 @@ import {
   discardTournament,
   saveTournamentConfig,
   saveTournamentEvents,
-  setRegistrationWindow,
   updateTournamentDetails,
   updateTournamentWindow,
   type TournamentDraftInput,

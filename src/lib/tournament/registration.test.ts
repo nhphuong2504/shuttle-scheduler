@@ -8,6 +8,8 @@ import {
   entryTypeLabel,
   registrationEntriesPayload,
   toRegistrationQueue,
+  toMyRegistration,
+  type MyRegistrationRow,
   type RegistrationEntryInput,
   type ReviewRegistrationRow,
 } from "./registration";
@@ -369,5 +371,34 @@ describe("toRegistrationQueue", () => {
 
   it("is an empty queue for an empty answer", () => {
     expect(toRegistrationQueue([])).toEqual({ pending: [], decided: [] });
+  });
+});
+
+
+describe("toMyRegistration", () => {
+  const row = (over: Partial<MyRegistrationRow> = {}): MyRegistrationRow => ({
+    registration_id: "r1", status: "pending", decided_at: null, decision_note: null,
+    created_at: "2030-10-01T09:00:00Z", entry_id: "e1", category_id: "c1",
+    category_code: "MS", category_name: "Singles", entry_type: "individual",
+    partner_name: null, partner_email: null, ...over,
+  });
+
+  it("distinguishes an absent request from a request with no entries", () => {
+    expect(toMyRegistration([])).toBeNull();
+    expect(toMyRegistration([row({ entry_id: null })])).toMatchObject({ id: "r1", entries: [] });
+  });
+
+  it("keeps entry order and the host's decision note", () => {
+    const registration = toMyRegistration([
+      row({ status: "approved", decision_note: "See you Saturday", decided_at: "2030-10-02T09:00:00Z" }),
+      row({ entry_id: "e2", category_id: "c2", category_code: "MD", partner_name: "Mei", partner_email: "mei@example.test" }),
+    ]);
+    expect(registration).toMatchObject({ status: "approved", decisionNote: "See you Saturday", decidedAt: "2030-10-02T09:00:00Z" });
+    expect(registration?.entries.map((entry) => entry.entryId)).toEqual(["e1", "e2"]);
+    expect(registration?.entries[1]).toMatchObject({ partnerName: "Mei", partnerEmail: "mei@example.test" });
+  });
+
+  it("keeps an unknown decision pending", () => {
+    expect(toMyRegistration([row({ status: "unknown" })])?.status).toBe("pending");
   });
 });
