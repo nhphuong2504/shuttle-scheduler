@@ -1,0 +1,43 @@
+{
+  "revision": "f4057f3",
+  "method": "Required-read scenarios, deduplicated complete documents; no runtime/token claims.",
+  "scenarios": {
+    "ui": {
+      "references": [
+        "AGENTS.md",
+        "docs/design-principles.md"
+      ],
+      "bytes": 22820,
+      "words": 3670,
+      "discoveryCommands": null,
+      "elapsedMs": null,
+      "tokens": null
+    },
+    "registration": {
+      "references": [
+        "AGENTS.md",
+        "docs/authorization.md",
+        "docs/tournament-format.md"
+      ],
+      "bytes": 75869,
+      "words": 11163,
+      "discoveryCommands": null,
+      "elapsedMs": null,
+      "tokens": null
+    },
+    "scheduling-rpc": {
+      "references": [
+        "AGENTS.md",
+        "docs/tournament-format.md",
+        "docs/scheduling-decisions.md",
+        "docs/authorization.md",
+        "supabase/migrations/README.md"
+      ],
+      "bytes": 317123,
+      "words": 45516,
+      "discoveryCommands": null,
+      "elapsedMs": null,
+      "tokens": null
+    }
+  }
+}

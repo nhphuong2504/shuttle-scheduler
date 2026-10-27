@@ -8,7 +8,7 @@ and knockout draws. Two kinds of operator run it during the day, and a third
 audience — participants — signs in to enter:
 
 - The **organiser** plans the tournament. The Schedule tab is their view.
-- The **moderator** runs a single court in real time. The Desk is their view.
+- The **moderator** runs every court for one day in real time. The Desk is their view.
 - A **participant** registers from a tournament's public page, and may withdraw
   while the request is still pending. Approval is what creates their entry, and it
   grants no operating rights.
@@ -37,13 +37,29 @@ npm run dev
 [`.env.example`](.env.example) for the exact names and where each is used. A build
 fails without them.
 
+## Working with a coding agent
+
+```sh
+npm run agent:context -- <path>
+npm run agent:doctor
+npm run agent:check -- --changed
+npm run agent:verify
+```
+
+Start with the relevant context, not all historical docs. The check command prints a
+plan; add `--stage=checkpoint --run` to execute it. The strict full gate is shared with
+`npm run verify`; only the output mode differs. See [agent workflow](docs/agent-workflow.md)
+and [verification](docs/verification.md) for prerequisites, reports and local integration.
+
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Dev server with HMR |
 | `npm run build` | Production build |
-| `npm run verify` | Phase-close gate: typecheck, unit tests, one strict browser run, build |
+| `npm run verify` | Full gate with agent contracts, application checks and applicable local integration |
+| `npm run agent:verify` | The same full gate with concise output and redacted logs/manifests |
+| `npm run test:agent` | Node CLI contract tests, no backend or browser needed |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run test` | Vitest — unit and component tests |
 | `npm run test:integration` | Vitest against a **real** backend: auth, RLS, RPC authorization per role, realtime, the lifecycle. Targets the local stack — see [`AGENTS.md`](AGENTS.md) |
@@ -92,6 +108,9 @@ review the diff.
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
 | [`docs/recovery-runbook.md`](docs/recovery-runbook.md) | Getting the database back after data loss: what a backup does and does not contain, and the restore procedure |
+| [`docs/agent-workflow.md`](docs/agent-workflow.md) | Agent commands, scoped discovery and bounded handoffs |
+| [`docs/agent-workflow-evaluation.md`](docs/agent-workflow-evaluation.md) | Measured read-volume changes, preserved rules and validation limits |
+| [`docs/verification.md`](docs/verification.md) | Shared gates, report provenance and local integration operations |
 | [`docs/maintenance-baseline.md`](docs/maintenance-baseline.md) | Code/test inventory, baseline measurements and registration extraction rationale |
 | [`docs/cleanup-deferred.md`](docs/cleanup-deferred.md) | What an earlier cleanup removed, and the candidates it deliberately left alone |
 | [`supabase/migrations/README.md`](supabase/migrations/README.md) | Applying and verifying database migrations |
