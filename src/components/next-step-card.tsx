@@ -1,3 +1,4 @@
+import { useTournamentRegistrationQueue } from "@/lib/tournament/registration/review";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -11,7 +12,6 @@ import {
   usePlacementMatches,
   useTeams,
   useTournamentContext,
-  useTournamentRegistrationQueue,
   useTournamentSummary,
 } from "@/lib/tournament/data";
 import { organiserNextStep, type NextStepTarget } from "@/lib/tournament/next-step";

@@ -1387,29 +1387,6 @@ describe("registration entries and the identity bridge", () => {
     );
   });
 
-  it("makes a rejection re-appliable, and moves the arbiter with the index", () => {
-    // An unconditional unique key makes a rejection permanent: the row stays, the key keeps
-    // it, and a person turned down once can never apply again. That is not a policy anybody
-    // chose - it is what the constraint means.
-    expect(executable).toMatch(
-      /create unique index tournament_registrations_live_request_idx\s+on public\.tournament_registrations \(tournament_id, profile_id\)\s+where status <> 'rejected'/,
-    );
-    expect(executable).toMatch(
-      /alter table public\.tournament_registrations\s+drop constraint if exists tournament_registrations_unique_request/,
-    );
-    // The Phase 1 body inferred the dropped constraint, and an `ON CONFLICT` clause that no
-    // longer resolves raises at run time rather than at apply time - so it has to move in
-    // the same file as the index it infers, and both reads have to carry the predicate or a
-    // rejected row and a live row can coexist and the read could return either.
-    //
-    // Read from the *two-argument* body Step 9 leaves in place, not from the one-argument
-    // form it drops: the S8 body still carries the clause, so a signature that matched the
-    // first definition would pass here while the shipped function had lost the predicate.
-    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
-    expect(fn).toMatch(/on conflict \(tournament_id, profile_id\) where status <> 'rejected' do nothing/);
-    expect(fn.match(/status <> 'rejected'/g)).toHaveLength(2);
-  });
-
   it("closes the executable surface it adds", () => {
     // `create function` grants EXECUTE to PUBLIC, so a new predicate is an API until it is
     // closed - and a new function that is not closed is the failure this project has hit
@@ -1466,57 +1443,6 @@ describe("registration entries and the identity bridge", () => {
       expect(droppedAt, name).toBeGreaterThan(-1);
       expect(created, name).toBeGreaterThan(droppedAt);
     }
-  });
-
-  it("files the entries, and replaces them rather than accumulating on a retry", () => {
-    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
-    // The refusal is on the payload *shape* first, so a client that sends an object where an
-    // array belongs reads a sentence rather than a cast error.
-    expect(fn).toMatch(/jsonb_typeof\(p_entries\) <> 'array'/);
-    expect(fn).toMatch(/jsonb_array_length\(p_entries\) = 0/);
-    expect(fn).toMatch(/raise exception 'Choose at least one event to enter'/);
-    // Delete-then-insert, in that order: a retry has to replace the set, and the delete is
-    // only safe because the whole function is one transaction that rolls it back on refusal.
-    const del = fn.indexOf("delete from public.tournament_registration_entries");
-    const ins = fn.indexOf("insert into public.tournament_registration_entries");
-    expect(del).toBeGreaterThan(-1);
-    expect(ins).toBeGreaterThan(del);
-    // A decided request is an approved entrant's row, and replacing its entries would rewrite
-    // what they were approved for - so a live non-pending request is refused, not updated.
-    expect(fn).toMatch(/v_status <> 'pending'/);
-    expect(fn).toMatch(/raise exception 'Your registration has already been decided'/);
-    // The one insert into the entries table carries the partner as supplied, never a player.
-    expect(fn).toMatch(
-      /insert into public\.tournament_registration_entries\s+\(registration_id, category_id, partner_name, partner_email\)/,
-    );
-  });
-
-  it("refuses each entry mistake with the sentence that names it", () => {
-    const fn = fnBody("submit_tournament_registration\\(\\s*p_tournament_id uuid,\\s*p_entries jsonb");
-    // "not in this tournament", "not open" and "unknown" are three different mistakes, and a
-    // single generic refusal would leave the person guessing which one they made.
-    expect(fn).toMatch(/if v_cat_tournament <> p_tournament_id/);
-    expect(fn).toMatch(/raise exception 'That event belongs to another tournament'/);
-    expect(fn).toMatch(/if not v_cat_active/);
-    expect(fn).toMatch(/raise exception 'That event is not open for registration'/);
-    expect(fn).toMatch(/raise exception 'Unknown event'/);
-    // One event per entry, or the same category can be filed twice and approved twice.
-    expect(fn).toMatch(/v_category = any \(v_seen\)/);
-    expect(fn).toMatch(/raise exception 'Each event may only be chosen once'/);
-    // Per-player cap, then the doubles rules. Singles discards the partner fields rather than
-    // refusing them - a form that always sends them is not an error - which is what keeps a
-    // singles entry from leaving a row claiming a partner.
-    expect(fn).toMatch(/v_cap is not null and jsonb_array_length\(p_entries\) > v_cap/);
-    expect(fn).toMatch(
-      /if v_cat_entry_type = 'pair' then[\s\S]*?raise exception 'A doubles event needs a partner name and email'/,
-    );
-    // The self-partner comparison is by *normalized* address, the same normalization the
-    // approval deduplicates by, so the two agree about who counts as the same person.
-    expect(fn).toMatch(
-      /normalize_email\(v_partner_email\) = v_caller_email[\s\S]*?raise exception 'You cannot enter a doubles event with yourself as your partner'/,
-    );
-    expect(fn).toMatch(/v_partner_name := null;/);
-    expect(fn).toMatch(/v_partner_email := null;/);
   });
 
   it("withdraws the requester's own pending request, and deletes nothing else", () => {

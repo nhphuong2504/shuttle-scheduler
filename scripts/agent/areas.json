@@ -1,0 +1,303 @@
+{
+  "version": 1,
+  "areas": [
+    {
+      "id": "ui",
+      "patterns": [
+        "src/components/**",
+        "src/index.css",
+        "src/styles.css"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/design-principles.md"
+      ],
+      "entries": [
+        "src/components/app-shell.tsx",
+        "src/components/landing/landing.tsx"
+      ],
+      "tests": [
+        "src/components"
+      ],
+      "browserTests": [
+        "e2e/public-surfaces.spec.ts",
+        "e2e/states.spec.ts"
+      ]
+    },
+    {
+      "id": "routes",
+      "patterns": [
+        "src/routes/**",
+        "src/router.tsx"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/information-architecture.md"
+      ],
+      "entries": [
+        "src/routes/README.md"
+      ],
+      "tests": [
+        "src/routes/-surfaces.test.ts"
+      ],
+      "browserTests": [
+        "e2e/routing.spec.ts"
+      ]
+    },
+    {
+      "id": "tournament",
+      "patterns": [
+        "src/lib/tournament/**",
+        "src/hooks/useAutoSchedule.ts",
+        "src/hooks/useMatchCalls.ts"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/tournament-format.md",
+        "docs/roster-freeze.md"
+      ],
+      "entries": [
+        "src/lib/tournament/data.ts",
+        "src/lib/tournament/actions.ts"
+      ],
+      "tests": [
+        "src/lib/tournament"
+      ],
+      "browserTests": [
+        "e2e/staff-surfaces.spec.ts"
+      ]
+    },
+    {
+      "id": "scoring",
+      "patterns": [
+        "src/lib/tournament/scor*.ts",
+        "src/lib/tournament/format.ts",
+        "src/lib/tournament/finish-time.ts",
+        "src/components/match-format.tsx",
+        "src/routes/tournaments/*/scores.tsx"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/tournament-format.md#configurable-rules",
+        "docs/authorization.md"
+      ],
+      "entries": [
+        "src/lib/tournament/scoring.ts",
+        "src/lib/tournament/score-entry.ts"
+      ],
+      "tests": [
+        "src/lib/tournament/score-entry.test.ts",
+        "src/lib/tournament/format.test.ts",
+        "src/lib/tournament/finish-time.test.ts"
+      ],
+      "browserTests": [
+        "e2e/score-entry.spec.ts"
+      ]
+    },
+    {
+      "id": "registration",
+      "patterns": [
+        "src/lib/tournament/registration/**",
+        "src/lib/tournament/registration.ts",
+        "src/lib/tournament/registration-state.ts"
+      ],
+      "risk": "high",
+      "integration": true,
+      "documents": [
+        "docs/authorization.md",
+        "docs/reference/authorization.md#6-registration"
+      ],
+      "entries": [
+        "src/lib/tournament/registration/participant.ts",
+        "src/lib/tournament/registration/review.ts"
+      ],
+      "tests": [
+        "src/lib/tournament/registration.test.ts",
+        "src/lib/tournament/registration"
+      ],
+      "browserTests": [
+        "e2e/public-surfaces.spec.ts"
+      ]
+    },
+    {
+      "id": "scheduling",
+      "patterns": [
+        "src/lib/scheduling/**",
+        "src/lib/tournament/scheduling/**",
+        "src/lib/tournament/placement-schedule.ts",
+        "src/lib/tournament/*schedule*.ts",
+        "src/components/schedule/**"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/scheduling-decisions.md",
+        "docs/tournament-format.md",
+        "docs/reference/scheduling-decisions.md#3-hard-eligibility-rules",
+        "docs/reference/scheduling-decisions.md#35-live-delays-continue-past-closing-closing-is-an-actionable-warning"
+      ],
+      "entries": [
+        "src/lib/scheduling/index.ts",
+        "src/lib/tournament/placement-schedule.ts"
+      ],
+      "tests": [
+        "src/lib/scheduling",
+        "src/lib/tournament/placement-schedule.test.ts"
+      ],
+      "browserTests": [
+        "e2e/schedule-formats.spec.ts",
+        "e2e/schedule-conflicts.spec.ts"
+      ]
+    },
+    {
+      "id": "rpc",
+      "patterns": [
+        "src/lib/tournament/*actions.ts",
+        "src/lib/tournament/data.ts",
+        "src/lib/tournament/placement-schedule.ts",
+        "src/integrations/supabase/**"
+      ],
+      "risk": "high",
+      "integration": true,
+      "documents": [
+        "docs/authorization.md",
+        "supabase/migrations/README.md",
+        "docs/reference/authorization.md#4-lifecycle-guards-and-the-classified-mutation-list"
+      ],
+      "entries": [
+        "src/lib/tournament/actions.ts",
+        "src/integrations/supabase/client.server.ts"
+      ],
+      "tests": [
+        "src/lib/tournament/actions.test.ts"
+      ],
+      "browserTests": []
+    },
+    {
+      "id": "authorization",
+      "patterns": [
+        "src/lib/auth/**",
+        "src/hooks/useSession.ts"
+      ],
+      "risk": "high",
+      "integration": true,
+      "documents": [
+        "docs/authorization.md",
+        "docs/reference/authorization.md#2-the-predicates",
+        "docs/reference/authorization.md#4-lifecycle-guards-and-the-classified-mutation-list"
+      ],
+      "entries": [
+        "src/lib/auth/authorization.ts",
+        "src/hooks/useSession.ts"
+      ],
+      "tests": [],
+      "browserTests": [
+        "e2e/access.spec.ts"
+      ]
+    },
+    {
+      "id": "database",
+      "patterns": [
+        "supabase/migrations/**"
+      ],
+      "risk": "high",
+      "integration": true,
+      "documents": [
+        "supabase/migrations/README.md",
+        "docs/authorization.md"
+      ],
+      "entries": [
+        "supabase/migrations/README.md"
+      ],
+      "tests": [
+        "src/lib/tournament/db-invariants.test.ts"
+      ],
+      "browserTests": []
+    },
+    {
+      "id": "browser-tests",
+      "patterns": [
+        "e2e/**",
+        "playwright.config.ts"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/verification.md#browser-checks"
+      ],
+      "entries": [
+        "e2e/fixtures/app.ts",
+        "e2e/global-setup.ts"
+      ],
+      "tests": [],
+      "browserTests": [
+        "e2e"
+      ]
+    },
+    {
+      "id": "integration-tests",
+      "patterns": [
+        "integration/**",
+        "vitest.integration.config.ts",
+        "scripts/integration-target.mjs"
+      ],
+      "risk": "high",
+      "integration": true,
+      "documents": [
+        "docs/verification.md#local-integration"
+      ],
+      "entries": [
+        "integration/setup-guard.ts",
+        "scripts/integration-target.mjs"
+      ],
+      "tests": [],
+      "browserTests": []
+    },
+    {
+      "id": "tooling",
+      "patterns": [
+        "scripts/**",
+        "package.json",
+        "package-lock.json",
+        "*config*",
+        ".github/**",
+        ".nvmrc",
+        ".gitignore"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/agent-workflow.md",
+        "docs/verification.md"
+      ],
+      "entries": [
+        "scripts/agent/areas.json"
+      ],
+      "tests": [],
+      "browserTests": []
+    },
+    {
+      "id": "documentation",
+      "patterns": [
+        "docs/**",
+        "**/*.md",
+        "AGENTS.md",
+        "README.md"
+      ],
+      "risk": "standard",
+      "integration": false,
+      "documents": [
+        "docs/agent-workflow.md"
+      ],
+      "entries": [
+        "AGENTS.md"
+      ],
+      "tests": [],
+      "browserTests": []
+    }
+  ]
+}

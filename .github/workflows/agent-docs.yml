@@ -1,0 +1,43 @@
+name: Agent documentation contracts
+on:
+  pull_request:
+    paths: ["**/*.md", "AGENTS.md"]
+  push:
+    branches: [main]
+    paths: ["**/*.md", "AGENTS.md"]
+permissions:
+  contents: read
+concurrency:
+  group: agent-docs-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          import { appendFileSync } from 'node:fs';
+          let docsOnly = true;
+          try {
+            const { BASE_SHA: base, HEAD_SHA: head } = process.env;
+            if (!/^[a-f0-9]{40}$/.test(base ?? '') || !/^[a-f0-9]{40}$/.test(head ?? '')) throw new Error('No comparison');
+            const files = execFileSync('git', ['diff', '--name-only', '-z', base, head, '--'], { encoding: 'utf8' }).split('\0').filter(Boolean);
+            docsOnly = files.every(file => file.endsWith('.md'));
+          } catch { /* Unknown comparison runs the cheap contracts conservatively. */ }
+          appendFileSync(process.env.GITHUB_OUTPUT, `docs_only=${docsOnly}\n`);
+          JS
+      # Mixed/code changes execute these once in the main CI checks job. Markdown-only
+      # changes skip that workflow, so run dependency-free contracts here instead.
+      - if: steps.scope.outputs.docs_only == 'true'
+        run: node --test scripts/agent/agent.test.mjs

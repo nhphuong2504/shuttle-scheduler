@@ -1,3 +1,4 @@
+import { useTournamentRegistrationQueue } from "@/lib/tournament/registration/review";
 import { MatchNotifications } from "@/components/match-notifications";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
@@ -30,7 +31,6 @@ import {
 } from "@/lib/tournament/registration-state";
 import {
   useTournamentContext,
-  useTournamentRegistrationQueue,
 } from "@/lib/tournament/data";
 import {
   BYE_NOTE,

@@ -259,3 +259,88 @@ export function toRegistrationQueue(rows: readonly ReviewRegistrationRow[]): Reg
     decided: all.filter((request) => request.status !== "pending"),
   };
 }
+
+/** One requested event, as the participant's own panel draws it. */
+export interface MyRegistrationEntry {
+  entryId: string | null;
+  categoryId: string | null;
+  categoryCode: string | null;
+  categoryName: string | null;
+  entryType: string | null;
+  partnerName: string | null;
+  partnerEmail: string | null;
+}
+
+/** The caller's own registration request for one tournament. */
+export interface MyRegistration {
+  id: string;
+  status: RegistrationDecision;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  entries: MyRegistrationEntry[];
+}
+
+/**
+ * `my_tournament_registration`'s row, in the wire shape the RPC returns.
+ *
+ * Declared here rather than read from the generated types because that function's `RETURNS
+ * TABLE` marks every column non-null in `types.ts`, while a request awaiting a decision
+ * genuinely has no `decided_at`, and a request with no entries genuinely has no entry
+ * columns. Building the type from the statement instead would be the client believing a lie
+ * the generator cannot avoid.
+ */
+export interface MyRegistrationRow {
+  registration_id: string;
+  status: string;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+  entry_id: string | null;
+  category_id: string | null;
+  category_code: string | null;
+  category_name: string | null;
+  entry_type: string | null;
+  partner_name: string | null;
+  partner_email: string | null;
+}
+
+/**
+ * The RPC's one-row-per-entry answer, gathered into one request.
+ *
+ * Pure, and exported, so the gather is tested without a network: the row-per-entry shape is
+ * what lets the queue and the participant's panel share one read, and the cost of it is this
+ * fold. A request that somehow has no entries still produces one row with null entry columns
+ * - which is what a Phase 1 row decided under the old form looks like - so an absent entry
+ * must not be mistaken for an absent request.
+ */
+export function toMyRegistration(
+  rows: readonly MyRegistrationRow[],
+): MyRegistration | null {
+  const first = rows[0];
+  if (!first) return null;
+
+  const entries: MyRegistrationEntry[] = [];
+  for (const row of rows) {
+    // The request's own columns repeat per row; only a row carrying an entry id adds one.
+    if (row.entry_id == null) continue;
+    entries.push({
+      entryId: row.entry_id,
+      categoryId: row.category_id,
+      categoryCode: row.category_code,
+      categoryName: row.category_name,
+      entryType: row.entry_type,
+      partnerName: row.partner_name,
+      partnerEmail: row.partner_email,
+    });
+  }
+
+  return {
+    id: first.registration_id,
+    status: normalizeRegistrationDecision(first.status),
+    decidedAt: first.decided_at,
+    decisionNote: first.decision_note,
+    createdAt: first.created_at,
+    entries,
+  };
+}

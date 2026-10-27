@@ -106,9 +106,10 @@ function greedyOf(problem: SchedulingProblem): Solution {
 }
 
 describe("hybrid is never worse than greedy", () => {
-  it("holds for every semantics fixture", () => {
-    const failures: string[] = [];
-    for (const { id, problem, seeds, runs } of fixtureCases()) {
+  it.each(fixtureCases())(
+    "holds for every semantics fixture ($id)",
+    ({ id, problem, seeds, runs }) => {
+      const failures: string[] = [];
       const greedy = greedyOf(problem);
       for (const seed of seeds) {
         for (const runCount of runs) {
@@ -117,20 +118,18 @@ describe("hybrid is never worse than greedy", () => {
             failures.push(`${id} seed=${seed} runs=${runCount}`);
         }
       }
-    }
-    expect(failures).toEqual([]);
-  });
+      expect(failures).toEqual([]);
+    },
+  );
 
-  it("holds for every benchmark shape", () => {
+  it.each(shapeCases())("holds for every benchmark shape ($id)", ({ id, problem, seeds, runs }) => {
     const failures: string[] = [];
-    for (const { id, problem, seeds, runs } of shapeCases()) {
-      const greedy = greedyOf(problem);
-      for (const seed of seeds) {
-        for (const runCount of runs) {
-          const hybrid = hybridSolver.solve(problem, { seed, runs: runCount });
-          if (compare(problem, hybrid, greedy) > 0)
-            failures.push(`${id} seed=${seed} runs=${runCount}`);
-        }
+    const greedy = greedyOf(problem);
+    for (const seed of seeds) {
+      for (const runCount of runs) {
+        const hybrid = hybridSolver.solve(problem, { seed, runs: runCount });
+        if (compare(problem, hybrid, greedy) > 0)
+          failures.push(`${id} seed=${seed} runs=${runCount}`);
       }
     }
     expect(failures).toEqual([]);
@@ -224,12 +223,13 @@ describe("hybrid solver behaviour", () => {
     }
   });
 
-  it("searches a superset as runs grow, so quality is monotone in the run count", () => {
-    // Run `n` uses seed `baseSeed + n`, so a larger run count evaluates every seed a smaller one did
-    // and adds to it. The best-of fold therefore cannot get worse. A violation means the fold or the
-    // seed offset broke.
-    const failures: string[] = [];
-    for (const { id, problem, monotonicRuns } of allCases()) {
+  it.each(allCases())(
+    "searches a superset as runs grow, so quality is monotone in the run count ($id)",
+    ({ id, problem, monotonicRuns }) => {
+      // Run `n` uses seed `baseSeed + n`, so a larger run count evaluates every seed a smaller one did
+      // and adds to it. The best-of fold therefore cannot get worse. A violation means the fold or the
+      // seed offset broke.
+      const failures: string[] = [];
       const order = objectiveOrderOf(problem);
       let previous: SolutionMetrics | null = null;
       for (const runCount of monotonicRuns) {
@@ -242,9 +242,9 @@ describe("hybrid solver behaviour", () => {
         }
         previous = metrics;
       }
-    }
-    expect(failures).toEqual([]);
-  });
+      expect(failures).toEqual([]);
+    },
+  );
 
   it("decides independently of the order the matches are supplied in", () => {
     const fixture = FIXTURES.find((candidate) => candidate.id === "F3")!.problem;

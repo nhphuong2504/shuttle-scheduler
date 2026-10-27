@@ -22,6 +22,7 @@
     "bench:scheduling": "vitest run --config vitest.benchmark.config.ts",
     "bench:strategies": "vitest run --config vitest.strategy.config.ts",
     "typecheck": "tsc --noEmit",
+    "verify": "node scripts/agent/verify.mjs",
     "test:e2e": "playwright test",
     "test:e2e:final": "node scripts/e2e-final.mjs",
     "test:all": "npm run test && npm run test:e2e",
@@ -35,7 +36,13 @@
     "deploy:check": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy --dry-run",
     "deploy:dry": "npm run deploy:check",
     "deploy": "npm run build && node scripts/verify-build-target.mjs && wrangler deploy",
-    "deploy:www-redirect": "wrangler deploy --config workers/www-redirect/wrangler.toml"
+    "deploy:www-redirect": "wrangler deploy --config workers/www-redirect/wrangler.toml",
+    "test:agent": "node --test scripts/agent/agent.test.mjs",
+    "agent:context": "node scripts/agent/context.mjs",
+    "agent:doctor": "node scripts/agent/doctor.mjs",
+    "agent:check": "node scripts/agent/check.mjs",
+    "agent:verify": "node scripts/agent/verify.mjs --summary",
+    "agent:evaluate": "node scripts/agent/evaluate.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

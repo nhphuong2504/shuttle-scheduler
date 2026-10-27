@@ -118,19 +118,9 @@ test.describe("a viewer", () => {
     await expect(header.getByRole("button", { name: /^reset$/i })).toHaveCount(0);
   });
 
-  test("is shown the data, and none of the operator's controls, on the read-only sections", async ({
-    page,
-  }) => {
-    /**
-     * The read-only workspace is data and navigation. Each of the five sections is
-     * asserted where its operator's work lived, because "no controls" is not one fact:
-     * Entries had two entry forms and a per-row act, Schedule a whole settings panel and
-     * a build, Scores a dialog behind every row. All of them are removed for a caller
-     * without the edit right rather than disabled, so their absence is the assertion.
-     */
-
-    // Entries: the lists and the stat row stay, the desk's two forms and the per-entry
-    // acts go.
+  // Each section has its own timeout and failure location. The same three navigations
+  // used to share one 60-second budget, which failed on cold route transforms.
+  test("shows the entries data without the operator's forms or row actions", async ({ page }) => {
     await page.goto(routes.entries, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Entries", level: 1 })).toBeVisible();
@@ -141,9 +131,9 @@ test.describe("a viewer", () => {
     // body is an input or a select.
     await expect(page.locator("main input")).toHaveCount(0);
     await expect(page.locator("main select")).toHaveCount(0);
+  });
 
-    // Schedule: the tournament-wide planner is gone, including the settings panel the
-    // first-build effect used to open for an editor. The running order is what remains.
+  test("shows the running order without the operator's planning controls", async ({ page }) => {
     await page.goto(routes.schedule, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Running order" })).toBeVisible();
@@ -160,9 +150,9 @@ test.describe("a viewer", () => {
     await expect(page.getByRole("heading", { name: "Stage progress" })).toHaveCount(0);
     await expect(page.locator("main input")).toHaveCount(0);
     await expect(page.locator("main select")).toHaveCount(0);
+  });
 
-    // Scores: every row already carries its result, so the way into scoring is gone. The
-    // search box is local filtering rather than a change to the tournament, so it stays.
+  test("shows the scores without opening a scoring dialog for a reader", async ({ page }) => {
     await page.goto(routes.scores, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Scores", level: 1 })).toBeVisible();

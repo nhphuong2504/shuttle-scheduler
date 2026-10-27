@@ -1,3 +1,4 @@
+import { usePendingRegistrationCounts } from "@/lib/tournament/registration/review";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useMemo } from "react";
@@ -11,7 +12,6 @@ import { phaseReminder, tournamentPhase } from "@/lib/tournament/phase";
 import {
   useExploreTournaments,
   useMyTournaments,
-  usePendingRegistrationCounts,
   type TournamentSummary,
 } from "@/lib/tournament/data";
 import { countText, shortDays } from "@/lib/tournament/summary-format";

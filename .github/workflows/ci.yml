@@ -47,11 +47,12 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run test:agent
       - run: npm run test
       - run: npm run build
 
@@ -87,7 +88,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
@@ -111,20 +112,9 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
-
-      # The skip guard, run against the JSON report the config always writes. It runs per
-      # shard: each shard is a separate runner with its own report, and a skipped test is
-      # never a passing test whichever slice of the suite it was in.
-      #
-      # This is the one place the workflow goes slightly beyond the plan, which left the
-      # final gate entirely local. The plan's stated goal was that "a skip can never be
-      # read as a pass", and since the suite became hermetic the guard needs neither
-      # credentials nor a recorded session - so running it here costs one step and closes
-      # the loophole in CI as well as locally. `npm run test:e2e:final` differs only by also
-      # setting `E2E_REQUIRE_STAFF=1`, which fails at the moment of skipping with a clearer
-      # message; that remains the local phase-close gate.
-      - run: node scripts/assert-no-skips.mjs
+      # The same strict gate as local verification, once per shard. The wrapper also
+      # asserts that every collected test produced a result and none was skipped.
+      - run: npm run test:e2e:final -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
       # Named per shard: a matrix job cannot upload two artifacts under one name.
       - uses: actions/upload-artifact@v7

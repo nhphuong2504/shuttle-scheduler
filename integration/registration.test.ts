@@ -410,7 +410,7 @@ describe("registration: submission, withdrawal and the approval bridge", () => {
     const first = await applicant.client.rpc("submit_tournament_registration", {
       p_tournament_id: tournamentId,
       p_entries: [
-        entry(ms.id),
+        entry(ms.id, { name: "Ignored singles partner", email: "ignored@example.test" }),
         entry(md2.id, { name: "Fresh Partner", email: freshPartnerEmail }),
       ],
     } as never);
@@ -443,6 +443,22 @@ describe("registration: submission, withdrawal and the approval bridge", () => {
       .select("id", { count: "exact", head: true })
       .eq("tournament_id", tournamentId);
     expect(teamsAfter.count).toBe(teamsBefore.count);
+
+    // A refused replacement must roll back both its delete and any partial inserts.
+    const refusedRetry = await expectRefused(() =>
+      applicant.client.rpc("submit_tournament_registration", {
+        p_tournament_id: tournamentId,
+        p_entries: [entry(ws.id), entry(crypto.randomUUID())],
+      } as never),
+    );
+    expect(refusedRetry.message).toMatch(/unknown event/i);
+    const unchanged = await roster
+      .from("tournament_registration_entries")
+      .select("category_id, partner_name, partner_email")
+      .eq("registration_id", requestId);
+    expect(unchanged.error).toBeNull();
+    expect(unchanged.data).toHaveLength(2);
+    expect(unchanged.data).toEqual(expect.arrayContaining(entries ?? []));
 
     // A retry on imperfect wifi returns the same request and *replaces* the set, rather
     // than filing a second request or accumulating a second copy of the entries.
@@ -846,6 +862,26 @@ describe("registration: submission, withdrawal and the approval bridge", () => {
   // ---------------------------------------------------------------------------
   // Withdrawal and re-application
   // ---------------------------------------------------------------------------
+
+  it("refuses to replace an approved request and preserves its entries", async () => {
+    const approved = await roster.from("tournament_registrations")
+      .select("id").eq("profile_id", applicant.profileId).eq("status", "approved").single();
+    expect(approved.error).toBeNull();
+    const requestId = approved.data!.id;
+    const before = await roster.from("tournament_registration_entries")
+      .select("id, category_id, partner_name, partner_email").eq("registration_id", requestId).order("id");
+    expect(before.error).toBeNull();
+    expect(before.data?.length).toBeGreaterThan(0);
+    const refusal = await expectRefused(() => applicant.client.rpc("submit_tournament_registration", {
+      p_tournament_id: tournamentId,
+      p_entries: [entry(ws.id)],
+    } as never));
+    expect(refusal.message).toMatch(/already been decided/i);
+    const after = await roster.from("tournament_registration_entries")
+      .select("id, category_id, partner_name, partner_email").eq("registration_id", requestId).order("id");
+    expect(after.error).toBeNull();
+    expect(after.data).toEqual(before.data);
+  });
 
   it("withdraws a pending request and its entries, and refuses everybody else", async () => {
     const submitted = await withdrawer.client.rpc("submit_tournament_registration", {

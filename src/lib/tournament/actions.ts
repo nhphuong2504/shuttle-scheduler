@@ -15,10 +15,6 @@ import { buildFirstRound, tierForRank, type DrawTier } from "./draws";
 import { gamesWinnerFor, isLegalGameScore, type GameScore } from "./format";
 import { circleMethod, splitIntoPools } from "./pools";
 import {
-  registrationEntriesPayload,
-  type RegistrationEntryInput,
-} from "./registration";
-import {
   gamesNeededToWin,
   isOddBestOf,
   scoringRuleLabel,
@@ -1249,25 +1245,6 @@ export async function updateTournamentWindow(
 }
 
 /**
- * Sets the registration window: both instants, or both null to switch registration off.
- * "Close now" is `closes = now` with the same `opens`. The database enforces the rules -
- * it must close by 00:00 of the first window date, its opening time is fixed once passed,
- * and it cannot be extended once a schedule exists - and says which one was broken.
- */
-export async function setRegistrationWindow(
-  tournamentId: string,
-  opensAt: string | null,
-  closesAt: string | null,
-): Promise<void> {
-  const { error } = await supabase.rpc("set_registration_window", {
-    p_tournament_id: tournamentId,
-    p_opens: opensAt as never,
-    p_closes: closesAt as never,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/**
  * Name, note, venue, address and organiser contact, until the tournament is completed.
  *
  * The narrow writer for what can still change once a tournament has started. It touches
@@ -1505,86 +1482,6 @@ export async function removeTournamentEditor(
   const { error } = await supabase.rpc("remove_tournament_editor", {
     p_tournament_id: tournamentId,
     p_profile_id: profileId,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/**
- * Files - or replaces - this caller's registration request for one tournament.
- *
- * No client-side gate, on purpose. The RPC consults the lifecycle, the window, readiness, the
- * per-player event cap, each event's own state and the partner shape inside one transaction,
- * and every refusal carries the sentence the person should read ("That event is not open for
- * registration", "This tournament allows at most 2 event(s) per player"). A pre-check here
- * could only replace one of those with a vaguer one, or disagree with it - so the form is
- * rendered from `tournament_registration_state`, and the refusal is surfaced as it arrives.
- *
- * Idempotent by construction: a retry on bad wifi returns the same request rather than
- * filing a second one, which is the reason the RPC upserts rather than inserts.
- */
-export async function submitTournamentRegistration(
-  tournamentId: string,
-  entries: readonly RegistrationEntryInput[],
-): Promise<string> {
-  const { data, error } = await supabase.rpc("submit_tournament_registration", {
-    p_tournament_id: tournamentId,
-    p_entries: registrationEntriesPayload(entries) as never,
-  });
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("The registration request could not be filed.");
-  return data as string;
-}
-
-/**
- * Withdraws this caller's own unanswered request.
- *
- * The requester's act and nobody else's - it is not editor-gated, because deleting your own
- * unanswered request is not a decision about the tournament. The RPC refuses another
- * person's request and one that has already been decided, and deletes the request and its
- * entries and nothing else: the approval is the only path that creates an entry, so
- * withdrawing cannot destroy competition data.
- */
-export async function withdrawTournamentRegistration(registrationId: string): Promise<void> {
-  const { error } = await supabase.rpc("withdraw_tournament_registration", {
-    p_registration_id: registrationId,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/** One reviewer decision, and the note that travels with it. */
-export interface RegistrationDecisionInput {
-  registrationId: string;
-  decision: "approved" | "rejected";
-  /** Optional for both outcomes; the reason an "approved" needed one is equally real. */
-  note?: string | null;
-}
-
-/**
- * Approves or declines one waiting request.
- *
- * Approval is the only path that creates competition data - the linked requester's `players`
- * row, the unlinked partner's, and the `teams` entries - so it is editor-gated at the database
- * and it is the one act this page performs that changes what the tournament holds. A decline
- * creates nothing and takes nothing away, which is why the two share one call rather than two:
- * the RPC takes the decision word and does the shape difference, and the client does not
- * pre-judge which branch applies.
- *
- * No client-side gate, on the same reasoning as submission: the RPC re-checks that the caller
- * may edit, that the request is still pending, and that every category it names is not already
- * full - and its refusal names the event that was full, which is the sentence the reviewer
- * needs. A pre-check here could only replace that with a vaguer one, or disagree with it. The
- * note is trimmed to null when blank rather than stored as whitespace.
- */
-export async function decideTournamentRegistration(
-  input: RegistrationDecisionInput,
-): Promise<void> {
-  const note = input.note?.trim();
-  const { error } = await supabase.rpc("decide_tournament_registration", {
-    p_registration_id: input.registrationId,
-    p_decision: input.decision,
-    // Omitted rather than sent as null: the generated signature is `p_note?: string`, and an
-    // absent key is the same to the function as a null one.
-    ...(note ? { p_note: note } : {}),
   });
   if (error) throw new Error(error.message);
 }

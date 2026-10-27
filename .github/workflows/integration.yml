@@ -6,7 +6,7 @@ name: Integration (local Supabase)
 # did not - which meant those migrations were never parsed by Postgres locally. `ubuntu-latest`
 # ships with Docker, so this workflow is where the suite can actually run.
 #
-# It is deliberately not part of `ci.yml` and is not a required check. It runs by hand
+# It is deliberately not part of `ci.yml` and runs by hand
 # (`workflow_dispatch`) or on a pull request that touches the surfaces it covers, so a docs or
 # UI change does not pay for a multi-minute stack startup. `workflow_dispatch` only appears in
 # the Actions UI once this file is on the default branch, which is why the `pull_request`
@@ -17,6 +17,17 @@ on:
     paths:
       - "supabase/migrations/**"
       - "integration/**"
+      # Application RPC callers and auth/realtime plumbing must exercise the real backend.
+      - "src/lib/tournament/actions.ts"
+      - "src/lib/tournament/data.ts"
+      - "src/lib/tournament/*actions.ts"
+      - "src/lib/tournament/placement-schedule.ts"
+      - "src/lib/tournament/registration/**"
+      - "src/lib/tournament/registration.ts"
+      - "src/lib/tournament/registration-state.ts"
+      - "src/lib/auth/**"
+      - "src/hooks/useSession.ts"
+      - "src/integrations/supabase/**"
       - "scripts/integration-target.mjs"
       - "vitest.integration.config.ts"
       - ".github/workflows/integration.yml"
@@ -43,7 +54,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
