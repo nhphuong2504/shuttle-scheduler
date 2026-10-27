@@ -19,12 +19,14 @@ Two things to know before reading:
 Every entrant plays **exactly two** placement matches. The two results sort them
 into one of four single-elimination draws:
 
-| Record | Draw | Name |
-| --- | --- | --- |
-| WW | Draw A | Cup |
-| WL | Draw B | Plate |
-| LW | Draw C | Bowl |
-| LL | Draw D | Shield |
+| Record | Draw |
+| --- | --- |
+| WW | Draw A |
+| WL | Draw B |
+| LW | Draw C |
+| LL | Draw D |
+
+The draws are named only by their letter.
 
 Each draw is single elimination and runs to a winner. Draw D absorbs any extra
 entrants.

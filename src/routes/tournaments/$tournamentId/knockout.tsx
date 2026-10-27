@@ -285,7 +285,7 @@ function BracketSection({
           {drawn.map(({ tierMapping, draw, own, progress }) => (
             <Panel
               key={tierMapping.tier}
-              title={`${tierMapping.label}, ${tierMapping.title}`}
+              title={tierMapping.label}
               right={
                 <span className="flex items-baseline gap-3 text-sm text-muted-foreground tabular-nums">
                   <span>
@@ -330,7 +330,7 @@ function BracketSection({
               {emptyTiers.map((tierMapping) => (
                 <span key={tierMapping.tier}>
                   <span className="font-semibold text-foreground">
-                    {tierMapping.label}, {tierMapping.title}
+                    {tierMapping.label}
                   </span>{" "}
                   <abbr title={tierMapping.detail} className="font-score text-t2 no-underline">
                     {tierMapping.record}

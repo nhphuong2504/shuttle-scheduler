@@ -32,10 +32,8 @@ export type DrawTier = "A" | "B" | "C" | "D";
 export interface PlacementTierMapping {
   record: PlacementRecord;
   tier: DrawTier;
-  /** How the tier reads to a host, e.g. "Draw A". */
+  /** How the tier reads to a host: just the letter, e.g. "Draw A". */
   label: string;
-  /** The competitive meaning, e.g. "Cup". */
-  title: string;
   detail: string;
 }
 
@@ -45,28 +43,24 @@ export const PLACEMENT_TIERS: PlacementTierMapping[] = [
     record: "WW",
     tier: "A",
     label: "Draw A",
-    title: "Cup",
     detail: "Won both placement matches.",
   },
   {
     record: "WL",
     tier: "B",
     label: "Draw B",
-    title: "Plate",
     detail: "Won the first placement match, lost the second.",
   },
   {
     record: "LW",
     tier: "C",
     label: "Draw C",
-    title: "Bowl",
     detail: "Lost the first placement match, won the second.",
   },
   {
     record: "LL",
     tier: "D",
     label: "Draw D",
-    title: "Shield",
     detail: "Lost both placement matches.",
   },
 ];

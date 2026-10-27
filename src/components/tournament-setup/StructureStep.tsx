@@ -117,7 +117,7 @@ function HowItRuns({ format }: { format: CompetitionFormat }) {
             {format.tiers.map((tier) => (
               <span key={tier.tier} className="block rounded-lg bg-background px-3 py-2">
                 <span className="block">
-                  <strong>{tier.label}</strong>, {tier.title}
+                  <strong>{tier.label}</strong>
                 </span>
                 <span className="block text-sm text-muted-foreground">{tier.detail}</span>
               </span>

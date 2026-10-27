@@ -228,7 +228,7 @@ export function ReviewStep({
             <dd className="mt-2 flex flex-wrap gap-2 text-sm">
               {PLACEMENT_TIERS.map((tier) => (
                 <span key={tier.tier} className="rounded-full bg-secondary px-3 py-0.5">
-                  <span className="font-score">{tier.record}</span> → {tier.label}, {tier.title}
+                  <span className="font-score">{tier.record}</span> → {tier.label}
                 </span>
               ))}
             </dd>

@@ -18,9 +18,7 @@ export function PlacementTierLegend() {
         <div key={tier.record} className="flex items-baseline gap-2">
           <dt className="w-8 shrink-0 font-score font-semibold">{tier.record}</dt>
           <dd className="min-w-0 text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {tier.label}, {tier.title}.
-            </span>{" "}
+            <span className="font-medium text-foreground">{tier.label}.</span>{" "}
             {tier.detail}
           </dd>
         </div>
