@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { SCHEDULE_SHIFT_THRESHOLD_MS } from "@/lib/tournament/published-time";
 
 import {
+  DEMO_CLOSE,
   DEMO_MATCHES,
   DEMO_REST,
   DEMO_RESULT_STEP,
   DEMO_SLOT,
-  DEMO_SPAN,
   DEMO_STEPS,
   DEMO_TOAST,
   demoCounts,
@@ -43,7 +43,7 @@ describe("schedule demo", () => {
     const late = DEMO_MATCHES.find((m) => m.kind === "late")!;
     const lateEnd = late.start + (late.ranFor ?? DEMO_SLOT);
     for (const court of [1, 2, 3] as const) {
-      const row = after.filter((a) => a.m.court === court && a.m.kind !== "held");
+      const row = after.filter((a) => a.m.court === court);
       for (let i = 1; i < row.length; i += 1) {
         const prevEnd = row[i - 1]!.start + row[i - 1]!.length;
         const earliest = Math.max(row[i]!.m.start, prevEnd);
@@ -54,13 +54,12 @@ describe("schedule demo", () => {
     }
   });
 
-  it("holds a match that would cross the close, leaving it for review", () => {
-    const held = after.find((a) => a.m.kind === "held")!;
-    expect(held.start).toBe(held.m.start);
-    const before = after.filter((a) => a.m.court === held.m.court && a.m.start < held.m.start).at(-1)!;
-    // Pushed behind its predecessor it would end past the close, so it keeps its time and overlaps.
-    expect(before.start + before.length + DEMO_SLOT).toBeGreaterThan(DEMO_SPAN);
-    expect(before.start + before.length).toBeGreaterThan(held.start);
+  it("moves the last match past closing without overlapping and flags only its new finish", () => {
+    const last = after.find((a) => a.m.label === "Park vs Quinn")!;
+    const before = after.filter((a) => a.m.court === last.m.court && a.m.start < last.m.start).at(-1)!;
+    expect(last.start).toBe(before.start + before.length);
+    expect(last.start + last.length - DEMO_CLOSE).toBe(7);
+    expect(after.filter((a) => a.m.review)).toEqual(after.filter((a) => a.start + a.length > DEMO_CLOSE));
   });
 
   it("counts nothing as moved or flagged until the result is in, and everything after", () => {
@@ -68,7 +67,7 @@ describe("schedule demo", () => {
     expect(demoCounts(1)).toEqual({ auto: 0, locked: 4, review: 0 });
     // The reflow is one update: every step after the result shows all of it.
     for (let step = DEMO_RESULT_STEP; step < DEMO_STEPS.length; step += 1) {
-      expect(demoCounts(step)).toEqual({ auto: 6, locked: 4, review: 2 });
+      expect(demoCounts(step)).toEqual({ auto: 7, locked: 4, review: 1 });
     }
   });
 
@@ -86,7 +85,7 @@ describe("schedule demo", () => {
     const largest = Math.max(...moved.map((a) => a.start - a.m.start));
     const review = DEMO_MATCHES.filter((m) => m.review).length;
     expect(DEMO_TOAST).toBe(
-      `Result recorded. ${moved.length} later matches delayed by up to ${largest} min. ${review} matches need schedule review.`,
+      `Result recorded. ${moved.length} later matches delayed by up to ${largest} min. ${review} ${review === 1 ? "match needs" : "matches need"} schedule review.`,
     );
   });
 });
