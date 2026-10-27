@@ -95,19 +95,31 @@ const ariaState = (state: CourtState) => state.replace("-", " ");
 /**
  * The desk's Refresh control, resolved to the copy that is actually on screen.
  *
- * The Desk renders its controls twice - once in the page header, once in the console bar -
- * and lets a media query decide which is shown, so that moving them needs no measurement.
- * The hidden copy is `display: none` and so out of the accessibility tree, which is why
- * `getByRole` normally finds one. Under load it does not hold: the tree is read at one
- * moment and the click acts at the next, and a resolution that landed on the copy the
- * breakpoint was about to hide leaves the click waiting on a `display: none` button until
- * it times out.
- *
- * `:visible` puts that decision back inside the retry - each attempt resolves the selector
- * again and picks the copy that is on screen now - and `aria-busy` identifies the control
- * without naming it, which matters because its label is the thing under test.
+ * The Desk renders its controls twice - once in the page header, once in the console bar - and
+ * lets a media query decide which is shown. `aria-busy` identifies the control without naming it,
+ * which matters because its label is what these tests assert.
  */
 const refreshButton = (page: Page) => page.locator("button[aria-busy]:visible");
+
+/**
+ * Click Refresh without racing the layout that owns it.
+ *
+ * The console bar exists only once `canEdit` resolves, so on a cold load the header copy is the
+ * only one on screen and it is hidden (`desk-console:hidden`, a 0x0 box) as the bar mounts. That
+ * window is what made these tests flaky: Playwright resolves a locator **once** and then retries
+ * actionability on that same node, so a click bound to the header copy waited forever on a
+ * control that had become 0x0 - measured as "element is not stable" followed by 29 attempts of
+ * "element is not visible", with the visible copy sitting in the console bar the whole time.
+ *
+ * `toPass` re-runs the whole attempt, so every try resolves the selector again. This is the
+ * documented remedy for an action whose target is legitimately replaced, and it keeps the tests
+ * about the control's behaviour rather than about which of its two copies a click happens to hit.
+ */
+const clickRefresh = async (page: Page) => {
+  await expect(async () => {
+    await page.locator("button[aria-busy]:visible").first().click({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+};
 
 test("Refresh fetches new court data and shows progress", async ({ page }) => {
   await installAppMock(page, { preset: "states", role: "user" });
@@ -125,7 +137,7 @@ test("Refresh fetches new court data and shows progress", async ({ page }) => {
   });
   const refresh = refreshButton(page);
   try {
-    await refresh.click();
+    await clickRefresh(page);
     // One control, three facts: it is busy, it is locked, and it says so. The label is
     // asserted through the same locator rather than a second one, because a label-only
     // locator is a second element to resolve in the middle of the re-render.
@@ -154,7 +166,7 @@ test("Refresh explains when the desk is offline", async ({ page, context }) => {
     // Refresh button's own variant all change at once. Wait for the pause to land, then
     // click the button it left behind.
     await expect(page.locator("[data-desk-paused]")).toBeVisible();
-    await refresh.click();
+    await clickRefresh(page);
     await expect(page.getByText("You are offline. Reconnect to refresh the desk.", { exact: true })).toBeVisible();
     await expect(refresh).toBeEnabled();
   } finally {
