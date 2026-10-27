@@ -19,10 +19,14 @@ const CODES = ["XD", "WD", "MD", "WS", "MS"] as const;
 async function fiveEventsFixture(page: Page) {
   await installAppMock(page, { preset: "layout", role: "user" });
   const fixture = deskFixture("layout", "user");
+  // `tables` is an untyped row map, so the tournament row is narrowed here rather than by
+  // indexing into `unknown`.
+  const tournament = fixture.tables["tournaments"]?.[0] as { id: string } | undefined;
+  if (!tournament) throw new Error("the layout fixture must serve one tournament");
 
   const categories = CODES.map((code, index) => ({
     id: `cat-${code}`,
-    tournament_id: fixture.tables["tournaments"][0]!["id"],
+    tournament_id: tournament.id,
     code,
     name: code,
     entry_type: code.endsWith("S") ? "individual" : "pair",

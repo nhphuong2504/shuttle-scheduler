@@ -123,7 +123,7 @@ test.describe("the placement format gets the placement scheduler", () => {
     page,
   }) => {
     const fixture = deskFixture("layout", "admin");
-    const base = fixture.tables["categories"] as Record<string, unknown>[];
+    const base = fixture.tables["categories"] as { tournament_id: string }[];
     const template = base[0]!;
     const codes = ["XD", "WD", "MD", "WS", "MS"];
     const routed = codes.map((code, index) => ({
@@ -136,10 +136,10 @@ test.describe("the placement format gets the placement scheduler", () => {
     }));
     const entrants = routed.flatMap((category) =>
       [1, 2].map((seed) => ({
-        id: `entrant-${String(category["code"])}-${seed}`,
-        tournament_id: category["tournament_id"],
-        category_id: category["id"],
-        team_id: `team-${String(category["code"])}-${seed}`,
+        id: `entrant-${category.code}-${seed}`,
+        tournament_id: category.tournament_id,
+        category_id: category.id,
+        team_id: `team-${category.code}-${seed}`,
         seed,
         seed_locked_at: null,
         excluded: false,
