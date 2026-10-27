@@ -44,3 +44,25 @@ export function compareEventOrder(
     a.code.localeCompare(b.code)
   );
 }
+
+/**
+ * Compare two events by **id**, for a surface that has grouped its rows and kept only the key.
+ *
+ * A panel list built by walking matches knows the category id but not the event behind it, so it
+ * cannot call `compareEventOrder` without a lookup. This is that lookup, stated once. An id that
+ * resolves to nothing sorts last rather than first: on a screen the usual reason for one is a
+ * category that has not loaded yet, and putting it at the top would make the list jump as data
+ * arrives.
+ */
+export function compareEventIds(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  eventFor: (id: string) => { code: string; sort_order: number } | undefined,
+): number {
+  const eventA = a ? eventFor(a) : undefined;
+  const eventB = b ? eventFor(b) : undefined;
+  if (!eventA && !eventB) return 0;
+  if (!eventA) return 1;
+  if (!eventB) return -1;
+  return compareEventOrder(eventA, eventB);
+}

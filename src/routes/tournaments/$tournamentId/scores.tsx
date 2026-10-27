@@ -16,7 +16,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { compareEventOrder } from "@/lib/tournament/event-order";
+import { compareEventIds, compareEventOrder } from "@/lib/tournament/event-order";
 import {
   indexBy,
   teamLabel,
@@ -441,26 +441,46 @@ function MatchesPage() {
     return [...byDraw.entries()];
   };
 
+  /**
+   * The order the event panels are drawn in: the standard order, MS -> WS -> MD -> WD -> XD.
+   *
+   * `groupByCategory` walks the matches, so a group is created when its event's first match is
+   * reached - which is scored-time order, a fact about the draw rather than about the
+   * tournament. An event whose first match is late in the day therefore sat below the others,
+   * and the panels moved between visits as the schedule changed. `compareEventIds` pins them.
+   */
   const placementGroups = useMemo(
     () =>
-      groupByCategory(
-        // In playing order, round by round, rather than by tag: sorted by tag, 18:00 sat above
-        // 17:44 inside the same round.
-        [...visiblePlacement].sort((a, b) => {
-          const at = (m: DeskMatch) => (m.scheduled ? new Date(m.scheduled).getTime() : Infinity);
-          const x = at(a);
-          const y = at(b);
-          if (x !== y) return x < y ? -1 : 1;
-          return a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0;
-        }),
-      ),
-    [visiblePlacement],
+      [
+        ...groupByCategory(
+          // In playing order, round by round, rather than by tag: sorted by tag, 18:00 sat above
+          // 17:44 inside the same round.
+          [...visiblePlacement].sort((a, b) => {
+            const at = (m: DeskMatch) =>
+              m.scheduled ? new Date(m.scheduled).getTime() : Infinity;
+            const x = at(a);
+            const y = at(b);
+            if (x !== y) return x < y ? -1 : 1;
+            return a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0;
+          }),
+        ),
+      ].sort((a, b) => compareEventIds(a[0], b[0], (id) => catMap.get(id))),
+    [visiblePlacement, catMap],
   );
-  const tierGroups = useMemo(
-    () => groupByDraw(visibleTier),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visibleTier, drawOfTierMatch],
-  );
+  const tierGroups = useMemo(() => {
+    // The bracket panels read in event order, then A/B/C/D within an event, so an event's draws
+    // stay together however their matches happen to be scheduled.
+    const drawById = new Map((tierDraws ?? []).map((draw) => [draw.id, draw]));
+    return [...groupByDraw(visibleTier)].sort((a, b) => {
+      const drawA = drawById.get(a[0]);
+      const drawB = drawById.get(b[0]);
+      const byEvent = compareEventIds(drawA?.category_id, drawB?.category_id, (id) =>
+        catMap.get(id),
+      );
+      if (byEvent) return byEvent;
+      return (drawA?.tier ?? "").localeCompare(drawB?.tier ?? "");
+    });
+  }, [visibleTier, drawOfTierMatch, tierDraws, catMap]);
 
   const searching = !roundRobin && query.trim().length > 0;
   /** A search's matches, both stages together, in the order they are played. */
@@ -474,6 +494,19 @@ function MatchesPage() {
         return x === y ? 0 : x < y ? -1 : 1;
       }),
     [visiblePlacement, visibleTier],
+  );
+
+  /** The round-robin pools, in the standard event order. */
+  const orderedPools = useMemo(
+    () =>
+      // Pools read in the standard event order too, so a round-robin tournament's group panels
+      // sit in the same order as its filter chips.
+      [...(pools ?? [])].sort(
+        (a, b) =>
+          compareEventIds(a.category_id, b.category_id, (id) => catMap.get(id)) ||
+          a.name.localeCompare(b.name),
+      ),
+    [pools, catMap],
   );
 
   const groupCount = visiblePool.length + visiblePlacement.length;
@@ -625,7 +658,7 @@ function MatchesPage() {
                 </ul>
               </Panel>
             ))}
-            {(pools ?? []).map((pool) => {
+            {orderedPools.map((pool) => {
               const list = visiblePool
                 .filter((m) => m.pool_id === pool.id)
                 .sort((a, b) => a.round - b.round);

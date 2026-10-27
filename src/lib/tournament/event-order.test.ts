@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { STANDARD_EVENTS, compareEventOrder, eventRank } from "./event-order";
+import { STANDARD_EVENTS, compareEventIds, compareEventOrder, eventRank } from "./event-order";
 
 const category = (code: string, sort_order: number) => ({ code, sort_order });
 
@@ -56,5 +56,42 @@ describe("the standard event order", () => {
     expect(compareEventOrder(a, b)).toBeLessThan(0);
     expect(compareEventOrder(b, a)).toBeGreaterThan(0);
     expect(compareEventOrder(a, a)).toBe(0);
+  });
+});
+
+describe("compareEventIds", () => {
+  const byId = new Map([
+    ["c-ms", category("MS", 5)],
+    ["c-ws", category("WS", 4)],
+    ["c-md", category("MD", 3)],
+    ["c-wd", category("WD", 2)],
+    ["c-xd", category("XD", 1)],
+  ]);
+  const eventFor = (id: string) => byId.get(id);
+
+  it("orders ids by the standard events rather than by their configured order", () => {
+    // The configured order is the reverse of the standard one, which is what a tournament built
+    // by pressing the toggles backwards stores.
+    const ids = ["c-xd", "c-wd", "c-md", "c-ws", "c-ms"];
+    expect([...ids].sort((a, b) => compareEventIds(a, b, eventFor))).toEqual([
+      "c-ms",
+      "c-ws",
+      "c-md",
+      "c-wd",
+      "c-xd",
+    ]);
+  });
+
+  it("puts an id it cannot resolve last, not first", () => {
+    // On a screen the usual reason for an unknown id is a category that has not loaded yet;
+    // putting it at the top would make the list jump as the data arrives.
+    expect(compareEventIds("c-unknown", "c-ms", eventFor)).toBeGreaterThan(0);
+    expect(compareEventIds("c-ms", "c-unknown", eventFor)).toBeLessThan(0);
+  });
+
+  it("treats two missing ids as equal, and a null the same as an unknown one", () => {
+    expect(compareEventIds("x", "y", eventFor)).toBe(0);
+    expect(compareEventIds(null, undefined, eventFor)).toBe(0);
+    expect(compareEventIds(null, "c-unknown", eventFor)).toBe(0);
   });
 });
