@@ -86,10 +86,10 @@ flowchart LR
   tier -->|"UI-only iteration"| ui["typecheck"]
   tier -->|"Feature checkpoint"| cp["typecheck + relevant tests"]
   tier -->|"PR / phase close"| gate1["typecheck + test"]
-  gate1 --> gate2["hermetic Playwright"]
-  gate2 --> final["build + final e2e"]
+  gate1 --> gate2["strict hermetic Playwright: zero skips"]
+  gate2 --> final["build"]
   final --> pr["Pull request"]
-  pr --> ci["CI: checks + 4 browser shards"]
+  pr --> ci["CI: checks + 2 browser shards"]
   ci --> merge["Merge to main"]
 ```
 
@@ -102,7 +102,7 @@ every small change is wasted effort; reaching a PR without it is a broken branch
 | --- | --- | --- | --- |
 | **UI-only iteration** | Changing a screen's look — layout, copy, spacing, styling or markup changes that alter no behaviour | `npm run typecheck` | A local look (`npm run dev`), focused tests (`npx vitest run <path>`) |
 | **Feature checkpoint** | The feature is finished and about to be reviewed or handed over | `npm run typecheck` + the relevant tests | — |
-| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run typecheck` + `npm run test` + `npm run test:e2e` + `npm run build` + `npm run test:e2e:final` | — |
+| **PR / phase close** | Pushing a branch, opening a PR, or closing a phase | `npm run verify` (typecheck + test + one strict Playwright run + build) | — |
 
 **A high-risk change takes the PR / phase-close bar at every stage.** Scheduling, scoring,
 authorization, the database and RPCs get the full verification regardless of how small the
@@ -117,10 +117,13 @@ owes at every stage — not a per-edit ritual. The order matters: each is cheape
 ```
 npm run typecheck
 npm run test
-npm run test:e2e
-npm run test:e2e:final    # PR / phase close, also runs assert-no-skips
+npm run test:e2e:final    # one full Playwright run, also runs assert-no-skips
 npm run build
 ```
+
+`npm run verify` runs this sequence. `npm run test:e2e` remains available for exploratory
+or focused browser checks; do not run it again immediately before the strict final run
+unless a separate before/after measurement is needed.
 
 - `npm run test:e2e:final` sets `E2E_REQUIRE_STAFF=1`, which turns any skipped test
   into a failure, and then asserts that the run contained **zero** skips. A skipped
@@ -131,8 +134,8 @@ npm run build
 - **`npm run test:integration` is not part of that list.** It runs the real application
   against a real Supabase project — authentication, RLS and RPC authorization per role,
   realtime delivery, and the tournament lifecycle. Run it by hand whenever a change touches
-  RLS policies, RPC guards or realtime publication membership; those are the surfaces the
-  hermetic suite structurally cannot see.
+  RLS policies, RPC guards/callers or realtime publication membership; those are the
+  surfaces the hermetic suite structurally cannot see.
 
   **It runs against the local stack, not staging.** The guard refuses any project a root
   environment file names, and `.env` names staging — deliberately, because the suite writes
@@ -155,11 +158,13 @@ npm run build
 - **There is a CI workflow for the same suite.** [`.github/workflows/integration.yml`](.github/workflows/integration.yml)
   starts its own local stack on `ubuntu-latest` and runs `npm run test:integration` there,
   by hand (`workflow_dispatch`) or on a pull request that touches `supabase/migrations/**`,
-  `integration/**`, `scripts/integration-target.mjs` or `vitest.integration.config.ts`. It
-  exists for a machine without a container runtime - the reason the reflow and conflict
-  migrations were first written without ever being parsed by Postgres - and it holds no
-  credentials, because the stack's keys are the CLI's demo values. It is **not a required
-  check** and does not replace running the suite locally when you can.
+  `integration/**`, `scripts/integration-target.mjs`, `vitest.integration.config.ts`, or
+  the application RPC/auth client paths listed in that workflow. It exists for a machine
+  without a container runtime - the reason the reflow and conflict migrations were first written without ever being parsed by Postgres - and it holds no
+  credentials, because the stack's keys are the CLI's demo values. For changes to RLS
+  policies, RPC guards/callers or realtime publication membership, a successful integration run is required before merge (local when available, otherwise
+  this workflow). Repository branch-protection settings are managed separately; this
+  document does not configure them.
 - **`npm run lint` is not a gate.** It reports a large pre-existing Prettier backlog
   that predates the current design work. Do not run a repo-wide format as part of an
   unrelated change; it buries the real diff.

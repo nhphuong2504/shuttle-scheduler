@@ -166,6 +166,11 @@ function main() {
   console.log(
     `Assumes ${WORKERS_PER_SHARD} workers per shard and ${SETUP_MIN * 60}s of fixed setup.\n`,
   );
+  console.log(
+    "The fixed setup estimate predates route preparation. Add measured CI preparation\n" +
+      "time per shard before using these wall/billed estimates as a budget.\n",
+  );
+
   console.log("  N   work per shard (min)                wall    billed min   evenness");
 
   let best = null;
@@ -227,8 +232,7 @@ function main() {
   console.log(
     "\nWall time is set by the slowest shard; billed minutes are the sum, so every extra\n" +
       "shard costs its own setup and nothing else. More shards is therefore never cheaper,\n" +
-      "and past a point it is not faster either - N=6 above is worse than N=5 because a\n" +
-      "finer count-based split shuffles the heavy specs back together. Take the largest N\n" +
+      "and a finer count-based split can group heavy specs together. Take the largest N\n" +
       "whose wall time still justifies its extra minutes on your plan.",
   );
 }

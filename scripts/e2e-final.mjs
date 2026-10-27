@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * The phase-close gate, in one cross-platform command.
+ * The phase-close browser gate, in one cross-platform command.
+ * This includes the full Playwright run; do not run test:e2e separately before it.
  *
  * ## Why this exists
  *

@@ -43,6 +43,7 @@ fails without them.
 | --- | --- |
 | `npm run dev` | Dev server with HMR |
 | `npm run build` | Production build |
+| `npm run verify` | Phase-close gate: typecheck, unit tests, one strict browser run, build |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run test` | Vitest — unit and component tests |
 | `npm run test:integration` | Vitest against a **real** backend: auth, RLS, RPC authorization per role, realtime, the lifecycle. Targets the local stack — see [`AGENTS.md`](AGENTS.md) |
@@ -57,11 +58,12 @@ fails without them.
 ### The gates
 
 ```sh
-npm run typecheck && npm run test && npm run test:e2e && npm run build
+npm run verify
 ```
 
-All of these run in CI on every pull request except `test:e2e:final`, which is a
-local phase-close gate because it needs no credentials but does need a full run.
+CI runs the same checks, with the strict browser suite split across two runners.
+`test:e2e:final` runs Playwright once and asserts zero skips; there is no separate
+ordinary browser run before it. `test:e2e` remains available for focused iteration.
 
 `npm run lint` is deliberately **not** a gate. It reports a large pre-existing
 Prettier backlog that predates the current design work, so it is noise rather than
@@ -90,6 +92,7 @@ review the diff.
 | [`docs/tournament-format.md`](docs/tournament-format.md) | Tournament rules as implemented |
 | [`docs/scheduling-decisions.md`](docs/scheduling-decisions.md) | Why the scheduler works the way it does |
 | [`docs/recovery-runbook.md`](docs/recovery-runbook.md) | Getting the database back after data loss: what a backup does and does not contain, and the restore procedure |
+| [`docs/maintenance-baseline.md`](docs/maintenance-baseline.md) | Code/test inventory, baseline measurements and registration extraction rationale |
 | [`docs/cleanup-deferred.md`](docs/cleanup-deferred.md) | What an earlier cleanup removed, and the candidates it deliberately left alone |
 | [`supabase/migrations/README.md`](supabase/migrations/README.md) | Applying and verifying database migrations |
 | [`src/routes/README.md`](src/routes/README.md) | File-based routing conventions |

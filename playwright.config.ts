@@ -17,6 +17,7 @@ const BASE_URL = process.env["PLAYWRIGHT_BASE_URL"] ?? `http://localhost:${PORT}
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   // A stray `test.only` would silently shrink the gate in CI.
   forbidOnly: Boolean(process.env["CI"]),
@@ -42,7 +43,7 @@ export default defineConfig({
    * that structurally rather than by hoping the machine is quiet: a worker count that is
    * stated rather than inferred (so a run is reproducible across machines, which matters
    * more here than squeezing out the last second), and a test timeout with realistic room
-   * for a cold Vite transform of the heaviest route.
+   * for normal rendering after globalSetup has compiled the heavy route graphs.
    */
   workers: process.env["CI"] ? 2 : 4,
   timeout: 60_000,
@@ -64,8 +65,8 @@ export default defineConfig({
    *
    * It is the dev server on purpose. React's production build drops the hydration-mismatch
    * console error that `route-sweep.spec.ts` listens for, so running against a build would
-   * make that check pass vacuously. Cold-transform cost is paid once per run now that each
-   * route is loaded once rather than eight times.
+   * make that check pass vacuously. globalSetup pays the heavy cold transforms before
+   * parallel workers begin; the route sweep shares each route load across its probes.
    */
   webServer: {
     command: "npm run dev",
