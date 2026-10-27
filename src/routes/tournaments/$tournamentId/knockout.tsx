@@ -6,10 +6,17 @@ import { KnockoutBracket } from "@/components/knockout-bracket";
 import { Button } from "@/components/ui/button";
 import { PLACEMENT_TIERS } from "@/lib/tournament/competition-format";
 import { compareEventOrder } from "@/lib/tournament/event-order";
-import { bracketNote, bracketRounds, buildCategoryView } from "@/lib/tournament/placement-actions";
+import { roundName } from "@/lib/tournament/draws";
+import {
+  bracketNote,
+  bracketProgress,
+  bracketRounds,
+  buildCategoryView,
+} from "@/lib/tournament/placement-actions";
 import {
   indexBy,
   teamLabel,
+  teamPlayerIds,
   useCategories,
   usePlacementEntrants,
   usePlacementMatches,
@@ -189,23 +196,66 @@ function BracketSection({
     return teamId ? teamLabel(teamMap.get(teamId), playerMap) : fallback;
   };
 
+  // A pair is two lines on a card, one per player, so the partner is never the name that a
+  // truncated "A / B" loses. The full label stays the accessible name and the title.
+  const pairs = category.entry_type === "pair";
+  const names = (entrantId: string | null | undefined) => {
+    const teamId = entrantId ? entrantTeam.get(entrantId) : undefined;
+    const team = teamId ? teamMap.get(teamId) : undefined;
+    if (!team) return null;
+    return teamPlayerIds(team).map((id) => playerMap.get(id)?.name ?? "Unknown");
+  };
+
   const short = view.gate.short.length;
   const hasDraws = draws.length > 0;
   const championCount = draws.filter((draw) => draw.champion_id).length;
 
+  const drawn = PLACEMENT_TIERS.flatMap((tierMapping) => {
+    const draw = draws.find((entry) => entry.tier === tierMapping.tier);
+    if (!draw) return [];
+    const own = categoryTierMatches.filter((match) => match.draw_id === draw.id);
+    return [{ tierMapping, draw, own, progress: bracketProgress(draw, own) }];
+  });
+  // A tier nobody landed in is a name on one shared line, not a row of its own: three rows that
+  // each say "empty" push the brackets that matter down the page.
+  const emptyTiers = PLACEMENT_TIERS.filter(
+    (tierMapping) => !draws.some((entry) => entry.tier === tierMapping.tier),
+  );
+  const played = drawn.reduce((sum, entry) => sum + entry.progress.played, 0);
+  const total = drawn.reduce((sum, entry) => sum + entry.progress.total, 0);
+  const live = drawn.reduce((sum, entry) => sum + entry.progress.live, 0);
+
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="space-y-1">
         <h2 className="font-display text-lg font-bold">
           {category.code} — {category.name}
-          <span className="ml-2 font-score text-sm font-normal text-muted-foreground">
-            {hasDraws
-              ? `${draws.length} bracket${draws.length === 1 ? "" : "s"}, ${championCount} decided`
-              : view.gate.ready
-                ? "ready to draw"
-                : `${short} short`}
-          </span>
         </h2>
+        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground tabular-nums">
+          {hasDraws ? (
+            <>
+              <span>
+                <span className="font-semibold text-foreground">
+                  {championCount} of {draws.length}
+                </span>{" "}
+                bracket{draws.length === 1 ? "" : "s"} decided
+              </span>
+              <span>
+                <span className="font-semibold text-foreground">
+                  {played} of {total}
+                </span>{" "}
+                match{total === 1 ? "" : "es"} played
+              </span>
+              {live > 0 ? (
+                <span>
+                  <span className="font-semibold text-foreground">{live}</span> live
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span>{view.gate.ready ? "Ready to draw" : `Waiting on ${short} entrant${short === 1 ? "" : "s"}`}</span>
+          )}
+        </p>
       </div>
 
       {!hasDraws ? (
@@ -220,8 +270,7 @@ function BracketSection({
             </p>
             {short > 0 ? (
               <p className="rounded-md border border-hairline bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                Waiting on {short} entrant{short === 1 ? "" : "s"}. A waived entrant is skipped
-                rather than blocking the event.
+                A waived entrant is skipped rather than blocking the event.
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -233,60 +282,63 @@ function BracketSection({
         </Panel>
       ) : (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-          {PLACEMENT_TIERS.map((tierMapping) => {
-            const draw = draws.find((entry) => entry.tier === tierMapping.tier);
-            const rounds = draw
-              ? bracketRounds(categoryTierMatches.filter((match) => match.draw_id === draw.id))
-              : new Map<number, TierDrawMatch[]>();
-
-            if (!draw) {
-              // A tier nobody landed in is one line, not a panel: four panels of which three say
-              // "empty" push the one real bracket down the page.
-              return (
-                <div
-                  key={tierMapping.tier}
-                  className="flex flex-wrap items-baseline justify-between gap-x-3 rounded-xl border border-hairline bg-card px-4 py-2.5 text-sm"
-                >
-                  <span className="font-semibold">
-                    {tierMapping.label}, {tierMapping.title}
+          {drawn.map(({ tierMapping, draw, own, progress }) => (
+            <Panel
+              key={tierMapping.tier}
+              title={`${tierMapping.label}, ${tierMapping.title}`}
+              right={
+                <span className="flex items-baseline gap-3 text-sm text-muted-foreground tabular-nums">
+                  <span>
+                    {progress.round === null ? (
+                      <span className="font-semibold text-foreground">Decided</span>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-foreground">
+                          {roundName(draw.bracket_size, progress.round)}
+                        </span>{" "}
+                        {progress.played}/{progress.total} played
+                      </>
+                    )}
                   </span>
-                  <span className="text-muted-foreground">
-                    <span className="font-score text-t2">{tierMapping.record}</span>. No entrants
-                    in this tier.
-                  </span>
-                </div>
-              );
-            }
-
-            return (
-              <Panel
-                key={tierMapping.tier}
-                title={`${tierMapping.label}, ${tierMapping.title}`}
-                right={
                   <abbr
                     title={tierMapping.detail}
                     className="font-score text-t2 text-muted-foreground no-underline"
                   >
                     {tierMapping.record}
                   </abbr>
-                }
-              >
-                {
-                  <div className="space-y-3">
-                    <p className="text-t4 text-muted-foreground">{bracketNote(draw)}</p>
+                </span>
+              }
+            >
+              <div className="space-y-3">
+                <p className="text-t4 text-muted-foreground">{bracketNote(draw)}</p>
 
-                    <KnockoutBracket
-                      rounds={rounds}
-                      bracketSize={draw.bracket_size}
-                      label={label}
-                      ariaLabel={`${category.code} ${tierMapping.label} bracket`}
-                      champion={draw.champion_id ? label(draw.champion_id) : null}
-                    />
-                  </div>
-                }
-              </Panel>
-            );
-          })}
+                <KnockoutBracket
+                  rounds={bracketRounds(own)}
+                  bracketSize={draw.bracket_size}
+                  label={label}
+                  names={names}
+                  pairs={pairs}
+                  ariaLabel={`${category.code} ${tierMapping.label} bracket`}
+                  champion={draw.champion_id ? label(draw.champion_id) : null}
+                />
+              </div>
+            </Panel>
+          ))}
+          {emptyTiers.length > 0 ? (
+            <p className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-sm text-muted-foreground">
+              <span>No entrants in</span>
+              {emptyTiers.map((tierMapping) => (
+                <span key={tierMapping.tier}>
+                  <span className="font-semibold text-foreground">
+                    {tierMapping.label}, {tierMapping.title}
+                  </span>{" "}
+                  <abbr title={tierMapping.detail} className="font-score text-t2 no-underline">
+                    {tierMapping.record}
+                  </abbr>
+                </span>
+              ))}
+            </p>
+          ) : null}
         </div>
       )}
     </section>
