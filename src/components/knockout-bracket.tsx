@@ -31,14 +31,16 @@
  * Colour follows the system's rule that a screen where nothing needs attention looks nearly grey.
  * A winner is marked by weight, a check and a word; no row is tinted. The only hue on the tree is
  * the one `StatusPill` paints on a live match and the champion's success surface. The joining lines
- * carry the one other signal: the route out of a decided match is drawn in ink, a route not yet
- * played is faint, so how far a draw has got reads from across the room.
+ * carry the one other signal: a route is drawn in ink while the entrant on it is still in the
+ * draw, and faint once they have lost or before anyone has reached it, so who is left - and the
+ * champion's road, once there is one - reads from across the room.
  *
  * Geometry: every column splits its height equally between its slots, and each slot centres its
  * card. Two neighbouring slots meet exactly at the centre of the match they feed in the next
  * column, so the joining lines need no measuring - each match draws a stub out of its card, half of
  * the bar to that meeting point, and the stub into the next round. Cards may differ in height (a
- * pair is taller than a bye); the lines attach to the slot, not the card, so that costs nothing.
+ * pair is taller than a bye); the lines attach to the slot, not the card, and every slot of a
+ * column is an even share of a height that fits the tallest card, so that costs nothing.
  */
 
 import { Trophy } from "lucide-react";
@@ -92,11 +94,31 @@ function feederShort(bracketSize: number, round: number, slot: number, side: "a"
   return `Winner ${roundCode(bracketSize, round - 1)} ${feeder}`;
 }
 
-/** A match whose winner is known moves on, so the line out of it is a played path. */
+/** Who came out of a match: the advancing side of a bye, or a decided match's winner. */
+function winnerOf(match: TierDrawMatch | undefined): string | null {
+  if (!match) return null;
+  if (isByeMatch(match)) return match.entrant_a_id ?? match.entrant_b_id;
+  return match.status === "reported" || match.status === "walkover" ? match.winner_id : null;
+}
+
+/** A match whose winner is known moves on. */
 function advanced(match: TierDrawMatch | undefined): boolean {
-  if (!match) return false;
-  if (isByeMatch(match)) return true;
-  return (match.status === "reported" || match.status === "walkover") && !!match.winner_id;
+  return winnerOf(match) !== null;
+}
+
+/**
+ * Whether the line out of `match` into `next` is inked: its winner is still in the draw.
+ *
+ * Inking every line out of a decided match drew both of a decided match's feeders the same weight
+ * - both had a winner - so the ink said nothing. It now follows the people: a route is ink while the
+ * entrant on it has not lost, so a finished round shows one heavy route per match, the winner's,
+ * and the champion's road reads end to end.
+ */
+function alive(match: TierDrawMatch | undefined, next: TierDrawMatch | undefined): boolean {
+  const winner = winnerOf(match);
+  if (!winner) return false;
+  const after = winnerOf(next);
+  return after === null || after === winner;
 }
 
 function Side({
@@ -151,10 +173,10 @@ function Side({
           aria-hidden
           className={cn(
             "w-4 shrink-0 text-right font-score text-t4 tabular-nums",
-            // The game's own winner is the heavier number, so a 2-1 reads game by game.
-            score > (against[index] ?? 0)
-              ? "font-semibold text-foreground"
-              : "text-muted-foreground",
+            // The game's own winner is the darker number, so a 2-1 reads game by game. Weight
+            // stays the row's: only the match's winner is bold, so a game the loser took does
+            // not compete with the result.
+            score > (against[index] ?? 0) ? "text-foreground" : "text-muted-foreground",
           )}
         >
           {score}
@@ -490,6 +512,18 @@ export function KnockoutBracket({
   const columnRem = cardRem + ARM_REM * 2;
   const [scrollRef, edges] = useScrollEdges(shape === "linear");
 
+  /**
+   * The height of the first round's slot, which every column divides.
+   *
+   * The geometry holds only while each column splits its height exactly evenly. A slot left to
+   * size itself grew past its share whenever its card was taller than its neighbours' - a played
+   * match among byes - and pushed every slot under it off the line the next round meets. So every
+   * slot is an even share of a column whose height fits the tallest card a slot can hold: the
+   * header, two sides, and the slot's own padding.
+   */
+  const slotRem = (pairs ? 7.25 : 5.25) + 1.5;
+  const firstColumnSlots = shape === "mirrored" ? Math.max(1, slotsIn(1) / 2) : slotsIn(1);
+
   const card = (round: number, slot: number) => {
     const match = at(round, slot);
     return match ? (
@@ -530,14 +564,18 @@ export function KnockoutBracket({
         }}
       >
         {heading(name, toward === "left" ? "right" : "left")}
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-1 flex-col" style={{ minHeight: `${firstColumnSlots * slotRem}rem` }}>
           {slots.map((slot) => (
-            <div key={slot} className="relative flex flex-1 items-center py-3">
+            <div key={slot} className="relative flex min-h-0 flex-1 basis-0 items-center py-3">
               {card(round, slot)}
               <Connector
                 toward={toward}
                 place={slots.length === 1 ? "single" : slot % 2 === 1 ? "upper" : "lower"}
-                played={advanced(at(round, slot))}
+                played={
+                  round === roundCount
+                    ? advanced(at(round, slot))
+                    : alive(at(round, slot), at(round + 1, Math.ceil(slot / 2)))
+                }
               />
             </div>
           ))}
