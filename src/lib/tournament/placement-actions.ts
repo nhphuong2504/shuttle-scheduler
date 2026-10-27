@@ -34,6 +34,7 @@ import {
   type PlacementGate,
   type PlacementStage,
 } from "./placement";
+import { isByeMatch } from "./match-status";
 import { assignSeeds, type AssignedSeed, type SeedableEntrant } from "./placement-seed";
 import { seedFromString, type RandomFn } from "./rng";
 import { buildTierBracket, type TierBracketPlan } from "./tier-draw";
@@ -1154,6 +1155,40 @@ export function bracketNote(draw: TierDraw): string {
 /** True when a tier draw has a champion, whether by bye or by winning the final. */
 export function tierIsDecided(draw: TierDraw | undefined): boolean {
   return !!draw?.champion_id;
+}
+
+/**
+ * How far a tier draw has got, for the line over its bracket.
+ *
+ * `round` is the earliest round with a match still to finish, or null once the draw has its
+ * champion. A round whose rows do not exist yet is the one after the last round that does,
+ * because the generator writes a round only when the one before it can feed it.
+ *
+ * `total` is counted from the entrants rather than from the rows: a single-elimination draw
+ * of n entrants plays n - 1 matches whatever its byes, and the later rounds' rows may not be
+ * written yet. Byes are draw conditions, so they are never played and never counted.
+ */
+export function bracketProgress(
+  draw: TierDraw,
+  matches: readonly TierDrawMatch[],
+): { round: number | null; played: number; total: number; live: number } {
+  let played = 0;
+  let live = 0;
+  let open: number | null = null;
+  let last = 0;
+  for (const match of matches) {
+    last = Math.max(last, match.round);
+    if (isByeMatch(match)) continue;
+    if (match.status === "reported" || match.status === "walkover") {
+      played += 1;
+      continue;
+    }
+    if (match.status === "live") live += 1;
+    if (match.status !== "void") open = open === null ? match.round : Math.min(open, match.round);
+  }
+  const total = Math.max(0, draw.entrant_count - 1);
+  const round = draw.champion_id ? null : (open ?? last + 1);
+  return { round, played: Math.min(played, total), total, live };
 }
 
 /** Group the tier-draw matches by draw, then round, which is how a bracket reads. */
