@@ -66,7 +66,7 @@ describe("buildResultsCsv", () => {
 
   it("writes a bracket's played matches only, skipping byes and waiting slots", () => {
     expect(lines).toHaveLength(4);
-    expect(lines[3]).toBe("MS Men's Singles,Draw A Cup,Final,Ana,Cy,,Ana,Walkover");
+    expect(lines[3]).toBe("MS Men's Singles,Draw A,Final,Ana,Cy,,Ana,Walkover");
   });
 });
 

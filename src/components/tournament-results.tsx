@@ -45,7 +45,7 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
             (entry) => entry.category_id === category.id && entry.tier === tier.tier,
           );
           const champion = draw?.champion_id ? name(draw.champion_id) : null;
-          return champion ? [{ title: tier.title, label: tier.label, champion }] : [];
+          return champion ? [{ label: tier.label, champion }] : [];
         }),
       }))
       .filter((row) => row.winners.length > 0);
@@ -79,7 +79,7 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
                     {index === 0 ? (
                       <Trophy aria-hidden className="mr-1 inline size-3.5 align-[-2px]" />
                     ) : null}
-                    {winner.title}
+                    {winner.label}
                   </dt>
                   <dd className={index === 0 ? "font-semibold" : undefined}>{winner.champion}</dd>
                 </div>

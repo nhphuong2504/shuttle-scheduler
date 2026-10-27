@@ -107,7 +107,7 @@ export function buildResultsCsv(input: ResultsExportInput): string {
       for (const match of matches) {
         rows.push([
           event,
-          `${tier.label} ${tier.title}`,
+          tier.label,
           roundName(draw.bracket_size, match.round),
           name(match.entrant_a_id),
           name(match.entrant_b_id),
