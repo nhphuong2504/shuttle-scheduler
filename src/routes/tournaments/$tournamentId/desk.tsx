@@ -674,7 +674,13 @@ function Desk() {
                 </button>
               ))}
             </div>
-            <span className="ml-auto flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            {/*
+              The status shares the line with the day buttons and the console's controls by
+              wrapping its own text, rather than holding its full width and pushing the controls
+              onto a line of their own when the schedule runs long. Below its minimum it still
+              drops to its own line as a whole, as on a phone.
+            */}
+            <span className="ml-auto flex min-w-64 flex-1 flex-wrap items-baseline justify-end gap-x-4 gap-y-1 text-right">
               <DayScheduleStatus latestFinishMs={dayCounts.latestFinishMs} closeMs={dayCloseMs} />
               {/*
                 The day's pace as one count, in place of the per-court progress bars: those led
@@ -704,7 +710,7 @@ function Desk() {
               </span>
             </span>
             {consoleBar ? (
-              <span className="hidden items-center gap-2 desk-console:flex">{controls}</span>
+              <span className="hidden shrink-0 items-center gap-2 desk-console:flex">{controls}</span>
             ) : null}
           </div>
         ) : null}
