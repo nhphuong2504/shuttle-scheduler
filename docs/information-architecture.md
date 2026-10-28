@@ -61,6 +61,7 @@ mounts `WorkspaceShell` around the child page.
 | --- | --- | --- |
 | `…/desk` | The Desk: one day, every court, live. Read-only board for a caller without `can_edit`, reachable by URL | Operator (full), anyone (read-only) |
 | `…/now` | One day as a spectator reads it: on court, up next, just finished; the results once the tournament is complete. Day-scoped like the Desk, with none of its moderator states | Reader |
+| `…/timetable` | Schedule: every match with a court or a time, day by day in playing order, filterable by event, with finished matches optionally hidden. A published timetable, not the organiser's `…/schedule`: no forecast, no conflicts, no controls | Reader |
 | `…/me` | My matches: the followed player's next match (lit up by a Desk call), their path through the placement rounds into a draw, and every match | Reader |
 | `…/players`, `…/players/$playerId` | Everyone playing, by name; one player in the same view as My matches | Reader |
 | `…/entries` | Who is in the tournament, and the walk-in roster | Operator |
@@ -141,7 +142,7 @@ three editor entries (`registrations`, `settings`, `access`). The editor entries
 offering the trip; the pages themselves still refuse, since the nav is presentation.
 
 A read-only reader — a signed-in viewer or an anonymous visitor — gets the **Watch sections**:
-**Now**, **My matches**, **Draws** (the Knockout page, which links the placement rounds) and
+**Now**, **Schedule** (every scheduled match, while Now lists only the next few), **My matches**, **Draws** (the Knockout page, which links the placement rounds) and
 **Players**. They name a reader's questions - what is on court, when do I play, how far did they
 get, who is in - rather than the operator's order of work, so they are a list of their own and
 not the operational one with its controls withheld (see Watch mode in
@@ -188,7 +189,7 @@ flowchart LR
   visitor["Visitor"] --> landing["/" ]
   landing --> explore["/explore"]
   explore --> card["/tournaments/:id/players (upcoming)<br/>or /now (in progress, completed)"]
-  card --> sections["the Watch sections:<br/>now, me, draws (knockout),<br/>players"]
+  card --> sections["the Watch sections:<br/>now, schedule (timetable), me,<br/>draws (knockout), players"]
 ```
 
 The participant page at `/tournaments/:id/` — the card and the Register panel — is no longer one

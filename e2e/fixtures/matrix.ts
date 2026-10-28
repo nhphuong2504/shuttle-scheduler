@@ -59,6 +59,7 @@ export const ROUTES = [
   routes.schedule,
   routes.scores,
   routes.now,
+  routes.timetable,
   routes.me,
   routes.players,
   routes.settings,

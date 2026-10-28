@@ -34,8 +34,9 @@ export const routes = {
   knockout: `/tournaments/${TOURNAMENT_ID}/knockout`,
   schedule: `/tournaments/${TOURNAMENT_ID}/schedule`,
   scores: `/tournaments/${TOURNAMENT_ID}/scores`,
-  /** The reader's Watch pages: the day's hall, the followed player, and everyone playing. */
+  /** The reader's Watch pages: the day's hall, the full schedule, the followed player, and everyone playing. */
   now: `/tournaments/${TOURNAMENT_ID}/now`,
+  timetable: `/tournaments/${TOURNAMENT_ID}/timetable`,
   me: `/tournaments/${TOURNAMENT_ID}/me`,
   players: `/tournaments/${TOURNAMENT_ID}/players`,
   settings: `/tournaments/${TOURNAMENT_ID}/settings`,

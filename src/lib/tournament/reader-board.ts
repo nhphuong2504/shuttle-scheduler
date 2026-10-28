@@ -32,6 +32,11 @@ function startOrder(a: DeskMatch, b: DeskMatch): number {
   return a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0;
 }
 
+/** Matches in the order they are played: by start, else scheduled, time; untimed last. */
+export function inPlayingOrder(matches: readonly DeskMatch[]): DeskMatch[] {
+  return [...matches].sort(startOrder);
+}
+
 export interface NowBoard {
   /** On court right now, longest-running first. */
   live: DeskMatch[];

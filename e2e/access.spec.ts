@@ -179,7 +179,7 @@ test.describe("a viewer", () => {
     // The sections reading a tournament is made of: the day's hall, the followed player, the
     // draws and who is playing. The operational pages stay reachable by URL - this one was
     // opened directly - but they are not the reader's nav.
-    for (const label of ["Now", "My matches", "Draws", "Players"]) {
+    for (const label of ["Now", "Schedule", "My matches", "Draws", "Players"]) {
       await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
     }
     await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
@@ -219,7 +219,7 @@ test.describe("a viewer", () => {
     // The reader's sections are the Watch pages, named for a reader's questions.
     await expect(
       page.getByRole("navigation", { name: "Tournament sections" }).getByRole("link"),
-    ).toHaveText(["Now", "My matches", "Draws", "Players"]);
+    ).toHaveText(["Now", "Schedule", "My matches", "Draws", "Players"]);
     const header = page.getByRole("banner");
     await header.getByRole("link", { name: /tournova/i }).click();
     await expect(page).toHaveURL(new RegExp(`${routes.now}$`));

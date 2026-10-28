@@ -119,8 +119,9 @@ const SECTIONS = [
  * A reader brings questions rather than an order of work - what is on court, when do I play,
  * how far did they get, who is in - so their nav names those questions instead of the six
  * operational pages with the controls taken away. Now is the day's hall (one day, no
- * tournament-wide forecast, like the Desk), My matches is the player's own page, Draws is the
- * bracket page every reader already had, and Players is the way to find someone.
+ * tournament-wide forecast, like the Desk), Schedule is every scheduled match day by day, My
+ * matches is the player's own page, Draws is the bracket page every reader already had, and
+ * Players is the way to find someone.
  *
  * The operational pages stay reachable by URL - a shared `…/scores?q=` link still works, and
  * Now links to Scores for every result - only their nav entries are gone, the same arrangement
@@ -128,6 +129,7 @@ const SECTIONS = [
  */
 const READ_ONLY_SECTIONS = [
   { label: "Now", scoped: "/tournaments/$tournamentId/now" },
+  { label: "Schedule", scoped: "/tournaments/$tournamentId/timetable" },
   { label: "My matches", scoped: "/tournaments/$tournamentId/me" },
   { label: "Draws", scoped: "/tournaments/$tournamentId/knockout" },
   { label: "Players", scoped: "/tournaments/$tournamentId/players" },
@@ -137,7 +139,7 @@ const READ_ONLY_SECTIONS = [
  * The reader's own pages, which are written for reading rather than derived from an operator's.
  * The read-only notice is about a page with its controls withheld, so it is not drawn on these.
  */
-const READER_PAGES = ["/now", "/me", "/players"];
+const READER_PAGES = ["/now", "/timetable", "/me", "/players"];
 
 /**
  * The entries that belong to the people who run the tournament.

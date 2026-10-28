@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { DeskMatch } from "./desk-matches";
-import { matchesOfPlayer, nextMatchOf, nowBoard, outcomeFor, placementPath } from "./reader-board";
+import {
+  inPlayingOrder,
+  matchesOfPlayer,
+  nextMatchOf,
+  nowBoard,
+  outcomeFor,
+  placementPath,
+} from "./reader-board";
 
 function match(over: Partial<DeskMatch> & { id: string }): DeskMatch {
   return {
@@ -112,5 +119,21 @@ describe("placementPath", () => {
 
   it("has nothing to say before the first result", () => {
     expect(placementPath([r2({})], "t1")).toEqual({ results: [], draw: null, next: null });
+  });
+});
+
+describe("inPlayingOrder", () => {
+  it("orders by start or scheduled time and leaves untimed matches last", () => {
+    const rows = [
+      match({ id: "untimed" }),
+      match({ id: "late", scheduled: at("12:00") }),
+      match({
+        id: "started",
+        status: "in-progress",
+        startedAt: at("09:00"),
+        scheduled: at("13:00"),
+      }),
+    ];
+    expect(inPlayingOrder(rows).map((m) => m.id)).toEqual(["started", "late", "untimed"]);
   });
 });

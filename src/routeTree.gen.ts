@@ -37,6 +37,7 @@ import { Route as TournamentsTournamentIdRegistrationsRouteImport } from './rout
 import { Route as TournamentsTournamentIdScheduleRouteImport } from './routes/tournaments/$tournamentId/schedule'
 import { Route as TournamentsTournamentIdScoresRouteImport } from './routes/tournaments/$tournamentId/scores'
 import { Route as TournamentsTournamentIdSettingsRouteImport } from './routes/tournaments/$tournamentId/settings'
+import { Route as TournamentsTournamentIdTimetableRouteImport } from './routes/tournaments/$tournamentId/timetable'
 import { Route as TournamentsTournamentIdPlayersIndexRouteImport } from './routes/tournaments/$tournamentId/players.index'
 import { Route as TournamentsTournamentIdPlayersPlayerIdRouteImport } from './routes/tournaments/$tournamentId/players.$playerId'
 
@@ -195,6 +196,12 @@ const TournamentsTournamentIdSettingsRoute =
     path: '/settings',
     getParentRoute: () => TournamentsTournamentIdRouteRoute,
   } as any)
+const TournamentsTournamentIdTimetableRoute =
+  TournamentsTournamentIdTimetableRouteImport.update({
+    id: '/timetable',
+    path: '/timetable',
+    getParentRoute: () => TournamentsTournamentIdRouteRoute,
+  } as any)
 const TournamentsTournamentIdPlayersIndexRoute =
   TournamentsTournamentIdPlayersIndexRouteImport.update({
     id: '/players/',
@@ -236,6 +243,7 @@ export interface FileRoutesByFullPath {
   '/tournaments/$tournamentId/schedule': typeof TournamentsTournamentIdScheduleRoute
   '/tournaments/$tournamentId/scores': typeof TournamentsTournamentIdScoresRoute
   '/tournaments/$tournamentId/settings': typeof TournamentsTournamentIdSettingsRoute
+  '/tournaments/$tournamentId/timetable': typeof TournamentsTournamentIdTimetableRoute
   '/tournaments/$tournamentId/': typeof TournamentsTournamentIdIndexRoute
   '/tournaments/$tournamentId/players/$playerId': typeof TournamentsTournamentIdPlayersPlayerIdRoute
   '/tournaments/$tournamentId/players/': typeof TournamentsTournamentIdPlayersIndexRoute
@@ -267,6 +275,7 @@ export interface FileRoutesByTo {
   '/tournaments/$tournamentId/schedule': typeof TournamentsTournamentIdScheduleRoute
   '/tournaments/$tournamentId/scores': typeof TournamentsTournamentIdScoresRoute
   '/tournaments/$tournamentId/settings': typeof TournamentsTournamentIdSettingsRoute
+  '/tournaments/$tournamentId/timetable': typeof TournamentsTournamentIdTimetableRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdIndexRoute
   '/tournaments/$tournamentId/players/$playerId': typeof TournamentsTournamentIdPlayersPlayerIdRoute
   '/tournaments/$tournamentId/players': typeof TournamentsTournamentIdPlayersIndexRoute
@@ -300,6 +309,7 @@ export interface FileRoutesById {
   '/tournaments/$tournamentId/schedule': typeof TournamentsTournamentIdScheduleRoute
   '/tournaments/$tournamentId/scores': typeof TournamentsTournamentIdScoresRoute
   '/tournaments/$tournamentId/settings': typeof TournamentsTournamentIdSettingsRoute
+  '/tournaments/$tournamentId/timetable': typeof TournamentsTournamentIdTimetableRoute
   '/tournaments/$tournamentId/': typeof TournamentsTournamentIdIndexRoute
   '/tournaments/$tournamentId/players/$playerId': typeof TournamentsTournamentIdPlayersPlayerIdRoute
   '/tournaments/$tournamentId/players/': typeof TournamentsTournamentIdPlayersIndexRoute
@@ -334,6 +344,7 @@ export interface FileRouteTypes {
     | '/tournaments/$tournamentId/schedule'
     | '/tournaments/$tournamentId/scores'
     | '/tournaments/$tournamentId/settings'
+    | '/tournaments/$tournamentId/timetable'
     | '/tournaments/$tournamentId/'
     | '/tournaments/$tournamentId/players/$playerId'
     | '/tournaments/$tournamentId/players/'
@@ -365,6 +376,7 @@ export interface FileRouteTypes {
     | '/tournaments/$tournamentId/schedule'
     | '/tournaments/$tournamentId/scores'
     | '/tournaments/$tournamentId/settings'
+    | '/tournaments/$tournamentId/timetable'
     | '/tournaments/$tournamentId'
     | '/tournaments/$tournamentId/players/$playerId'
     | '/tournaments/$tournamentId/players'
@@ -397,6 +409,7 @@ export interface FileRouteTypes {
     | '/tournaments/$tournamentId/schedule'
     | '/tournaments/$tournamentId/scores'
     | '/tournaments/$tournamentId/settings'
+    | '/tournaments/$tournamentId/timetable'
     | '/tournaments/$tournamentId/'
     | '/tournaments/$tournamentId/players/$playerId'
     | '/tournaments/$tournamentId/players/'
@@ -617,6 +630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TournamentsTournamentIdSettingsRouteImport
       parentRoute: typeof TournamentsTournamentIdRouteRoute
     }
+    '/tournaments/$tournamentId/timetable': {
+      id: '/tournaments/$tournamentId/timetable'
+      path: '/timetable'
+      fullPath: '/tournaments/$tournamentId/timetable'
+      preLoaderRoute: typeof TournamentsTournamentIdTimetableRouteImport
+      parentRoute: typeof TournamentsTournamentIdRouteRoute
+    }
     '/tournaments/$tournamentId/players/': {
       id: '/tournaments/$tournamentId/players/'
       path: '/players'
@@ -648,6 +668,7 @@ interface TournamentsTournamentIdRouteRouteChildren {
   TournamentsTournamentIdScheduleRoute: typeof TournamentsTournamentIdScheduleRoute
   TournamentsTournamentIdScoresRoute: typeof TournamentsTournamentIdScoresRoute
   TournamentsTournamentIdSettingsRoute: typeof TournamentsTournamentIdSettingsRoute
+  TournamentsTournamentIdTimetableRoute: typeof TournamentsTournamentIdTimetableRoute
   TournamentsTournamentIdIndexRoute: typeof TournamentsTournamentIdIndexRoute
   TournamentsTournamentIdPlayersPlayerIdRoute: typeof TournamentsTournamentIdPlayersPlayerIdRoute
   TournamentsTournamentIdPlayersIndexRoute: typeof TournamentsTournamentIdPlayersIndexRoute
@@ -670,6 +691,8 @@ const TournamentsTournamentIdRouteRouteChildren: TournamentsTournamentIdRouteRou
     TournamentsTournamentIdScheduleRoute: TournamentsTournamentIdScheduleRoute,
     TournamentsTournamentIdScoresRoute: TournamentsTournamentIdScoresRoute,
     TournamentsTournamentIdSettingsRoute: TournamentsTournamentIdSettingsRoute,
+    TournamentsTournamentIdTimetableRoute:
+      TournamentsTournamentIdTimetableRoute,
     TournamentsTournamentIdIndexRoute: TournamentsTournamentIdIndexRoute,
     TournamentsTournamentIdPlayersPlayerIdRoute:
       TournamentsTournamentIdPlayersPlayerIdRoute,
