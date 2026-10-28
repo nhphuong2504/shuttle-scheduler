@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import { EmptyState, Notice, Page, Panel } from "@/components/app-shell";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useMyMatchNotifications, type MatchNotification } from "@/hooks/useMyMatchNotifications";
 import { useMyPlayer } from "@/hooks/useMyPlayer";
 import { useReaderMatches } from "@/hooks/useReaderMatches";
+import { signInSearch } from "@/lib/routing/redirect";
 import type { Player } from "@/lib/tournament/data";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/me")({
@@ -33,7 +34,8 @@ export const Route = createFileRoute("/tournaments/$tournamentId/me")({
 /**
  * A player's own page: which match is next, where, against whom, and where it leads.
  *
- * "Me" is the player this browser follows (`useMyPlayer`), chosen once by name. A call from the
+ * "Me" is the player this account follows (`useMyPlayer`), chosen once by name, so the page is
+ * a signed-in player's: a visitor is asked to sign in rather than offered a name to pick. A call from the
  * Desk (`my_match_notifications`, the same read the header inbox makes) lights the next-match
  * card up as "Called to Court N", and when nobody is followed yet a call offers its own match's
  * players as the likely answer. Choosing grants nothing: everything shown is public already.
@@ -41,8 +43,8 @@ export const Route = createFileRoute("/tournaments/$tournamentId/me")({
 function MyMatchesPage() {
   const { tournamentId } = Route.useParams();
   const data = useReaderMatches();
-  const { playerId, ready, choose } = useMyPlayer(tournamentId);
-  const { session, query: callsQuery } = useMyMatchNotifications();
+  const { playerId, canChoose, ready, choose } = useMyPlayer(tournamentId);
+  const { query: callsQuery } = useMyMatchNotifications();
   const calls = useMemo(
     () => (callsQuery.data ?? []).filter((call) => call.tournament_id === tournamentId),
     [callsQuery.data, tournamentId],
@@ -73,12 +75,13 @@ function MyMatchesPage() {
               </Button>
             </p>
           </div>
+        ) : !canChoose ? (
+          <SignInToFollow tournamentId={tournamentId} />
         ) : (
           <ChoosePlayer
             players={data.players}
             suggested={suggestedFromCalls(calls, data)}
             onChoose={choose}
-            signedIn={!!session}
             tournamentId={tournamentId}
           />
         )}
@@ -126,17 +129,42 @@ function OtherCalls({
   );
 }
 
+/** A visitor's My matches: the one step that makes the page theirs. */
+function SignInToFollow({ tournamentId }: { tournamentId: string }) {
+  const href = useLocation({ select: (location) => location.href });
+  return (
+    <Panel>
+      <EmptyState
+        title="Sign in to follow your matches"
+        hint="Once signed in, pick yourself to see your next match, your court and where your results lead, and get a notification when you are called."
+        action={
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button size="sm" asChild>
+              <Link to="/auth" search={signInSearch(href)}>
+                Sign in
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/tournaments/$tournamentId/players" params={{ tournamentId }}>
+                Browse players
+              </Link>
+            </Button>
+          </div>
+        }
+      />
+    </Panel>
+  );
+}
+
 function ChoosePlayer({
   players,
   suggested,
   onChoose,
-  signedIn,
   tournamentId,
 }: {
   players: readonly Player[];
   suggested: readonly Player[];
   onChoose: (id: string) => void;
-  signedIn: boolean;
   tournamentId: string;
 }) {
   const [query, setQuery] = useState("");
@@ -210,7 +238,6 @@ function ChoosePlayer({
           ) : null}
           <p className="text-sm text-muted-foreground">
             Saved in this browser only. It shows your matches and changes nothing in the tournament.
-            {signedIn ? null : " Sign in to get a notification when you are called to a court."}
           </p>
         </div>
       </Panel>

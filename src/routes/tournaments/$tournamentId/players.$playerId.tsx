@@ -28,7 +28,7 @@ export const Route = createFileRoute("/tournaments/$tournamentId/players/$player
 function PlayerPage() {
   const { tournamentId, playerId } = Route.useParams();
   const data = useReaderMatches();
-  const { playerId: me, choose } = useMyPlayer(tournamentId);
+  const { playerId: me, canChoose, choose } = useMyPlayer(tournamentId);
   const { query: callsQuery } = useMyMatchNotifications();
   const isMe = me === playerId;
   const calls = isMe
@@ -59,11 +59,11 @@ function PlayerPage() {
                   Open My matches
                 </Link>
               </Button>
-            ) : (
+            ) : canChoose ? (
               <Button size="sm" variant="outline" onClick={() => choose(playerId)}>
                 This is me
               </Button>
-            )
+            ) : null
           ) : null}
         </>
       }

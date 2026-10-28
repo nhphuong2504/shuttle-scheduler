@@ -106,7 +106,7 @@ function NowPage() {
                     title={status === "upcoming" ? "Play has not started" : "No match on court"}
                     hint={
                       status === "upcoming"
-                        ? "Find who is playing, and pick yourself to follow your own matches."
+                        ? "Find who is playing, and open a player for their matches."
                         : "The next matches are listed as they are called."
                     }
                     action={

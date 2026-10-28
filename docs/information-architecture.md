@@ -154,9 +154,10 @@ on the Watch pages, which were written for reading. A read-only workspace opens 
 `readerHomeFor` says (the logo points there for a reader, and at the Desk for an operator), and the
 tournament's participant page at `/tournaments/$tournamentId/` is not part of that experience.
 
-"Me" on My matches is the player this browser follows, chosen by name and kept in this browser
-only. It is a bookmark, not an identity: it grants nothing, and everything it shows is already
-public. The account-backed answer (`players.profile_id`) is withheld from the client, so an
+"Me" on My matches is the player a signed-in account follows, chosen by name and kept in this
+browser, per account. A visitor is offered no "This is me" and is asked to sign in on My matches
+instead; Now and Players read the same for both. It is a bookmark, not an identity: it grants
+nothing, and everything it shows is already public. The account-backed answer (`players.profile_id`) is withheld from the client, so an
 account's own player needs a server read before it can replace the bookmark; until then a Desk
 call is what ties the two, by offering the called match's players as the answer to "which one is
 you".
