@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { useSession } from "@/hooks/useSession";
+import { myMatchNotificationsKey, useMyMatchNotifications } from "@/hooks/useMyMatchNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,33 +13,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-interface MatchNotification {
-  id: string;
-  read_at: string | null;
-  message: string;
-  created_at: string;
-  tournament_id: string;
-  tournament_name: string;
-  court_number: number;
-  outdated: boolean;
-}
-
 /** Account-scoped inbox persists across routes. Polling also catches up after reconnects. */
 export function MatchNotifications() {
-  const { session } = useSession();
+  const { session, query } = useMyMatchNotifications();
   const [open, setOpen] = useState(false);
   const client = useQueryClient();
-  const key = ["my-match-notifications", session?.userId];
-  const query = useQuery({
-    queryKey: key,
-    enabled: !!session,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("my_match_notifications");
-      if (error) throw error;
-      return data as unknown as MatchNotification[];
-    },
-    refetchInterval: 5_000,
-  });
+  const key = myMatchNotificationsKey(session?.userId);
   const read = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.rpc("read_match_notification", { p_id: id });
@@ -120,12 +99,12 @@ export function MatchNotifications() {
                 ) : null}
                 <div className="flex flex-wrap items-center gap-3">
                   <Link
-                    to="/tournaments/$tournamentId/desk"
+                    to="/tournaments/$tournamentId/me"
                     params={{ tournamentId: n.tournament_id }}
                     className="inline-flex min-h-11 items-center underline"
                     onClick={() => setOpen(false)}
                   >
-                    View court board
+                    View my matches
                   </Link>
                   {!n.read_at ? (
                     <Button

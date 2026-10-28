@@ -5,7 +5,7 @@ import { signInSearch } from "@/lib/routing/redirect";
 import { tournamentPhase } from "@/lib/tournament/phase";
 import type { TournamentSummary } from "@/lib/tournament/data";
 import { countText, dateRangeText } from "@/lib/tournament/summary-format";
-import { readerHomeFor } from "@/lib/tournament/reader-home";
+import { tournamentHomeFor } from "@/lib/tournament/reader-home";
 
 /**
  * The two action treatments, named once.
@@ -158,7 +158,7 @@ export function ExploreCard({
 
       <h3 className="min-w-0 break-words font-display text-2xl font-bold leading-tight">
         <Link
-          to={readerHomeFor(summary.status)}
+          to={tournamentHomeFor(summary)}
           params={{ tournamentId: summary.id }}
           className={
             live
@@ -187,7 +187,7 @@ export function ExploreCard({
 
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
         <Link
-          to={readerHomeFor(summary.status)}
+          to={tournamentHomeFor(summary)}
           params={{ tournamentId: summary.id }}
           className={
             live

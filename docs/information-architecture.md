@@ -45,10 +45,11 @@ one arrangement ([`useSignInRedirect`](../src/hooks/useSignInRedirect.ts)) rathe
 agree.
 
 Reading a tournament begins where [`readerHomeFor`](../src/lib/tournament/reader-home.ts) says:
-`…/entries` while the tournament is upcoming, because there are no scores yet and the question is
-who is playing, and `…/scores` once it is in progress or completed, because a reader comes to find
-a match and its result. It reads the stored status, not the clock, so the server and the browser
-agree. A card in `/explore` and the workspace logo both link there (see [The shells](#3-the-shells)).
+`…/players` while the tournament is upcoming, because nothing is on court yet and the question is
+who is playing, and `…/now` once it is in progress or completed, because a reader comes to see
+what is on court, what is next and what just finished. It reads the stored status, not the clock, so the server and the browser
+agree. A card in `/explore` and the workspace logo both link there for a reader, and to the Desk for
+anyone who may operate the tournament (`tournamentHomeFor`; see [The shells](#3-the-shells)).
 
 ### Tournament-scoped
 
@@ -58,7 +59,10 @@ mounts `WorkspaceShell` around the child page.
 
 | Address | Surface | Audience |
 | --- | --- | --- |
-| `…/desk` | The Desk: one day, every court, live. Read-only board for a caller without `can_edit` | Operator (full), anyone (read-only) |
+| `…/desk` | The Desk: one day, every court, live. Read-only board for a caller without `can_edit`, reachable by URL | Operator (full), anyone (read-only) |
+| `…/now` | One day as a spectator reads it: on court, up next, just finished; the results once the tournament is complete. Day-scoped like the Desk, with none of its moderator states | Reader |
+| `…/me` | My matches: the followed player's next match (lit up by a Desk call), their path through the placement rounds into a draw, and every match | Reader |
+| `…/players`, `…/players/$playerId` | Everyone playing, by name; one player in the same view as My matches | Reader |
 | `…/entries` | Who is in the tournament, and the walk-in roster | Operator |
 | `…/registrations` | The queue of requests awaiting a decision, with a nav badge when work is waiting | Editor |
 | `…/placement` | Seeding and the placement stage | Operator |
@@ -136,17 +140,26 @@ three editor entries (`registrations`, `settings`, `access`). The editor entries
 `can_edit`, because a nav entry that leads to a page saying no is a worse answer than not
 offering the trip; the pages themselves still refuse, since the nav is presentation.
 
-A read-only reader — a signed-in viewer or an anonymous visitor — gets the six operational
-sections, **the Desk included, in a read-only form**. For a caller without `can_edit` the Desk
-shows the day picker and the court board, and withholds every control that starts, scores or
-moves a match; a court tile opens the match to read, not to run. The list is the operational one itself
-rather than a restated copy, so a section added later is offered to everyone reading the
-tournament by default. It is sorted into the reader's order - Scores, Schedule, Knockout, Entries,
-Placement, Desk - because on a phone the row scrolls and the operator's order pushed the two
-sections a reader came for off the screen; a section without a reader rank keeps its place after
-the ranked ones. A read-only workspace opens where `readerHomeFor` says (the logo points there for
-a reader, and at the Desk for an operator), and the tournament's participant page at
-`/tournaments/$tournamentId/` is not part of that experience.
+A read-only reader — a signed-in viewer or an anonymous visitor — gets the **Watch sections**:
+**Now**, **My matches**, **Draws** (the Knockout page, which links the placement rounds) and
+**Players**. They name a reader's questions - what is on court, when do I play, how far did they
+get, who is in - rather than the operator's order of work, so they are a list of their own and
+not the operational one with its controls withheld (see Watch mode in
+[`design-principles.md`](design-principles.md)). Now keeps the Desk's product rule: one day, no
+tournament-wide forecast. The operational pages stay reachable by URL - a shared
+`…/scores?q=` link still works, and Now links to Scores for every result, and the Desk is still a
+read-only board for a caller without `can_edit` - only their nav entries are gone, the same
+arrangement Pools and Draws have. The read-only notice is drawn on those operational pages and not
+on the Watch pages, which were written for reading. A read-only workspace opens where
+`readerHomeFor` says (the logo points there for a reader, and at the Desk for an operator), and the
+tournament's participant page at `/tournaments/$tournamentId/` is not part of that experience.
+
+"Me" on My matches is the player this browser follows, chosen by name and kept in this browser
+only. It is a bookmark, not an identity: it grants nothing, and everything it shows is already
+public. The account-backed answer (`players.profile_id`) is withheld from the client, so an
+account's own player needs a server read before it can replace the bookmark; until then a Desk
+call is what ties the two, by offering the called match's players as the answer to "which one is
+you".
 
 The header's own line — brand, then the tournament's name and status — carries one more entry
 for a reader, and it follows the same split as the section nav. An operator gets the workspace
@@ -160,7 +173,8 @@ another.
 
 Both shells include a **Notifications** inbox in the signed-in account header,
 available without a new address. It lists
-only the caller's own match calls and links to the tournament's read-only Desk. Receiving
+only the caller's own match calls and links to the tournament's My matches, where the called
+match reads "Called to Court N". Receiving
 a call does not change the workspace nav or grant operator access. The participant can
 read a call and mark it as read without choosing a working tournament.
 
@@ -172,8 +186,8 @@ read a call and mark it as read without choosing a working tournament.
 flowchart LR
   visitor["Visitor"] --> landing["/" ]
   landing --> explore["/explore"]
-  explore --> card["/tournaments/:id/entries (upcoming)<br/>or /scores (in progress, completed)"]
-  card --> sections["the read-only six:<br/>scores, schedule, knockout,<br/>entries, placement, desk"]
+  explore --> card["/tournaments/:id/players (upcoming)<br/>or /now (in progress, completed)"]
+  card --> sections["the Watch sections:<br/>now, me, draws (knockout),<br/>players"]
 ```
 
 The participant page at `/tournaments/:id/` — the card and the Register panel — is no longer one

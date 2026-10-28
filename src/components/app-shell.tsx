@@ -114,32 +114,30 @@ const SECTIONS = [
 ] as const;
 
 /**
- * What a reader without the edit right is offered: every operational section, the Desk included.
+ * What a reader without the edit right is offered: the Watch sections, not the operator's.
  *
- * The Desk used to be withheld because it is where a moderator works in real time. It now has a
- * read-only variant for readers - the day's court board and progress, with none of the acts and
- * none of the operator's alerts - so the nav no longer needs to hide it. Derived from `SECTIONS`
- * rather than restated, so a section added later is offered to everyone reading the tournament
- * by default.
+ * A reader brings questions rather than an order of work - what is on court, when do I play,
+ * how far did they get, who is in - so their nav names those questions instead of the six
+ * operational pages with the controls taken away. Now is the day's hall (one day, no
+ * tournament-wide forecast, like the Desk), My matches is the player's own page, Draws is the
+ * bracket page every reader already had, and Players is the way to find someone.
  *
- * The order is the reader's, not the operator's. A reader comes to find a match and see its
- * score, so Scores and Schedule lead; on a phone the row scrolls, and in the operator's order
- * those two were the ones pushed off the screen. A section with no rank here keeps its place
- * after the ranked ones. Where a reader *opens* is `readerHomeFor`.
+ * The operational pages stay reachable by URL - a shared `…/scores?q=` link still works, and
+ * Now links to Scores for every result - only their nav entries are gone, the same arrangement
+ * Pools and Draws have. Where a reader *opens* is `readerHomeFor`.
  */
-const READER_RANK: Partial<Record<(typeof SECTIONS)[number]["label"], number>> = {
-  Scores: 0,
-  Schedule: 1,
-  Knockout: 2,
-  Entries: 3,
-  Placement: 4,
-  Desk: 5,
-};
-const READ_ONLY_SECTIONS = [...SECTIONS].sort(
-  (a, b) =>
-    (READER_RANK[a.label] ?? Number.MAX_SAFE_INTEGER) -
-    (READER_RANK[b.label] ?? Number.MAX_SAFE_INTEGER),
-);
+const READ_ONLY_SECTIONS = [
+  { label: "Now", scoped: "/tournaments/$tournamentId/now" },
+  { label: "My matches", scoped: "/tournaments/$tournamentId/me" },
+  { label: "Draws", scoped: "/tournaments/$tournamentId/knockout" },
+  { label: "Players", scoped: "/tournaments/$tournamentId/players" },
+] as const;
+
+/**
+ * The reader's own pages, which are written for reading rather than derived from an operator's.
+ * The read-only notice is about a page with its controls withheld, so it is not drawn on these.
+ */
+const READER_PAGES = ["/now", "/me", "/players"];
 
 /**
  * The entries that belong to the people who run the tournament.
@@ -947,7 +945,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
-        {readOnly ? <ReadOnlyNotice signedIn={signedIn} /> : null}
+        {readOnly && !READER_PAGES.some((page) => pathname.endsWith(page) || pathname.includes(`${page}/`)) ? (
+          <ReadOnlyNotice signedIn={signedIn} />
+        ) : null}
         {/*
           The sentence the pill cannot hold.
 

@@ -161,11 +161,11 @@ test.describe("Explore", () => {
     await expect(page.getByText(TOURNAMENT_NAME)).toBeVisible();
 
     // A card opens the tournament's read-only workspace rather than the participant page:
-    // Browse is where somebody reads an event. This one is in progress, so it opens on Scores;
-    // an upcoming one opens on Entries (`readerHomeFor`).
+    // Browse is where somebody reads an event. This one is in progress, so it opens on Now;
+    // an upcoming one opens on Players (`readerHomeFor`).
     await expect(page.getByRole("link", { name: TOURNAMENT_NAME })).toHaveAttribute(
       "href",
-      routes.scores,
+      routes.now,
     );
 
     // A visitor is offered the trip that changes what they can do, once, in the header bar; creating a tournament is
@@ -321,7 +321,7 @@ test.describe("Explore, an upcoming tournament", () => {
     await expect(page.getByRole("heading", { level: 3 })).toHaveCount(1);
     await expect(page.getByRole("link", { name: TOURNAMENT_NAME })).toHaveAttribute(
       "href",
-      routes.entries,
+      routes.players,
     );
     await expect(page.getByRole("link", { name: "Details" })).toBeVisible();
     await expect(page.getByText(/showing 1 of 1 upcoming/i)).toBeVisible();
