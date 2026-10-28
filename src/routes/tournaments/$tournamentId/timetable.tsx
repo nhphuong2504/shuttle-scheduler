@@ -1,16 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { EmptyState, Page, Panel, StatusPill } from "@/components/app-shell";
-import { ConnectionBadge } from "@/components/connection-badge";
+import { EmptyState, Page, StatusPill } from "@/components/app-shell";
 import { readerDayLabel } from "@/components/reader/day-picker";
 import {
   ReaderMatchList,
   ReaderMatchRow,
   ReaderState,
   type MatchReading,
+  ReaderConnection,
 } from "@/components/reader/reader-match";
 import { useReaderMatches } from "@/hooks/useReaderMatches";
+import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import { attributeMatchesToDays } from "@/lib/tournament/day-scope";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
 import { compareEventOrder } from "@/lib/tournament/event-order";
@@ -43,6 +44,9 @@ export const Route = createFileRoute("/tournaments/$tournamentId/timetable")({
  * everything", so nothing is capped. It is a timetable read from the published schedule, not
  * the organiser's Schedule page at `…/schedule` - it carries no forecast, no conflicts and no
  * planning controls. Each day is its own list, so a reader scrolls to the day they came for.
+ *
+ * While play is on, the list opens where play is - the first match still to finish - rather
+ * than at the first match of the morning, and "Jump to now" brings a reader back there.
  */
 function TimetablePage() {
   const data = useReaderMatches();
@@ -68,6 +72,32 @@ function TimetablePage() {
   }, [matches, orderedDays, eventId, hideFinished]);
 
   const total = sections.reduce((sum, section) => sum + section.rows.length, 0);
+  const playing = normalizeTournamentStatus(data.tournament?.status) === "in_progress";
+  const listed = sections.flatMap((section) => section.rows);
+  const nowIndex = playing ? listed.findIndex((m) => !isFinished(m)) : -1;
+  const nowId = listed[nowIndex]?.id ?? null;
+  const jumpToNow = (smooth: boolean) => {
+    const row = nowId ? document.getElementById(rowAnchor(nowId)) : null;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    row?.scrollIntoView({ block: "start", behavior: smooth && !still ? "smooth" : "auto" });
+  };
+  // Once, on the first load that has a row to go to: later refreshes and filters never move the page.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || !nowId) return;
+    opened.current = true;
+    // When play is still on the first row, the top of the page already is "now".
+    if (nowIndex > 0) jumpToNow(false);
+  });
+  // The way back is offered only while "now" is off screen, where a reader cannot see it.
+  const [nowInView, setNowInView] = useState(true);
+  useEffect(() => {
+    const row = nowId ? document.getElementById(rowAnchor(nowId)) : null;
+    if (!row || typeof IntersectionObserver === "undefined") return setNowInView(true);
+    const watch = new IntersectionObserver(([entry]) => setNowInView(!!entry?.isIntersecting));
+    watch.observe(row);
+    return () => watch.disconnect();
+  }, [nowId]);
   // Times read in the browser's zone, as the Desk and Scores print them, so one match has one time.
   const reading: MatchReading = { label, courtName };
 
@@ -75,12 +105,17 @@ function TimetablePage() {
     <Page
       title="Schedule"
       subtitle="Every scheduled match, day by day, in the order it is played."
-      actions={<ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />}
+      actions={<ReaderConnection live={live} />}
     >
       <div className="space-y-5">
-        <div className="flex flex-wrap items-center gap-2">
+        {/* One row that scrolls sideways on a phone, so the filters never push the first match down. */}
+        <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:px-0">
           {events.length > 1 ? (
-            <div role="group" aria-label="Filter by event" className="flex flex-wrap gap-1.5">
+            <div
+              role="group"
+              aria-label="Filter by event"
+              className="flex shrink-0 gap-1.5 sm:flex-wrap"
+            >
               <Chip active={eventId === "all"} onClick={() => setEventId("all")}>
                 All events
               </Chip>
@@ -102,16 +137,14 @@ function TimetablePage() {
 
         <ReaderState state={data} loadingLabel="Loading the schedule">
           {total === 0 ? (
-            <Panel>
-              <EmptyState
-                title="No matches scheduled"
-                hint={
-                  hideFinished || eventId !== "all"
-                    ? "Nothing matches these filters. Clear them to see the whole schedule."
-                    : "Matches appear here once the organiser gives them a court and a time."
-                }
-              />
-            </Panel>
+            <EmptyState
+              title="No matches scheduled"
+              hint={
+                hideFinished || eventId !== "all"
+                  ? "Nothing matches these filters. Clear them to see the whole schedule."
+                  : "Matches appear here once the organiser gives them a court and a time."
+              }
+            />
           ) : (
             <div className="space-y-5">
               {sections.map(({ day, rows }) =>
@@ -130,8 +163,10 @@ function TimetablePage() {
                     {rows.map((match) => (
                       <ReaderMatchRow
                         key={match.id}
+                        id={rowAnchor(match.id)}
                         match={match}
                         reading={reading}
+                        place={courtName(match.courtId) ?? "Court to be assigned"}
                         aside={<TimeAndState match={match} />}
                       />
                     ))}
@@ -142,8 +177,21 @@ function TimetablePage() {
           )}
         </ReaderState>
       </div>
+      {nowId && !nowInView ? (
+        <button
+          type="button"
+          onClick={() => jumpToNow(true)}
+          className="fixed bottom-4 left-1/2 z-20 min-h-11 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg transition-colors hover:bg-primary/90"
+        >
+          Jump to now
+        </button>
+      ) : null}
     </Page>
   );
+}
+
+function rowAnchor(matchId: string) {
+  return `timetable-match-${matchId}`;
 }
 
 /** The time leads; a live match adds its state and a finished one its score. */
@@ -179,7 +227,7 @@ function Chip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "min-h-11 rounded-full border px-4 text-sm font-semibold transition-colors",
+        "min-h-11 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold transition-colors",
         active
           ? "border-primary bg-primary text-primary-foreground"
           : "border-input bg-surface text-muted-foreground hover:bg-muted/60",

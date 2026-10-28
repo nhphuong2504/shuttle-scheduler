@@ -2,9 +2,8 @@ import { Link, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import { EmptyState, Notice, Page, Panel } from "@/components/app-shell";
-import { ConnectionBadge } from "@/components/connection-badge";
 import { PlayerView } from "@/components/reader/player-view";
-import { ReaderState } from "@/components/reader/reader-match";
+import { ReaderState, ReaderConnection } from "@/components/reader/reader-match";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMyMatchNotifications, type MatchNotification } from "@/hooks/useMyMatchNotifications";
@@ -56,9 +55,7 @@ function MyMatchesPage() {
     <Page
       title="My matches"
       subtitle="Your next match, and where your results lead."
-      actions={
-        <ConnectionBadge status={data.live.status} lastUpdatedAt={data.live.lastUpdatedAt} />
-      }
+      actions={<ReaderConnection live={data.live} />}
     >
       <ReaderState
         state={{ ...data, loading: data.loading || !ready }}
@@ -133,26 +130,24 @@ function OtherCalls({
 function SignInToFollow({ tournamentId }: { tournamentId: string }) {
   const href = useLocation({ select: (location) => location.href });
   return (
-    <Panel>
-      <EmptyState
-        title="Sign in to follow your matches"
-        hint="Once signed in, pick yourself to see your next match, your court and where your results lead, and get a notification when you are called."
-        action={
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button size="sm" asChild>
-              <Link to="/auth" search={signInSearch(href)}>
-                Sign in
-              </Link>
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/tournaments/$tournamentId/players" params={{ tournamentId }}>
-                Browse players
-              </Link>
-            </Button>
-          </div>
-        }
-      />
-    </Panel>
+    <EmptyState
+      title="Sign in to follow your matches"
+      hint="Once signed in, pick yourself to see your next match, your court and where your results lead, and get a notification when you are called."
+      action={
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button size="sm" asChild>
+            <Link to="/auth" search={signInSearch(href)}>
+              Sign in
+            </Link>
+          </Button>
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/tournaments/$tournamentId/players" params={{ tournamentId }}>
+              Browse players
+            </Link>
+          </Button>
+        </div>
+      }
+    />
   );
 }
 
@@ -178,12 +173,10 @@ function ChoosePlayer({
 
   if (!players.length) {
     return (
-      <Panel>
-        <EmptyState
-          title="No players yet"
-          hint="Entries appear here once the organiser has added them."
-        />
-      </Panel>
+      <EmptyState
+        title="No players yet"
+        hint="Entries appear here once the organiser has added them."
+      />
     );
   }
 

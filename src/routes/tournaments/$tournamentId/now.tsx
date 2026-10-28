@@ -1,8 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
-import { EmptyState, Page, Panel, StatusPill } from "@/components/app-shell";
-import { ConnectionBadge } from "@/components/connection-badge";
+import { EmptyState, Page, StatusPill } from "@/components/app-shell";
 import { MatchIdentity } from "@/components/match-identity";
 import { ReaderDayPicker } from "@/components/reader/day-picker";
 import {
@@ -11,6 +10,7 @@ import {
   ReaderMatchRow,
   whereAndWhen,
   type MatchReading,
+  ReaderConnection,
 } from "@/components/reader/reader-match";
 import { TournamentResults } from "@/components/tournament-results";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import { attributeMatchesToDays, resolveSelectedDay } from "@/lib/tournament/day-scope";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
 import { matchesOfPlayer, nextMatchOf, nowBoard } from "@/lib/tournament/reader-board";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/now")({
   head: () => ({
@@ -52,6 +53,7 @@ function NowPage() {
   const { tournament, live, matches, days, label, courtName } = data;
   const { playerId } = useMyPlayer(tournamentId);
   const [pickedDayId, setPickedDayId] = useState<string | null>(null);
+  const [allCourts, setAllCourts] = useState(false);
   // The browser's clock, adopted after mount so the server and first render agree.
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -83,7 +85,7 @@ function NowPage() {
     <Page
       title="Now"
       subtitle="On court, up next and just finished."
-      actions={<ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />}
+      actions={<ReaderConnection live={live} />}
     >
       <div className="space-y-5">
         <ReaderDayPicker days={orderedDays} selectedId={dayId} onSelect={setPickedDayId} />
@@ -101,35 +103,45 @@ function NowPage() {
                 On court
               </h2>
               {board.live.length === 0 ? (
-                <Panel>
-                  <EmptyState
-                    title={status === "upcoming" ? "Play has not started" : "No match on court"}
-                    hint={
-                      status === "upcoming"
-                        ? "Find who is playing, and open a player for their matches."
-                        : "The next matches are listed as they are called."
-                    }
-                    action={
-                      <Button size="sm" variant="outline" asChild>
-                        <Link to="/tournaments/$tournamentId/players" params={{ tournamentId }}>
-                          Find a player
-                        </Link>
-                      </Button>
-                    }
-                  />
-                </Panel>
+                <EmptyState
+                  title={status === "upcoming" ? "Play has not started" : "No match on court"}
+                  hint={
+                    status === "upcoming"
+                      ? "Find who is playing, and open a player for their matches."
+                      : "The next matches are listed as they are called."
+                  }
+                  action={
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to="/tournaments/$tournamentId/players" params={{ tournamentId }}>
+                        Find a player
+                      </Link>
+                    </Button>
+                  }
+                />
               ) : (
-                <ul className="grid gap-3 sm:grid-cols-2">
-                  {board.live.map((match) => (
-                    <CourtCard
-                      key={match.id}
-                      match={match}
-                      reading={reading}
-                      now={now}
-                      demo={!!tournament?.is_demo}
-                    />
-                  ))}
-                </ul>
+                <>
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {board.live.map((match, index) => (
+                      <CourtCard
+                        key={match.id}
+                        match={match}
+                        reading={reading}
+                        now={now}
+                        demo={!!tournament?.is_demo}
+                        folded={!allCourts && index >= PHONE_COURTS}
+                      />
+                    ))}
+                  </ul>
+                  {board.live.length > PHONE_COURTS && !allCourts ? (
+                    <Button
+                      variant="outline"
+                      className="min-h-11 w-full sm:hidden"
+                      onClick={() => setAllCourts(true)}
+                    >
+                      Show all {board.live.length} courts
+                    </Button>
+                  ) : null}
+                </>
               )}
             </section>
 
@@ -171,17 +183,25 @@ function NowPage() {
 
 /** One court with a match on it: the court is the address a spectator walks to, so it leads. */
 const MAX_SHOWN_MINUTES = 180;
+/**
+ * Courts a phone shows before "Show all": a full hall would otherwise push Up next several
+ * screens down. A wider screen lays the courts out in two columns and shows them all.
+ */
+const PHONE_COURTS = 4;
 
 function CourtCard({
   match,
   reading,
   now,
   demo,
+  folded,
 }: {
   match: DeskMatch;
   reading: MatchReading;
   now: number | null;
   demo: boolean;
+  /** Hidden on a phone until the reader asks for every court. */
+  folded: boolean;
 }) {
   const started = match.startedAt ? new Date(match.startedAt).getTime() : null;
   const elapsed =
@@ -190,17 +210,26 @@ function CourtCard({
   // closed rather than a match: neither has a running time worth printing.
   const minutes = elapsed != null && elapsed <= MAX_SHOWN_MINUTES && !demo ? elapsed : null;
   return (
-    <li className="space-y-3 rounded-xl border border-hairline bg-surface p-4 shadow-panel">
+    <li
+      className={cn(
+        "space-y-2 rounded-xl border border-hairline bg-surface p-3 shadow-panel sm:space-y-3 sm:p-4",
+        folded && "max-sm:hidden",
+      )}
+    >
       <div className="flex items-center justify-between gap-3">
-        <p className="font-display text-xl font-bold tracking-tight">
+        <p className="font-display text-lg font-bold tracking-tight sm:text-xl">
           {reading.courtName(match.courtId) ?? "Court not assigned"}
         </p>
         <StatusPill status={match.status} />
       </div>
-      <div className="space-y-1 text-lg font-semibold leading-snug">
+      {/* On a phone "vs" leads the second line rather than taking one of its own. */}
+      <div className="space-y-0.5 text-base font-semibold leading-snug sm:space-y-1 sm:text-lg">
         <p className="break-words">{reading.label(match.teams[0])}</p>
-        <p className="text-sm font-normal text-muted-foreground">vs</p>
-        <p className="break-words">{reading.label(match.teams[1])}</p>
+        <p className="text-sm font-normal text-muted-foreground max-sm:hidden">vs</p>
+        <p className="break-words">
+          <span className="text-sm font-normal text-muted-foreground sm:hidden">vs </span>
+          {reading.label(match.teams[1])}
+        </p>
       </div>
       <p className="flex flex-wrap justify-between gap-x-3 font-score text-t2 text-muted-foreground">
         <MatchIdentity match={match} />

@@ -1,7 +1,8 @@
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { EmptyState, Notice, Panel, StatusPill } from "@/components/app-shell";
+import { EmptyState, Notice, StatusPill } from "@/components/app-shell";
+import { ConnectionBadge } from "@/components/connection-badge";
 import { MatchIdentity } from "@/components/match-identity";
 import { Button } from "@/components/ui/button";
 import { timeLabel } from "@/lib/tournament/format";
@@ -49,6 +50,8 @@ export function ReaderMatchRow({
   reading,
   mineTeamId,
   aside,
+  place,
+  id,
 }: {
   match: DeskMatch;
   reading: MatchReading;
@@ -56,11 +59,18 @@ export function ReaderMatchRow({
   mineTeamId?: string | null;
   /** Replaces the default right-hand column (the status, or the score). */
   aside?: ReactNode;
+  /** Replaces the court-and-time line, for a list whose aside already carries the time. */
+  place?: ReactNode;
+  /** An anchor, so a long list can be scrolled to this row. */
+  id?: string;
 }) {
   const won = match.status === "reported" ? sideThatWon(match.initialGames) : null;
   const finished = match.status === "reported" || match.status === "walkover";
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3">
+    <li
+      id={id}
+      className="grid scroll-mt-24 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3"
+    >
       <div className="min-w-0 space-y-1">
         <p className="font-score text-t2 text-muted-foreground">
           <MatchIdentity match={match} />
@@ -78,12 +88,13 @@ export function ReaderMatchRow({
             mine={!!mineTeamId && match.teams[1] === mineTeamId}
           />
         </p>
-        <p className="text-sm text-muted-foreground">{whereAndWhen(match, reading)}</p>
+        <p className="text-sm text-muted-foreground">{place ?? whereAndWhen(match, reading)}</p>
       </div>
       <div className="flex flex-col items-end gap-1.5 text-right">
         {aside ?? (
           <>
-            {finished ? null : <StatusPill status={match.status} />}
+            {/* "Scheduled" is what every listed match is until it is called: it tells a reader nothing. */}
+            {finished || match.status === "scheduled" ? null : <StatusPill status={match.status} />}
             {match.score ? (
               <span className="whitespace-nowrap font-score text-base font-semibold tabular-nums">
                 {match.score}
@@ -163,17 +174,15 @@ export function ReaderState({
   if (state.loading) return <ReaderLoading label={loadingLabel} />;
   if (state.error) {
     return (
-      <Panel>
-        <EmptyState
-          title="Could not load the tournament"
-          hint="The connection may have dropped. Check it, then try again."
-          action={
-            <Button size="sm" variant="outline" onClick={state.retry}>
-              Try again
-            </Button>
-          }
-        />
-      </Panel>
+      <EmptyState
+        title="Could not load the tournament"
+        hint="The connection may have dropped. Check it, then try again."
+        action={
+          <Button size="sm" variant="outline" onClick={state.retry}>
+            Try again
+          </Button>
+        }
+      />
     );
   }
   return (
@@ -188,5 +197,26 @@ export function ReaderState({
       ) : null}
       {children}
     </>
+  );
+}
+
+/**
+ * The connection readout as a reader sees it: said only when something is wrong.
+ *
+ * A healthy connection, and the moment of connecting on every load, are not news to a
+ * spectator, and a green "Live" beside pages full of live matches reads as one more live
+ * match. The badge stays mounted as a live region either way, so going offline is still
+ * announced; it is only drawn when updates have stopped.
+ */
+export function ReaderConnection({
+  live,
+}: {
+  live: { status: "connecting" | "live" | "offline" | "error"; lastUpdatedAt: number };
+}) {
+  const healthy = live.status === "live" || live.status === "connecting";
+  return (
+    <span className={healthy ? "sr-only" : undefined}>
+      <ConnectionBadge status={live.status} lastUpdatedAt={live.lastUpdatedAt} />
+    </span>
   );
 }

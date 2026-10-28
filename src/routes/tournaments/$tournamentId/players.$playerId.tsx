@@ -1,9 +1,8 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 
-import { EmptyState, Page, Panel } from "@/components/app-shell";
-import { ConnectionBadge } from "@/components/connection-badge";
+import { EmptyState, Page } from "@/components/app-shell";
 import { PlayerView, eventNames } from "@/components/reader/player-view";
-import { ReaderState } from "@/components/reader/reader-match";
+import { ReaderState, ReaderConnection } from "@/components/reader/reader-match";
 import { Button } from "@/components/ui/button";
 import { useMyMatchNotifications } from "@/hooks/useMyMatchNotifications";
 import { useMyPlayer } from "@/hooks/useMyPlayer";
@@ -51,7 +50,7 @@ function PlayerPage() {
           >
             All players
           </Link>
-          <ConnectionBadge status={data.live.status} lastUpdatedAt={data.live.lastUpdatedAt} />
+          <ReaderConnection live={data.live} />
           {known ? (
             isMe ? (
               <Button size="sm" variant="outline" asChild>
@@ -72,12 +71,10 @@ function PlayerPage() {
         {known ? (
           <PlayerView playerId={playerId} data={data} calls={calls} showName={false} />
         ) : (
-          <Panel>
-            <EmptyState
-              title="This player is not in the tournament"
-              hint="They may have withdrawn, or the link is out of date."
-            />
-          </Panel>
+          <EmptyState
+            title="This player is not in the tournament"
+            hint="They may have withdrawn, or the link is out of date."
+          />
         )}
       </ReaderState>
     </Page>

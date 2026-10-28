@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
-import { EmptyState, Page, Panel } from "@/components/app-shell";
+import { EmptyState, Page } from "@/components/app-shell";
 import { ReaderState } from "@/components/reader/reader-match";
 import { Input } from "@/components/ui/input";
 import { useMyPlayer } from "@/hooks/useMyPlayer";
@@ -106,19 +106,15 @@ function PlayersPage() {
 
         <ReaderState state={data} loadingLabel="Loading the players">
           {!rows.length ? (
-            <Panel>
-              <EmptyState
-                title="No players yet"
-                hint="Entries appear here once the organiser adds them."
-              />
-            </Panel>
+            <EmptyState
+              title="No players yet"
+              hint="Entries appear here once the organiser adds them."
+            />
           ) : !visible.length ? (
-            <Panel>
-              <EmptyState
-                title="No player matches that name"
-                hint="Check the spelling, or search part of the name."
-              />
-            </Panel>
+            <EmptyState
+              title="No player matches that name"
+              hint="Check the spelling, or search part of the name."
+            />
           ) : (
             <>
               <p className="text-sm text-muted-foreground" role="status">
