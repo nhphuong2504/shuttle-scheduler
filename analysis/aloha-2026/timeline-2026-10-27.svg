@@ -1,0 +1,314 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="487" viewBox="0 0 1360 487" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="1360" height="487" fill="#ffffff"/>
+<text x="74" y="28" font-size="18" font-weight="600" fill="#0f172a">Day 2 — morning plan vs actual play</text>
+<text x="74" y="48" font-size="12" fill="#475569">Hollow bar = plan published that morning · solid bar = actual play · blue = placement · orange = knockout</text>
+<rect x="1038" y="16" width="12" height="10" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="1054" y="25" font-size="11" fill="#475569">planned</text>
+<rect x="1116" y="16" width="12" height="10" fill="#2563eb"/>
+<text x="1132" y="25" font-size="11" fill="#475569">placement</text>
+<rect x="1210" y="16" width="12" height="10" fill="#ea580c"/>
+<text x="1226" y="25" font-size="11" fill="#475569">knockout</text>
+<rect x="92.72592592592594" y="70" width="1235.911111111111" height="367" fill="#f8fafc"/>
+<line x1="92.72592592592594" y1="70" x2="92.72592592592594" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="148.9037037037037" y1="70" x2="148.9037037037037" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="148.9037037037037" y="64" font-size="11" fill="#64748b" text-anchor="middle">10:00</text>
+<line x1="205.0814814814815" y1="70" x2="205.0814814814815" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="261.25925925925924" y1="70" x2="261.25925925925924" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="261.25925925925924" y="64" font-size="11" fill="#64748b" text-anchor="middle">11:00</text>
+<line x1="317.43703703703704" y1="70" x2="317.43703703703704" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="373.61481481481485" y1="70" x2="373.61481481481485" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="373.61481481481485" y="64" font-size="11" fill="#64748b" text-anchor="middle">12:00</text>
+<line x1="429.7925925925926" y1="70" x2="429.7925925925926" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="485.9703703703704" y1="70" x2="485.9703703703704" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="485.9703703703704" y="64" font-size="11" fill="#64748b" text-anchor="middle">13:00</text>
+<line x1="542.148148148148" y1="70" x2="542.148148148148" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="598.325925925926" y1="70" x2="598.325925925926" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="598.325925925926" y="64" font-size="11" fill="#64748b" text-anchor="middle">14:00</text>
+<line x1="654.5037037037036" y1="70" x2="654.5037037037036" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="710.6814814814815" y1="70" x2="710.6814814814815" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="710.6814814814815" y="64" font-size="11" fill="#64748b" text-anchor="middle">15:00</text>
+<line x1="766.8592592592593" y1="70" x2="766.8592592592593" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="823.037037037037" y1="70" x2="823.037037037037" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="823.037037037037" y="64" font-size="11" fill="#64748b" text-anchor="middle">16:00</text>
+<line x1="879.2148148148149" y1="70" x2="879.2148148148149" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="935.3925925925926" y1="70" x2="935.3925925925926" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="935.3925925925926" y="64" font-size="11" fill="#64748b" text-anchor="middle">17:00</text>
+<line x1="991.5703703703705" y1="70" x2="991.5703703703705" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="1047.7481481481482" y1="70" x2="1047.7481481481482" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="1047.7481481481482" y="64" font-size="11" fill="#64748b" text-anchor="middle">18:00</text>
+<line x1="1103.9259259259259" y1="70" x2="1103.9259259259259" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="1160.1037037037038" y1="70" x2="1160.1037037037038" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="1160.1037037037038" y="64" font-size="11" fill="#64748b" text-anchor="middle">19:00</text>
+<line x1="1216.2814814814815" y1="70" x2="1216.2814814814815" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="1272.4592592592594" y1="70" x2="1272.4592592592594" y2="435" stroke="#e2e8f0" stroke-width="1"/>
+<text x="1272.4592592592594" y="64" font-size="11" fill="#64748b" text-anchor="middle">20:00</text>
+<line x1="1328.637037037037" y1="70" x2="1328.637037037037" y2="435" stroke="#f1f5f9" stroke-width="1"/>
+<rect x="130.17777777777778" y="309" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-1 planned 09:50</title></rect>
+<rect x="148.9037037037037" y="111" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-2 planned 10:00</title></rect>
+<rect x="92.72592592592594" y="243" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-3 planned 09:30</title></rect>
+<rect x="130.17777777777778" y="111" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-4 planned 09:50</title></rect>
+<rect x="130.17777777777778" y="243" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-5 planned 09:50</title></rect>
+<rect x="111.45185185185186" y="177" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-6 planned 09:40</title></rect>
+<rect x="130.17777777777778" y="276" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-7 planned 09:50</title></rect>
+<rect x="148.9037037037037" y="78" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-8 planned 10:00</title></rect>
+<rect x="111.45185185185186" y="210" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-9 planned 09:40</title></rect>
+<rect x="130.17777777777778" y="78" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-10 planned 09:50</title></rect>
+<rect x="148.9037037037037" y="177" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-11 planned 10:00</title></rect>
+<rect x="130.17777777777778" y="177" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-12 planned 09:50</title></rect>
+<rect x="92.72592592592594" y="210" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-13 planned 09:30</title></rect>
+<rect x="92.72592592592594" y="309" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-14 planned 09:30</title></rect>
+<rect x="111.45185185185186" y="309" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-15 planned 09:40</title></rect>
+<rect x="111.45185185185186" y="243" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-16 planned 09:40</title></rect>
+<rect x="111.45185185185186" y="111" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-17 planned 09:40</title></rect>
+<rect x="111.45185185185186" y="78" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-18 planned 09:40</title></rect>
+<rect x="130.17777777777778" y="210" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-19 planned 09:50</title></rect>
+<rect x="92.72592592592594" y="177" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-20 planned 09:30</title></rect>
+<rect x="111.45185185185186" y="276" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-21 planned 09:40</title></rect>
+<rect x="148.9037037037037" y="144" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-22 planned 10:00</title></rect>
+<rect x="130.17777777777778" y="144" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-23 planned 09:50</title></rect>
+<rect x="167.62962962962962" y="78" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MS round2 r2-makeup-2 planned 10:10</title></rect>
+<rect x="92.72592592592594" y="111" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WS round2 r2-2 planned 09:30</title></rect>
+<rect x="92.72592592592594" y="276" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WS round2 r2-3 planned 09:30</title></rect>
+<rect x="92.72592592592594" y="144" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WS round2 r2-7 planned 09:30</title></rect>
+<rect x="92.72592592592594" y="78" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WS round2 r2-11 planned 09:30</title></rect>
+<rect x="111.45185185185186" y="144" width="18.725925925925928" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WS round2 r2-makeup-2 planned 09:40</title></rect>
+<rect x="148.9037037037037" y="243" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD A r1 s2 planned 10:00</title></rect>
+<rect x="167.62962962962962" y="144" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD A r2 s2 planned 10:10</title></rect>
+<rect x="148.9037037037037" y="276" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD B r1 s2 planned 10:00</title></rect>
+<rect x="167.62962962962962" y="111" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD B r2 s2 planned 10:10</title></rect>
+<rect x="148.9037037037037" y="309" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD C r1 s2 planned 10:00</title></rect>
+<rect x="167.62962962962962" y="177" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD C r2 s2 planned 10:10</title></rect>
+<rect x="148.9037037037037" y="210" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD D r1 s2 planned 10:00</title></rect>
+<rect x="186.35555555555555" y="78" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>WD D r2 s2 planned 10:20</title></rect>
+<rect x="317.43703703703704" y="111" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD A r1 s2 planned 11:30</title></rect>
+<rect x="298.7111111111111" y="78" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD A r1 s6 planned 11:20</title></rect>
+<rect x="261.25925925925924" y="309" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD A r1 s8 planned 11:00</title></rect>
+<rect x="317.43703703703704" y="177" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD A r2 s2 planned 11:30</title></rect>
+<rect x="279.9851851851852" y="144" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD B r1 s2 planned 11:10</title></rect>
+<rect x="298.7111111111111" y="243" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD B r1 s6 planned 11:20</title></rect>
+<rect x="336.162962962963" y="78" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD B r1 s8 planned 11:40</title></rect>
+<rect x="261.25925925925924" y="276" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD B r2 s2 planned 11:00</title></rect>
+<rect x="261.25925925925924" y="210" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD C r1 s2 planned 11:00</title></rect>
+<rect x="298.7111111111111" y="276" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD C r1 s6 planned 11:20</title></rect>
+<rect x="261.25925925925924" y="243" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD C r1 s8 planned 11:00</title></rect>
+<rect x="279.9851851851852" y="177" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD C r2 s2 planned 11:10</title></rect>
+<rect x="298.7111111111111" y="210" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD D r1 s2 planned 11:20</title></rect>
+<rect x="298.7111111111111" y="309" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD D r1 s6 planned 11:20</title></rect>
+<rect x="317.43703703703704" y="144" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD D r1 s8 planned 11:30</title></rect>
+<rect x="279.9851851851852" y="111" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>XD D r2 s2 planned 11:10</title></rect>
+<rect x="223.80740740740742" y="243" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD A r1 s1 planned 10:40</title></rect>
+<rect x="223.80740740740742" y="276" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD A r1 s2 planned 10:40</title></rect>
+<rect x="242.53333333333333" y="144" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD A r1 s3 planned 10:50</title></rect>
+<rect x="242.53333333333333" y="177" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD A r1 s4 planned 10:50</title></rect>
+<rect x="186.35555555555555" y="243" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD B r1 s2 planned 10:20</title></rect>
+<rect x="186.35555555555555" y="276" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD B r2 s2 planned 10:20</title></rect>
+<rect x="205.0814814814815" y="144" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD B r2 s3 planned 10:30</title></rect>
+<rect x="205.0814814814815" y="177" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD B r2 s4 planned 10:30</title></rect>
+<rect x="186.35555555555555" y="210" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD C r1 s2 planned 10:20</title></rect>
+<rect x="205.0814814814815" y="111" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD C r2 s2 planned 10:30</title></rect>
+<rect x="186.35555555555555" y="309" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD C r2 s3 planned 10:20</title></rect>
+<rect x="223.80740740740742" y="78" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD C r2 s4 planned 10:40</title></rect>
+<rect x="223.80740740740742" y="210" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD D r1 s1 planned 10:40</title></rect>
+<rect x="223.80740740740742" y="309" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD D r1 s2 planned 10:40</title></rect>
+<rect x="242.53333333333333" y="111" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD D r1 s3 planned 10:50</title></rect>
+<rect x="261.25925925925924" y="78" width="37.451851851851856" height="28" fill="none" stroke="#94a3b8" stroke-width="1.3" rx="2"><title>MD D r1 s4 planned 11:00</title></rect>
+<text x="62" y="96" font-size="12" fill="#334155" text-anchor="end">Court 1</text>
+<line x1="74" y1="106" x2="1338" y2="106" stroke="#f1f5f9"/>
+<text x="62" y="129" font-size="12" fill="#334155" text-anchor="end">Court 2</text>
+<line x1="74" y1="139" x2="1338" y2="139" stroke="#f1f5f9"/>
+<text x="62" y="162" font-size="12" fill="#334155" text-anchor="end">Court 3</text>
+<line x1="74" y1="172" x2="1338" y2="172" stroke="#f1f5f9"/>
+<text x="62" y="195" font-size="12" fill="#334155" text-anchor="end">Court 4</text>
+<line x1="74" y1="205" x2="1338" y2="205" stroke="#f1f5f9"/>
+<text x="62" y="228" font-size="12" fill="#334155" text-anchor="end">Court 5</text>
+<line x1="74" y1="238" x2="1338" y2="238" stroke="#f1f5f9"/>
+<text x="62" y="261" font-size="12" fill="#334155" text-anchor="end">Court 6</text>
+<line x1="74" y1="271" x2="1338" y2="271" stroke="#f1f5f9"/>
+<text x="62" y="294" font-size="12" fill="#334155" text-anchor="end">Court 7</text>
+<line x1="74" y1="304" x2="1338" y2="304" stroke="#f1f5f9"/>
+<text x="62" y="327" font-size="12" fill="#334155" text-anchor="end">Court 8</text>
+<line x1="74" y1="337" x2="1338" y2="337" stroke="#f1f5f9"/>
+<text x="62" y="360" font-size="12" fill="#334155" text-anchor="end">Court 9</text>
+<line x1="74" y1="370" x2="1338" y2="370" stroke="#f1f5f9"/>
+<text x="62" y="393" font-size="12" fill="#334155" text-anchor="end">Court 10</text>
+<line x1="74" y1="403" x2="1338" y2="403" stroke="#f1f5f9"/>
+<text x="62" y="426" font-size="12" fill="#334155" text-anchor="end">Court 11</text>
+<line x1="74" y1="436" x2="1338" y2="436" stroke="#f1f5f9"/>
+<rect x="205.02193303703703" y="313" width="21.556568098765435" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-1 · 10:29–10:41 (12 min)</title></rect>
+<rect x="217.45248355555555" y="115" width="19.75397925925926" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-2 · 10:36–10:47 (11 min)</title></rect>
+<rect x="149.85373234567902" y="247" width="22.002338765432096" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-3 · 10:00–10:12 (12 min)</title></rect>
+<rect x="194.29637807407408" y="115" width="22.721039802469136" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-4 · 10:24–10:36 (12 min)</title></rect>
+<rect x="194.41148009876542" y="247" width="22.330760296296294" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-5 · 10:24–10:36 (12 min)</title></rect>
+<rect x="169.8473098271605" y="181" width="23.707802469135803" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-6 · 10:11–10:23 (13 min)</title></rect>
+<rect x="204.98329520987653" y="280" width="21.469867061728397" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-7 · 10:29–10:41 (11 min)</title></rect>
+<rect x="217.39199881481483" y="82" width="22.260756543209876" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-8 · 10:36–10:48 (12 min)</title></rect>
+<rect x="169.7435994074074" y="214" width="23.643541333333335" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-9 · 10:11–10:23 (13 min)</title></rect>
+<rect x="193.64178212345678" y="82" width="23.298640987654323" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-10 · 10:23–10:36 (12 min)</title></rect>
+<rect x="217.5980776296296" y="181" width="19.52723950617284" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-11 · 10:36–10:47 (10 min)</title></rect>
+<rect x="193.73016849382714" y="181" width="23.52519348148148" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-12 · 10:23–10:36 (13 min)</title></rect>
+<rect x="149.81762251851853" y="214" width="19.549024" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-13 · 10:00–10:10 (10 min)</title></rect>
+<rect x="149.92707555555555" y="313" width="24.705238913580246" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-14 · 10:00–10:13 (13 min)</title></rect>
+<rect x="175.16150913580248" y="313" width="29.736489481481485" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-15 · 10:14–10:29 (16 min)</title></rect>
+<rect x="172.17319466666666" y="247" width="21.93420760493827" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-16 · 10:12–10:24 (12 min)</title></rect>
+<rect x="171.96299614814814" y="115" width="22.014666666666667" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-17 · 10:12–10:24 (12 min)</title></rect>
+<rect x="169.21137738271602" y="82" width="24.061067061728398" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-18 · 10:10–10:23 (13 min)</title></rect>
+<rect x="193.68653708641975" y="214" width="23.400353975308644" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-19 · 10:23–10:36 (12 min)</title></rect>
+<rect x="149.78254261728395" y="181" width="19.752418765432097" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-20 · 10:00–10:11 (11 min)</title></rect>
+<rect x="173.55145402469134" y="280" width="31.14133965432099" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-21 · 10:13–10:29 (17 min)</title></rect>
+<rect x="216.83324839506173" y="148" width="22.74741214814815" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-22 · 10:36–10:48 (12 min)</title></rect>
+<rect x="194.34135150617283" y="148" width="22.284569679012346" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-23 · 10:24–10:36 (12 min)</title></rect>
+<rect x="239.9585809382716" y="82" width="22.164068345679013" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>MS round2 r2-makeup-2 · 10:48–11:00 (12 min)</title></rect>
+<rect x="149.6964033580247" y="115" width="22.035358814814817" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>WS round2 r2-2 · 10:00–10:12 (12 min)</title></rect>
+<rect x="149.8894052345679" y="280" width="23.179575308641976" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>WS round2 r2-3 · 10:00–10:12 (12 min)</title></rect>
+<rect x="149.73522844444443" y="148" width="21.814174419753087" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>WS round2 r2-7 · 10:00–10:12 (12 min)</title></rect>
+<rect x="149.65945086419754" y="82" width="19.06296138271605" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>WS round2 r2-11 · 10:00–10:10 (10 min)</title></rect>
+<rect x="172.08053254320987" y="148" width="22.127459160493828" height="20" fill="#2563eb" fill-opacity="0.92" rx="2"><title>WS round2 r2-makeup-2 · 10:12–10:24 (12 min)</title></rect>
+<rect x="608.8730540246913" y="214" width="23.877615407407408" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r1 s2 · 14:05–14:18 (13 min)</title></rect>
+<rect x="611.4107602962963" y="313" width="22.126491654320986" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r1 s3 · 14:06–14:18 (12 min)</title></rect>
+<rect x="496.7170544197531" y="247" width="56.81601975308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r1 s4 · 13:05–13:36 (30 min)</title></rect>
+<rect x="550.8372898765432" y="82" width="56.72803911111111" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r1 s6 · 13:34–14:04 (30 min)</title></rect>
+<rect x="633.211639308642" y="247" width="57.7735387654321" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r1 s8 · 14:18–14:49 (31 min)</title></rect>
+<rect x="694.860196345679" y="379" width="44.734832592592596" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r2 s1 · 14:51–15:15 (24 min)</title></rect>
+<rect x="862.6553536790123" y="115" width="40.85085708641976" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r2 s2 · 16:21–16:42 (22 min)</title></rect>
+<rect x="757.0748693333334" y="280" width="41.028285234567896" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r2 s3 · 15:24–15:46 (22 min)</title></rect>
+<rect x="828.0428203456789" y="346" width="44.23328987654321" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r2 s4 · 16:02–16:26 (24 min)</title></rect>
+<rect x="931.1218642962963" y="346" width="52.02505402469136" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r3 s1 · 16:57–17:25 (28 min)</title></rect>
+<rect x="916.4931085432099" y="379" width="43.945628444444445" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r3 s2 · 16:49–17:13 (23 min)</title></rect>
+<rect x="1013.1674800987654" y="82" width="51.48724543209876" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS A r4 s1 · 17:41–18:09 (27 min)</title></rect>
+<rect x="633.7929232592593" y="313" width="57.40560553086419" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r1 s2 · 14:18–14:49 (31 min)</title></rect>
+<rect x="633.0710076049384" y="115" width="56.52792138271605" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r1 s6 · 14:18–14:48 (30 min)</title></rect>
+<rect x="633.1045270123457" y="148" width="56.67794725925926" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r1 s8 · 14:18–14:48 (30 min)</title></rect>
+<rect x="798.5025785679012" y="280" width="64.38747338271605" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r2 s1 · 15:46–16:21 (34 min)</title></rect>
+<rect x="435.6085218765432" y="82" width="60.459648" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r2 s2 · 12:33–13:05 (32 min)</title></rect>
+<rect x="798.4219634567901" y="214" width="64.05958241975308" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r2 s3 · 15:46–16:21 (34 min)</title></rect>
+<rect x="778.7344924444444" y="379" width="49.237419061728396" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r2 s4 · 15:36–16:02 (26 min)</title></rect>
+<rect x="902.9809173333333" y="280" width="57.23273402469136" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r3 s1 · 16:42–17:13 (31 min)</title></rect>
+<rect x="960.0056375308642" y="115" width="53.3462929382716" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS B r3 s2 · 17:13–17:41 (28 min)</title></rect>
+<rect x="1064.701134617284" y="148" width="37.451851851851856" height="20" fill="#ea580c" fill-opacity="0.55" rx="2"><title>MS B r4 s1 · 18:09–in progress (20 min)</title></rect>
+<rect x="608.6737165432098" y="82" width="23.38144079012346" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r1 s2 · 14:05–14:18 (12 min)</title></rect>
+<rect x="418.3537983209876" y="313" width="46.015998024691356" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r1 s4 · 12:23–12:48 (25 min)</title></rect>
+<rect x="559.0143087407407" y="214" width="49.782718024691356" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r1 s6 · 13:39–14:05 (27 min)</title></rect>
+<rect x="464.5073070617284" y="280" width="45.83136039506173" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r1 s8 · 12:48–13:13 (24 min)</title></rect>
+<rect x="756.7725080493827" y="214" width="40.73999960493827" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r2 s1 · 15:24–15:46 (22 min)</title></rect>
+<rect x="691.3953694814815" y="313" width="41.582385382716055" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r2 s2 · 14:49–15:11 (22 min)</title></rect>
+<rect x="862.6142502716049" y="247" width="40.086652049382714" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r2 s3 · 16:21–16:42 (21 min)</title></rect>
+<rect x="756.8093981234568" y="247" width="40.809504000000004" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r2 s4 · 15:24–15:46 (22 min)</title></rect>
+<rect x="947.9737619753087" y="82" width="45.72377995061728" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r3 s1 · 17:06–17:31 (24 min)</title></rect>
+<rect x="1013.2138579753085" y="280" width="52.02808138271605" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS C r3 s2 · 17:41–18:09 (28 min)</title></rect>
+<rect x="611.3092969876543" y="280" width="22.053398123456788" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r1 s2 · 14:06–14:18 (12 min)</title></rect>
+<rect x="496.6903387654321" y="181" width="57.05068681481481" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r1 s3 · 13:05–13:36 (30 min)</title></rect>
+<rect x="633.7221392592593" y="280" width="57.38229175308641" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r1 s4 · 14:18–14:49 (31 min)</title></rect>
+<rect x="633.1393884444444" y="181" width="56.81005866666667" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r1 s6 · 14:18–14:48 (30 min)</title></rect>
+<rect x="464.47718953086417" y="148" width="45.721158320987655" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r1 s8 · 12:48–13:12 (24 min)</title></rect>
+<rect x="798.3639755061728" y="181" width="63.77054775308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r2 s1 · 15:46–16:20 (34 min)</title></rect>
+<rect x="756.6693281975308" y="115" width="40.36392059259259" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r2 s2 · 15:24–15:46 (22 min)</title></rect>
+<rect x="739.8559122962963" y="346" width="41.75247920987655" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r2 s3 · 15:15–15:37 (22 min)</title></rect>
+<rect x="733.1368628148149" y="313" width="40.393164246913585" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r2 s4 · 15:11–15:33 (22 min)</title></rect>
+<rect x="948.0192659753086" y="148" width="45.52681441975309" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r3 s1 · 17:06–17:31 (24 min)</title></rect>
+<rect x="891.9920446419752" y="148" width="39.7905015308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MS D r3 s2 · 16:36–16:58 (21 min)</title></rect>
+<rect x="378.11403061728396" y="313" width="39.94539614814815" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD A r1 s2 · 12:02–12:23 (21 min)</title></rect>
+<rect x="713.762801382716" y="247" width="42.805438024691355" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD A r2 s1 · 15:01–15:24 (23 min)</title></rect>
+<rect x="227.022368" y="313" width="44.97237096296296" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD A r2 s2 · 10:41–11:05 (24 min)</title></rect>
+<rect x="983.2586184691359" y="214" width="33.10862301234568" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD A r3 s1 · 17:25–17:43 (18 min)</title></rect>
+<rect x="356.8040205432099" y="181" width="37.36296612345679" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD B r1 s2 · 11:51–12:10 (20 min)</title></rect>
+<rect x="713.6337173333333" y="115" width="42.49489975308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD B r2 s1 · 15:01–15:24 (23 min)</title></rect>
+<rect x="345.83552790123457" y="214" width="44.572229135802466" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD B r2 s2 · 11:45–12:08 (24 min)</title></rect>
+<rect x="930.8068005925926" y="181" width="52.098303604938266" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD B r3 s1 · 16:57–17:25 (28 min)</title></rect>
+<rect x="216.87282251851852" y="247" width="43.42798143209876" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD C r1 s2 · 10:36–10:59 (23 min)</title></rect>
+<rect x="515.9443982222222" y="313" width="42.71358735802469" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD C r2 s1 · 13:16–13:38 (23 min)</title></rect>
+<rect x="356.8582320987654" y="247" width="36.8593947654321" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD C r2 s2 · 11:51–12:10 (20 min)</title></rect>
+<rect x="756.7107749135802" y="181" width="40.65417244444445" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD C r3 s1 · 15:24–15:46 (22 min)</title></rect>
+<rect x="356.71525965432096" y="82" width="36.80306093827161" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD D r1 s2 · 11:50–12:10 (20 min)</title></rect>
+<rect x="713.6825607901235" y="181" width="42.28751012345679" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD D r2 s1 · 15:01–15:24 (23 min)</title></rect>
+<rect x="378.0223047901234" y="115" width="39.913249975308645" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD D r2 s2 · 12:02–12:23 (21 min)</title></rect>
+<rect x="828.0999968395062" y="379" width="44.2639067654321" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WD D r3 s1 · 16:02–16:26 (24 min)</title></rect>
+<rect x="217.4884061234568" y="214" width="42.539280197530864" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r1 s2 · 10:36–10:59 (23 min)</title></rect>
+<rect x="281.015392" y="115" width="55.1163922962963" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r1 s6 · 11:10–11:39 (29 min)</title></rect>
+<rect x="260.46602903703706" y="214" width="40.88574972839507" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r1 s8 · 10:59–11:21 (22 min)</title></rect>
+<rect x="418.1293368888889" y="115" width="46.029980049382715" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r2 s1 · 12:23–12:48 (25 min)</title></rect>
+<rect x="301.70151664197533" y="214" width="43.82213096296296" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r2 s2 · 11:21–11:44 (23 min)</title></rect>
+<rect x="633.030372345679" y="82" width="56.3856667654321" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r2 s3 · 14:18–14:48 (30 min)</title></rect>
+<rect x="464.55268622222223" y="313" width="45.882138864197536" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r2 s4 · 12:48–13:13 (25 min)</title></rect>
+<rect x="862.758346271605" y="214" width="39.71197748148148" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r3 s1 · 16:21–16:42 (21 min)</title></rect>
+<rect x="793.0792071111111" y="148" width="38.564515160493826" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD A r3 s2 · 15:44–16:04 (21 min)</title></rect>
+<rect x="1064.8013495308642" y="82" width="37.451851851851856" height="20" fill="#ea580c" fill-opacity="0.55" rx="2"><title>XD A r4 s1 · 18:09–in progress (20 min)</title></rect>
+<rect x="337.00072967901235" y="148" width="40.693028740740736" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r1 s2 · 11:40–12:02 (22 min)</title></rect>
+<rect x="272.1712308148148" y="280" width="64.6832181728395" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r1 s6 · 11:05–11:40 (35 min)</title></rect>
+<rect x="239.8953809382716" y="148" width="39.92670143209876" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r1 s8 · 10:48–11:09 (21 min)</title></rect>
+<rect x="633.1703174320988" y="214" width="56.9546852345679" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r2 s1 · 14:18–14:49 (30 min)</title></rect>
+<rect x="294.30299693827163" y="181" width="42.21351150617284" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r2 s2 · 11:17–11:40 (23 min)</title></rect>
+<rect x="608.6302099753086" y="115" width="23.82084464197531" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r2 s3 · 14:05–14:18 (13 min)</title></rect>
+<rect x="608.5884199506172" y="148" width="23.735142320987656" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r2 s4 · 14:05–14:18 (13 min)</title></rect>
+<rect x="872.4618089876544" y="313" width="43.3637202962963" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r3 s1 · 16:26–16:49 (23 min)</title></rect>
+<rect x="903.6251203950618" y="115" width="56.215822617283955" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD B r3 s2 · 16:43–17:13 (30 min)</title></rect>
+<rect x="1064.7357463703704" y="181" width="37.451851851851856" height="20" fill="#ea580c" fill-opacity="0.55" rx="2"><title>XD B r4 s1 · 18:09–in progress (20 min)</title></rect>
+<rect x="272.22694044444444" y="313" width="64.45535486419753" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r1 s2 · 11:05–11:40 (34 min)</title></rect>
+<rect x="262.6694463209877" y="82" width="39.274040493827165" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r1 s6 · 11:00–11:21 (21 min)</title></rect>
+<rect x="336.95101234567903" y="115" width="40.59315713580247" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r1 s8 · 11:40–12:02 (22 min)</title></rect>
+<rect x="393.95728750617286" y="82" width="41.54490232098765" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r2 s1 · 12:10–12:33 (22 min)</title></rect>
+<rect x="294.25050192592596" y="148" width="42.06445313580247" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r2 s2 · 11:17–11:40 (22 min)</title></rect>
+<rect x="510.68250666666665" y="148" width="43.19159782716049" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r2 s3 · 13:13–13:36 (23 min)</title></rect>
+<rect x="733.097226271605" y="82" width="40.289141728395066" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r2 s4 · 15:11–15:33 (22 min)</title></rect>
+<rect x="752.0207107160494" y="148" width="40.07064138271605" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD C r3 s1 · 15:22–15:43 (21 min)</title></rect>
+<rect x="1064.7650524444443" y="247" width="37.451851851851856" height="20" fill="#ea580c" fill-opacity="0.55" rx="2"><title>XD C r3 s2 · 18:09–in progress (20 min)</title></rect>
+<rect x="435.89546548148144" y="247" width="60.3341842962963" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r1 s2 · 12:33–13:05 (32 min)</title></rect>
+<rect x="226.976864" y="280" width="44.84906074074075" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r1 s6 · 10:41–11:05 (24 min)</title></rect>
+<rect x="237.35979693827161" y="181" width="42.7280375308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r1 s8 · 10:47–11:10 (23 min)</title></rect>
+<rect x="827.6791940740741" y="82" width="44.112726123456795" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r2 s1 · 16:02–16:26 (24 min)</title></rect>
+<rect x="237.316040691358" y="115" width="42.32493076543209" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r2 s2 · 10:47–11:09 (23 min)</title></rect>
+<rect x="464.44089244444444" y="115" width="45.526970469135804" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r2 s3 · 12:48–13:12 (24 min)</title></rect>
+<rect x="608.4723816296297" y="247" width="24.476782617283952" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r2 s4 · 14:05–14:18 (13 min)</title></rect>
+<rect x="903.3378959012346" y="412" width="57.19890251851852" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r3 s1 · 16:42–17:13 (31 min)</title></rect>
+<rect x="694.7964033580247" y="346" width="44.92121797530864" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r3 s2 · 14:51–15:15 (24 min)</title></rect>
+<rect x="1013.4493677037037" y="115" width="51.081048888888894" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>XD D r4 s1 · 17:41–18:08 (27 min)</title></rect>
+<rect x="573.7808873086419" y="280" width="37.157667555555555" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD A r1 s1 · 13:46–14:06 (20 min)</title></rect>
+<rect x="573.8348179753086" y="313" width="37.40082370370371" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD A r1 s2 · 13:46–14:06 (20 min)</title></rect>
+<rect x="496.6542913580247" y="82" width="53.85095664197531" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD A r1 s3 · 13:05–13:34 (29 min)</title></rect>
+<rect x="394.0165862716049" y="247" width="41.73768572839506" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD A r1 s4 · 12:10–12:33 (22 min)</title></rect>
+<rect x="885.2466540246913" y="82" width="43.710649283950616" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD A r2 s1 · 16:33–16:56 (23 min)</title></rect>
+<rect x="739.8897438024692" y="379" width="38.75093175308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD A r2 s2 · 15:15–15:36 (21 min)</title></rect>
+<rect x="302.16663743209875" y="82" width="42.94503980246914" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r1 s2 · 11:21–11:44 (23 min)</title></rect>
+<rect x="691.2974953086419" y="82" width="41.47399348148148" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r2 s1 · 14:49–15:11 (22 min)</title></rect>
+<rect x="395.2783079506173" y="181" width="40.10790597530865" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r2 s2 · 12:11–12:32 (21 min)</title></rect>
+<rect x="337.0757270123457" y="313" width="40.86543209876543" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r2 s3 · 11:40–12:02 (22 min)</title></rect>
+<rect x="433.09038419753085" y="214" width="41.590531160493825" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r2 s4 · 12:31–12:53 (22 min)</title></rect>
+<rect x="863.0025323456791" y="280" width="39.33689718518518" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r3 s1 · 16:21–16:42 (21 min)</title></rect>
+<rect x="885.1318640987654" y="346" width="45.8896292345679" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r3 s2 · 16:33–16:57 (25 min)</title></rect>
+<rect x="993.8026567901234" y="148" width="31.562985086419754" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD B r4 s1 · 17:31–17:48 (17 min)</title></rect>
+<rect x="260.501764345679" y="247" width="41.10540483950617" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r1 s2 · 10:59–11:21 (22 min)</title></rect>
+<rect x="510.71718083950617" y="280" width="43.380979358024696" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r2 s1 · 13:13–13:36 (23 min)</title></rect>
+<rect x="337.0386808888889" y="280" width="41.278182716049386" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r2 s2 · 11:40–12:02 (22 min)</title></rect>
+<rect x="378.4417655308642" y="280" width="40.13249935802469" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r2 s3 · 12:02–12:24 (21 min)</title></rect>
+<rect x="418.3954635061728" y="148" width="45.648314469135805" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r2 s4 · 12:23–12:48 (24 min)</title></rect>
+<rect x="773.7804551111112" y="313" width="36.214130567901236" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r3 s1 · 15:33–15:53 (19 min)</title></rect>
+<rect x="713.803936" y="214" width="42.584035160493826" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r3 s2 · 15:01–15:24 (23 min)</title></rect>
+<rect x="930.8442524444445" y="214" width="52.19761343209876" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD C r4 s1 · 16:57–17:25 (28 min)</title></rect>
+<rect x="301.75254479012347" y="247" width="43.59560967901235" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD D r1 s1 · 11:21–11:44 (23 min)</title></rect>
+<rect x="435.567543308642" y="181" width="60.92567387654321" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD D r1 s2 · 12:33–13:05 (33 min)</title></rect>
+<rect x="378.06693491358027" y="148" width="40.22341372839506" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD D r1 s3 · 12:02–12:23 (21 min)</title></rect>
+<rect x="418.6790364444444" y="280" width="45.57955911111112" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD D r1 s4 · 12:24–12:48 (24 min)</title></rect>
+<rect x="827.7526933333334" y="313" width="44.41411990123457" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD D r2 s1 · 16:02–16:26 (24 min)</title></rect>
+<rect x="713.7229775802468" y="280" width="43.218126222222224" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD D r2 s2 · 15:01–15:24 (23 min)</title></rect>
+<rect x="983.2251614814815" y="181" width="32.928604444444446" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>MD D r3 s1 · 17:25–17:43 (18 min)</title></rect>
+<rect x="553.935744" y="247" width="53.87586212345679" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS A r1 s2 · 13:36–14:05 (29 min)</title></rect>
+<rect x="474.7767296790123" y="214" width="40.9147437037037" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS A r1 s4 · 12:54–13:15 (22 min)</title></rect>
+<rect x="862.6931800493827" y="181" width="39.4795575308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS A r2 s1 · 16:21–16:42 (21 min)</title></rect>
+<rect x="872.5109645432099" y="379" width="43.71957530864197" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS A r2 s2 · 16:26–16:49 (23 min)</title></rect>
+<rect x="553.9737576296295" y="148" width="54.40006320987655" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS B r1 s2 · 13:36–14:05 (29 min)</title></rect>
+<rect x="510.63918735802474" y="115" width="39.99573767901234" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS B r1 s3 · 13:13–13:34 (21 min)</title></rect>
+<rect x="608.5312746666667" y="181" width="23.648815802469137" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS B r1 s4 · 14:05–14:18 (13 min)</title></rect>
+<rect x="798.4570121481482" y="247" width="63.85909017283951" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS B r2 s1 · 15:46–16:20 (34 min)</title></rect>
+<rect x="831.8200892839507" y="148" width="40.22765827160494" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS B r2 s2 · 16:04–16:26 (21 min)</title></rect>
+<rect x="916.0885661234569" y="313" width="44.229731950617285" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS B r3 s1 · 16:49–17:13 (24 min)</title></rect>
+<rect x="515.9909321481482" y="214" width="42.89329382716049" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS C r1 s2 · 13:16–13:38 (23 min)</title></rect>
+<rect x="391.2064801975309" y="214" width="41.75831545679013" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS C r1 s4 · 12:09–12:31 (22 min)</title></rect>
+<rect x="781.872458271605" y="346" width="45.97439525925926" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS C r2 s1 · 15:38–16:02 (25 min)</title></rect>
+<rect x="691.3547654320987" y="148" width="41.18071427160494" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS C r2 s2 · 14:49–15:11 (22 min)</title></rect>
+<rect x="862.5562311111111" y="412" width="40.65663802469136" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS C r3 s1 · 16:21–16:42 (22 min)</title></rect>
+<rect x="554.0104292345679" y="181" width="53.694470320987655" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS D r1 s2 · 13:36–14:05 (29 min)</title></rect>
+<rect x="550.8756468148148" y="115" width="57.35201817283951" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS D r1 s4 · 13:34–14:05 (31 min)</title></rect>
+<rect x="798.3224663703703" y="115" width="63.6725175308642" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS D r2 s1 · 15:46–16:20 (34 min)</title></rect>
+<rect x="773.7377912098765" y="82" width="53.807075555555556" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS D r2 s2 · 15:33–16:02 (29 min)</title></rect>
+<rect x="902.9442457283951" y="247" width="57.19047585185185" height="20" fill="#ea580c" fill-opacity="0.92" rx="2"><title>WS D r3 s1 · 16:42–17:13 (31 min)</title></rect>
+<text x="74" y="471" font-size="11" fill="#64748b">2026-10-27 · configured window 09:30–20:30 · 11 courts</text>
+</svg>

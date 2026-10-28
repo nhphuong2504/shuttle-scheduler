@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+<rect width="900" height="360" fill="#ffffff"/>
+<text x="54" y="26" font-size="17" font-weight="600" fill="#0f172a">Actual match length vs configured slot</text>
+<text x="54" y="44" font-size="12" fill="#475569">172 placement matches (slot 10 min) and 143 knockout matches (slot 20 min)</text>
+<line x1="54" y1="316" x2="882" y2="316" stroke="#f1f5f9"/>
+<text x="46" y="320" font-size="10" fill="#64748b" text-anchor="end">0</text>
+<line x1="54" y1="248.10526315789474" x2="882" y2="248.10526315789474" stroke="#f1f5f9"/>
+<text x="46" y="252.10526315789474" font-size="10" fill="#64748b" text-anchor="end">15</text>
+<line x1="54" y1="180.21052631578948" x2="882" y2="180.21052631578948" stroke="#f1f5f9"/>
+<text x="46" y="184.21052631578948" font-size="10" fill="#64748b" text-anchor="end">30</text>
+<line x1="54" y1="112.31578947368422" x2="882" y2="112.31578947368422" stroke="#f1f5f9"/>
+<text x="46" y="116.31578947368422" font-size="10" fill="#64748b" text-anchor="end">45</text>
+<rect x="54" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>0–2 min: 0 placement</title></rect>
+<rect x="73.7" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>0–2 min: 0 knockout</title></rect>
+<rect x="95.4" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>2–4 min: 0 placement</title></rect>
+<rect x="115.10000000000001" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>2–4 min: 0 knockout</title></rect>
+<rect x="136.8" y="306.94736842105266" width="19.7" height="9.052631578947341" fill="#2563eb" fill-opacity="0.85"><title>4–6 min: 2 placement</title></rect>
+<rect x="156.5" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>4–6 min: 0 knockout</title></rect>
+<rect x="178.2" y="297.89473684210526" width="19.7" height="18.10526315789474" fill="#2563eb" fill-opacity="0.85"><title>6–8 min: 4 placement</title></rect>
+<rect x="197.89999999999998" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>6–8 min: 0 knockout</title></rect>
+<rect x="219.6" y="297.89473684210526" width="19.7" height="18.10526315789474" fill="#2563eb" fill-opacity="0.85"><title>8–10 min: 4 placement</title></rect>
+<rect x="239.29999999999998" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>8–10 min: 0 knockout</title></rect>
+<rect x="261" y="58" width="19.7" height="258" fill="#2563eb" fill-opacity="0.85"><title>10–12 min: 57 placement</title></rect>
+<rect x="280.7" y="306.94736842105266" width="19.7" height="9.052631578947341" fill="#ea580c" fill-opacity="0.85"><title>10–12 min: 2 knockout</title></rect>
+<rect x="302.4" y="58" width="19.7" height="258" fill="#2563eb" fill-opacity="0.85"><title>12–14 min: 57 placement</title></rect>
+<rect x="322.09999999999997" y="288.8421052631579" width="19.7" height="27.15789473684208" fill="#ea580c" fill-opacity="0.85"><title>12–14 min: 6 knockout</title></rect>
+<rect x="343.8" y="230" width="19.7" height="86" fill="#2563eb" fill-opacity="0.85"><title>14–16 min: 19 placement</title></rect>
+<rect x="363.5" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>14–16 min: 0 knockout</title></rect>
+<rect x="385.2" y="266.2105263157895" width="19.7" height="49.78947368421052" fill="#2563eb" fill-opacity="0.85"><title>16–18 min: 11 placement</title></rect>
+<rect x="404.9" y="302.42105263157896" width="19.7" height="13.57894736842104" fill="#ea580c" fill-opacity="0.85"><title>16–18 min: 3 knockout</title></rect>
+<rect x="426.59999999999997" y="297.89473684210526" width="19.7" height="18.10526315789474" fill="#2563eb" fill-opacity="0.85"><title>18–20 min: 4 placement</title></rect>
+<rect x="446.29999999999995" y="288.8421052631579" width="19.7" height="27.15789473684208" fill="#ea580c" fill-opacity="0.85"><title>18–20 min: 6 knockout</title></rect>
+<rect x="468" y="279.7894736842105" width="19.7" height="36.21052631578948" fill="#2563eb" fill-opacity="0.85"><title>20–22 min: 8 placement</title></rect>
+<rect x="487.7" y="166.6315789473684" width="19.7" height="149.3684210526316" fill="#ea580c" fill-opacity="0.85"><title>20–22 min: 33 knockout</title></rect>
+<rect x="509.4" y="306.94736842105266" width="19.7" height="9.052631578947341" fill="#2563eb" fill-opacity="0.85"><title>22–24 min: 2 placement</title></rect>
+<rect x="529.1" y="139.4736842105263" width="19.7" height="176.5263157894737" fill="#ea580c" fill-opacity="0.85"><title>22–24 min: 39 knockout</title></rect>
+<rect x="550.8" y="302.42105263157896" width="19.7" height="13.57894736842104" fill="#2563eb" fill-opacity="0.85"><title>24–26 min: 3 placement</title></rect>
+<rect x="570.5" y="257.1578947368421" width="19.7" height="58.84210526315792" fill="#ea580c" fill-opacity="0.85"><title>24–26 min: 13 knockout</title></rect>
+<rect x="592.1999999999999" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>26–28 min: 0 placement</title></rect>
+<rect x="611.9" y="279.7894736842105" width="19.7" height="36.21052631578948" fill="#ea580c" fill-opacity="0.85"><title>26–28 min: 8 knockout</title></rect>
+<rect x="633.6" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>28–30 min: 0 placement</title></rect>
+<rect x="653.3000000000001" y="284.3157894736842" width="19.7" height="31.68421052631578" fill="#ea580c" fill-opacity="0.85"><title>28–30 min: 7 knockout</title></rect>
+<rect x="675" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>30–32 min: 0 placement</title></rect>
+<rect x="694.7" y="243.57894736842104" width="19.7" height="72.42105263157896" fill="#ea580c" fill-opacity="0.85"><title>30–32 min: 16 knockout</title></rect>
+<rect x="716.4" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>32–34 min: 0 placement</title></rect>
+<rect x="736.1" y="302.42105263157896" width="19.7" height="13.57894736842104" fill="#ea580c" fill-opacity="0.85"><title>32–34 min: 3 knockout</title></rect>
+<rect x="757.8" y="311.4736842105263" width="19.7" height="4.526315789473699" fill="#2563eb" fill-opacity="0.85"><title>34–36 min: 1 placement</title></rect>
+<rect x="777.5" y="284.3157894736842" width="19.7" height="31.68421052631578" fill="#ea580c" fill-opacity="0.85"><title>34–36 min: 7 knockout</title></rect>
+<rect x="799.1999999999999" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>36–38 min: 0 placement</title></rect>
+<rect x="818.9" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>36–38 min: 0 knockout</title></rect>
+<rect x="840.6" y="316" width="19.7" height="0" fill="#2563eb" fill-opacity="0.85"><title>38–40 min: 0 placement</title></rect>
+<rect x="860.3000000000001" y="316" width="19.7" height="0" fill="#ea580c" fill-opacity="0.85"><title>38–40 min: 0 knockout</title></rect>
+<line x1="261" y1="52" x2="261" y2="316" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text x="265" y="50" font-size="10" fill="#2563eb">placement slot</text>
+<line x1="468" y1="52" x2="468" y2="316" stroke="#ea580c" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text x="472" y="50" font-size="10" fill="#ea580c">knockout slot</text>
+<text x="54" y="344" font-size="10" fill="#64748b" text-anchor="middle">0</text>
+<text x="136.8" y="344" font-size="10" fill="#64748b" text-anchor="middle">4</text>
+<text x="219.60000000000002" y="344" font-size="10" fill="#64748b" text-anchor="middle">8</text>
+<text x="302.4" y="344" font-size="10" fill="#64748b" text-anchor="middle">12</text>
+<text x="385.20000000000005" y="344" font-size="10" fill="#64748b" text-anchor="middle">16</text>
+<text x="468" y="344" font-size="10" fill="#64748b" text-anchor="middle">20</text>
+<text x="550.8" y="344" font-size="10" fill="#64748b" text-anchor="middle">24</text>
+<text x="633.5999999999999" y="344" font-size="10" fill="#64748b" text-anchor="middle">28</text>
+<text x="716.4000000000001" y="344" font-size="10" fill="#64748b" text-anchor="middle">32</text>
+<text x="799.2" y="344" font-size="10" fill="#64748b" text-anchor="middle">36</text>
+<text x="882" y="344" font-size="10" fill="#64748b" text-anchor="middle">40</text>
+<text x="468" y="358" font-size="11" fill="#475569" text-anchor="middle">minutes</text>
+</svg>

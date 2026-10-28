@@ -1,0 +1,1009 @@
+{
+  "exportedAt": "2026-10-28T15:17:54.362Z",
+  "source": {
+    "project": "dzilzdxzdrrbdimhbiwv",
+    "tournamentId": "424c17ad-13c4-4c99-83e3-845b4a4bf992",
+    "name": "Aloha",
+    "venueTimezone": "America/Chicago",
+    "status": "in_progress",
+    "startsOn": "2026-10-26",
+    "endsOn": "2026-10-27",
+    "statusNote": "Every match is decided; the stored tournament status is still in_progress because completing the tournament is an operator action."
+  },
+  "settings": {
+    "venueTimezone": "America/Chicago",
+    "groupSlotMinutes": 10,
+    "groupRestGapMinutes": 5,
+    "knockoutSlotMinutes": 20,
+    "knockoutRestGapMinutes": 10,
+    "courts": 11,
+    "maxCategoriesPerPlayer": 3,
+    "placement": {
+      "gamesTo": 21,
+      "winBy": 2,
+      "bestOf": 1
+    },
+    "knockout": {
+      "gamesTo": 21,
+      "winBy": 2,
+      "bestOf": 3
+    }
+  },
+  "counts": {
+    "placementMatches": 172,
+    "placementReported": 172,
+    "drawMatches": 220,
+    "drawPlayed": 143,
+    "drawByes": 68,
+    "matchesPlayed": 315,
+    "draws": 20,
+    "championsCrowned": 12,
+    "entrants": 172,
+    "teams": 172,
+    "players": 123,
+    "activityRows": 4095,
+    "activityAttached": 4095,
+    "activityOrphaned": 0,
+    "resultCorrections": 0,
+    "nightsCrossed": 0
+  },
+  "perCategory": [
+    {
+      "category": "MS",
+      "entryType": "individual",
+      "entrants": 49,
+      "placement": {
+        "matches": 49,
+        "reported": 49,
+        "round1": 24,
+        "round2": 25,
+        "makeups": 2,
+        "crossovers": 1
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 60,
+        "played": 42,
+        "byes": 15,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 16,
+            "entrants": 13,
+            "matches": 15,
+            "played": 12,
+            "byes": 3,
+            "champion": "Edward Redmond",
+            "final": {
+              "sideA": "Daniel Newell",
+              "sideB": "Edward Redmond",
+              "winnerSide": "B",
+              "games": [
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 12,
+                  "b": 21
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 16,
+            "entrants": 11,
+            "matches": 15,
+            "played": 9,
+            "byes": 5,
+            "champion": null,
+            "final": {
+              "sideA": "Ryan Ellsworth",
+              "sideB": "Frederick Sinclair",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 15
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 16,
+            "entrants": 12,
+            "matches": 15,
+            "played": 10,
+            "byes": 4,
+            "champion": null,
+            "final": {
+              "sideA": "Nigel Ramsey",
+              "sideB": "Zachary Griffin",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "D",
+            "bracketSize": 16,
+            "entrants": 13,
+            "matches": 15,
+            "played": 11,
+            "byes": 3,
+            "champion": null,
+            "final": {
+              "sideA": "Dominic Kessler",
+              "sideB": "Zane Vance",
+              "winnerSide": "B",
+              "games": [
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 12,
+                  "b": 21
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
+    },
+    {
+      "category": "WD",
+      "entryType": "pair",
+      "entrants": 20,
+      "placement": {
+        "matches": 20,
+        "reported": 20,
+        "round1": 10,
+        "round2": 10,
+        "makeups": 0,
+        "crossovers": 0
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 28,
+        "played": 16,
+        "byes": 12,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 8,
+            "entrants": 5,
+            "matches": 7,
+            "played": 4,
+            "byes": 3,
+            "champion": "Megan Crowley / Nina Chandler",
+            "final": {
+              "sideA": "Irene Delaney / Julia Pruitt",
+              "sideB": "Megan Crowley / Nina Chandler",
+              "winnerSide": "B",
+              "games": [
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 14,
+                  "b": 21
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 8,
+            "entrants": 5,
+            "matches": 7,
+            "played": 4,
+            "byes": 3,
+            "champion": "Lucy Everett / Maya Kingsley",
+            "final": {
+              "sideA": "Lucy Everett / Maya Kingsley",
+              "sideB": "Freya Iverson / Gabrielle Aldridge",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 8,
+            "entrants": 5,
+            "matches": 7,
+            "played": 4,
+            "byes": 3,
+            "champion": "Bridget Keller / Claire Harper",
+            "final": {
+              "sideA": "Bridget Keller / Claire Harper",
+              "sideB": "Jasmine Jennings / Katherine Whitaker",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 22,
+                  "b": 20
+                },
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "D",
+            "bracketSize": 8,
+            "entrants": 5,
+            "matches": 7,
+            "played": 4,
+            "byes": 3,
+            "champion": "Stella Maddox / Tessa Montgomery",
+            "final": {
+              "sideA": "Stella Maddox / Tessa Montgomery",
+              "sideB": "Teresa Gallagher / Vivian Thornton",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
+    },
+    {
+      "category": "XD",
+      "entryType": "pair",
+      "entrants": 44,
+      "placement": {
+        "matches": 44,
+        "reported": 44,
+        "round1": 22,
+        "round2": 22,
+        "makeups": 0,
+        "crossovers": 0
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 60,
+        "played": 36,
+        "byes": 20,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 16,
+            "entrants": 11,
+            "matches": 15,
+            "played": 9,
+            "byes": 5,
+            "champion": null,
+            "final": {
+              "sideA": "Declan Ellison / Zara Nolan",
+              "sideB": "Harrison Foster / Gabrielle Aldridge",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 16,
+            "entrants": 11,
+            "matches": 15,
+            "played": 9,
+            "byes": 5,
+            "champion": null,
+            "final": {
+              "sideA": "Ian Callahan / Fiona Callahan",
+              "sideB": "Thomas Hollister / Teresa Gallagher",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 16,
+            "entrants": 11,
+            "matches": 15,
+            "played": 8,
+            "byes": 5,
+            "champion": null,
+            "final": {
+              "sideA": "Quinn Maddox / Paula Sterling",
+              "sideB": "Jasper Winslow / Isabel Palmer",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "D",
+            "bracketSize": 16,
+            "entrants": 11,
+            "matches": 15,
+            "played": 10,
+            "byes": 5,
+            "champion": "Cameron Prescott / Yvonne Wexford",
+            "final": {
+              "sideA": "Cameron Prescott / Yvonne Wexford",
+              "sideB": "Sebastian Fenwick / Rosa Jensen",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
+    },
+    {
+      "category": "MD",
+      "entryType": "pair",
+      "entrants": 34,
+      "placement": {
+        "matches": 34,
+        "reported": 34,
+        "round1": 17,
+        "round2": 17,
+        "makeups": 0,
+        "crossovers": 1
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 44,
+        "played": 29,
+        "byes": 14,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 8,
+            "entrants": 8,
+            "matches": 7,
+            "played": 6,
+            "byes": 0,
+            "champion": null,
+            "final": {
+              "sideA": "Derek Radcliffe / Elias Irwin",
+              "sideB": "Simon Barrett / Thomas Hollister",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 16,
+            "entrants": 9,
+            "matches": 15,
+            "played": 8,
+            "byes": 7,
+            "champion": "Vincent Lockhart / Walter Carrington",
+            "final": {
+              "sideA": "Vincent Lockhart / Walter Carrington",
+              "sideB": "Harrison Foster / Ivan Aldridge",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 4
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 16,
+            "entrants": 9,
+            "matches": 15,
+            "played": 8,
+            "byes": 7,
+            "champion": "Keith Delaney / Lucas Whitaker",
+            "final": {
+              "sideA": "Keith Delaney / Lucas Whitaker",
+              "sideB": "Nigel Ramsey / Oscar Fairbanks",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 4
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "D",
+            "bracketSize": 8,
+            "entrants": 8,
+            "matches": 7,
+            "played": 7,
+            "byes": 0,
+            "champion": "Gavin Dalton / Henry Underwood",
+            "final": {
+              "sideA": "Gavin Dalton / Henry Underwood",
+              "sideB": "Ian Callahan / Joel Marsh",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
+    },
+    {
+      "category": "WS",
+      "entryType": "individual",
+      "entrants": 25,
+      "placement": {
+        "matches": 25,
+        "reported": 25,
+        "round1": 12,
+        "round2": 13,
+        "makeups": 2,
+        "crossovers": 1
+      },
+      "knockout": {
+        "draws": 4,
+        "matches": 28,
+        "played": 20,
+        "byes": 7,
+        "tiers": [
+          {
+            "tier": "A",
+            "bracketSize": 8,
+            "entrants": 6,
+            "matches": 7,
+            "played": 4,
+            "byes": 2,
+            "champion": null,
+            "final": {
+              "sideA": "Katherine Whitaker",
+              "sideB": "Zara Nolan",
+              "winnerSide": "B",
+              "games": [
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 12,
+                  "b": 21
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "B",
+            "bracketSize": 8,
+            "entrants": 7,
+            "matches": 7,
+            "played": 6,
+            "byes": 1,
+            "champion": "Willa Barrett",
+            "final": {
+              "sideA": "Julia Pruitt",
+              "sideB": "Willa Barrett",
+              "winnerSide": "B",
+              "games": [
+                {
+                  "a": 12,
+                  "b": 21
+                },
+                {
+                  "a": 12,
+                  "b": 21
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "C",
+            "bracketSize": 8,
+            "entrants": 6,
+            "matches": 7,
+            "played": 5,
+            "byes": 2,
+            "champion": "Rosa Jensen",
+            "final": {
+              "sideA": "Rosa Jensen",
+              "sideB": "Isabel Palmer",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          },
+          {
+            "tier": "D",
+            "bracketSize": 8,
+            "entrants": 6,
+            "matches": 7,
+            "played": 5,
+            "byes": 2,
+            "champion": "Camille Blackwell",
+            "final": {
+              "sideA": "Camille Blackwell",
+              "sideB": "Laura Kendall",
+              "winnerSide": "A",
+              "games": [
+                {
+                  "a": 21,
+                  "b": 14
+                },
+                {
+                  "a": 21,
+                  "b": 14
+                }
+              ]
+            },
+            "decidedWithoutAMatch": false
+          }
+        ]
+      }
+    }
+  ],
+  "stages": {
+    "placement": {
+      "slotMinutes": 10,
+      "duration": {
+        "n": 172,
+        "meanMin": 13.5,
+        "medianMin": 12.4,
+        "minMin": 5.6,
+        "maxMin": 34.8
+      },
+      "overrun": {
+        "matches": 161,
+        "share": 0.9359999999999999,
+        "meanMin": 3.9,
+        "meanAllMin": 3.5,
+        "maxMin": 24.8
+      },
+      "startDelay": {
+        "n": 172,
+        "meanMin": 0.1,
+        "medianMin": -0.2,
+        "minMin": -4.9,
+        "maxMin": 10
+      },
+      "drift": {
+        "n": 172,
+        "meanMin": 477.1,
+        "medianMin": 720,
+        "minMin": 12,
+        "maxMin": 1056,
+        "moved": 172,
+        "movedMeanMin": 477.1,
+        "intraDay": {
+          "n": 159,
+          "meanMin": 430.5,
+          "medianMin": 712,
+          "minMin": 12,
+          "maxMin": 874,
+          "moved": 159,
+          "movedMeanMin": 430.5
+        }
+      }
+    },
+    "knockout": {
+      "slotMinutes": 20,
+      "duration": {
+        "n": 143,
+        "meanMin": 24,
+        "medianMin": 23.1,
+        "minMin": 11.8,
+        "maxMin": 34.5
+      },
+      "overrun": {
+        "matches": 126,
+        "share": 0.8809999999999999,
+        "meanMin": 5.1,
+        "meanAllMin": 4,
+        "maxMin": 14.5
+      },
+      "startDelay": {
+        "n": 143,
+        "meanMin": -0.4,
+        "medianMin": -0.3,
+        "minMin": -34.8,
+        "maxMin": 8.1
+      },
+      "drift": {
+        "n": 143,
+        "meanMin": 41.9,
+        "medianMin": 21,
+        "minMin": 0,
+        "maxMin": 237,
+        "moved": 136,
+        "movedMeanMin": 44,
+        "intraDay": {
+          "n": 143,
+          "meanMin": 41.9,
+          "medianMin": 21,
+          "minMin": 0,
+          "maxMin": 237,
+          "moved": 136,
+          "movedMeanMin": 44
+        }
+      }
+    }
+  },
+  "days": [
+    {
+      "date": "2026-10-26",
+      "windowLocal": "12:30–17:00",
+      "courts": 11,
+      "matchesStarted": 143,
+      "byStage": {
+        "placement": 143,
+        "knockout": 0
+      },
+      "firstStartLocal": "12:29:24",
+      "lastStartLocal": "16:47:04",
+      "lastEndLocal": "17:00:22",
+      "courtMinutes": 1973.7,
+      "courtCapacityMinutes": 2970,
+      "utilization": 0.6645,
+      "activeMinutes": 271,
+      "activeUtilization": 0.6622
+    },
+    {
+      "date": "2026-10-27",
+      "windowLocal": "09:30–20:30",
+      "courts": 11,
+      "matchesStarted": 172,
+      "byStage": {
+        "placement": 29,
+        "knockout": 143
+      },
+      "firstStartLocal": "10:00:24",
+      "lastStartLocal": "17:41:41",
+      "lastEndLocal": "18:09:20",
+      "courtMinutes": 3788.9,
+      "courtCapacityMinutes": 7260,
+      "utilization": 0.5219,
+      "activeMinutes": 488.9,
+      "activeUtilization": 0.7045
+    }
+  ],
+  "total": {
+    "matchesPlayed": 315,
+    "courtMinutes": 5762.6,
+    "courtCapacityMinutes": 10230,
+    "utilization": 0.5632999999999999
+  },
+  "driftNote": "Placement drift excludes the two matches carried across the day boundary; their 19-hour figure is a planning decision, not intra-day reflow. Knockout drift includes time spent waiting for feeder results, because a bracket match is published before both sides are known.",
+  "carried": [
+    {
+      "match": "WS round2 r2-7",
+      "firstPublishedLocal": "2026-10-26 16:25:00",
+      "playedLocal": "2026-10-27 10:00:26",
+      "driftMin": 1056
+    },
+    {
+      "match": "MS round2 r2-10",
+      "firstPublishedLocal": "2026-10-26 16:49:00",
+      "playedLocal": "2026-10-27 10:23:53",
+      "driftMin": 1055
+    },
+    {
+      "match": "WS round2 r2-makeup-2",
+      "firstPublishedLocal": "2026-10-26 16:40:00",
+      "playedLocal": "2026-10-27 10:12:22",
+      "driftMin": 1053
+    },
+    {
+      "match": "WS round2 r2-2",
+      "firstPublishedLocal": "2026-10-26 16:30:00",
+      "playedLocal": "2026-10-27 10:00:25",
+      "driftMin": 1051
+    },
+    {
+      "match": "WS round2 r2-11",
+      "firstPublishedLocal": "2026-10-26 16:30:00",
+      "playedLocal": "2026-10-27 10:00:24",
+      "driftMin": 1051
+    },
+    {
+      "match": "MS round2 r2-9",
+      "firstPublishedLocal": "2026-10-26 16:41:00",
+      "playedLocal": "2026-10-27 10:11:07",
+      "driftMin": 1050
+    },
+    {
+      "match": "MS round2 r2-17",
+      "firstPublishedLocal": "2026-10-26 16:46:00",
+      "playedLocal": "2026-10-27 10:12:18",
+      "driftMin": 1047
+    },
+    {
+      "match": "WS round2 r2-3",
+      "firstPublishedLocal": "2026-10-26 16:35:00",
+      "playedLocal": "2026-10-27 10:00:31",
+      "driftMin": 1046
+    },
+    {
+      "match": "MS round2 r2-13",
+      "firstPublishedLocal": "2026-10-26 16:36:00",
+      "playedLocal": "2026-10-27 10:00:29",
+      "driftMin": 1045
+    },
+    {
+      "match": "MS round2 r2-18",
+      "firstPublishedLocal": "2026-10-26 16:46:00",
+      "playedLocal": "2026-10-27 10:10:50",
+      "driftMin": 1045
+    },
+    {
+      "match": "MS round2 r2-20",
+      "firstPublishedLocal": "2026-10-26 16:39:00",
+      "playedLocal": "2026-10-27 10:00:28",
+      "driftMin": 1042
+    },
+    {
+      "match": "MS round2 r2-3",
+      "firstPublishedLocal": "2026-10-26 16:41:00",
+      "playedLocal": "2026-10-27 10:00:30",
+      "driftMin": 1040
+    },
+    {
+      "match": "MS round2 r2-14",
+      "firstPublishedLocal": "2026-10-26 16:46:00",
+      "playedLocal": "2026-10-27 10:00:32",
+      "driftMin": 1035
+    }
+  ],
+  "restGaps": {
+    "sameDayPlayerTurnarounds": 742,
+    "minMin": 5.6,
+    "medianMin": 46.2,
+    "underFiveMinutes": 0,
+    "underTenMinutes": 39,
+    "tightest": [
+      {
+        "player": "Maya Kingsley",
+        "gapMin": 5.6,
+        "from": "WS round1 r1-11",
+        "to": "WD round2 r2-3"
+      },
+      {
+        "player": "Rosa Jensen",
+        "gapMin": 5.6,
+        "from": "WD round2 r2-8",
+        "to": "XD round2 r2-19"
+      },
+      {
+        "player": "Beatrice Mercer",
+        "gapMin": 5.6,
+        "from": "XD round2 r2-1",
+        "to": "WD round2 r2-1"
+      },
+      {
+        "player": "Priya Lawson",
+        "gapMin": 5.7,
+        "from": "WD round2 r2-8",
+        "to": "XD round2 r2-21"
+      },
+      {
+        "player": "Zoe Upton",
+        "gapMin": 5.7,
+        "from": "WD round2 r2-8",
+        "to": "XD round2 r2-20"
+      }
+    ],
+    "note": "Consecutive matches for the same player on the same day, measured from the previous ended_at to the next started_at. The applicable gap depends on the later match's stage: 5 minutes placement, 10 minutes knockout. The desk may start a match early."
+  },
+  "activity": {
+    "byAction": {
+      "court-moved": 1553,
+      "started": 329,
+      "time-shifted": 1888,
+      "reset": 10,
+      "reported": 315
+    },
+    "byTable": {
+      "placement_matches": 2449,
+      "tier_draw_matches": 1646
+    },
+    "byDate": {
+      "2026-10-26": 2390,
+      "2026-10-27": 1705
+    }
+  },
+  "byes": [
+    "MS draw A r1 s1",
+    "MS draw A r1 s5",
+    "MS draw A r1 s7",
+    "MS draw B r1 s1",
+    "MS draw B r1 s3",
+    "MS draw B r1 s4",
+    "MS draw B r1 s5",
+    "MS draw B r1 s7",
+    "MS draw C r1 s1",
+    "MS draw C r1 s3",
+    "MS draw C r1 s5",
+    "MS draw C r1 s7",
+    "MS draw D r1 s1",
+    "MS draw D r1 s5",
+    "MS draw D r1 s7",
+    "WD draw A r1 s1",
+    "WD draw A r1 s3",
+    "WD draw A r1 s4",
+    "WD draw B r1 s1",
+    "WD draw B r1 s3",
+    "WD draw B r1 s4",
+    "WD draw C r1 s1",
+    "WD draw C r1 s3",
+    "WD draw C r1 s4",
+    "WD draw D r1 s1",
+    "WD draw D r1 s3",
+    "WD draw D r1 s4",
+    "XD draw A r1 s1",
+    "XD draw A r1 s3",
+    "XD draw A r1 s4",
+    "XD draw A r1 s5",
+    "XD draw A r1 s7",
+    "XD draw B r1 s1",
+    "XD draw B r1 s3",
+    "XD draw B r1 s4",
+    "XD draw B r1 s5",
+    "XD draw B r1 s7",
+    "XD draw C r1 s1",
+    "XD draw C r1 s3",
+    "XD draw C r1 s4",
+    "XD draw C r1 s5",
+    "XD draw C r1 s7",
+    "XD draw D r1 s1",
+    "XD draw D r1 s3",
+    "XD draw D r1 s4",
+    "XD draw D r1 s5",
+    "XD draw D r1 s7",
+    "MD draw B r1 s1",
+    "MD draw B r1 s3",
+    "MD draw B r1 s4",
+    "MD draw B r1 s5",
+    "MD draw B r1 s6",
+    "MD draw B r1 s7",
+    "MD draw B r1 s8",
+    "MD draw C r1 s1",
+    "MD draw C r1 s3",
+    "MD draw C r1 s4",
+    "MD draw C r1 s5",
+    "MD draw C r1 s6",
+    "MD draw C r1 s7",
+    "MD draw C r1 s8",
+    "WS draw A r1 s1",
+    "WS draw A r1 s3",
+    "WS draw B r1 s1",
+    "WS draw C r1 s1",
+    "WS draw C r1 s3",
+    "WS draw D r1 s1",
+    "WS draw D r1 s3"
+  ],
+  "remaining": [],
+  "notes": [
+    "Two knockout matches (MS draw A, round 1; XD draw C, round 1) were started without a published scheduled_time: the draw was built moments earlier and the desk started the match immediately. Their time-derived columns are blank, not zero.",
+    "One time-shifted row moved a match earlier: XD r2-makeup-2 was published on day 2 at 12:01, pulled back to 17:01 on day 1 at 16:36, and returned to day 2 at 16:47. That is the only negative shift in the trail.",
+    "Twenty-three activity rows at 15:03:07 belong to an abandoned build whose matches were deleted; they are attached = false. The nine 16:23-16:47 rows that the day-1 snapshot read as orphaned are tier-draw placements and are attached here; that snapshot's attached flag only checked the placement table."
+  ]
+}

@@ -1,0 +1,3628 @@
+{
+  "generatedAt": "2026-10-28T15:31:37.626Z",
+  "source": {
+    "tournament": "Aloha",
+    "id": "424c17ad-13c4-4c99-83e3-845b4a4bf992",
+    "exportedAt": "2026-10-28T15:17:54.227Z"
+  },
+  "totals": {
+    "matchesScheduled": 323,
+    "matchesPlayed": 315,
+    "placementPlayed": 172,
+    "knockoutPlayed": 147,
+    "byes": 68,
+    "inProgress": 4,
+    "courts": 11,
+    "dayWindows": [
+      "2026-10-26 12:30–17:00",
+      "2026-10-27 09:30–20:30"
+    ],
+    "capacityMinutes": 9690,
+    "courtMinutes": 5762.9
+  },
+  "utilisationPct": 59.5,
+  "settings": {
+    "venueTimezone": "America/Chicago",
+    "placementSlot": 10,
+    "placementRest": 5,
+    "knockoutSlot": 20,
+    "knockoutRest": 10,
+    "maxCategoriesPerPlayer": 3
+  },
+  "days": [
+    {
+      "date": "2026-10-26",
+      "windowLocal": "12:30–17:00",
+      "windowMinutes": 270,
+      "courts": [
+        {
+          "court": 1,
+          "matches": 19,
+          "courtMinutes": 246.8,
+          "firstStartLocal": "12:29",
+          "lastEndLocal": "16:59",
+          "gaps": [
+            0.5,
+            0.1,
+            0.3,
+            10.1,
+            0.1,
+            0.2,
+            0.3,
+            0.1,
+            0.2,
+            0.2,
+            0.3,
+            0.3,
+            1.6,
+            0.1,
+            0.4,
+            0.1,
+            6.2,
+            2.4
+          ],
+          "gapCount": 4,
+          "gapMinutes": 20.3,
+          "largestGapMin": 10.1,
+          "leadingIdleMin": -0.6,
+          "trailingIdleMin": 0
+        },
+        {
+          "court": 2,
+          "matches": 18,
+          "courtMinutes": 242,
+          "firstStartLocal": "12:29",
+          "lastEndLocal": "16:59",
+          "gaps": [
+            0.5,
+            0.2,
+            10,
+            0.1,
+            0.2,
+            0.2,
+            0.1,
+            0.2,
+            0.2,
+            0.1,
+            0.1,
+            5.7,
+            0.1,
+            0.1,
+            0.1,
+            6.1,
+            4.3
+          ],
+          "gapCount": 4,
+          "gapMinutes": 26.1,
+          "largestGapMin": 10,
+          "leadingIdleMin": -0.5,
+          "trailingIdleMin": 0.1
+        },
+        {
+          "court": 3,
+          "matches": 17,
+          "courtMinutes": 244.8,
+          "firstStartLocal": "12:30",
+          "lastEndLocal": "17:00",
+          "gaps": [
+            0.4,
+            0.2,
+            10,
+            0.2,
+            0.1,
+            0.2,
+            0.1,
+            0.1,
+            0.5,
+            0.1,
+            5.3,
+            0.1,
+            0.2,
+            0.1,
+            0.2,
+            7.3
+          ],
+          "gapCount": 3,
+          "gapMinutes": 22.6,
+          "largestGapMin": 10,
+          "leadingIdleMin": 0,
+          "trailingIdleMin": -0.1
+        },
+        {
+          "court": 4,
+          "matches": 18,
+          "courtMinutes": 245.3,
+          "firstStartLocal": "12:29",
+          "lastEndLocal": "17:00",
+          "gaps": [
+            0.4,
+            0.2,
+            10,
+            0.1,
+            0.2,
+            0.5,
+            0.1,
+            0.4,
+            0.3,
+            0.2,
+            7.4,
+            0.1,
+            4,
+            0.9,
+            0.2,
+            0.1,
+            0.1
+          ],
+          "gapCount": 3,
+          "gapMinutes": 21.4,
+          "largestGapMin": 10,
+          "leadingIdleMin": -0.1,
+          "trailingIdleMin": -0.2
+        },
+        {
+          "court": 5,
+          "matches": 18,
+          "courtMinutes": 247.3,
+          "firstStartLocal": "12:29",
+          "lastEndLocal": "16:51",
+          "gaps": [
+            0.1,
+            0.1,
+            10.1,
+            0.1,
+            0.2,
+            0.2,
+            0,
+            0.3,
+            0.1,
+            0.1,
+            0.3,
+            1.5,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            1.2
+          ],
+          "gapCount": 3,
+          "gapMinutes": 12.8,
+          "largestGapMin": 10.1,
+          "leadingIdleMin": -0.1,
+          "trailingIdleMin": 8
+        },
+        {
+          "court": 6,
+          "matches": 18,
+          "courtMinutes": 253.1,
+          "firstStartLocal": "12:30",
+          "lastEndLocal": "17:00",
+          "gaps": [
+            0.4,
+            0.2,
+            10,
+            0.6,
+            0.1,
+            0.2,
+            0.1,
+            0.1,
+            0.5,
+            0.1,
+            0.2,
+            0.1,
+            0,
+            0.1,
+            0,
+            0.1,
+            4.3
+          ],
+          "gapCount": 2,
+          "gapMinutes": 14.3,
+          "largestGapMin": 10,
+          "leadingIdleMin": 0.1,
+          "trailingIdleMin": -0.3
+        },
+        {
+          "court": 7,
+          "matches": 18,
+          "courtMinutes": 247.6,
+          "firstStartLocal": "12:29",
+          "lastEndLocal": "16:52",
+          "gaps": [
+            0.3,
+            0.2,
+            0.1,
+            5,
+            6.8,
+            0.3,
+            0.2,
+            0.1,
+            0.1,
+            0.2,
+            0.2,
+            0.3,
+            0.1,
+            0.5,
+            0.1,
+            1,
+            0.1
+          ],
+          "gapCount": 2,
+          "gapMinutes": 11.8,
+          "largestGapMin": 6.8,
+          "leadingIdleMin": -0.3,
+          "trailingIdleMin": 7.1
+        },
+        {
+          "court": 8,
+          "matches": 17,
+          "courtMinutes": 246.9,
+          "firstStartLocal": "12:29",
+          "lastEndLocal": "17:00",
+          "gaps": [
+            0.3,
+            0.3,
+            0.1,
+            0.3,
+            0.2,
+            0,
+            0.4,
+            0.3,
+            0.4,
+            1,
+            12.9,
+            0.2,
+            0.1,
+            0.2,
+            0.1,
+            7.2
+          ],
+          "gapCount": 2,
+          "gapMinutes": 20.1,
+          "largestGapMin": 12.9,
+          "leadingIdleMin": -0.4,
+          "trailingIdleMin": -0.4
+        },
+        {
+          "court": 9,
+          "matches": 0,
+          "courtMinutes": 0,
+          "firstStartLocal": null,
+          "lastEndLocal": null,
+          "gaps": [],
+          "gapCount": 0,
+          "gapMinutes": 0,
+          "largestGapMin": null,
+          "leadingIdleMin": null,
+          "trailingIdleMin": null
+        },
+        {
+          "court": 10,
+          "matches": 0,
+          "courtMinutes": 0,
+          "firstStartLocal": null,
+          "lastEndLocal": null,
+          "gaps": [],
+          "gapCount": 0,
+          "gapMinutes": 0,
+          "largestGapMin": null,
+          "leadingIdleMin": null,
+          "trailingIdleMin": null
+        },
+        {
+          "court": 11,
+          "matches": 0,
+          "courtMinutes": 0,
+          "firstStartLocal": null,
+          "lastEndLocal": null,
+          "gaps": [],
+          "gapCount": 0,
+          "gapMinutes": 0,
+          "largestGapMin": null,
+          "leadingIdleMin": null,
+          "trailingIdleMin": null
+        }
+      ],
+      "effectiveCourts": 9,
+      "capacityMinutes": 2430,
+      "matches": 143,
+      "byKind": {
+        "placement": 143,
+        "knockout": 0
+      },
+      "firstStartLocal": "12:29",
+      "lastStartLocal": "16:47",
+      "lastEndLocal": "17:00",
+      "courtMinutes": 1973.9,
+      "utilisationPct": 81.2,
+      "activeSpanMinutes": 271,
+      "activeUtilisationPct": 66.2,
+      "maxConcurrentCourts": 8,
+      "meanConcurrentCourts": 7.3,
+      "courtsUsed": 8,
+      "gaps": {
+        "leadingIdleMin": -1.9,
+        "trailingIdleMin": 14.2,
+        "betweenMatchesMin": 149.4,
+        "betweenMatchesCount": 23,
+        "largestMin": 12.9
+      }
+    },
+    {
+      "date": "2026-10-27",
+      "windowLocal": "09:30–20:30",
+      "windowMinutes": 660,
+      "courts": [
+        {
+          "court": 1,
+          "matches": 21,
+          "courtMinutes": 450.1,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "18:09",
+          "gaps": [
+            0.3,
+            0.2,
+            0.2,
+            0.2,
+            0.3,
+            0.1,
+            6.2,
+            0.2,
+            0.1,
+            0.3,
+            0.2,
+            0.6,
+            0.5,
+            1,
+            0.2,
+            0.2,
+            0.1,
+            7.2,
+            10.2,
+            10.4
+          ],
+          "gapCount": 4,
+          "gapMinutes": 34,
+          "largestGapMin": 10.4,
+          "leadingIdleMin": 30.4,
+          "trailingIdleMin": 141
+        },
+        {
+          "court": 2,
+          "matches": 21,
+          "courtMinutes": 470.9,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "18:08",
+          "gaps": [
+            0.1,
+            0.2,
+            0.2,
+            0.1,
+            0.7,
+            0.4,
+            0.3,
+            0.1,
+            0.2,
+            0.4,
+            0.1,
+            0.2,
+            0.3,
+            12.8,
+            0.3,
+            0.7,
+            0.4,
+            0.1,
+            0.1,
+            0.1
+          ],
+          "gapCount": 1,
+          "gapMinutes": 12.8,
+          "largestGapMin": 12.8,
+          "leadingIdleMin": 30.4,
+          "trailingIdleMin": 141
+        },
+        {
+          "court": 3,
+          "matches": 21,
+          "courtMinutes": 426.2,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "17:48",
+          "gaps": [
+            0.3,
+            0.1,
+            0.1,
+            0.2,
+            7.7,
+            0.4,
+            0.2,
+            0.1,
+            0.2,
+            0.3,
+            0.1,
+            0.1,
+            0.4,
+            0.8,
+            10.4,
+            0.5,
+            0.1,
+            10.7,
+            8.7,
+            0.1
+          ],
+          "gapCount": 4,
+          "gapMinutes": 37.5,
+          "largestGapMin": 10.7,
+          "leadingIdleMin": 30.4,
+          "trailingIdleMin": 162
+        },
+        {
+          "court": 4,
+          "matches": 19,
+          "courtMinutes": 412.4,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "17:43",
+          "gaps": [
+            0.2,
+            0.1,
+            0.2,
+            0.1,
+            7.6,
+            10.8,
+            0.6,
+            0.1,
+            0.1,
+            0.1,
+            0.4,
+            0.5,
+            12.7,
+            0.4,
+            0.5,
+            0.3,
+            15.3,
+            0.2
+          ],
+          "gapCount": 4,
+          "gapMinutes": 46.4,
+          "largestGapMin": 15.3,
+          "leadingIdleMin": 30.5,
+          "trailingIdleMin": 166.9
+        },
+        {
+          "court": 5,
+          "matches": 20,
+          "courtMinutes": 431.8,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "17:43",
+          "gaps": [
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.4,
+            0.1,
+            0.1,
+            0.2,
+            0.1,
+            0,
+            0.2,
+            12.6,
+            0.2,
+            0.5,
+            0.1,
+            15.2,
+            0.1
+          ],
+          "gapCount": 2,
+          "gapMinutes": 27.8,
+          "largestGapMin": 15.2,
+          "leadingIdleMin": 30.5,
+          "trailingIdleMin": 166.8
+        },
+        {
+          "court": 6,
+          "matches": 18,
+          "courtMinutes": 411.7,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "17:13",
+          "gaps": [
+            0.2,
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            6.1,
+            0.2,
+            0.1,
+            0.3,
+            0.2,
+            0.4,
+            0.1,
+            12.2,
+            0.1,
+            0.4,
+            0.2,
+            0.1
+          ],
+          "gapCount": 2,
+          "gapMinutes": 18.3,
+          "largestGapMin": 12.2,
+          "leadingIdleMin": 30.5,
+          "trailingIdleMin": 196.8
+        },
+        {
+          "court": 7,
+          "matches": 19,
+          "courtMinutes": 435.4,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "18:09",
+          "gaps": [
+            0.3,
+            0.2,
+            0.3,
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.2,
+            10.5,
+            0.2,
+            0.2,
+            12.1,
+            0.1,
+            0.2,
+            0.1,
+            0.3,
+            28.3
+          ],
+          "gapCount": 3,
+          "gapMinutes": 50.9,
+          "largestGapMin": 28.3,
+          "leadingIdleMin": 30.5,
+          "trailingIdleMin": 140.7
+        },
+        {
+          "court": 8,
+          "matches": 19,
+          "courtMinutes": 410.1,
+          "firstStartLocal": "10:00",
+          "lastEndLocal": "17:13",
+          "gaps": [
+            0.3,
+            0.1,
+            0.2,
+            0.1,
+            0.2,
+            0.1,
+            0.2,
+            0.1,
+            2.9,
+            8.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            9.5,
+            0.2,
+            0.1
+          ],
+          "gapCount": 3,
+          "gapMinutes": 20.5,
+          "largestGapMin": 9.5,
+          "leadingIdleMin": 30.5,
+          "trailingIdleMin": 196.7
+        },
+        {
+          "court": 9,
+          "matches": 6,
+          "courtMinutes": 146.7,
+          "firstStartLocal": "14:51",
+          "lastEndLocal": "17:25",
+          "gaps": [
+            0.1,
+            0.1,
+            0.1,
+            6.9,
+            0.1
+          ],
+          "gapCount": 1,
+          "gapMinutes": 6.9,
+          "largestGapMin": 6.9,
+          "leadingIdleMin": 321.5,
+          "trailingIdleMin": 184.5
+        },
+        {
+          "court": 10,
+          "matches": 6,
+          "courtMinutes": 141.3,
+          "firstStartLocal": "14:51",
+          "lastEndLocal": "17:13",
+          "gaps": [
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ],
+          "gapCount": 0,
+          "gapMinutes": 0,
+          "largestGapMin": 0.2,
+          "leadingIdleMin": 321.6,
+          "trailingIdleMin": 196.6
+        },
+        {
+          "court": 11,
+          "matches": 2,
+          "courtMinutes": 52.3,
+          "firstStartLocal": "16:21",
+          "lastEndLocal": "17:13",
+          "gaps": [
+            0.1
+          ],
+          "gapCount": 0,
+          "gapMinutes": 0,
+          "largestGapMin": 0.1,
+          "leadingIdleMin": 411.1,
+          "trailingIdleMin": 196.6
+        }
+      ],
+      "effectiveCourts": 11,
+      "capacityMinutes": 7260,
+      "matches": 172,
+      "byKind": {
+        "placement": 29,
+        "knockout": 143
+      },
+      "firstStartLocal": "10:00",
+      "lastStartLocal": "17:41",
+      "lastEndLocal": "18:09",
+      "courtMinutes": 3789,
+      "utilisationPct": 52.2,
+      "activeSpanMinutes": 488.9,
+      "activeUtilisationPct": 70.4,
+      "maxConcurrentCourts": 11,
+      "meanConcurrentCourts": 7.7,
+      "courtsUsed": 11,
+      "gaps": {
+        "leadingIdleMin": 1297.9,
+        "trailingIdleMin": 1889.6,
+        "betweenMatchesMin": 255.1,
+        "betweenMatchesCount": 24,
+        "largestMin": 28.3
+      }
+    }
+  ],
+  "durations": {
+    "placement": {
+      "n": 172,
+      "mean": 13.5,
+      "median": 12.4,
+      "p90": 18.4,
+      "p95": 21.8,
+      "min": 5.6,
+      "max": 34.8,
+      "total": 2325,
+      "overrunMean": 3.5,
+      "overrunSharePct": 94.2,
+      "impliedSlot": 18.4
+    },
+    "knockout": {
+      "n": 143,
+      "mean": 24,
+      "median": 23.1,
+      "p90": 30.6,
+      "p95": 32.5,
+      "min": 11.8,
+      "max": 34.5,
+      "total": 3437.9,
+      "overrunMean": 4,
+      "overrunSharePct": 88.1,
+      "impliedSlot": 30.6
+    },
+    "byCategory": [
+      {
+        "category": "MS",
+        "placement": {
+          "played": 49,
+          "n": 49,
+          "mean": 13.1,
+          "median": 12.5,
+          "p90": 16.3,
+          "p95": 16.3,
+          "min": 8.2,
+          "max": 25.1,
+          "total": 643.6,
+          "overrunMean": 3.1,
+          "overrunSharePct": 98
+        },
+        "knockout": {
+          "played": 42,
+          "n": 42,
+          "mean": 25.3,
+          "median": 24.5,
+          "p90": 30.9,
+          "p95": 34.1,
+          "min": 11.8,
+          "max": 34.4,
+          "total": 1063.5,
+          "overrunMean": 5.3,
+          "overrunSharePct": 90.5
+        }
+      },
+      {
+        "category": "WD",
+        "placement": {
+          "played": 20,
+          "n": 20,
+          "mean": 14.2,
+          "median": 13.4,
+          "p90": 16.4,
+          "p95": 24.4,
+          "min": 7.9,
+          "max": 24.5,
+          "total": 283.4,
+          "overrunMean": 4.2,
+          "overrunSharePct": 95
+        },
+        "knockout": {
+          "played": 16,
+          "n": 16,
+          "mean": 22.2,
+          "median": 22.6,
+          "p90": 24,
+          "p95": 27.8,
+          "min": 17.7,
+          "max": 27.8,
+          "total": 354.7,
+          "overrunMean": 2.2,
+          "overrunSharePct": 75
+        }
+      },
+      {
+        "category": "XD",
+        "placement": {
+          "played": 44,
+          "n": 44,
+          "mean": 14.8,
+          "median": 12.5,
+          "p90": 21.8,
+          "p95": 21.9,
+          "min": 5.7,
+          "max": 34.8,
+          "total": 650.8,
+          "overrunMean": 4.8,
+          "overrunSharePct": 90.9
+        },
+        "knockout": {
+          "played": 36,
+          "n": 36,
+          "mean": 23.9,
+          "median": 22.8,
+          "p90": 30.5,
+          "p95": 34.4,
+          "min": 12.7,
+          "max": 34.5,
+          "total": 859.5,
+          "overrunMean": 3.9,
+          "overrunSharePct": 91.7
+        }
+      },
+      {
+        "category": "MD",
+        "placement": {
+          "played": 34,
+          "n": 34,
+          "mean": 12.6,
+          "median": 11.9,
+          "p90": 16.1,
+          "p95": 19.8,
+          "min": 5.6,
+          "max": 23.9,
+          "total": 428.2,
+          "overrunMean": 2.6,
+          "overrunSharePct": 94.1
+        },
+        "knockout": {
+          "played": 29,
+          "n": 29,
+          "mean": 22.6,
+          "median": 22.2,
+          "p90": 27.9,
+          "p95": 28.8,
+          "min": 16.9,
+          "max": 32.5,
+          "total": 656.7,
+          "overrunMean": 2.6,
+          "overrunSharePct": 82.8
+        }
+      },
+      {
+        "category": "WS",
+        "placement": {
+          "played": 25,
+          "n": 25,
+          "mean": 12.8,
+          "median": 12.6,
+          "p90": 16.7,
+          "p95": 17.6,
+          "min": 7.5,
+          "max": 19.2,
+          "total": 319.1,
+          "overrunMean": 2.8,
+          "overrunSharePct": 92
+        },
+        "knockout": {
+          "played": 20,
+          "n": 20,
+          "mean": 25.2,
+          "median": 23.3,
+          "p90": 30.6,
+          "p95": 34,
+          "min": 12.6,
+          "max": 34.1,
+          "total": 503.3,
+          "overrunMean": 5.2,
+          "overrunSharePct": 95
+        }
+      }
+    ]
+  },
+  "plans": {
+    "day1": {
+      "label": "day 1 at 12:29 (round 1 published)",
+      "rowsWithTime": 85,
+      "rowsWithoutTime": 0,
+      "unscheduledByKind": {
+        "placement": 0,
+        "knockout": 0
+      },
+      "courtsInPlan": 8,
+      "firstStartLocal": "2026-10-26 12:30:00",
+      "lastEndLocal": "2026-10-26 14:20:00",
+      "overlaps": {
+        "courtPairs": 0,
+        "courtMinutes": 0,
+        "playerPairs": 0,
+        "playerMinutes": 0,
+        "restViolations": 0,
+        "dependencyViolations": 0
+      },
+      "examples": {
+        "courtOverlaps": [],
+        "playerOverlaps": [],
+        "restViolations": [],
+        "dependencyViolations": []
+      },
+      "byDay": [
+        {
+          "date": "2026-10-26",
+          "matches": 85,
+          "firstLocal": "12:30",
+          "lastEndLocal": "14:20",
+          "windowLocal": "12:30–17:00",
+          "slotMinutes": 850,
+          "capacityMinutes": 2430,
+          "utilisationPct": 35,
+          "outsideWindow": 0
+        }
+      ]
+    },
+    "day1Rebuild": {
+      "label": "day 1 at 13:29 (round 2 inserted)",
+      "rowsWithTime": 62,
+      "rowsWithoutTime": 0,
+      "unscheduledByKind": {
+        "placement": 0,
+        "knockout": 0
+      },
+      "courtsInPlan": 8,
+      "firstStartLocal": "2026-10-26 13:05:00",
+      "lastEndLocal": "2026-10-26 14:59:00",
+      "overlaps": {
+        "courtPairs": 0,
+        "courtMinutes": 0,
+        "playerPairs": 0,
+        "playerMinutes": 0,
+        "restViolations": 0,
+        "dependencyViolations": 0
+      },
+      "examples": {
+        "courtOverlaps": [],
+        "playerOverlaps": [],
+        "restViolations": [],
+        "dependencyViolations": []
+      },
+      "byDay": [
+        {
+          "date": "2026-10-26",
+          "matches": 62,
+          "firstLocal": "13:05",
+          "lastEndLocal": "14:59",
+          "windowLocal": "12:30–17:00",
+          "slotMinutes": 620,
+          "capacityMinutes": 2430,
+          "utilisationPct": 25.5,
+          "outsideWindow": 0
+        }
+      ]
+    },
+    "day2": {
+      "label": "day 2 at 09:55",
+      "rowsWithTime": 69,
+      "rowsWithoutTime": 0,
+      "unscheduledByKind": {
+        "placement": 0,
+        "knockout": 0
+      },
+      "courtsInPlan": 8,
+      "firstStartLocal": "2026-10-27 09:30:00",
+      "lastEndLocal": "2026-10-27 12:00:00",
+      "overlaps": {
+        "courtPairs": 0,
+        "courtMinutes": 0,
+        "playerPairs": 0,
+        "playerMinutes": 0,
+        "restViolations": 0,
+        "dependencyViolations": 0
+      },
+      "examples": {
+        "courtOverlaps": [],
+        "playerOverlaps": [],
+        "restViolations": [],
+        "dependencyViolations": []
+      },
+      "byDay": [
+        {
+          "date": "2026-10-27",
+          "matches": 69,
+          "firstLocal": "09:30",
+          "lastEndLocal": "12:00",
+          "windowLocal": "09:30–20:30",
+          "slotMinutes": 1090,
+          "capacityMinutes": 7260,
+          "utilisationPct": 15,
+          "outsideWindow": 0
+        }
+      ]
+    },
+    "day2Mid": {
+      "label": "day 2 at 13:00",
+      "rowsWithTime": 44,
+      "rowsWithoutTime": 0,
+      "unscheduledByKind": {
+        "placement": 0,
+        "knockout": 0
+      },
+      "courtsInPlan": 8,
+      "firstStartLocal": "2026-10-27 12:53:00",
+      "lastEndLocal": "2026-10-27 15:34:00",
+      "overlaps": {
+        "courtPairs": 0,
+        "courtMinutes": 0,
+        "playerPairs": 0,
+        "playerMinutes": 0,
+        "restViolations": 0,
+        "dependencyViolations": 0
+      },
+      "examples": {
+        "courtOverlaps": [],
+        "playerOverlaps": [],
+        "restViolations": [],
+        "dependencyViolations": []
+      },
+      "byDay": [
+        {
+          "date": "2026-10-27",
+          "matches": 44,
+          "firstLocal": "12:53",
+          "lastEndLocal": "15:34",
+          "windowLocal": "09:30–20:30",
+          "slotMinutes": 880,
+          "capacityMinutes": 7260,
+          "utilisationPct": 12.1,
+          "outsideWindow": 0
+        }
+      ]
+    }
+  },
+  "planSnapshots": {
+    "day1": [
+      {
+        "id": "7c6d2c71-a303-4a87-82e3-74be4408028e",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "763b9529-fe96-4c1f-b7de-ecf77bb0d91b",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "532f3dda-289f-4897-af75-f249bccc4d6e",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "2221e033-1e15-4258-814c-06ad654151b1",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "4c422e07-1ffb-4d02-8fbf-c510d02481f5",
+        "planned": "2026-10-26T19:10:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "9efe6d8d-f232-4b96-af2a-85860859b3d4",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "efa44bd7-8f8c-4278-a835-569b99333aef",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "a025f1f1-8b43-4b39-ba59-b4dd13996144",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "3bf37968-4265-4bc3-83d6-ee3b9a81b5f9",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "a808177e-a25f-4e18-a80b-aa27b074ac6e",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "475a0f44-e96e-4d93-b9eb-6db6de2f9811",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "da21f2b4-35ee-45db-8254-a982cbf6ca2e",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "a621cef5-861b-45fe-a28f-cd815ad39585",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "e5db102e-9144-4747-b5cf-ea8f66afa093",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "ff755b73-9554-4ea6-910e-0b8e7cb90995",
+        "planned": "2026-10-26T19:10:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "7602589a-efbc-4ba1-91ed-3a17da913f20",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "20015bc3-08e0-4785-99ca-b94ade29d335",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "450af6d1-e2a3-45e5-8e7a-5a45240c50cd",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "8dc7edfb-5520-4aeb-8c7d-cd31c1392e08",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "a38504d2-bd4b-4349-b961-1d506bcef917",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "f411acf9-bc15-4d53-911e-23469f489770",
+        "planned": "2026-10-26T19:10:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "2749f534-9aa9-4d79-bb07-329973e8afc3",
+        "planned": "2026-10-26T19:10:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "d8666602-6094-4670-9114-98438441febb",
+        "planned": "2026-10-26T19:10:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "37906a56-8c68-403f-b021-dcd10f867152",
+        "planned": "2026-10-26T19:00:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "d5031885-bf3d-4dbe-a4d1-571acd4503ed",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "5035d9fd-6fc0-4a7b-b9c2-52634d91b758",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "a7b2fa38-2b9d-46b3-a478-ee1b122edb0a",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "81b28bc2-c99b-45f3-b692-875a0e6bab6c",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "bd0a7d47-6278-43be-9308-3f3ee95faab7",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "c63470f6-17ba-4e86-b728-0ce18d0e45a8",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "8f366508-2035-4e2b-839d-7ce6f20d0ac4",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "08d128eb-89fa-4dcb-8a52-02ee4cf75d4a",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "86085ab6-2063-42ac-a819-305eb8f927aa",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "cca855dc-9fff-4740-bdd5-ec7fd5a16d6b",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "3433f6ae-be5f-4817-bb8d-ddeaf6ce31f6",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "20b0863d-784a-4d5f-aefc-67c6a8dfd0fa",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "faba923e-aa23-468c-a523-466764ce27ea",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "620eb8f1-f532-4418-a342-28e74947974f",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "f59a72ed-d65c-4482-ae21-360d39da96b9",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "f91036c4-40aa-479d-95c1-2553a7e3108d",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "bdcef5fb-cb17-4f65-9632-3ae895d44f5f",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "18016faa-13e9-46e7-9346-d0fad2ed59cf",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "e62055e6-d589-44ec-8464-dc0b8067fa1b",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "207c80e5-6c78-441d-8037-7b1d396473e6",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "cf91e38e-76c3-4210-85b8-7326f1ad87f1",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "c7b261d9-091d-4087-824a-38fdbdf36eae",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "191c7908-fc65-4d3d-aaf9-60d16b6fc585",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "6cada361-2358-45ae-a0af-9fac4fcfbdf8",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "146b4a63-3ab4-4a45-b5d1-aec93e46cc54",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "4471c256-b435-4dcb-bffd-5bfda6e55eed",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "43bca981-3808-468e-8fcc-8e0e4edc16ff",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "dd183842-c2f2-4f72-ac6c-2bfdfa9e3cc2",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "575cec61-bbe0-4834-b79e-3586e88345fb",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "510e728c-dd2d-4e6f-99b8-92ccc0c94361",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "ed8f49ca-8d64-4568-a324-18a8facad9e0",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "bed488c4-80ee-4248-ab10-378f23f7a1f2",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "5772d32f-1727-4a10-b13b-82825de8c27e",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "8b0e7423-10c1-478c-a72e-1ad00804cb34",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "3a15b85a-187e-40d0-8c2c-6db141c1224b",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "9b028aa7-8e51-411b-9ecf-41353f4d7030",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "158fa758-4482-4bb8-9086-7a80cfe8e73c",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "fa48596a-2435-4865-b326-4a7feed82b1b",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "d617f74e-ea54-4a08-845a-f2b30def5c4b",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "c2709726-c14b-4d03-9ca2-5f912db757b6",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "b0d8fe29-e3fc-481a-af55-8d1d8bc8a0aa",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "ac469bda-4351-4c6b-8660-cf3ffdc62d03",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "1193c5d9-6e19-4f28-8106-0a167f4bc7a0",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "db92231f-0938-4b5e-bbdc-7db47cf69229",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "40f4367b-6b33-4776-9f0b-d506752c66dc",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "d1ed1718-ac94-4d3a-8ad9-6c68af335049",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "31e127e9-5491-485b-9248-721a7f4f9dc8",
+        "planned": "2026-10-26T18:30:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "ccf33ae0-5b6c-416a-bb31-9563d2fac978",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "2f044c93-6d7a-4efb-9bb8-eaebab4099e6",
+        "planned": "2026-10-26T17:50:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "2641b3be-f85f-4cab-a0dc-fb67626be694",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "913c457d-e00b-4112-994c-c5da5caaeb11",
+        "planned": "2026-10-26T17:30:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "cdac9008-918f-433c-be44-e95fb24ec66f",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "6b8199e7-603f-4236-9d6e-9698db3da9ab",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "7074c11a-e5e3-4ff9-9e90-c4ca869dc1f8",
+        "planned": "2026-10-26T18:20:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "978dde36-bb03-4419-90af-b8c2c372d73c",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "1a79f1a0-d1dd-44de-927d-e5fb3f559828",
+        "planned": "2026-10-26T18:00:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "bcd58fb6-9b42-43ab-bf13-9412a69b0f62",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "5a96801c-aca7-4fc1-b1a5-3bcae2f2d9c2",
+        "planned": "2026-10-26T17:40:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "d71afe18-8bd4-4384-b1d4-7fecce126ae6",
+        "planned": "2026-10-26T18:10:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "22d4832b-8105-41f4-be4d-cc7c6d93b25f",
+        "planned": "2026-10-26T18:50:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "feffdb15-1853-4e4e-8837-ef5fb106d3ca",
+        "planned": "2026-10-26T18:40:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      }
+    ],
+    "day2": [
+      {
+        "id": "57415598-5a5f-479a-883e-f3cde80e9125",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "f3b25d0e-44fe-457d-8428-cbeff7d896b5",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "495da269-8af5-4063-a3e2-826f5697ed39",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "749ef654-261d-4cff-8002-a6232301f47e",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "c88e2e7c-ed62-45d4-9318-90fc4887f41e",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "c573d319-7a2c-45ae-9c85-1f3475665592",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "9b31346e-f2bc-4311-834a-ed623720cd86",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "b714f384-07b2-42d7-ac0b-bd8273e126e3",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "fba4e0e1-4751-4ff5-942c-ae8bb5dc6cc2",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "d3dfbbf8-f0c5-4cbe-8481-b260078926e8",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "989ab8a9-692b-4568-abec-369bbd338973",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "ff7e1555-eaf4-4abe-a1b9-fa4d3a265e90",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "73f20384-6491-43d2-ab25-6617f8c2b73f",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "d235f0fd-281c-4cbc-9496-68334ae795c1",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "0b66fbab-9e4c-4d7b-9cbd-986d946144e0",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "84d17913-f2e5-421d-9d3e-d25b759bfbd4",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "5b3f6bd7-3c17-4a71-a424-edfcfb28146c",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "4ed879fd-374c-4928-b07b-925adae62a6c",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "9c2e556f-47e1-42e9-921b-eba0e5951213",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "c364fba1-0a45-4474-840e-07472e7a73dc",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "d97dc59d-7a44-4cf3-b9f8-3bec7b6cf370",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "ed1ff975-2566-4d02-bc92-754a0717dd8d",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "84027e48-5d21-4dc7-8a82-8d98f4022d2e",
+        "planned": "2026-10-27T14:50:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "d8241fd3-ed8e-40fa-936e-14ab45d7701c",
+        "planned": "2026-10-27T15:10:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "9f15e231-d0f9-4a15-a7d0-2bfdf2c15ae4",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "ae25ef4f-d7ae-4fa7-9ee3-9610b8eae174",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "65f81586-a5d9-428f-8702-dfe02d9e1eac",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "bc3d395d-683e-4b3e-b046-624d243384a2",
+        "planned": "2026-10-27T14:30:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "e5fe33ea-fd94-4925-9e0e-496564cdb29f",
+        "planned": "2026-10-27T14:40:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "b2d6a2c5-7b23-4dd0-a486-e8aaabea9db8",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "78e59786-48fa-4f73-90b6-ba4bd2269663",
+        "planned": "2026-10-27T15:10:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "25ca5ee4-8a1a-40b5-85b0-1b57907f8bdf",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "41f5fd24-6df1-438f-af43-1127509827de",
+        "planned": "2026-10-27T15:10:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "61ad0bb6-c1e5-449d-a2c9-fbbd1de475e9",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "9d3d3d06-03ee-463e-972a-f701e7a7b199",
+        "planned": "2026-10-27T15:10:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "dc2d246f-aba7-442b-b809-e59732bc2a54",
+        "planned": "2026-10-27T15:00:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "f47c3ff2-9fdd-428e-afc4-92d18a441ed5",
+        "planned": "2026-10-27T15:20:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "7fbd2379-7650-4c55-ba6b-54cd17cb62d0",
+        "planned": "2026-10-27T16:30:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "f4dcba96-e91a-47b2-bae2-26ebad942b0e",
+        "planned": "2026-10-27T16:20:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "43f3189a-7634-4a7d-a684-61b5b2b8efac",
+        "planned": "2026-10-27T16:00:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "c0112568-c825-49bc-a915-c67e73b92353",
+        "planned": "2026-10-27T16:30:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "7f93fa69-84a5-4426-a24e-4d1edefec008",
+        "planned": "2026-10-27T16:10:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "5b8b1ba3-a701-4465-b93a-844d88c5826f",
+        "planned": "2026-10-27T16:20:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "52e7cbf7-9d98-444e-9d0a-e0bd137375c7",
+        "planned": "2026-10-27T16:40:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "53d66aae-14cf-4209-ad69-2663a8fa72cf",
+        "planned": "2026-10-27T16:00:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "3b3a3c18-4087-48bc-baf4-64e5013e1fdc",
+        "planned": "2026-10-27T16:00:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "9134ed16-bedd-4ea2-9dbd-c671334b75cc",
+        "planned": "2026-10-27T16:20:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "b0c74610-f932-439d-afcd-806037325526",
+        "planned": "2026-10-27T16:00:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "38f8a617-b071-4ff4-bcfb-b4dcd51e861e",
+        "planned": "2026-10-27T16:10:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "bc606c7d-b307-4017-a197-14472e8f5165",
+        "planned": "2026-10-27T16:20:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "c12624c2-b5fd-4bb6-9ccf-d6e2d65ccaa1",
+        "planned": "2026-10-27T16:20:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "02183806-2841-4074-bf7e-a3242bbdaf00",
+        "planned": "2026-10-27T16:30:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "54c4fee9-fb24-4604-8e9a-3bea2b221947",
+        "planned": "2026-10-27T16:10:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "3042508e-0bf8-4aac-ae69-4b78f463e74d",
+        "planned": "2026-10-27T15:40:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "15ca1bf1-da38-4a7a-bde1-1ed5b53de83c",
+        "planned": "2026-10-27T15:40:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "8fce3bf0-074a-4252-b8b1-3c96d678a831",
+        "planned": "2026-10-27T15:50:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "a3bd5ce1-a5b1-468d-a37c-9187450e047a",
+        "planned": "2026-10-27T15:50:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "1e7cd87f-0cc0-4cef-a374-a4d4db63a4c2",
+        "planned": "2026-10-27T15:20:00+00:00",
+        "courtId": "47c20e77-2756-47ef-b4a5-39b5ca27fe6e"
+      },
+      {
+        "id": "2a1a5ec3-b5fc-4a25-b40d-1abb99d1af60",
+        "planned": "2026-10-27T15:20:00+00:00",
+        "courtId": "a8f2bb64-f10f-44cb-bae0-49fbf2ca78f1"
+      },
+      {
+        "id": "b00a551e-fd10-459f-9b85-57ddae63237d",
+        "planned": "2026-10-27T15:30:00+00:00",
+        "courtId": "6554e606-e7fd-4363-b7ec-ed8586a9b919"
+      },
+      {
+        "id": "46d81c4d-472d-4ef6-8005-53eef0fc067f",
+        "planned": "2026-10-27T15:30:00+00:00",
+        "courtId": "fddc98d9-4d45-4d13-8161-937ce6c2f5e8"
+      },
+      {
+        "id": "167ac551-a9d4-47c9-bd31-03e448171253",
+        "planned": "2026-10-27T15:20:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "b9d751a6-aae8-4e5f-a6a6-d6634b11a7bc",
+        "planned": "2026-10-27T15:30:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "52c023ee-3d12-4946-a68d-47235c59483b",
+        "planned": "2026-10-27T15:20:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "6cb6ae56-d527-4445-b0b5-cb279fdd8720",
+        "planned": "2026-10-27T15:40:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      },
+      {
+        "id": "9dd3a1c8-f4d7-4bbe-afc8-f1d0d51cbc67",
+        "planned": "2026-10-27T15:40:00+00:00",
+        "courtId": "02e3b7a2-cd35-4ae4-af52-f5e3dfecc54c"
+      },
+      {
+        "id": "d87a7a5b-2f59-4e85-8cd9-1350b03954ec",
+        "planned": "2026-10-27T15:40:00+00:00",
+        "courtId": "8c1100b8-196f-415f-b008-cad76de1bcf0"
+      },
+      {
+        "id": "2b56c798-7fe1-439d-ac52-011614676ff0",
+        "planned": "2026-10-27T15:50:00+00:00",
+        "courtId": "6b6c83ce-d58f-43a9-b125-80d425f151ac"
+      },
+      {
+        "id": "05695c47-7f01-483a-9c8a-589c019ef37d",
+        "planned": "2026-10-27T16:00:00+00:00",
+        "courtId": "97941434-46ce-45dc-9ffa-8debf8067622"
+      }
+    ]
+  },
+  "execution": {
+    "courtOverlaps": [],
+    "courtOverlapCount": 0,
+    "restViolationCount": 1,
+    "restViolations": [
+      {
+        "player": "Owen Sterling",
+        "from": "XD C r1 s8",
+        "to": "MD B r2 s2",
+        "gapMin": 9.5,
+        "required": 10
+      }
+    ],
+    "inProgress": [
+      {
+        "match": "MS B r4 s1",
+        "startedLocal": "2026-10-27 18:09:03"
+      },
+      {
+        "match": "XD A r4 s1",
+        "startedLocal": "2026-10-27 18:09:06"
+      },
+      {
+        "match": "XD B r4 s1",
+        "startedLocal": "2026-10-27 18:09:04"
+      },
+      {
+        "match": "XD C r3 s2",
+        "startedLocal": "2026-10-27 18:09:05"
+      }
+    ],
+    "notStarted": [
+      {
+        "match": "MS C r4 s1",
+        "status": "scheduled",
+        "scheduledLocal": "2026-10-27 18:20:00"
+      },
+      {
+        "match": "MS D r4 s1",
+        "status": "scheduled",
+        "scheduledLocal": "2026-10-27 18:19:00"
+      },
+      {
+        "match": "XD C r4 s1",
+        "status": "scheduled",
+        "scheduledLocal": null
+      },
+      {
+        "match": "MD A r3 s1",
+        "status": "scheduled",
+        "scheduledLocal": "2026-10-27 18:19:00"
+      },
+      {
+        "match": "WS A r3 s1",
+        "status": "scheduled",
+        "scheduledLocal": "2026-10-27 18:40:00"
+      }
+    ]
+  },
+  "players": {
+    "distinct": 123,
+    "matchesPerPlayer": {
+      "n": 123,
+      "mean": 8,
+      "median": 8,
+      "p90": 12,
+      "p95": 12,
+      "min": 3,
+      "max": 14,
+      "total": 988
+    },
+    "waitGaps": {
+      "n": 742,
+      "mean": 58.3,
+      "median": 45.9,
+      "p90": 117.3,
+      "p95": 150.2,
+      "min": 5.6,
+      "max": 286.2,
+      "total": 43247.9
+    },
+    "sameDayTurnarounds": 742,
+    "underFiveMin": 0,
+    "underTenMin": 39,
+    "underThirtyMin": 227,
+    "restViolations": [
+      {
+        "player": "Owen Sterling",
+        "from": "XD C r1 s8",
+        "to": "MD B r2 s2",
+        "gapMin": 9.5,
+        "required": 10
+      }
+    ],
+    "restViolationCount": 1,
+    "courtChangesBetweenMatches": 656,
+    "playersWithMaxCategories": 47
+  },
+  "churn": {
+    "timeShiftRows": 1888,
+    "courtMoveRows": 1553,
+    "liveSchedulingEvents": 2542,
+    "liveTimeShifts": 1754,
+    "liveCourtMoves": 788,
+    "firstStartLocal": "2026-10-26 12:29:24",
+    "byDay": [
+      {
+        "date": "2026-10-26",
+        "timeShifts": 1086,
+        "courtMoves": 998,
+        "started": 153,
+        "reported": 143
+      },
+      {
+        "date": "2026-10-27",
+        "timeShifts": 802,
+        "courtMoves": 555,
+        "started": 176,
+        "reported": 172
+      }
+    ],
+    "perMatch": {
+      "matches": 323,
+      "shifts": {
+        "n": 323,
+        "mean": 5.8,
+        "median": 6,
+        "p90": 10,
+        "p95": 11,
+        "min": 0,
+        "max": 14,
+        "total": 1888
+      },
+      "movedMinutes": {
+        "n": 323,
+        "mean": 191.6,
+        "median": 25,
+        "p90": 761,
+        "p95": 774,
+        "min": 0,
+        "max": 791,
+        "total": 61881
+      },
+      "courtMoves": {
+        "n": 323,
+        "mean": 4.8,
+        "median": 5,
+        "p90": 9,
+        "p95": 9,
+        "min": 1,
+        "max": 9,
+        "total": 1553
+      },
+      "maxShifts": 14,
+      "maxMovedMinutes": 791,
+      "liveShifts": {
+        "n": 323,
+        "mean": 5.4,
+        "median": 6,
+        "p90": 10,
+        "p95": 10,
+        "min": 0,
+        "max": 13,
+        "total": 1754
+      },
+      "liveMovedMinutes": {
+        "n": 323,
+        "mean": 23.9,
+        "median": 22,
+        "p90": 49,
+        "p95": 54,
+        "min": 0,
+        "max": 69,
+        "total": 7731
+      },
+      "liveMaxMovedMinutes": 69,
+      "liveMaxShifts": 13
+    },
+    "nearStart": {
+      "count": 551,
+      "matches": 283,
+      "examples": [
+        {
+          "match": "WD round1 r1-9",
+          "atLocal": "2026-10-26 12:16:02",
+          "minutesBeforeStart": 25.4,
+          "pushMin": 722
+        },
+        {
+          "match": "MD round1 r1-16",
+          "atLocal": "2026-10-26 12:16:02",
+          "minutesBeforeStart": 29.1,
+          "pushMin": 722
+        },
+        {
+          "match": "XD round1 r1-2",
+          "atLocal": "2026-10-26 12:16:02",
+          "minutesBeforeStart": 25.5,
+          "pushMin": 717
+        },
+        {
+          "match": "MS round1 r1-9",
+          "atLocal": "2026-10-26 12:16:02",
+          "minutesBeforeStart": 25.9,
+          "pushMin": 717
+        },
+        {
+          "match": "XD round1 r1-12",
+          "atLocal": "2026-10-26 12:16:02",
+          "minutesBeforeStart": 26.9,
+          "pushMin": 717
+        },
+        {
+          "match": "WD round1 r1-4",
+          "atLocal": "2026-10-26 12:16:04",
+          "minutesBeforeStart": 27,
+          "pushMin": 717
+        },
+        {
+          "match": "MD round1 r1-2",
+          "atLocal": "2026-10-26 12:16:04",
+          "minutesBeforeStart": 26,
+          "pushMin": 717
+        },
+        {
+          "match": "XD round1 r1-16",
+          "atLocal": "2026-10-26 13:29:21",
+          "minutesBeforeStart": 0.1,
+          "pushMin": 25
+        }
+      ],
+      "pushes": {
+        "n": 551,
+        "mean": 13.9,
+        "median": 3,
+        "p90": 11,
+        "p95": 14,
+        "min": 1,
+        "max": 722,
+        "total": 7662
+      }
+    },
+    "bursts": [
+      {
+        "atLocal": "2026-10-26 12:15:37",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 85,
+        "rows": 85,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-26 12:16:02",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 49,
+        "rows": 49,
+        "totalPushedMin": 35113,
+        "largestPushMin": 722
+      },
+      {
+        "atLocal": "2026-10-26 12:16:04",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 24,
+        "rows": 24,
+        "totalPushedMin": 7972,
+        "largestPushMin": 722
+      },
+      {
+        "atLocal": "2026-10-26 12:23:19",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 85,
+        "rows": 170,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-26 12:24:50",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 85,
+        "rows": 170,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-26 12:25:21",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 85,
+        "rows": 170,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-26 12:27:10",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 85,
+        "rows": 170,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-26 13:28:50",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 21,
+        "rows": 21,
+        "totalPushedMin": 200,
+        "largestPushMin": 14
+      },
+      {
+        "atLocal": "2026-10-26 14:53:27",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 20,
+        "rows": 20,
+        "totalPushedMin": 36,
+        "largestPushMin": 2
+      },
+      {
+        "atLocal": "2026-10-26 15:04:04",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 38,
+        "rows": 38,
+        "totalPushedMin": 189,
+        "largestPushMin": 8
+      },
+      {
+        "atLocal": "2026-10-26 15:18:53",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 28,
+        "rows": 28,
+        "totalPushedMin": 112,
+        "largestPushMin": 4
+      },
+      {
+        "atLocal": "2026-10-26 15:25:02",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 23,
+        "rows": 23,
+        "totalPushedMin": 51,
+        "largestPushMin": 7
+      },
+      {
+        "atLocal": "2026-10-26 15:27:06",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 25,
+        "rows": 25,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-26 15:32:37",
+        "date": "2026-10-26",
+        "action": "time-shifted",
+        "matches": 21,
+        "rows": 21,
+        "totalPushedMin": 62,
+        "largestPushMin": 4
+      },
+      {
+        "atLocal": "2026-10-26 16:52:37",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 29,
+        "rows": 58,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-26 16:52:37",
+        "date": "2026-10-26",
+        "action": "court-moved",
+        "matches": 24,
+        "rows": 48,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-27 10:00:14",
+        "date": "2026-10-27",
+        "action": "court-moved",
+        "matches": 29,
+        "rows": 58,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-27 10:00:15",
+        "date": "2026-10-27",
+        "action": "court-moved",
+        "matches": 40,
+        "rows": 80,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-27 10:24:04",
+        "date": "2026-10-27",
+        "action": "time-shifted",
+        "matches": 24,
+        "rows": 24,
+        "totalPushedMin": 27,
+        "largestPushMin": 2
+      },
+      {
+        "atLocal": "2026-10-27 11:05:43",
+        "date": "2026-10-27",
+        "action": "time-shifted",
+        "matches": 20,
+        "rows": 20,
+        "totalPushedMin": 80,
+        "largestPushMin": 4
+      },
+      {
+        "atLocal": "2026-10-27 11:41:34",
+        "date": "2026-10-27",
+        "action": "court-moved",
+        "matches": 56,
+        "rows": 112,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-27 12:02:05",
+        "date": "2026-10-27",
+        "action": "time-shifted",
+        "matches": 23,
+        "rows": 23,
+        "totalPushedMin": 46,
+        "largestPushMin": 2
+      },
+      {
+        "atLocal": "2026-10-27 14:48:38",
+        "date": "2026-10-27",
+        "action": "time-shifted",
+        "matches": 20,
+        "rows": 20,
+        "totalPushedMin": 74,
+        "largestPushMin": 4
+      },
+      {
+        "atLocal": "2026-10-27 14:51:21",
+        "date": "2026-10-27",
+        "action": "court-moved",
+        "matches": 40,
+        "rows": 79,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-27 15:34:52",
+        "date": "2026-10-27",
+        "action": "court-moved",
+        "matches": 26,
+        "rows": 52,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-27 16:04:07",
+        "date": "2026-10-27",
+        "action": "court-moved",
+        "matches": 18,
+        "rows": 36,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      },
+      {
+        "atLocal": "2026-10-27 16:42:03",
+        "date": "2026-10-27",
+        "action": "court-moved",
+        "matches": 14,
+        "rows": 28,
+        "totalPushedMin": 0,
+        "largestPushMin": null
+      }
+    ],
+    "finalVsDayStart": {
+      "matches": 154,
+      "movedOverOneHour": 24,
+      "movedLater": 134,
+      "courtChanged": 38,
+      "movedMinutes": {
+        "n": 154,
+        "mean": 37.4,
+        "median": 35,
+        "p90": 81,
+        "p95": 111,
+        "min": -53,
+        "max": 187,
+        "total": 5758
+      },
+      "examples": [
+        {
+          "match": "MD A r1 s1",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:40:00",
+          "publishedLocal": "2026-10-27 13:47:00",
+          "startedLocal": "2026-10-27 13:46:53",
+          "movedMin": 187,
+          "courtChanged": true
+        },
+        {
+          "match": "MD A r1 s2",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:40:00",
+          "publishedLocal": "2026-10-27 13:47:00",
+          "startedLocal": "2026-10-27 13:46:55",
+          "movedMin": 187,
+          "courtChanged": true
+        },
+        {
+          "match": "MD A r1 s3",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:50:00",
+          "publishedLocal": "2026-10-27 13:06:00",
+          "startedLocal": "2026-10-27 13:05:42",
+          "movedMin": 136,
+          "courtChanged": true
+        },
+        {
+          "match": "WD A r1 s2",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:00:00",
+          "publishedLocal": "2026-10-27 12:03:00",
+          "startedLocal": "2026-10-27 12:02:24",
+          "movedMin": 123,
+          "courtChanged": true
+        },
+        {
+          "match": "MD B r2 s4",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:30:00",
+          "publishedLocal": "2026-10-27 12:32:00",
+          "startedLocal": "2026-10-27 12:31:45",
+          "movedMin": 122,
+          "courtChanged": true
+        },
+        {
+          "match": "MD B r2 s2",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:20:00",
+          "publishedLocal": "2026-10-27 12:13:00",
+          "startedLocal": "2026-10-27 12:11:34",
+          "movedMin": 113,
+          "courtChanged": true
+        },
+        {
+          "match": "MD D r1 s2",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:40:00",
+          "publishedLocal": "2026-10-27 12:33:00",
+          "startedLocal": "2026-10-27 12:33:05",
+          "movedMin": 113,
+          "courtChanged": true
+        },
+        {
+          "match": "WD B r1 s2",
+          "kind": "knockout",
+          "plannedLocal": "2026-10-27 10:00:00",
+          "publishedLocal": "2026-10-27 11:51:00",
+          "startedLocal": "2026-10-27 11:51:01",
+          "movedMin": 111,
+          "courtChanged": true
+        }
+      ]
+    }
+  },
+  "stages": [
+    {
+      "stage": "WD round1",
+      "matches": 10,
+      "firstStartLocal": "12:29",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "14:53",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 144.1,
+      "courtMinutes": 144.7,
+      "meanDuration": 14.5
+    },
+    {
+      "stage": "MD round1",
+      "matches": 17,
+      "firstStartLocal": "12:29",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "14:41",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 131.6,
+      "courtMinutes": 221.9,
+      "meanDuration": 13.1
+    },
+    {
+      "stage": "WS round1",
+      "matches": 12,
+      "firstStartLocal": "12:29",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "15:04",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 154.1,
+      "courtMinutes": 161.7,
+      "meanDuration": 13.5
+    },
+    {
+      "stage": "MS round1",
+      "matches": 24,
+      "firstStartLocal": "12:41",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "15:27",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 165.1,
+      "courtMinutes": 338.9,
+      "meanDuration": 14.1
+    },
+    {
+      "stage": "XD round1",
+      "matches": 22,
+      "firstStartLocal": "12:41",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "15:03",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 142.4,
+      "courtMinutes": 390.4,
+      "meanDuration": 17.7
+    },
+    {
+      "stage": "WD round2",
+      "matches": 10,
+      "firstStartLocal": "14:27",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "16:41",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 133.2,
+      "courtMinutes": 138.8,
+      "meanDuration": 13.9
+    },
+    {
+      "stage": "XD round2",
+      "matches": 22,
+      "firstStartLocal": "15:25",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "16:59",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 94.6,
+      "courtMinutes": 260.3,
+      "meanDuration": 11.8
+    },
+    {
+      "stage": "MD round2",
+      "matches": 17,
+      "firstStartLocal": "15:48",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "16:27",
+      "lastEndDate": "2026-10-26",
+      "spanMin": 38.9,
+      "courtMinutes": 206.3,
+      "meanDuration": 12.1
+    },
+    {
+      "stage": "WS round2",
+      "matches": 13,
+      "firstStartLocal": "16:27",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "10:24",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 1076.9,
+      "courtMinutes": 157.4,
+      "meanDuration": 12.1
+    },
+    {
+      "stage": "MS round2",
+      "matches": 25,
+      "firstStartLocal": "16:31",
+      "firstStartDate": "2026-10-26",
+      "lastEndLocal": "11:00",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 1109.1,
+      "courtMinutes": 304.7,
+      "meanDuration": 12.2
+    },
+    {
+      "stage": "WD draw C r1",
+      "matches": 1,
+      "firstStartLocal": "10:36",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "10:59",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 23.2,
+      "courtMinutes": 23.2,
+      "meanDuration": 23.2
+    },
+    {
+      "stage": "XD draw A r1",
+      "matches": 3,
+      "firstStartLocal": "10:36",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "11:39",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 63.4,
+      "courtMinutes": 74,
+      "meanDuration": 24.7
+    },
+    {
+      "stage": "WD draw A r2",
+      "matches": 2,
+      "firstStartLocal": "10:41",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:24",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 282.8,
+      "courtMinutes": 46.9,
+      "meanDuration": 23.4
+    },
+    {
+      "stage": "XD draw D r1",
+      "matches": 3,
+      "firstStartLocal": "10:41",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "13:05",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 143.8,
+      "courtMinutes": 79,
+      "meanDuration": 26.3
+    },
+    {
+      "stage": "XD draw D r2",
+      "matches": 4,
+      "firstStartLocal": "10:47",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:26",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 338.8,
+      "courtMinutes": 83.5,
+      "meanDuration": 20.9
+    },
+    {
+      "stage": "XD draw B r1",
+      "matches": 3,
+      "firstStartLocal": "10:48",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "12:02",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 73.6,
+      "courtMinutes": 77.6,
+      "meanDuration": 25.9
+    },
+    {
+      "stage": "MD draw C r1",
+      "matches": 1,
+      "firstStartLocal": "10:59",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "11:21",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 22,
+      "courtMinutes": 22,
+      "meanDuration": 22
+    },
+    {
+      "stage": "XD draw C r1",
+      "matches": 3,
+      "firstStartLocal": "11:00",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "12:02",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 61.3,
+      "courtMinutes": 77.1,
+      "meanDuration": 25.7
+    },
+    {
+      "stage": "XD draw B r2",
+      "matches": 4,
+      "firstStartLocal": "11:17",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:49",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 211.4,
+      "courtMinutes": 78.4,
+      "meanDuration": 19.6
+    },
+    {
+      "stage": "XD draw C r2",
+      "matches": 4,
+      "firstStartLocal": "11:17",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:33",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 255.9,
+      "courtMinutes": 89.2,
+      "meanDuration": 22.3
+    },
+    {
+      "stage": "XD draw A r2",
+      "matches": 4,
+      "firstStartLocal": "11:21",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:48",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 207,
+      "courtMinutes": 102.6,
+      "meanDuration": 25.6
+    },
+    {
+      "stage": "MD draw B r1",
+      "matches": 1,
+      "firstStartLocal": "11:21",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "11:44",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 22.9,
+      "courtMinutes": 22.9,
+      "meanDuration": 22.9
+    },
+    {
+      "stage": "MD draw D r1",
+      "matches": 4,
+      "firstStartLocal": "11:21",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "13:05",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 104,
+      "courtMinutes": 101.6,
+      "meanDuration": 25.4
+    },
+    {
+      "stage": "MD draw B r2",
+      "matches": 4,
+      "firstStartLocal": "11:40",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:11",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 211.3,
+      "courtMinutes": 87.6,
+      "meanDuration": 21.9
+    },
+    {
+      "stage": "MD draw C r2",
+      "matches": 4,
+      "firstStartLocal": "11:40",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "13:36",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 115.9,
+      "courtMinutes": 91,
+      "meanDuration": 22.8
+    },
+    {
+      "stage": "WD draw B r2",
+      "matches": 2,
+      "firstStartLocal": "11:45",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:24",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 219.1,
+      "courtMinutes": 46.5,
+      "meanDuration": 23.2
+    },
+    {
+      "stage": "WD draw D r1",
+      "matches": 1,
+      "firstStartLocal": "11:50",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "12:10",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 19.7,
+      "courtMinutes": 19.7,
+      "meanDuration": 19.7
+    },
+    {
+      "stage": "WD draw B r1",
+      "matches": 1,
+      "firstStartLocal": "11:51",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "12:10",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 20,
+      "courtMinutes": 20,
+      "meanDuration": 20
+    },
+    {
+      "stage": "WD draw C r2",
+      "matches": 2,
+      "firstStartLocal": "11:51",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "13:38",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 107.8,
+      "courtMinutes": 42.5,
+      "meanDuration": 21.2
+    },
+    {
+      "stage": "WD draw A r1",
+      "matches": 1,
+      "firstStartLocal": "12:02",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "12:23",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 21.3,
+      "courtMinutes": 21.3,
+      "meanDuration": 21.3
+    },
+    {
+      "stage": "WD draw D r2",
+      "matches": 2,
+      "firstStartLocal": "12:02",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:24",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 201.8,
+      "courtMinutes": 43.9,
+      "meanDuration": 21.9
+    },
+    {
+      "stage": "WS draw C r1",
+      "matches": 2,
+      "firstStartLocal": "12:09",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "13:38",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 89.5,
+      "courtMinutes": 45.2,
+      "meanDuration": 22.6
+    },
+    {
+      "stage": "MD draw A r1",
+      "matches": 4,
+      "firstStartLocal": "12:10",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:06",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 116,
+      "courtMinutes": 90.9,
+      "meanDuration": 22.7
+    },
+    {
+      "stage": "MS draw C r1",
+      "matches": 4,
+      "firstStartLocal": "12:23",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:18",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 114.1,
+      "courtMinutes": 88.1,
+      "meanDuration": 22
+    },
+    {
+      "stage": "MS draw B r2",
+      "matches": 4,
+      "firstStartLocal": "12:33",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:21",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 228.2,
+      "courtMinutes": 127.2,
+      "meanDuration": 31.8
+    },
+    {
+      "stage": "MS draw D r1",
+      "matches": 5,
+      "firstStartLocal": "12:48",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:49",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 121,
+      "courtMinutes": 127.6,
+      "meanDuration": 25.5
+    },
+    {
+      "stage": "WS draw A r1",
+      "matches": 2,
+      "firstStartLocal": "12:54",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:05",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 71,
+      "courtMinutes": 50.6,
+      "meanDuration": 25.3
+    },
+    {
+      "stage": "MS draw A r1",
+      "matches": 5,
+      "firstStartLocal": "13:05",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:49",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 103.7,
+      "courtMinutes": 116.1,
+      "meanDuration": 23.2
+    },
+    {
+      "stage": "WS draw B r1",
+      "matches": 3,
+      "firstStartLocal": "13:13",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:18",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 64.9,
+      "courtMinutes": 63,
+      "meanDuration": 21
+    },
+    {
+      "stage": "WS draw D r1",
+      "matches": 2,
+      "firstStartLocal": "13:34",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:05",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 30.6,
+      "courtMinutes": 59.3,
+      "meanDuration": 29.7
+    },
+    {
+      "stage": "MS draw B r1",
+      "matches": 3,
+      "firstStartLocal": "14:18",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "14:49",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 31,
+      "courtMinutes": 91.1,
+      "meanDuration": 30.4
+    },
+    {
+      "stage": "MS draw C r2",
+      "matches": 4,
+      "firstStartLocal": "14:49",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:42",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 112.8,
+      "courtMinutes": 87.2,
+      "meanDuration": 21.8
+    },
+    {
+      "stage": "WS draw C r2",
+      "matches": 2,
+      "firstStartLocal": "14:49",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:02",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 72.9,
+      "courtMinutes": 46.5,
+      "meanDuration": 23.3
+    },
+    {
+      "stage": "MS draw A r2",
+      "matches": 4,
+      "firstStartLocal": "14:51",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:42",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 111.4,
+      "courtMinutes": 91.2,
+      "meanDuration": 22.8
+    },
+    {
+      "stage": "XD draw D r3",
+      "matches": 2,
+      "firstStartLocal": "14:51",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:13",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 141.9,
+      "courtMinutes": 54.5,
+      "meanDuration": 27.3
+    },
+    {
+      "stage": "MD draw C r3",
+      "matches": 2,
+      "firstStartLocal": "15:01",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:53",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 51.4,
+      "courtMinutes": 42.1,
+      "meanDuration": 21
+    },
+    {
+      "stage": "MD draw D r2",
+      "matches": 2,
+      "firstStartLocal": "15:01",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:26",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 84.6,
+      "courtMinutes": 46.8,
+      "meanDuration": 23.4
+    },
+    {
+      "stage": "MS draw D r2",
+      "matches": 4,
+      "firstStartLocal": "15:11",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:20",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 68.9,
+      "courtMinutes": 99.5,
+      "meanDuration": 24.9
+    },
+    {
+      "stage": "MD draw A r2",
+      "matches": 2,
+      "firstStartLocal": "15:15",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:56",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 101,
+      "courtMinutes": 44,
+      "meanDuration": 22
+    },
+    {
+      "stage": "XD draw C r3",
+      "matches": 1,
+      "firstStartLocal": "15:22",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:43",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 21.4,
+      "courtMinutes": 21.4,
+      "meanDuration": 21.4
+    },
+    {
+      "stage": "WD draw C r3",
+      "matches": 1,
+      "firstStartLocal": "15:24",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "15:46",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 21.7,
+      "courtMinutes": 21.7,
+      "meanDuration": 21.7
+    },
+    {
+      "stage": "WS draw D r2",
+      "matches": 2,
+      "firstStartLocal": "15:33",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:20",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 47.1,
+      "courtMinutes": 62.7,
+      "meanDuration": 31.4
+    },
+    {
+      "stage": "XD draw A r3",
+      "matches": 2,
+      "firstStartLocal": "15:44",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:42",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 58.4,
+      "courtMinutes": 41.8,
+      "meanDuration": 20.9
+    },
+    {
+      "stage": "WS draw B r2",
+      "matches": 2,
+      "firstStartLocal": "15:46",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:26",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 39.3,
+      "courtMinutes": 55.6,
+      "meanDuration": 27.8
+    },
+    {
+      "stage": "WD draw D r3",
+      "matches": 1,
+      "firstStartLocal": "16:02",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:26",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 23.6,
+      "courtMinutes": 23.6,
+      "meanDuration": 23.6
+    },
+    {
+      "stage": "MD draw B r3",
+      "matches": 2,
+      "firstStartLocal": "16:21",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:57",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 36.3,
+      "courtMinutes": 45.5,
+      "meanDuration": 22.8
+    },
+    {
+      "stage": "WS draw A r2",
+      "matches": 2,
+      "firstStartLocal": "16:21",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:49",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 28.6,
+      "courtMinutes": 44.4,
+      "meanDuration": 22.2
+    },
+    {
+      "stage": "WS draw C r3",
+      "matches": 1,
+      "firstStartLocal": "16:21",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "16:42",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 21.7,
+      "courtMinutes": 21.7,
+      "meanDuration": 21.7
+    },
+    {
+      "stage": "XD draw B r3",
+      "matches": 2,
+      "firstStartLocal": "16:26",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:13",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 46.7,
+      "courtMinutes": 53.2,
+      "meanDuration": 26.6
+    },
+    {
+      "stage": "MS draw D r3",
+      "matches": 2,
+      "firstStartLocal": "16:36",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:31",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 54.2,
+      "courtMinutes": 45.6,
+      "meanDuration": 22.8
+    },
+    {
+      "stage": "MS draw B r3",
+      "matches": 2,
+      "firstStartLocal": "16:42",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:41",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 58.9,
+      "courtMinutes": 59.1,
+      "meanDuration": 29.5
+    },
+    {
+      "stage": "WS draw D r3",
+      "matches": 1,
+      "firstStartLocal": "16:42",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:13",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 30.5,
+      "courtMinutes": 30.5,
+      "meanDuration": 30.5
+    },
+    {
+      "stage": "MS draw A r3",
+      "matches": 2,
+      "firstStartLocal": "16:49",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:25",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 35.6,
+      "courtMinutes": 51.3,
+      "meanDuration": 25.6
+    },
+    {
+      "stage": "WS draw B r3",
+      "matches": 1,
+      "firstStartLocal": "16:49",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:13",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 23.6,
+      "courtMinutes": 23.6,
+      "meanDuration": 23.6
+    },
+    {
+      "stage": "WD draw B r3",
+      "matches": 1,
+      "firstStartLocal": "16:57",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:25",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 27.8,
+      "courtMinutes": 27.8,
+      "meanDuration": 27.8
+    },
+    {
+      "stage": "MD draw C r4",
+      "matches": 1,
+      "firstStartLocal": "16:57",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:25",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 27.9,
+      "courtMinutes": 27.9,
+      "meanDuration": 27.9
+    },
+    {
+      "stage": "MS draw C r3",
+      "matches": 2,
+      "firstStartLocal": "17:06",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "18:09",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 62.6,
+      "courtMinutes": 52.2,
+      "meanDuration": 26.1
+    },
+    {
+      "stage": "WD draw A r3",
+      "matches": 1,
+      "firstStartLocal": "17:25",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:43",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 17.7,
+      "courtMinutes": 17.7,
+      "meanDuration": 17.7
+    },
+    {
+      "stage": "MD draw D r3",
+      "matches": 1,
+      "firstStartLocal": "17:25",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:43",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 17.6,
+      "courtMinutes": 17.6,
+      "meanDuration": 17.6
+    },
+    {
+      "stage": "MD draw B r4",
+      "matches": 1,
+      "firstStartLocal": "17:31",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "17:48",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 16.9,
+      "courtMinutes": 16.9,
+      "meanDuration": 16.9
+    },
+    {
+      "stage": "MS draw A r4",
+      "matches": 1,
+      "firstStartLocal": "17:41",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "18:09",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 27.5,
+      "courtMinutes": 27.5,
+      "meanDuration": 27.5
+    },
+    {
+      "stage": "XD draw D r4",
+      "matches": 1,
+      "firstStartLocal": "17:41",
+      "firstStartDate": "2026-10-27",
+      "lastEndLocal": "18:08",
+      "lastEndDate": "2026-10-27",
+      "spanMin": 27.3,
+      "courtMinutes": 27.3,
+      "meanDuration": 27.3
+    }
+  ],
+  "notice": {
+    "matches": 319,
+    "firstNotice": {
+      "n": 319,
+      "mean": 326.1,
+      "median": 116,
+      "p90": 1136.8,
+      "p95": 1153.3,
+      "min": 7.7,
+      "max": 1279.7,
+      "total": 104032.1
+    },
+    "notice": {
+      "n": 319,
+      "mean": 9.2,
+      "median": 0.3,
+      "p90": 15.5,
+      "p95": 30.7,
+      "min": 0,
+      "max": 1079.3,
+      "total": 2941.7
+    },
+    "under5Min": 210,
+    "under15Min": 287,
+    "under30Min": 303,
+    "sinceLastChange": {
+      "n": 304,
+      "mean": 39.9,
+      "median": 0.3,
+      "p90": 16.4,
+      "p95": 36.6,
+      "min": 0,
+      "max": 1108,
+      "total": 12124.4
+    },
+    "lastChangeUnder5Min": 198,
+    "lastChangeUnder15Min": 271,
+    "tightest": [
+      {
+        "match": "MS round1 r1-8",
+        "kind": "placement",
+        "date": "2026-10-26",
+        "firstNoticeMin": 73.4,
+        "noticeMin": 0,
+        "minutesSinceLastChange": 0,
+        "timeChanges": 5
+      },
+      {
+        "match": "XD round1 r1-17",
+        "kind": "placement",
+        "date": "2026-10-26",
+        "firstNoticeMin": 73.1,
+        "noticeMin": 0,
+        "minutesSinceLastChange": 0,
+        "timeChanges": 4
+      },
+      {
+        "match": "MD round1 r1-6",
+        "kind": "placement",
+        "date": "2026-10-26",
+        "firstNoticeMin": 73.5,
+        "noticeMin": 0,
+        "minutesSinceLastChange": 0,
+        "timeChanges": 5
+      },
+      {
+        "match": "WS round1 r1-6",
+        "kind": "placement",
+        "date": "2026-10-26",
+        "firstNoticeMin": 132.5,
+        "noticeMin": 0,
+        "minutesSinceLastChange": 0,
+        "timeChanges": 10
+      },
+      {
+        "match": "WS round1 r1-7",
+        "kind": "placement",
+        "date": "2026-10-26",
+        "firstNoticeMin": 73.3,
+        "noticeMin": 0,
+        "minutesSinceLastChange": 0,
+        "timeChanges": 4
+      },
+      {
+        "match": "MS A r1 s2",
+        "kind": "knockout",
+        "date": "2026-10-27",
+        "firstNoticeMin": 185.2,
+        "noticeMin": 0,
+        "minutesSinceLastChange": 0,
+        "timeChanges": 12
+      },
+      {
+        "match": "MS round1 r1-6",
+        "kind": "placement",
+        "date": "2026-10-26",
+        "firstNoticeMin": 146.2,
+        "noticeMin": 0.1,
+        "minutesSinceLastChange": 0.1,
+        "timeChanges": 12
+      },
+      {
+        "match": "MS round1 r1-12",
+        "kind": "placement",
+        "date": "2026-10-26",
+        "firstNoticeMin": 158.4,
+        "noticeMin": 0.1,
+        "minutesSinceLastChange": 0.1,
+        "timeChanges": 14
+      }
+    ],
+    "byDay": [
+      {
+        "date": "2026-10-26",
+        "matches": 143,
+        "medianNoticeMin": 0.3,
+        "medianFirstNoticeMin": 92.7,
+        "under15Min": 138
+      },
+      {
+        "date": "2026-10-27",
+        "matches": 176,
+        "medianNoticeMin": 0.3,
+        "medianFirstNoticeMin": 184.9,
+        "under15Min": 149
+      }
+    ]
+  },
+  "feederWaits": {
+    "samples": 42,
+    "n": 42,
+    "mean": 80.9,
+    "median": 59.3,
+    "p90": 155.6,
+    "p95": 176.9,
+    "min": 14.7,
+    "max": 219.2,
+    "total": 3396,
+    "underTenMin": 0,
+    "underThirtyMin": 10,
+    "tightest": [
+      {
+        "match": "MS A r3 s1",
+        "readyLocal": "2026-10-27 16:42:58",
+        "startLocal": "2026-10-27 16:57:43",
+        "waitMin": 14.7,
+        "publishedWaitMin": 15
+      },
+      {
+        "match": "MS A r4 s1",
+        "readyLocal": "2026-10-27 17:25:30",
+        "startLocal": "2026-10-27 17:41:31",
+        "waitMin": 16,
+        "publishedWaitMin": 10.5
+      },
+      {
+        "match": "XD D r3 s1",
+        "readyLocal": "2026-10-27 16:26:02",
+        "startLocal": "2026-10-27 16:42:52",
+        "waitMin": 16.8,
+        "publishedWaitMin": 16
+      },
+      {
+        "match": "WS C r3 s1",
+        "readyLocal": "2026-10-27 16:02:34",
+        "startLocal": "2026-10-27 16:21:06",
+        "waitMin": 18.5,
+        "publishedWaitMin": 10.4
+      },
+      {
+        "match": "MS B r3 s1",
+        "readyLocal": "2026-10-27 16:21:16",
+        "startLocal": "2026-10-27 16:42:41",
+        "waitMin": 21.4,
+        "publishedWaitMin": 20.7
+      }
+    ],
+    "longest": [
+      {
+        "match": "MD B r3 s2",
+        "readyLocal": "2026-10-27 12:53:58",
+        "startLocal": "2026-10-27 16:33:09",
+        "waitMin": 219.2,
+        "publishedWaitMin": 218
+      },
+      {
+        "match": "XD A r3 s1",
+        "readyLocal": "2026-10-27 12:48:21",
+        "startLocal": "2026-10-27 16:21:12",
+        "waitMin": 212.9,
+        "publishedWaitMin": 213.6
+      },
+      {
+        "match": "MD D r2 s1",
+        "readyLocal": "2026-10-27 13:05:37",
+        "startLocal": "2026-10-27 16:02:31",
+        "waitMin": 176.9,
+        "publishedWaitMin": 171.4
+      },
+      {
+        "match": "XD C r3 s1",
+        "readyLocal": "2026-10-27 12:33:02",
+        "startLocal": "2026-10-27 15:22:04",
+        "waitMin": 169,
+        "publishedWaitMin": 169
+      },
+      {
+        "match": "XD C r3 s2",
+        "readyLocal": "2026-10-27 15:33:29",
+        "startLocal": "2026-10-27 18:09:05",
+        "waitMin": 155.6,
+        "publishedWaitMin": 148.5
+      },
+      {
+        "match": "MD A r2 s1",
+        "readyLocal": "2026-10-27 14:06:53",
+        "startLocal": "2026-10-27 16:33:13",
+        "waitMin": 146.3,
+        "publishedWaitMin": 145.1
+      },
+      {
+        "match": "XD B r3 s2",
+        "readyLocal": "2026-10-27 14:18:13",
+        "startLocal": "2026-10-27 16:43:02",
+        "waitMin": 144.8,
+        "publishedWaitMin": 143.8
+      },
+      {
+        "match": "MD C r3 s2",
+        "readyLocal": "2026-10-27 12:48:17",
+        "startLocal": "2026-10-27 15:01:40",
+        "waitMin": 133.4,
+        "publishedWaitMin": 131.7
+      }
+    ]
+  },
+  "draws": [
+    {
+      "category": "MS",
+      "draw": "A",
+      "bracketSize": 16,
+      "entrants": 13,
+      "byes": 3,
+      "played": 12,
+      "byePctOfBracket": 20
+    },
+    {
+      "category": "MS",
+      "draw": "B",
+      "bracketSize": 16,
+      "entrants": 11,
+      "byes": 5,
+      "played": 10,
+      "byePctOfBracket": 33.3
+    },
+    {
+      "category": "MS",
+      "draw": "C",
+      "bracketSize": 16,
+      "entrants": 12,
+      "byes": 4,
+      "played": 10,
+      "byePctOfBracket": 26.7
+    },
+    {
+      "category": "MS",
+      "draw": "D",
+      "bracketSize": 16,
+      "entrants": 13,
+      "byes": 3,
+      "played": 11,
+      "byePctOfBracket": 20
+    },
+    {
+      "category": "WD",
+      "draw": "A",
+      "bracketSize": 8,
+      "entrants": 5,
+      "byes": 3,
+      "played": 4,
+      "byePctOfBracket": 42.9
+    },
+    {
+      "category": "WD",
+      "draw": "B",
+      "bracketSize": 8,
+      "entrants": 5,
+      "byes": 3,
+      "played": 4,
+      "byePctOfBracket": 42.9
+    },
+    {
+      "category": "WD",
+      "draw": "C",
+      "bracketSize": 8,
+      "entrants": 5,
+      "byes": 3,
+      "played": 4,
+      "byePctOfBracket": 42.9
+    },
+    {
+      "category": "WD",
+      "draw": "D",
+      "bracketSize": 8,
+      "entrants": 5,
+      "byes": 3,
+      "played": 4,
+      "byePctOfBracket": 42.9
+    },
+    {
+      "category": "XD",
+      "draw": "A",
+      "bracketSize": 16,
+      "entrants": 11,
+      "byes": 5,
+      "played": 10,
+      "byePctOfBracket": 33.3
+    },
+    {
+      "category": "XD",
+      "draw": "B",
+      "bracketSize": 16,
+      "entrants": 11,
+      "byes": 5,
+      "played": 10,
+      "byePctOfBracket": 33.3
+    },
+    {
+      "category": "XD",
+      "draw": "C",
+      "bracketSize": 16,
+      "entrants": 11,
+      "byes": 5,
+      "played": 9,
+      "byePctOfBracket": 33.3
+    },
+    {
+      "category": "XD",
+      "draw": "D",
+      "bracketSize": 16,
+      "entrants": 11,
+      "byes": 5,
+      "played": 10,
+      "byePctOfBracket": 33.3
+    },
+    {
+      "category": "MD",
+      "draw": "A",
+      "bracketSize": 8,
+      "entrants": 8,
+      "byes": 0,
+      "played": 6,
+      "byePctOfBracket": 0
+    },
+    {
+      "category": "MD",
+      "draw": "B",
+      "bracketSize": 16,
+      "entrants": 9,
+      "byes": 7,
+      "played": 8,
+      "byePctOfBracket": 46.7
+    },
+    {
+      "category": "MD",
+      "draw": "C",
+      "bracketSize": 16,
+      "entrants": 9,
+      "byes": 7,
+      "played": 8,
+      "byePctOfBracket": 46.7
+    },
+    {
+      "category": "MD",
+      "draw": "D",
+      "bracketSize": 8,
+      "entrants": 8,
+      "byes": 0,
+      "played": 7,
+      "byePctOfBracket": 0
+    },
+    {
+      "category": "WS",
+      "draw": "A",
+      "bracketSize": 8,
+      "entrants": 6,
+      "byes": 2,
+      "played": 4,
+      "byePctOfBracket": 28.6
+    },
+    {
+      "category": "WS",
+      "draw": "B",
+      "bracketSize": 8,
+      "entrants": 7,
+      "byes": 1,
+      "played": 6,
+      "byePctOfBracket": 14.3
+    },
+    {
+      "category": "WS",
+      "draw": "C",
+      "bracketSize": 8,
+      "entrants": 6,
+      "byes": 2,
+      "played": 5,
+      "byePctOfBracket": 28.6
+    },
+    {
+      "category": "WS",
+      "draw": "D",
+      "bracketSize": 8,
+      "entrants": 6,
+      "byes": 2,
+      "played": 5,
+      "byePctOfBracket": 28.6
+    }
+  ],
+  "comparison": {
+    "aloha": {
+      "name": "Aloha",
+      "status": "in_progress",
+      "entrants": 172,
+      "matchesPlayed": 315,
+      "days": 2,
+      "courts": 11,
+      "courtMinutes": 5762.9,
+      "capacityMinutes": 9690,
+      "utilisationPct": 59.5,
+      "playerWaitTotal": 43247.9,
+      "playerWaitP95": 150.2,
+      "playerWaitMedian": 45.9,
+      "restViolations": 1,
+      "placementMeanDuration": 13.5,
+      "knockoutMeanDuration": 24
+    },
+    "vietNamOpen": {
+      "name": "Viet Nam Open 2026",
+      "matchesPlayed": 82,
+      "courts": 8,
+      "courtMinutes": 1353.7,
+      "capacityMinutes": 4040,
+      "utilisationPct": 33.5,
+      "playerWaitMedian": 17,
+      "playerWaitTurnarounds": 177,
+      "restUnder10": 52,
+      "placementMeanDuration": 11.8,
+      "knockoutMeanDuration": 24.2
+    }
+  }
+}

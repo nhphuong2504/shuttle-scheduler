@@ -1,0 +1,173 @@
+﻿entrant_id,category,seed,seed_locked_at,tier,excluded,skill_level,team
+8b016b4d-a3ac-4ede-b192-87e9b306f0e5,MS,1,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Sebastian Fenwick
+29c29b54-d8fa-4ead-88a0-1800bd72b23b,MS,2,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Rowan Montgomery
+59742c73-bbd7-4a0f-8d24-766b53cf44aa,MS,3,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Connor Yates
+774a1d3e-d680-472f-99ae-7ea0c8a3fd5c,MS,4,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Dominic Kessler
+a5ce7d03-c370-4989-b5d8-5501ead5a4e1,MS,5,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Ryan Ellsworth
+c82a9e4c-34b0-4edd-9e9d-4c61417fd180,MS,6,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Daniel Newell
+bf7f1786-d4cb-45b3-8a40-a807e30a1f2e,MS,7,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Edward Redmond
+f5b7f5f0-ad10-462c-8103-6d91fb55cd4d,MS,8,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Declan Ellison
+37a56802-27b0-4f8d-b1b5-c1926229ae6a,MS,9,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Derek Radcliffe
+1c86778b-a278-427c-97a5-7cac938c9fd7,MS,10,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Frederick Sinclair
+c7a25af5-e03f-47b3-bf67-f6d6f5356b3c,MS,11,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Alec Oakes
+292b8cf3-32be-4fc2-bfbf-b2fd51ae2dba,MS,12,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Wesley Ingram
+74386769-7027-4f66-810d-5c5c1d7075dd,MS,13,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Logan Hayes
+cddb28e8-3589-4e9f-ac73-2d8d6c9b0dda,MS,14,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Quentin Ashford
+eddc0f40-1085-4230-b89c-11808a6248dc,MS,15,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Aaron Carrington
+3f7f1063-44d8-4f73-accd-f7eeb7600ea2,MS,16,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Zane Vance
+498a7a4b-4b46-4b2e-880a-2df059547147,MS,17,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Finn Langford
+75e0ead2-7114-41bd-ba8f-367bc4d38e63,MS,18,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Tobias Wexford
+4332be5f-1d24-494b-aa35-37af587e4bf5,MS,19,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Zachary Griffin
+4863ddc6-eb98-4e78-9aac-de930f2fa5da,MS,20,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Aaron Lockhart
+138aec92-693f-422d-85c3-e0d97f508a46,MS,21,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Jasper Winslow
+0adf1665-a3f1-43b1-a04a-aa170386b1a4,MS,22,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Blake Vance
+a5020bee-d755-4a69-b18a-e68f238e577f,MS,23,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Oscar Fairbanks
+f7c7056a-5641-4b8e-bfe1-94684f3e25a8,MS,24,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Warren Orton
+b8a5c2dc-9b77-44e2-896f-e3e4cfc0cb00,MS,25,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Aidan Ingram
+2620e154-4531-4b6b-9b21-21bcaffc7192,MS,26,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Cameron Prescott
+e18ec464-1045-43a1-a442-0c3935aaa73f,MS,27,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Bradley Harlow
+796e3588-a6c3-4e65-9a50-1c0f72124392,MS,28,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Patrick Lawson
+13d232a4-cb70-4803-9326-3952e0055bc2,MS,29,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Fraser Drummond
+73f884e5-1ac4-4a73-8aee-1738780cfeea,MS,30,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Trevor Nolan
+36c1ecba-41f9-4024-a81d-48973a1e4d82,MS,31,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Gordon Harper
+1081c620-b2cb-47a7-8be5-f821d889496b,MS,32,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Victor Upton
+5fa9ef6b-05d3-4939-8eea-7c8d8b36b501,MS,33,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Callum Brennan
+8e56051d-1848-4033-9219-93a39afe6d2c,MS,34,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Nigel Ramsey
+9c4c53f5-2d43-4769-9ba2-63d4bce0d0b9,MS,35,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Malcolm Kendall
+f20ef9cc-f0d7-424e-89e5-1a5fba49281b,MS,36,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Harrison Foster
+585b091c-b0ee-4faf-94d8-3766978a1957,MS,37,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Philip Jensen
+e6c47308-6de8-4d53-acac-1cb6214149a9,MS,38,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Kieran Jennings
+3592a270-933c-4466-ab5f-81faceb5879e,MS,39,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Elliot York
+7cb7bf26-309d-437a-9768-e423193c85b7,MS,40,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Grant Nash
+792ebb37-ded5-4769-b30d-8c38aeec09e6,MS,41,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Elias Irwin
+9b9be179-7540-4119-9238-3402df5be26a,MS,42,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Ivan Aldridge
+bcb5c8f4-3bda-4f1c-bfb6-8d87aa346a16,MS,43,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Xavier Oakes
+5bb49c4e-209a-48a7-8ded-e53c8c22648d,MS,44,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Benedict Griffin
+53d65185-06bf-4cf8-b0f6-0742d0479d85,MS,45,2026-10-26T17:11:46.446425+00:00,A,false,intermediate,Hugo Granger
+e4cb0664-88fe-4082-bdca-8bc70c93e0ce,MS,46,2026-10-26T17:11:46.446425+00:00,B,false,intermediate,Caleb Jarrett
+5363a88d-efc7-4c6c-93b8-9d53c51c1dd6,MS,47,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Brendan Donovan
+818ef306-287d-4cb1-8b36-91b7bb77fa5c,MS,48,2026-10-26T17:11:46.446425+00:00,D,false,intermediate,Adrian Orton
+1f747efa-631b-44ca-944c-428f46bc6849,MS,49,2026-10-26T17:11:46.446425+00:00,C,false,intermediate,Samuel Thornton
+c31dd28d-f903-4b11-aabf-ffe405effce8,WD,1,2026-10-26T17:11:52.296257+00:00,A,false,intermediate,Irene Delaney / Julia Pruitt
+3fc504f7-1efe-49f5-9224-1566cb0d9829,WD,2,2026-10-26T17:11:52.296257+00:00,B,false,intermediate,Lucy Everett / Maya Kingsley
+cbdd64b0-482f-40e4-b88f-fd61684356e9,WD,3,2026-10-26T17:11:52.296257+00:00,A,false,intermediate,Megan Crowley / Nina Chandler
+2d7d41b6-1619-4dae-b1de-933842bdb560,WD,4,2026-10-26T17:11:52.296257+00:00,B,false,intermediate,Freya Iverson / Gabrielle Aldridge
+b6ae2566-d689-4494-bcbc-afd5d9640f1e,WD,5,2026-10-26T17:11:52.296257+00:00,B,false,intermediate,Anya Thorne / Beatrice Mercer
+134452b1-a17b-4d97-b605-be1353976679,WD,6,2026-10-26T17:11:52.296257+00:00,B,false,intermediate,Daphne Nash / Emily Granger
+7039e900-1ff2-41b0-9a8a-c3557eec68bd,WD,7,2026-10-26T17:11:52.296257+00:00,A,false,intermediate,Helen Marsh / Isabel Palmer
+23263387-a91a-4832-a929-c8c7257c2ada,WD,8,2026-10-26T17:11:52.296257+00:00,B,false,intermediate,Nadia Ramsey / Ophelia Fairbanks
+21102b09-73d2-4623-8798-f47a80f46f61,WD,9,2026-10-26T17:11:52.296257+00:00,D,false,intermediate,Stella Maddox / Tessa Montgomery
+bb276f5e-3868-4bfc-9a08-171e9c1b722d,WD,10,2026-10-26T17:11:52.296257+00:00,A,false,intermediate,Yvonne Wexford / Zara Nolan
+2b3d94a2-dfdb-4261-9efb-927e07951196,WD,11,2026-10-26T17:11:52.296257+00:00,D,false,intermediate,Teresa Gallagher / Vivian Thornton
+4b649997-e94d-49ce-aafc-307d63a0aae6,WD,12,2026-10-26T17:11:52.296257+00:00,D,false,intermediate,Priya Lawson / Rosa Jensen
+bd081de4-76cb-440c-9bc5-60363ce67c41,WD,13,2026-10-26T17:11:52.296257+00:00,D,false,intermediate,Valerie Ellsworth / Willa Barrett
+15bdd061-202b-4d4d-8fc5-557a790f0efc,WD,14,2026-10-26T17:11:52.296257+00:00,C,false,intermediate,Bridget Keller / Claire Harper
+91df482f-9563-4587-9e97-2eb76be22b77,WD,15,2026-10-26T17:11:52.296257+00:00,C,false,intermediate,Jasmine Jennings / Katherine Whitaker
+5ca5aef9-52b7-4540-be6d-4e0ea388378f,WD,16,2026-10-26T17:11:52.296257+00:00,C,false,intermediate,Chloe Norwood / Camille Blackwell
+6c237f5e-0d5f-4ada-9fc5-a09e3e7c8a96,WD,17,2026-10-26T17:11:52.296257+00:00,C,false,intermediate,Zoe Upton / Amelia Garrison
+d00693ab-0825-4230-a2fc-48da2ef81c71,WD,18,2026-10-26T17:11:52.296257+00:00,C,false,intermediate,Olivia Pike / Paula Sterling
+5ba52631-f87c-4b96-9b7d-638eb0bcf488,WD,19,2026-10-26T17:11:52.296257+00:00,A,false,intermediate,Wendy Fenwick / Yara Hollister
+494fb015-8642-4659-b891-9cb8c328f74c,WD,20,2026-10-26T17:11:52.296257+00:00,D,false,intermediate,Rachel Sullivan / Sophie Ashford
+381174c2-f169-4ddb-a3c7-6c814d87f42a,XD,1,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Frederick Sinclair / Beatrice Mercer
+26bc56ee-479d-4bd9-a88d-95203b7c7b84,XD,2,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Cameron Prescott / Yvonne Wexford
+dd32e6f7-b589-46a0-9b06-7eb8343f00a2,XD,3,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Ian Callahan / Fiona Callahan
+ba36c5e1-49d3-4af5-8815-5f13ef147d15,XD,4,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Walter Carrington / Wendy Fenwick
+b07abf33-917e-41c6-84a6-af7182fbe74e,XD,5,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Noah Chandler / Megan Crowley
+9033ddf4-9648-43a8-9701-2538e5ff6aa0,XD,6,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Sebastian Fenwick / Rosa Jensen
+cd9f2302-8e34-4e0d-9825-30f16743247f,XD,7,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Malcolm Kendall / Lucy Everett
+b3e0064b-4594-401d-9128-8804f72dac29,XD,8,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Lucas Whitaker / Karen Hayes
+d466347e-acaa-4e2c-99df-b69daa0f450f,XD,9,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Trevor Nolan / Stella Maddox
+0ee96289-9212-419b-93a6-b46b9a7b648e,XD,10,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Edward Redmond / Anya Thorne
+211b911d-d138-4dd5-a781-915a976f4740,XD,11,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Declan Ellison / Zara Nolan
+321d2530-1998-429f-b651-2399b7df670b,XD,12,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Philip Jensen / Ophelia Fairbanks
+f91115cd-7ed2-4cb0-ae0b-a66e44732470,XD,13,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Elliot York / Daphne Nash
+7694110d-22e1-4094-b80e-3cf98798ae70,XD,14,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Harrison Foster / Gabrielle Aldridge
+58e80596-0786-4b00-b2a9-908061260107,XD,15,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Peter Sullivan / Olivia Pike
+3d5816a6-ed73-44b0-a6bc-d3c57db33188,XD,16,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Quinn Maddox / Paula Sterling
+cff7884a-2e7a-4d36-8e3b-491adef50c6e,XD,17,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Nigel Ramsey / Maya Kingsley
+19efb73a-13eb-45c6-988e-efb8e3de5ab8,XD,18,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Joel Marsh / Grace Osborne
+cf0795fa-29e1-45dc-b56b-4352ac531acc,XD,19,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Brendan Donovan / Amelia Garrison
+bb66f249-917a-4c28-93ee-8efc58b40de1,XD,20,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Miles Kingsley / Laura Kendall
+54a12662-f87b-4e72-9305-c9c29bcf2bb1,XD,21,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Aaron Carrington / Camille Blackwell
+62eb6187-b3ca-4281-8487-7e4f18bc47ea,XD,22,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Warren Orton / Tessa Montgomery
+ad4d813c-d48f-457c-aae0-804ec2e6a7c9,XD,23,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Oscar Fairbanks / Nadia Ramsey
+a3aecd50-c292-402c-8692-6eb1f89d2d34,XD,24,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Benedict Griffin / Willa Barrett
+02d30a1b-d40e-4a30-bf5e-ade7b4422905,XD,25,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Ivan Aldridge / Helen Marsh
+1596f52a-02cd-4210-aae7-8db7eee0a12a,XD,26,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Jasper Winslow / Isabel Palmer
+f6bd1da3-3f22-4db9-a052-fae4ceb714aa,XD,27,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Zane Vance / Yara Hollister
+aa9b7f7e-803f-4d50-bbfa-8120755cd700,XD,28,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Simon Barrett / Sophie Ashford
+aa560877-4323-4064-8ce7-a8f9ae00c73a,XD,29,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Alec Oakes / Zoe Upton
+f6406fbb-2ebf-4029-ae82-7ef223a9022f,XD,30,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Owen Sterling / Nina Chandler
+2db263e6-b576-4227-aa1f-852473d53510,XD,31,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Aidan Ingram / Valerie Ellsworth
+578f87f6-1d2a-43fb-837c-d7bb2ddcc98c,XD,32,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Roger Gallagher / Rachel Sullivan
+87ce1bef-6d81-4b60-a4c9-aafcc87b1a0f,XD,33,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Kieran Jennings / Jasmine Jennings
+0398220a-ccaa-438c-af01-6b7223ab3105,XD,34,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Vincent Lockhart / Vivian Thornton
+553aa646-c7bd-4575-bf32-727fdda37b6f,XD,35,2026-10-26T17:09:09.37906+00:00,A,false,intermediate,Oliver Pike / Diana Foster
+197c66ec-aafd-4f3e-b4c1-68dcdfbb35c4,XD,36,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Dominic Kessler / Claire Harper
+bd5c58b3-4e49-40df-ab1c-32e8b0195afc,XD,37,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Hugo Granger / Elena Underwood
+57c8142d-d3f1-4115-b442-af5beb809f53,XD,38,2026-10-26T17:09:09.37906+00:00,B,false,intermediate,Thomas Hollister / Teresa Gallagher
+bd7369b8-d5d4-4e84-8726-fb81115f27f7,XD,39,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Logan Hayes / Katherine Whitaker
+a5afe4a4-7353-4d0a-be13-929c91abeab1,XD,40,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Rowan Montgomery / Priya Lawson
+994ecbdc-b67b-4fd2-9d58-92caa8266c7f,XD,41,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Keith Delaney / Hannah Winslow
+16a91e6d-5952-4119-b5cd-fe2c97cc4b19,XD,42,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Fraser Drummond / Emily Granger
+1bd8364b-33c4-4383-b85d-308a9546777f,XD,43,2026-10-26T17:09:09.37906+00:00,C,false,intermediate,Callum Brennan / Bridget Keller
+d0feb289-bb89-4f6d-9162-45cb8826ca05,XD,44,2026-10-26T17:09:09.37906+00:00,D,false,intermediate,Gordon Harper / Freya Iverson
+1670e299-dceb-4f19-a91e-f924ca932523,MD,1,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Keith Delaney / Lucas Whitaker
+23866278-1a40-4e0b-8cf7-f7aade516abc,MD,2,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Zachary Griffin / Adrian Orton
+c88f1c66-dea1-4d56-8389-ba1728101c6a,MD,3,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Derek Radcliffe / Elias Irwin
+727d8006-bd21-4ea0-ab7d-cc6e48cb2fd5,MD,4,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Vincent Lockhart / Walter Carrington
+6b8a13f6-a42d-4eaa-aa5d-c89aa5ecdb5f,MD,5,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Sebastian Fenwick / Trevor Nolan
+73fde218-589c-4391-ab96-fbe2cee66890,MD,6,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Finn Langford / Grant Nash
+33502401-5f1d-429d-8eb9-ab9b641746e3,MD,7,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Gavin Dalton / Henry Underwood
+38b861c6-29c0-4777-bf68-795e0b3c36ba,MD,8,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Jasper Winslow / Kieran Jennings
+a08891a7-c642-4742-a09d-f8627727bb8b,MD,9,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Owen Sterling / Peter Sullivan
+8c8400d7-bae3-425b-b8df-aa98325c85d3,MD,10,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Ethan Lambert / Felix Fletcher
+ff680972-c301-440f-a337-a21ebde4277b,MD,11,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Miles Kingsley / Noah Chandler
+d8cf4710-7389-4837-9203-459e07583a0f,MD,12,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Warren Orton / Aidan Ingram
+d3ed279d-bd42-40d4-8a14-44b97f81fa02,MD,13,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Ryan Ellsworth / Samuel Thornton
+dd782dc4-12f6-48fd-b17e-923f4b6b69a8,MD,14,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Zane Vance / Alec Oakes
+310ee184-8843-40e3-a98e-e841d6df14c9,MD,15,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Nigel Ramsey / Oscar Fairbanks
+1a062756-b11d-485a-82cf-ccae1cc31e85,MD,16,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Simon Barrett / Thomas Hollister
+4d0b4857-d808-49de-889d-e405b3000169,MD,17,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Harrison Foster / Ivan Aldridge
+41e0a3ad-8f04-48d4-87b8-50649e019189,MD,18,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Logan Hayes / Malcolm Kendall
+201964b6-6671-4e82-8368-c016332314ee,MD,19,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Fraser Drummond / Gordon Harper
+cab2d20d-4fbd-455d-9108-35939eddc65f,MD,20,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Ian Callahan / Joel Marsh
+ba35ec77-c6d1-40fb-bf65-b2ecb5d378dd,MD,21,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Blake Vance / Connor Yates
+19bdf20e-2aed-41f2-be65-b1a8c266eb70,MD,22,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Patrick Lawson / Quentin Ashford
+046f1535-9fbf-4361-b5ce-834b17a5deb0,MD,23,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Wesley Ingram / Xavier Oakes
+a4ccfd9b-1d47-46eb-b3db-83b7e05cfbf1,MD,24,2026-10-26T17:12:14.761642+00:00,B,false,intermediate,Benedict Griffin / Cameron Prescott
+138ccb58-69f0-4f26-a70f-ead41968156c,MD,25,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Marcus Everett / Nathan Crowley
+10f4eb85-e2e3-4b8b-894a-17aa961f0cb6,MD,26,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Isaac Iverson / Jacob Osborne
+f40fcc92-6d56-41f9-a823-806c3b020f94,MD,27,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Philip Jensen / Rowan Montgomery
+3df7021d-0c18-4715-af09-563230876e70,MD,28,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Quinn Maddox / Roger Gallagher
+7c4572e7-9b52-4245-96e5-c8231f917d35,MD,29,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Declan Ellison / Edward Redmond
+7ec42b9b-79f1-4630-ae35-fee77559552a,MD,30,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Frederick Sinclair / Aaron Carrington
+f8efd4a2-2348-4fc5-8d68-d631da0c0f54,MD,31,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Brendan Donovan / Callum Brennan
+0a9de067-a274-47a9-b2ba-11663d9721c2,MD,32,2026-10-26T17:12:14.761642+00:00,A,false,intermediate,Tobias Wexford / Victor Upton
+da76841e-3c2b-4292-8665-5c213ddbc1d2,MD,33,2026-10-26T17:12:14.761642+00:00,D,false,intermediate,Dominic Kessler / Elliot York
+a07676e1-9a76-47e7-a401-73c608ab00ca,MD,34,2026-10-26T17:12:14.761642+00:00,C,false,intermediate,Kevin Palmer / Liam Pruitt
+ea7334b9-3923-4d15-b500-ca376003298d,WS,1,2026-10-26T17:12:11.299094+00:00,C,false,intermediate,Rosa Jensen
+8c3d0165-35ac-4962-84ce-cada8c555e9e,WS,2,2026-10-26T17:12:11.299094+00:00,B,false,intermediate,Nadia Ramsey
+7d9b428e-b746-468d-aa57-c47034fbb42d,WS,3,2026-10-26T17:12:11.299094+00:00,B,false,intermediate,Willa Barrett
+e8674024-26bf-46bd-a3a0-634645861651,WS,4,2026-10-26T17:12:11.299094+00:00,C,false,intermediate,Isabel Palmer
+ca5cb802-8caa-41bf-ae54-57e55ad0b61a,WS,5,2026-10-26T17:12:11.299094+00:00,C,false,intermediate,Alice Ackerman
+cfbf0610-98e0-432c-a31e-cd87627a3038,WS,6,2026-10-26T17:12:11.299094+00:00,C,false,intermediate,Karen Hayes
+62694248-f73c-4e75-a34b-001b77212cfd,WS,7,2026-10-26T17:12:11.299094+00:00,C,false,intermediate,Ophelia Fairbanks
+6fbba87c-842e-490c-96c0-9daf8ba38c36,WS,8,2026-10-26T17:12:11.299094+00:00,B,false,intermediate,Helen Marsh
+19261d6b-501b-4642-a73b-1a9004a223e5,WS,9,2026-10-26T17:12:11.299094+00:00,A,false,intermediate,Irene Delaney
+6ebf8227-e1f8-4ef3-b868-505c2b261081,WS,10,2026-10-26T17:12:11.299094+00:00,C,false,intermediate,Tessa Montgomery
+2f48bb5e-06a1-424f-af7d-b5f2ba133c34,WS,11,2026-10-26T17:12:11.299094+00:00,A,false,intermediate,Katherine Whitaker
+6d56da2e-46c1-496b-b22f-31673bac65d0,WS,12,2026-10-26T17:12:11.299094+00:00,B,false,intermediate,Julia Pruitt
+4c5e7b9e-3d30-45d6-871d-04c91926ce70,WS,13,2026-10-26T17:12:11.299094+00:00,A,false,intermediate,Zara Nolan
+4979f2bb-c5a0-447d-9037-e796e166948e,WS,14,2026-10-26T17:12:11.299094+00:00,B,false,intermediate,Priya Lawson
+3d3a9ed5-cd57-4abb-af04-250a88f09861,WS,15,2026-10-26T17:12:11.299094+00:00,D,false,intermediate,Camille Blackwell
+07b53f96-bd8c-4dfc-9ca4-cca2e38bc4e3,WS,16,2026-10-26T17:12:11.299094+00:00,D,false,intermediate,Laura Kendall
+216075e0-b6ba-4502-abc5-9afd11c23942,WS,17,2026-10-26T17:12:11.299094+00:00,A,false,intermediate,Anya Thorne
+fa5d9512-028e-40d6-a197-5a9e7fc89c20,WS,18,2026-10-26T17:12:11.299094+00:00,A,false,intermediate,Yvonne Wexford
+8291d4f3-09d5-4cda-a347-c1d5e4b20964,WS,19,2026-10-26T17:12:11.299094+00:00,A,false,intermediate,Bianca Tate
+0f972627-455c-430a-9e46-71ae2be59f78,WS,20,2026-10-26T17:12:11.299094+00:00,B,false,intermediate,Jasmine Jennings
+2edf36f9-e496-4266-a5f1-271ba02ceec0,WS,21,2026-10-26T17:12:11.299094+00:00,D,false,intermediate,Lucy Everett
+7e663387-70a9-4372-9bb1-198ec2b9acbc,WS,22,2026-10-26T17:12:11.299094+00:00,D,false,intermediate,Valerie Ellsworth
+36102085-be18-4b9e-a136-245c5c5430ca,WS,23,2026-10-26T17:12:11.299094+00:00,B,false,intermediate,Stella Maddox
+fdc921a2-9fc3-4a7b-bece-06c31c8a87a4,WS,24,2026-10-26T17:12:11.299094+00:00,D,false,intermediate,Maya Kingsley
+f1ccf504-1a4c-40ad-a5e9-8e0dbc4dd072,WS,25,2026-10-26T17:12:11.299094+00:00,D,false,intermediate,Beatrice Mercer
