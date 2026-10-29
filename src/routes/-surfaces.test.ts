@@ -723,7 +723,8 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     // The switcher belongs to the tournament identity, for a caller who may edit.
     expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
     // The row itself: Browse for everyone, My tournaments and New tournament once signed in.
-    expect(shell).toMatch(/\{ label: "Browse tournaments", to: "\/explore" \}/);
+    // A narrow phone draws Browse alone (`short`); the full label stays the link's name.
+    expect(shell).toMatch(/\{ label: "Browse tournaments", short: "Browse", to: "\/explore" \}/);
     expect(shell).toMatch(/\{ label: "My tournaments", to: "\/me\/tournaments" \}/);
     expect(shell).toMatch(/<Link to="\/tournaments\/new" className=\{NEW_TOURNAMENT_CLASS\}>/);
     // The create door is drawn by the shared row, never written into the workspace header.
@@ -886,7 +887,8 @@ describe("the workspace chrome is mounted once, by the layout", () => {
       // `schedule.tsx` is the one exception and it is a delegation: it chooses between
       // the two format views and renders neither a header nor any content of its own.
       if (file === join("routes", "tournaments", "$tournamentId", "schedule.tsx")) continue;
-      expect(source, file).toMatch(/<Page\b/);
+      // A reader page draws its title row with `ReaderPage`, a `Page` laid out for a phone.
+      expect(source, file).toMatch(/<(Reader)?Page\b/);
     }
   });
 

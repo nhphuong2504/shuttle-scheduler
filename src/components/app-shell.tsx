@@ -202,7 +202,7 @@ const PUBLIC_SECTIONS = [
  */
 const SIGNED_IN_SECTIONS = [
   { label: "Browse tournaments", short: "Browse", to: "/explore" },
-  { label: "My tournaments", short: null, to: "/me/tournaments" },
+  { label: "My tournaments", to: "/me/tournaments" },
 ] as const;
 const NEW_TOURNAMENT_CLASS =
   "inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-info-surface px-4 text-sm font-bold text-info-foreground transition-colors hover:bg-info-border/60";
@@ -771,7 +771,7 @@ function PrimaryNav({ signedIn, marked }: { signedIn: boolean; marked: boolean }
             className={NAV_ITEM_CLASS}
             {...(marked ? { activeProps: { className: NAV_ACTIVE_CLASS } } : {})}
           >
-            {item.short ? (
+            {"short" in item ? (
               <>
                 <span aria-hidden="true" className="hidden max-[23rem]:inline">
                   {item.short}
