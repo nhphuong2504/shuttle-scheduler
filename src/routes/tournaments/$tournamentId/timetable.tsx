@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { EmptyState, Page, StatusPill } from "@/components/app-shell";
+import { EmptyState, StatusPill } from "@/components/app-shell";
 import { readerDayLabel } from "@/components/reader/day-picker";
 import {
   ReaderMatchList,
@@ -9,6 +9,7 @@ import {
   ReaderState,
   type MatchReading,
   ReaderConnection,
+  ReaderPage,
 } from "@/components/reader/reader-match";
 import { useReaderMatches } from "@/hooks/useReaderMatches";
 import { normalizeTournamentStatus } from "@/lib/auth/authorization";
@@ -102,13 +103,10 @@ function TimetablePage() {
   const reading: MatchReading = { label, courtName };
 
   return (
-    <Page
+    <ReaderPage
       title="Schedule"
-      subtitle="Every scheduled match, day by day, in the order it is played."
-      actions={<ReaderConnection live={live} />}
-    >
-      <div className="space-y-5">
-        {/* One row that scrolls sideways on a phone, so the filters never push the first match down. */}
+      controls={
+        // One row that scrolls sideways on a phone, so the filters never push the first match down.
         <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:px-0">
           {events.length > 1 ? (
             <div
@@ -134,7 +132,10 @@ function TimetablePage() {
             Hide finished
           </Chip>
         </div>
-
+      }
+      actions={<ReaderConnection live={live} />}
+    >
+      <div className="space-y-5">
         <ReaderState state={data} loadingLabel="Loading the schedule">
           {total === 0 ? (
             <EmptyState
@@ -186,7 +187,7 @@ function TimetablePage() {
           Jump to now
         </button>
       ) : null}
-    </Page>
+    </ReaderPage>
   );
 }
 

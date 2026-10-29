@@ -1,7 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
-import { EmptyState, Page, StatusPill } from "@/components/app-shell";
+import { EmptyState, StatusPill } from "@/components/app-shell";
 import { MatchIdentity } from "@/components/match-identity";
 import { ReaderDayPicker } from "@/components/reader/day-picker";
 import {
@@ -11,6 +11,7 @@ import {
   whereAndWhen,
   type MatchReading,
   ReaderConnection,
+  ReaderPage,
 } from "@/components/reader/reader-match";
 import { TournamentResults } from "@/components/tournament-results";
 import { Button } from "@/components/ui/button";
@@ -82,14 +83,12 @@ function NowPage() {
   const myNext = playerId ? nextMatchOf(matchesOfPlayer(matches, playerId)) : null;
 
   return (
-    <Page
+    <ReaderPage
       title="Now"
-      subtitle="On court, up next and just finished."
+      controls={<ReaderDayPicker days={orderedDays} selectedId={dayId} onSelect={setPickedDayId} />}
       actions={<ReaderConnection live={live} />}
     >
       <div className="space-y-5">
-        <ReaderDayPicker days={orderedDays} selectedId={dayId} onSelect={setPickedDayId} />
-
         {status === "completed" ? <TournamentResults tournamentId={tournamentId} /> : null}
 
         {myNext ? (
@@ -177,7 +176,7 @@ function NowPage() {
           </div>
         </ReaderState>
       </div>
-    </Page>
+    </ReaderPage>
   );
 }
 

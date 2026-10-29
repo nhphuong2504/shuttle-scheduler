@@ -186,7 +186,13 @@ const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as
  * be a list of the caller's own work. What is left does not change with the session, so
  * the row does not move once the session settles.
  */
-const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as const;
+/**
+ * `short` is what a phone narrower than 23rem draws: the whole bar used to wrap there, and its
+ * second row put the tournament a further 60px down. The full label stays the link's name.
+ */
+const PUBLIC_SECTIONS = [
+  { label: "Browse tournaments", short: "Browse", to: "/explore" },
+] as const;
 
 /**
  * The same bar for somebody signed in, with the place their own tournaments live.
@@ -195,8 +201,8 @@ const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as con
  * rather than in it: it is something to do, not somewhere to be.
  */
 const SIGNED_IN_SECTIONS = [
-  { label: "Browse tournaments", to: "/explore" },
-  { label: "My tournaments", to: "/me/tournaments" },
+  { label: "Browse tournaments", short: "Browse", to: "/explore" },
+  { label: "My tournaments", short: null, to: "/me/tournaments" },
 ] as const;
 const NEW_TOURNAMENT_CLASS =
   "inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-info-surface px-4 text-sm font-bold text-info-foreground transition-colors hover:bg-info-border/60";
@@ -765,7 +771,16 @@ function PrimaryNav({ signedIn, marked }: { signedIn: boolean; marked: boolean }
             className={NAV_ITEM_CLASS}
             {...(marked ? { activeProps: { className: NAV_ACTIVE_CLASS } } : {})}
           >
-            {item.label}
+            {item.short ? (
+              <>
+                <span aria-hidden="true" className="hidden max-[23rem]:inline">
+                  {item.short}
+                </span>
+                <span className="max-[23rem]:sr-only">{item.label}</span>
+              </>
+            ) : (
+              item.label
+            )}
           </Link>
         ))}
       </nav>
@@ -886,9 +901,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3">
+        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3 watch-short:pb-2 watch-short:pt-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight">
+            <p className="min-w-0 break-words font-display text-xl font-bold leading-tight tracking-tight sm:text-2xl watch-short:text-lg">
               {tournament?.name ?? "Loading…"}
             </p>
             {tournament ? (
@@ -899,7 +914,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             ) : null}
             {tournament?.is_demo ? <DemoPill /> : null}
           </div>
-          {meta ? <p className="mt-1 break-words text-sm text-muted-foreground">{meta}</p> : null}
+          {meta ? (
+            <p className="mt-1 break-words text-sm text-muted-foreground watch-short:hidden">{meta}</p>
+          ) : null}
           <div className="mt-2 flex justify-end empty:hidden sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:self-center">
             {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
           </div>
@@ -946,7 +963,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 watch-short:py-3">
         {readOnly && !READER_PAGES.some((page) => pathname.endsWith(page) || pathname.includes(`${page}/`)) ? (
           <ReadOnlyNotice signedIn={signedIn} />
         ) : null}
@@ -966,7 +983,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           means "the moment this snapshot describes", never "updating now".
         */}
         {tournament?.is_demo ? (
-          <Notice tone="info" data-testid="demo-notice">
+          <Notice tone="info" data-testid="demo-notice" className="watch-short:mb-2 watch-short:py-1.5">
             <strong className="font-bold">Sample tournament.</strong> Not a real event.{" "}
             <InfoNote label="About the sample tournament" className="align-middle">
               <p>

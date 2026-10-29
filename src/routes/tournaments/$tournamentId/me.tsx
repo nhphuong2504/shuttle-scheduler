@@ -1,9 +1,9 @@
 import { Link, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
-import { EmptyState, Notice, Page, Panel } from "@/components/app-shell";
+import { EmptyState, Notice, Panel } from "@/components/app-shell";
 import { PlayerView } from "@/components/reader/player-view";
-import { ReaderState, ReaderConnection } from "@/components/reader/reader-match";
+import { ReaderConnection, ReaderPage, ReaderState } from "@/components/reader/reader-match";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMyMatchNotifications, type MatchNotification } from "@/hooks/useMyMatchNotifications";
@@ -52,11 +52,7 @@ function MyMatchesPage() {
   const followed = playerId ? (data.playerMap.get(playerId) ?? null) : null;
 
   return (
-    <Page
-      title="My matches"
-      subtitle="Your next match, and where your results lead."
-      actions={<ReaderConnection live={data.live} />}
-    >
+    <ReaderPage title="My matches" actions={<ReaderConnection live={data.live} />}>
       <ReaderState
         state={{ ...data, loading: data.loading || !ready }}
         loadingLabel="Loading your matches"
@@ -83,7 +79,7 @@ function MyMatchesPage() {
           />
         )}
       </ReaderState>
-    </Page>
+    </ReaderPage>
   );
 }
 

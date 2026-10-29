@@ -143,6 +143,48 @@ export function ReaderMatchList({
   );
 }
 
+/**
+ * A reader page's title row: the title and the page's own controls on one line.
+ *
+ * `Page` gives a workspace page a 24px title and a sentence under it. Below the tournament's
+ * own header that pushed the first match off a 320px screen, and off a phone held sideways
+ * entirely. The section tab already says where the reader is, so the title is smaller, the
+ * sentence is left to the meta description, and the day picker or filters share its line -
+ * on a phone they wrap beneath it and scroll sideways rather than wrapping again.
+ */
+export function ReaderPage({
+  title,
+  meta,
+  controls,
+  actions,
+  children,
+}: {
+  title: string;
+  /** One short fact under the title, such as a player's events. */
+  meta?: string | undefined;
+  controls?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 watch-short:mb-2">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
+          {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
+        </div>
+        {controls ? (
+          <div className="min-w-0 basis-full empty:hidden sm:basis-auto">{controls}</div>
+        ) : null}
+        {actions ? (
+          <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>
+        ) : null}
+      </div>
+      {children}
+    </>
+  );
+}
+
 /** The loading and error states every reader region shares. */
 export function ReaderLoading({ label }: { label: string }) {
   return (

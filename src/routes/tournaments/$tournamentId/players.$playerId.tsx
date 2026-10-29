@@ -1,8 +1,8 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 
-import { EmptyState, Page } from "@/components/app-shell";
+import { EmptyState } from "@/components/app-shell";
 import { PlayerView, eventNames } from "@/components/reader/player-view";
-import { ReaderState, ReaderConnection } from "@/components/reader/reader-match";
+import { ReaderConnection, ReaderPage, ReaderState } from "@/components/reader/reader-match";
 import { Button } from "@/components/ui/button";
 import { useMyMatchNotifications } from "@/hooks/useMyMatchNotifications";
 import { useMyPlayer } from "@/hooks/useMyPlayer";
@@ -38,9 +38,9 @@ function PlayerPage() {
   const name = data.playerMap.get(playerId)?.name;
 
   return (
-    <Page
+    <ReaderPage
       title={name ?? (data.loading || data.error ? "Player" : "Player not found")}
-      subtitle={known ? eventNames(data, playerId) || undefined : undefined}
+      meta={known ? eventNames(data, playerId) || undefined : undefined}
       actions={
         <>
           <Link
@@ -77,6 +77,6 @@ function PlayerPage() {
           />
         )}
       </ReaderState>
-    </Page>
+    </ReaderPage>
   );
 }

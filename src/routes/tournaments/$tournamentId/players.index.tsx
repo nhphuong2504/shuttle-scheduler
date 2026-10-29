@@ -1,8 +1,8 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
-import { EmptyState, Page } from "@/components/app-shell";
-import { ReaderState } from "@/components/reader/reader-match";
+import { EmptyState } from "@/components/app-shell";
+import { ReaderPage, ReaderState } from "@/components/reader/reader-match";
 import { Input } from "@/components/ui/input";
 import { useMyPlayer } from "@/hooks/useMyPlayer";
 import { useReaderMatches } from "@/hooks/useReaderMatches";
@@ -84,10 +84,7 @@ function PlayersPage() {
     : rows;
 
   return (
-    <Page
-      title="Players"
-      subtitle="Open a player for their matches, results and path through the draws."
-    >
+    <ReaderPage title="Players">
       <div className="space-y-4">
         <div className="max-w-md">
           <label htmlFor="players-search" className="mb-1.5 block text-sm font-semibold">
@@ -147,6 +144,6 @@ function PlayersPage() {
           )}
         </ReaderState>
       </div>
-    </Page>
+    </ReaderPage>
   );
 }

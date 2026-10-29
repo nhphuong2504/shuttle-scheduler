@@ -25,7 +25,13 @@ export function ReaderDayPicker({
 }) {
   if (days.length < 2) return null;
   return (
-    <div role="group" aria-label="Day" className="flex flex-wrap gap-1.5">
+    // One row that scrolls sideways on a phone, as Schedule's filters do, so a long event never
+    // spends a second row of the screen on its days.
+    <div
+      role="group"
+      aria-label="Day"
+      className="-mx-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
+    >
       {days.map((day) => {
         const active = day.id === selectedId;
         return (
@@ -35,7 +41,7 @@ export function ReaderDayPicker({
             aria-pressed={active}
             onClick={() => onSelect(day.id)}
             className={cn(
-              "min-h-11 rounded-full border px-4 text-sm font-semibold tabular-nums transition-colors",
+              "min-h-11 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold tabular-nums transition-colors",
               active
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-input bg-surface text-muted-foreground hover:bg-muted/60",
