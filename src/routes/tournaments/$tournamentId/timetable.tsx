@@ -2,9 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState, StatusPill } from "@/components/app-shell";
+import { MatchIdentity } from "@/components/match-identity";
 import { readerDayLabel } from "@/components/reader/day-picker";
 import {
   ReaderMatchList,
+  MatchSidesInline,
   ReaderMatchRow,
   ReaderState,
   ReaderTimeGroup,
@@ -79,7 +81,7 @@ function TimetablePage() {
   const nowIndex = playing ? listed.findIndex((m) => !isFinished(m)) : -1;
   const nowId = listed[nowIndex]?.id ?? null;
   const jumpToNow = (smooth: boolean) => {
-    const row = nowId ? document.getElementById(rowAnchor(nowId)) : null;
+    const row = nowId ? shownRow(nowId) : null;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     row?.scrollIntoView({ block: "start", behavior: smooth && !still ? "smooth" : "auto" });
   };
@@ -94,10 +96,15 @@ function TimetablePage() {
   // The way back is offered only while "now" is off screen, where a reader cannot see it.
   const [nowInView, setNowInView] = useState(true);
   useEffect(() => {
-    const row = nowId ? document.getElementById(rowAnchor(nowId)) : null;
-    if (!row || typeof IntersectionObserver === "undefined") return setNowInView(true);
-    const watch = new IntersectionObserver(([entry]) => setNowInView(!!entry?.isIntersecting));
-    watch.observe(row);
+    // Both layouts are in the page and one is hidden; whichever is drawn decides.
+    const rows = nowId ? anchorsOf(nowId) : [];
+    if (!rows.length || typeof IntersectionObserver === "undefined") return setNowInView(true);
+    const seen = new Map<Element, boolean>();
+    const watch = new IntersectionObserver((entries) => {
+      for (const entry of entries) seen.set(entry.target, entry.isIntersecting);
+      setNowInView([...seen.values()].some(Boolean));
+    });
+    for (const row of rows) watch.observe(row);
     return () => watch.disconnect();
   }, [nowId]);
   // Times read in the browser's zone, as the Desk and Scores print them, so one match has one time.
@@ -161,6 +168,7 @@ function TimetablePage() {
                       </span>
                     }
                     empty={null}
+                    wide={<DayTable rows={rows} reading={reading} />}
                   >
                     {groupByTime(rows).map((group) => (
                       <ReaderTimeGroup
@@ -201,8 +209,70 @@ function TimetablePage() {
   );
 }
 
-function rowAnchor(matchId: string) {
-  return `timetable-match-${matchId}`;
+function rowAnchor(matchId: string, wide = false) {
+  return `timetable-match-${matchId}${wide ? "-wide" : ""}`;
+}
+
+/** A match's row in both layouts - the rows below `lg`, the table from it. */
+function anchorsOf(matchId: string): HTMLElement[] {
+  return [rowAnchor(matchId), rowAnchor(matchId, true)].flatMap((id) => {
+    const row = document.getElementById(id);
+    return row ? [row] : [];
+  });
+}
+
+/** The one of a match's two rows the screen is drawing. */
+function shownRow(matchId: string): HTMLElement | null {
+  return anchorsOf(matchId).find((row) => row.getClientRects().length > 0) ?? null;
+}
+
+/**
+ * A day as columns, for a desktop. A wave's time is printed on its first row only, so the
+ * column reads as the hall's clock; the rows after it keep the time for a screen reader.
+ */
+function DayTable({ rows, reading }: { rows: readonly DeskMatch[]; reading: MatchReading }) {
+  return (
+    <table className="data-table">
+      <thead>
+        <tr>
+          <th className="w-20">Time</th>
+          <th className="w-28">Court</th>
+          <th>Match</th>
+          <th className="w-44">Event</th>
+          <th className="w-44 !text-right">Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((match, index) => {
+          const time = match.scheduled ? timeLabel(match.scheduled) : "Time to be set";
+          const repeat = index > 0 && rows[index - 1]!.scheduled === match.scheduled;
+          return (
+            <tr key={match.id} id={rowAnchor(match.id, true)} className="scroll-mt-28">
+              <td className="whitespace-nowrap font-score font-semibold tabular-nums">
+                {repeat ? <span className="sr-only">{time}</span> : time}
+              </td>
+              <td className="whitespace-nowrap font-display font-bold">
+                {reading.courtName(match.courtId) ?? (
+                  <span className="font-body font-normal text-muted-foreground">Unassigned</span>
+                )}
+              </td>
+              <td>
+                <MatchSidesInline match={match} reading={reading} />
+              </td>
+              <td className="font-score text-sm text-muted-foreground">
+                <MatchIdentity match={match} />
+              </td>
+              <td className="text-right">
+                <span className="inline-flex justify-end">
+                  <MatchState match={match} />
+                </span>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
 }
 
 /** A live match says so and a finished one gives its score: the time is the group's heading. */

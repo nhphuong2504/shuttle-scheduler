@@ -26,11 +26,22 @@ export interface MatchReading {
   timezone?: string | undefined;
 }
 
-function Side({ name, winner, mine }: { name: string; winner: boolean; mine: boolean }) {
+function Side({
+  name,
+  winner,
+  mine,
+  inline = false,
+}: {
+  name: string;
+  winner: boolean;
+  mine: boolean;
+  inline?: boolean;
+}) {
   return (
     <span
       className={cn(
-        "block min-w-0 break-words",
+        "min-w-0 break-words",
+        inline ? "inline" : "block",
         winner && "font-semibold",
         mine && "text-foreground",
       )}
@@ -137,6 +148,18 @@ export function ReaderMatchRow({
   );
 }
 
+/** Both sides on one line, for a table cell: the winner bold with a check, as in a row. */
+export function MatchSidesInline({ match, reading }: { match: DeskMatch; reading: MatchReading }) {
+  const won = match.status === "reported" ? sideThatWon(match.initialGames) : null;
+  return (
+    <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+      <Side name={reading.label(match.teams[0])} winner={won === "a"} mine={false} inline />
+      <span className="text-muted-foreground">vs</span>
+      <Side name={reading.label(match.teams[1])} winner={won === "b"} mine={false} inline />
+    </span>
+  );
+}
+
 /**
  * The matches of one wave - those published for the same time - under one heading.
  *
@@ -187,12 +210,18 @@ export function ReaderMatchList({
   children,
   right,
   headingId,
+  wide,
 }: {
   title: string;
   empty: string | null;
   children: ReactNode;
   right?: ReactNode;
   headingId: string;
+  /**
+   * The same matches as a table, drawn instead of the rows from `lg` up: a phone or tablet
+   * reads rows, a desktop scans columns (the running order's rule in `design-principles.md`).
+   */
+  wide?: ReactNode;
 }) {
   return (
     <section aria-labelledby={headingId} className="min-w-0">
@@ -205,9 +234,21 @@ export function ReaderMatchList({
       {empty ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="divide-y divide-hairline overflow-clip rounded-xl border border-hairline bg-surface">
-          {children}
-        </ul>
+        <>
+          <ul
+            className={cn(
+              "divide-y divide-hairline overflow-clip rounded-xl border border-hairline bg-surface",
+              wide && "lg:hidden",
+            )}
+          >
+            {children}
+          </ul>
+          {wide ? (
+            <div className="hidden rounded-xl border border-hairline bg-surface lg:block">
+              {wide}
+            </div>
+          ) : null}
+        </>
       )}
     </section>
   );
