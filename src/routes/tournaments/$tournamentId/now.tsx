@@ -96,10 +96,11 @@ function NowPage() {
   return (
     <ReaderPage
       title="Now"
+      className="watch-wall:flex watch-wall:h-dvh watch-wall:flex-col watch-wall:py-3 watch-wall-short:py-1.5"
       controls={<ReaderDayPicker days={orderedDays} selectedId={dayId} onSelect={setPickedDayId} />}
       actions={<ReaderConnection live={live} />}
     >
-      <div className="space-y-5">
+      <div className="space-y-5 watch-wall:flex watch-wall:min-h-0 watch-wall:flex-1 watch-wall:flex-col watch-wall:gap-4 watch-wall:space-y-0 [&>*]:flex-none">
         {status === "completed" ? <TournamentResults tournamentId={tournamentId} /> : null}
 
         {myNext ? (
@@ -107,8 +108,15 @@ function NowPage() {
         ) : null}
 
         <ReaderState state={data} loadingLabel="Loading the courts">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
-            <section aria-labelledby="now-on-court" className="min-w-0">
+          {/*
+            On a wall each column scrolls inside itself, so the hall stays where the eye left
+            it while a long Up next runs on.
+          */}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start watch-wall:!flex-1 watch-wall:min-h-0 watch-wall:grid-rows-[minmax(0,1fr)] watch-wall:items-stretch">
+            <section
+              aria-labelledby="now-on-court"
+              className="min-w-0 watch-wall:min-h-0 watch-wall:overflow-y-auto"
+            >
               {/* The same height as the lists' headings beside it, so the two columns start level. */}
               <h2
                 id="now-on-court"
@@ -173,7 +181,7 @@ function NowPage() {
             </section>
 
             {/* Side by side under the courts on a tablet; a column beside them on a wider screen. */}
-            <div className="grid gap-5 md:grid-cols-2 md:items-start lg:grid-cols-1">
+            <div className="grid gap-5 md:grid-cols-2 md:items-start lg:grid-cols-1 watch-wall:min-h-0 watch-wall:content-start watch-wall:overflow-y-auto">
               <ReaderMatchList
                 title="Up next"
                 headingId="now-up-next"
@@ -262,12 +270,12 @@ function CourtCard({
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight sm:text-xl">
+        <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight sm:text-xl watch-wall:text-2xl watch-wall-short:text-xl">
           {reading.courtName(match.courtId) ?? "Unassigned"}
         </p>
         <StatusPill status={match.status} />
       </div>
-      <div className="min-w-0 text-base font-semibold leading-snug">
+      <div className="min-w-0 text-base font-semibold leading-snug watch-wall:text-lg watch-wall-short:text-base">
         <p className="break-words">{reading.label(match.teams[0])}</p>
         <span className="sr-only"> vs </span>
         <p className="break-words">{reading.label(match.teams[1])}</p>

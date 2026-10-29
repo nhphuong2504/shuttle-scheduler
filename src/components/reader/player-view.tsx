@@ -30,7 +30,8 @@ type ReaderData = ReturnType<typeof useReaderMatches>;
  * The same view answers "when do I play" on My matches and "when does she play" on a player's
  * page, so a parent following a child and the player themself read one layout. The next match
  * leads because it is the one thing a player standing at the hall needs; the path is what makes
- * the two-round placement format legible - two results decide which of four draws you are in.
+ * the two-round placement format legible - two results decide which of four draws you are in -
+ * so it comes straight after, with every match in a column of its own beside them on a desktop.
  */
 export function PlayerView({
   playerId,
@@ -97,59 +98,57 @@ export function PlayerView({
             </div>
           )}
 
-          <ReaderMatchList
-            title="All matches"
-            headingId={`player-matches-${playerId}`}
-            empty={mine.length ? null : "No matches have been drawn for this player yet."}
-          >
-            {mine.map((match) => (
-              <ReaderMatchRow
-                key={match.id}
-                match={match}
-                reading={reading}
-                mineTeamId={
-                  events.find(({ team }) => match.teams.includes(team.id))?.team.id ?? null
-                }
-              />
-            ))}
-          </ReaderMatchList>
+          {tournament?.format === "two_round_placement" && events.length ? (
+            <section aria-labelledby={`player-path-${playerId}`} className="space-y-3">
+              <h2
+                id={`player-path-${playerId}`}
+                className="font-display text-lg font-bold tracking-tight"
+              >
+                Path to the draws
+              </h2>
+              {events.map(({ team, category }) => {
+                const entrant = entrants.find((row) => row.team_id === team.id);
+                const teamMatches = mine.filter((m) => m.teams.includes(team.id));
+                const path = placementPath(
+                  teamMatches.filter((m) => m.kind === "placement"),
+                  team.id,
+                );
+                const knockout = teamMatches.filter((m) => m.kind === "tier");
+                const champion = entrant
+                  ? (tierDraws.find((draw) => draw.champion_id === entrant.id) ?? null)
+                  : null;
+                return (
+                  <PathCard
+                    key={team.id}
+                    title={category?.name ?? category?.code ?? "Event"}
+                    path={path}
+                    placementOnCourt={teamMatches.some(
+                      (m) => m.kind === "placement" && m.status === "in-progress",
+                    )}
+                    knockout={knockout}
+                    teamId={team.id}
+                    champion={champion?.tier ?? null}
+                  />
+                );
+              })}
+            </section>
+          ) : null}
         </div>
 
-        {tournament?.format === "two_round_placement" && events.length ? (
-          <section aria-labelledby={`player-path-${playerId}`} className="space-y-3">
-            <h2
-              id={`player-path-${playerId}`}
-              className="font-display text-lg font-bold tracking-tight"
-            >
-              Path to the draws
-            </h2>
-            {events.map(({ team, category }) => {
-              const entrant = entrants.find((row) => row.team_id === team.id);
-              const teamMatches = mine.filter((m) => m.teams.includes(team.id));
-              const path = placementPath(
-                teamMatches.filter((m) => m.kind === "placement"),
-                team.id,
-              );
-              const knockout = teamMatches.filter((m) => m.kind === "tier");
-              const champion = entrant
-                ? (tierDraws.find((draw) => draw.champion_id === entrant.id) ?? null)
-                : null;
-              return (
-                <PathCard
-                  key={team.id}
-                  title={category?.name ?? category?.code ?? "Event"}
-                  path={path}
-                  placementOnCourt={teamMatches.some(
-                    (m) => m.kind === "placement" && m.status === "in-progress",
-                  )}
-                  knockout={knockout}
-                  teamId={team.id}
-                  champion={champion?.tier ?? null}
-                />
-              );
-            })}
-          </section>
-        ) : null}
+        <ReaderMatchList
+          title="All matches"
+          headingId={`player-matches-${playerId}`}
+          empty={mine.length ? null : "No matches have been drawn for this player yet."}
+        >
+          {mine.map((match) => (
+            <ReaderMatchRow
+              key={match.id}
+              match={match}
+              reading={reading}
+              mineTeamId={events.find(({ team }) => match.teams.includes(team.id))?.team.id ?? null}
+            />
+          ))}
+        </ReaderMatchList>
       </div>
     </div>
   );
@@ -203,7 +202,8 @@ function NextMatchCard({
         >
           {state}
         </p>
-        <StatusPill status={match.status} />
+        {/* Every next match is scheduled until it is called; only a change of state is news. */}
+        {match.status === "scheduled" ? null : <StatusPill status={match.status} />}
       </div>
       <div>
         <p className="text-sm text-muted-foreground">{opponent ? "Against" : "Match"}</p>

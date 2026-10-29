@@ -15,6 +15,13 @@
  * tournament's header gives up its second line so the page under it is still on screen.
  */
 @custom-variant watch-short (@media (max-height: 500px));
+/*
+ * Now on a laptop, a TV or a projector at the venue: like the Desk's console, one viewport tall
+ * under the header, the courts fixed and the lists scrolling inside themselves, because a
+ * screen on a wall is read from across the hall and nobody scrolls it.
+ */
+@custom-variant watch-wall (@media (min-width: 1200px) and (min-height: 600px));
+@custom-variant watch-wall-short (@media (min-width: 1200px) and (min-height: 600px) and (max-height: 759px));
 
 /*
  * Tournova design tokens. The principles live in docs/design-principles.md;

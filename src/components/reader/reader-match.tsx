@@ -268,6 +268,7 @@ export function ReaderPage({
   meta,
   controls,
   actions,
+  className,
   children,
 }: {
   title: string;
@@ -275,11 +276,13 @@ export function ReaderPage({
   meta?: string | undefined;
   controls?: ReactNode;
   actions?: ReactNode;
+  /** For a page that lays out the title row and its content together (Now's wall layout). */
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <>
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 watch-short:mb-2">
+    <div className={className}>
+      <div className="mb-4 flex flex-none flex-wrap items-center gap-x-4 gap-y-2 watch-short:mb-2">
         <div className="min-w-0">
           <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
           {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
@@ -292,7 +295,7 @@ export function ReaderPage({
         ) : null}
       </div>
       {children}
-    </>
+    </div>
   );
 }
 
