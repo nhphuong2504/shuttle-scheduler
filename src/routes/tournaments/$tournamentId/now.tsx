@@ -21,7 +21,13 @@ import { useReaderMatches } from "@/hooks/useReaderMatches";
 import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import { attributeMatchesToDays, resolveSelectedDay } from "@/lib/tournament/day-scope";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
-import { groupByTime, matchesOfPlayer, nextMatchOf, nowBoard } from "@/lib/tournament/reader-board";
+import {
+  groupByTime,
+  hallBoard,
+  matchesOfPlayer,
+  nextMatchOf,
+  nowBoard,
+} from "@/lib/tournament/reader-board";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/now")({
@@ -52,7 +58,7 @@ export const Route = createFileRoute("/tournaments/$tournamentId/now")({
 function NowPage() {
   const { tournamentId } = Route.useParams();
   const data = useReaderMatches();
-  const { tournament, live, matches, days, label, courtName } = data;
+  const { tournament, live, matches, days, courts, dayCourts, label, courtName } = data;
   const { playerId } = useMyPlayer(tournamentId);
   const [pickedDayId, setPickedDayId] = useState<string | null>(null);
   const [allCourts, setAllCourts] = useState(false);
@@ -77,6 +83,10 @@ function NowPage() {
   });
   const dayMatches = dayId ? (attribution.byDayId.get(dayId) ?? []) : matches;
   const board = nowBoard(dayMatches, { upNext: 6, justFinished: 6 });
+  const hall = useMemo(() => {
+    const ids = new Set(dayCourts.filter((row) => row.day_id === dayId).map((row) => row.court_id));
+    return hallBoard(courts, ids, board.live);
+  }, [courts, dayCourts, dayId, board.live]);
 
   // Times read in the browser's zone, as the Desk and Scores print them, so one match has one time.
   const reading: MatchReading = { label, courtName };
@@ -98,8 +108,12 @@ function NowPage() {
 
         <ReaderState state={data} loadingLabel="Loading the courts">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
-            <section aria-labelledby="now-on-court" className="space-y-3">
-              <h2 id="now-on-court" className="font-display text-lg font-bold tracking-tight">
+            <section aria-labelledby="now-on-court" className="min-w-0">
+              {/* The same height as the lists' headings beside it, so the two columns start level. */}
+              <h2
+                id="now-on-court"
+                className="flex min-h-11 items-center pb-1 font-display text-lg font-bold tracking-tight"
+              >
                 On court
               </h2>
               {board.live.length === 0 ? (
@@ -120,32 +134,46 @@ function NowPage() {
                 />
               ) : (
                 <>
-                  <ul className="grid gap-3 sm:grid-cols-2">
-                    {board.live.map((match, index) => (
-                      <CourtCard
-                        key={match.id}
-                        match={match}
-                        reading={reading}
-                        now={now}
-                        demo={!!tournament?.is_demo}
-                        folded={!allCourts && index >= PHONE_COURTS}
-                      />
-                    ))}
+                  {/*
+                    As many columns as the screen holds, as the Desk lays its courts out: one on
+                    a 320px phone, two on a phone, three on a tablet, a whole hall on a wide one.
+                  */}
+                  <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,9.5rem),1fr))] gap-2 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] sm:gap-3">
+                    {hall.map((tile, index) => {
+                      const folded = !allCourts && index >= PHONE_COURTS;
+                      return tile.match ? (
+                        <CourtCard
+                          key={tile.match.id}
+                          match={tile.match}
+                          reading={reading}
+                          now={now}
+                          demo={!!tournament?.is_demo}
+                          folded={folded}
+                        />
+                      ) : (
+                        <FreeCourt
+                          key={tile.court!.id}
+                          number={tile.court!.number}
+                          folded={folded}
+                        />
+                      );
+                    })}
                   </ul>
-                  {board.live.length > PHONE_COURTS && !allCourts ? (
+                  {hall.length > PHONE_COURTS && !allCourts ? (
                     <Button
                       variant="outline"
-                      className="min-h-11 w-full sm:hidden"
+                      className="mt-3 min-h-11 w-full sm:hidden"
                       onClick={() => setAllCourts(true)}
                     >
-                      Show all {board.live.length} courts
+                      Show all {hall.length} courts
                     </Button>
                   ) : null}
                 </>
               )}
             </section>
 
-            <div className="space-y-5">
+            {/* Side by side under the courts on a tablet; a column beside them on a wider screen. */}
+            <div className="grid gap-5 md:grid-cols-2 md:items-start lg:grid-cols-1">
               <ReaderMatchList
                 title="Up next"
                 headingId="now-up-next"
@@ -195,14 +223,18 @@ function NowPage() {
   );
 }
 
-/** One court with a match on it: the court is the address a spectator walks to, so it leads. */
+/** A match "on court" for longer than this is a record nobody closed, not a match. */
 const MAX_SHOWN_MINUTES = 180;
 /**
  * Courts a phone shows before "Show all": a full hall would otherwise push Up next several
- * screens down. A wider screen lays the courts out in two columns and shows them all.
+ * screens down. A wider screen shows them all.
  */
-const PHONE_COURTS = 4;
+const PHONE_COURTS = 6;
 
+/**
+ * One court with a match on it, set like a scoreboard: the court leads, because it is the
+ * address a spectator walks to, then one side per line and how long they have been on.
+ */
 function CourtCard({
   match,
   reading,
@@ -220,35 +252,50 @@ function CourtCard({
   const started = match.startedAt ? new Date(match.startedAt).getTime() : null;
   const elapsed =
     started != null && now != null ? Math.max(0, Math.floor((now - started) / 60_000)) : null;
-  // A sample tournament is a snapshot, and a match "on court" for hours is a record nobody
-  // closed rather than a match: neither has a running time worth printing.
+  // A sample tournament is a snapshot, so its matches have no running time worth printing.
   const minutes = elapsed != null && elapsed <= MAX_SHOWN_MINUTES && !demo ? elapsed : null;
   return (
     <li
       className={cn(
-        "space-y-2 rounded-xl border border-hairline bg-surface p-3 shadow-panel sm:space-y-3 sm:p-4",
+        "flex min-w-0 flex-col gap-2 rounded-xl border border-hairline bg-surface p-3 shadow-panel sm:p-4",
         folded && "max-sm:hidden",
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-display text-lg font-bold tracking-tight sm:text-xl">
-          {reading.courtName(match.courtId) ?? "Court not assigned"}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight sm:text-xl">
+          {reading.courtName(match.courtId) ?? "Unassigned"}
         </p>
         <StatusPill status={match.status} />
       </div>
-      {/* On a phone "vs" leads the second line rather than taking one of its own. */}
-      <div className="space-y-0.5 text-base font-semibold leading-snug sm:space-y-1 sm:text-lg">
+      <div className="min-w-0 text-base font-semibold leading-snug">
         <p className="break-words">{reading.label(match.teams[0])}</p>
-        <p className="text-sm font-normal text-muted-foreground max-sm:hidden">vs</p>
-        <p className="break-words">
-          <span className="text-sm font-normal text-muted-foreground sm:hidden">vs </span>
-          {reading.label(match.teams[1])}
-        </p>
+        <span className="sr-only"> vs </span>
+        <p className="break-words">{reading.label(match.teams[1])}</p>
       </div>
-      <p className="flex flex-wrap justify-between gap-x-3 font-score text-t2 text-muted-foreground">
+      <p className="mt-auto flex flex-wrap items-baseline justify-between gap-x-3 font-score text-xs text-muted-foreground">
         <MatchIdentity match={match} />
-        {minutes != null ? <span className="tabular-nums">{minutes} min on court</span> : null}
+        {minutes != null ? <span className="tabular-nums">{minutes} min</span> : null}
       </p>
+    </li>
+  );
+}
+
+/**
+ * A court with nothing on it, kept in its place so the hall never reshuffles as matches start
+ * and finish. Quiet on purpose: a spectator is looking for the courts in play.
+ */
+function FreeCourt({ number, folded }: { number: number; folded: boolean }) {
+  return (
+    <li
+      className={cn(
+        "flex min-w-0 flex-col gap-1 rounded-xl border border-dashed border-hairline p-3 text-muted-foreground sm:p-4",
+        folded && "max-sm:hidden",
+      )}
+    >
+      <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight sm:text-xl">
+        Court {number}
+      </p>
+      <p className="text-sm">Free</p>
     </li>
   );
 }

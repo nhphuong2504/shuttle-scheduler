@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import type { Court } from "./data";
 import type { DeskMatch } from "./desk-matches";
 import {
   groupByTime,
+  hallBoard,
   inPlayingOrder,
   matchesOfPlayer,
   nextMatchOf,
@@ -169,5 +171,33 @@ describe("groupByTime", () => {
     const groups = groupByTime([match({ id: "a" }), match({ id: "b" })]);
     expect(groups).toHaveLength(1);
     expect(groups[0]?.scheduled).toBeNull();
+  });
+});
+
+describe("hallBoard", () => {
+  const court = (id: string, number: number) => ({ id, number }) as Court;
+  const courts = [court("c2", 2), court("c1", 1), court("c3", 3)];
+
+  it("keeps every court of the day in number order, busy or free", () => {
+    const live = [match({ id: "m", courtId: "c2", status: "in-progress" })];
+    const tiles = hallBoard(courts, new Set(), live);
+    expect(tiles.map((t) => [t.court?.number, t.match?.id ?? null])).toEqual([
+      [1, null],
+      [2, "m"],
+      [3, null],
+    ]);
+  });
+
+  it("reads only the day's courts, and still shows a match on any other", () => {
+    const live = [
+      match({ id: "here", courtId: "c1", status: "in-progress" }),
+      match({ id: "elsewhere", courtId: "c3", status: "in-progress" }),
+    ];
+    const tiles = hallBoard(courts, new Set(["c1", "c2"]), live);
+    expect(tiles.map((t) => [t.court?.number, t.match?.id ?? null])).toEqual([
+      [1, "here"],
+      [2, null],
+      [3, "elsewhere"],
+    ]);
   });
 });

@@ -1,7 +1,9 @@
 import { PLACEMENT_TIERS, type DrawTier } from "./competition-format";
+import type { Court } from "./data";
 import { matchStartMs } from "./day-scope";
 import type { DeskMatch } from "./desk-matches";
 import { sideThatWon } from "./match-winner";
+import { courtsForDay } from "./scheduling/day-plan";
 
 /**
  * What the reader's pages ask of the match list, as pure answers.
@@ -176,4 +178,39 @@ export function groupByTime(matches: readonly DeskMatch[]): TimeGroup[] {
     group.shared = same && first!.tag ? { tag: first!.tag, roundTag: first!.roundTag } : null;
   }
   return groups;
+}
+
+export interface HallCourt {
+  /** Null for a match on court somewhere this day's courts do not name. */
+  court: Pick<Court, "id" | "number"> | null;
+  match: DeskMatch | null;
+}
+
+/**
+ * The hall as a spectator stands in it: every court the day plays on, by number, each with
+ * the match on it or nothing.
+ *
+ * A board of only the busy courts reshuffled itself whenever a match started or finished;
+ * keeping every court in its place means a realtime update changes a tile, never the layout.
+ * A match on a court the day does not list is still shown, after the hall, rather than lost.
+ */
+export function hallBoard(
+  courts: readonly Court[],
+  dayCourtIds: ReadonlySet<string>,
+  live: readonly DeskMatch[],
+): HallCourt[] {
+  const hall = courtsForDay(courts, dayCourtIds).sort((a, b) => a.number - b.number);
+  const byCourt = new Map(live.flatMap((m) => (m.courtId ? [[m.courtId, m] as const] : [])));
+  const placed = new Set<string>();
+  const tiles: HallCourt[] = hall.map((court) => {
+    const match = byCourt.get(court.id) ?? null;
+    if (match) placed.add(match.id);
+    return { court, match };
+  });
+  for (const match of live) {
+    if (placed.has(match.id)) continue;
+    const court = courts.find((c) => c.id === match.courtId) ?? null;
+    tiles.push({ court, match });
+  }
+  return tiles;
 }

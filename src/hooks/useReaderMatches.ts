@@ -17,6 +17,7 @@ import {
   useTeams,
   useTierDrawMatches,
   useTierDraws,
+  useTournamentDayCourts,
   useTournamentDays,
 } from "@/lib/tournament/data";
 
@@ -42,6 +43,8 @@ export function useReaderMatches() {
   const tierDrawsQuery = useTierDraws();
   const tierMatchesQuery = useTierDrawMatches();
   const daysQuery = useTournamentDays();
+  // Which courts each day plays on. Not waited for: without it every court is the day's, as the planner reads it.
+  const { data: dayCourts } = useTournamentDayCourts(tournament?.id);
   const queries = [
     categoriesQuery,
     courtsQuery,
@@ -144,6 +147,8 @@ export function useReaderMatches() {
     tierDraws: tierDraws ?? [],
     entrants: entrants ?? [],
     days: days ?? [],
+    courts: courts ?? [],
+    dayCourts: dayCourts ?? [],
     teamMap,
     playerMap,
     catMap,
