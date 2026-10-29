@@ -18,6 +18,7 @@ import { TournamentResults } from "@/components/tournament-results";
 import { Button } from "@/components/ui/button";
 import { useMyPlayer } from "@/hooks/useMyPlayer";
 import { useReaderMatches } from "@/hooks/useReaderMatches";
+import { useScrollable } from "@/hooks/useScrollable";
 import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import { attributeMatchesToDays, resolveSelectedDay } from "@/lib/tournament/day-scope";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
@@ -62,6 +63,9 @@ function NowPage() {
   const { playerId } = useMyPlayer(tournamentId);
   const [pickedDayId, setPickedDayId] = useState<string | null>(null);
   const [allCourts, setAllCourts] = useState(false);
+  // On a wall each column scrolls inside itself, and a region that scrolls takes keyboard focus.
+  const [courtsRef, courtsScroll] = useScrollable();
+  const [listsRef, listsScroll] = useScrollable();
   // The browser's clock, adopted after mount so the server and first render agree.
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -114,8 +118,10 @@ function NowPage() {
           */}
           <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start watch-wall:!flex-1 watch-wall:min-h-0 watch-wall:grid-rows-[minmax(0,1fr)] watch-wall:items-stretch">
             <section
+              ref={courtsRef}
               aria-labelledby="now-on-court"
-              className="min-w-0 watch-wall:min-h-0 watch-wall:overflow-y-auto"
+              tabIndex={courtsScroll ? 0 : undefined}
+              className="min-w-0 rounded-xl watch-wall:min-h-0 watch-wall:overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
             >
               {/* The same height as the lists' headings beside it, so the two columns start level. */}
               <h2
@@ -181,7 +187,13 @@ function NowPage() {
             </section>
 
             {/* Side by side under the courts on a tablet; a column beside them on a wider screen. */}
-            <div className="grid gap-5 md:grid-cols-2 md:items-start lg:grid-cols-1 watch-wall:min-h-0 watch-wall:content-start watch-wall:overflow-y-auto">
+            <div
+              ref={listsRef}
+              tabIndex={listsScroll ? 0 : undefined}
+              role={listsScroll ? "region" : undefined}
+              aria-label={listsScroll ? "Up next and just finished" : undefined}
+              className="grid gap-5 rounded-xl md:grid-cols-2 md:items-start lg:grid-cols-1 watch-wall:min-h-0 watch-wall:content-start watch-wall:overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+            >
               <ReaderMatchList
                 title="Up next"
                 headingId="now-up-next"
