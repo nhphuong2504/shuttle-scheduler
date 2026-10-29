@@ -7,6 +7,7 @@ import {
   ReaderMatchList,
   ReaderMatchRow,
   ReaderState,
+  ReaderTimeGroup,
   type MatchReading,
   ReaderConnection,
   ReaderPage,
@@ -17,7 +18,7 @@ import { attributeMatchesToDays } from "@/lib/tournament/day-scope";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
 import { compareEventOrder } from "@/lib/tournament/event-order";
 import { timeLabel } from "@/lib/tournament/format";
-import { inPlayingOrder, isFinished } from "@/lib/tournament/reader-board";
+import { groupByTime, inPlayingOrder, isFinished } from "@/lib/tournament/reader-board";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/timetable")({
@@ -161,15 +162,24 @@ function TimetablePage() {
                     }
                     empty={null}
                   >
-                    {rows.map((match) => (
-                      <ReaderMatchRow
-                        key={match.id}
-                        id={rowAnchor(match.id)}
-                        match={match}
+                    {groupByTime(rows).map((group) => (
+                      <ReaderTimeGroup
+                        key={`${group.scheduled}-${group.matches[0]!.id}`}
+                        group={group}
                         reading={reading}
-                        place={courtName(match.courtId) ?? "Court to be assigned"}
-                        aside={<TimeAndState match={match} />}
-                      />
+                      >
+                        {group.matches.map((match) => (
+                          <ReaderMatchRow
+                            key={match.id}
+                            id={rowAnchor(match.id)}
+                            match={match}
+                            reading={reading}
+                            showTime={false}
+                            showIdentity={!group.shared}
+                            aside={<MatchState match={match} />}
+                          />
+                        ))}
+                      </ReaderTimeGroup>
                     ))}
                   </ReaderMatchList>
                 ) : null,
@@ -195,22 +205,16 @@ function rowAnchor(matchId: string) {
   return `timetable-match-${matchId}`;
 }
 
-/** The time leads; a live match adds its state and a finished one its score. */
-function TimeAndState({ match }: { match: DeskMatch }) {
-  return (
-    <>
-      <span className="whitespace-nowrap font-score text-base font-semibold tabular-nums">
-        {match.scheduled ? timeLabel(match.scheduled) : "Time to be set"}
-      </span>
-      {match.status === "in-progress" || match.status === "walkover" ? (
-        <StatusPill status={match.status} />
-      ) : match.score ? (
-        <span className="whitespace-nowrap font-score text-sm tabular-nums text-muted-foreground">
-          {match.score}
-        </span>
-      ) : null}
-    </>
-  );
+/** A live match says so and a finished one gives its score: the time is the group's heading. */
+function MatchState({ match }: { match: DeskMatch }) {
+  if (match.status === "in-progress" || match.status === "walkover") {
+    return <StatusPill status={match.status} />;
+  }
+  return match.score ? (
+    <span className="whitespace-nowrap font-score text-sm tabular-nums text-muted-foreground">
+      {match.score}
+    </span>
+  ) : null;
 }
 
 function Chip({

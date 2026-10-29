@@ -12,6 +12,7 @@ import {
   type MatchReading,
   ReaderConnection,
   ReaderPage,
+  ReaderTimeGroup,
 } from "@/components/reader/reader-match";
 import { TournamentResults } from "@/components/tournament-results";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import { useReaderMatches } from "@/hooks/useReaderMatches";
 import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import { attributeMatchesToDays, resolveSelectedDay } from "@/lib/tournament/day-scope";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
-import { matchesOfPlayer, nextMatchOf, nowBoard } from "@/lib/tournament/reader-board";
+import { groupByTime, matchesOfPlayer, nextMatchOf, nowBoard } from "@/lib/tournament/reader-board";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/now")({
@@ -150,8 +151,22 @@ function NowPage() {
                 headingId="now-up-next"
                 empty={board.upNext.length ? null : "Nothing else is scheduled for this day."}
               >
-                {board.upNext.map((match) => (
-                  <ReaderMatchRow key={match.id} match={match} reading={reading} />
+                {groupByTime(board.upNext).map((group) => (
+                  <ReaderTimeGroup
+                    key={`${group.scheduled}-${group.matches[0]!.id}`}
+                    group={group}
+                    reading={reading}
+                  >
+                    {group.matches.map((match) => (
+                      <ReaderMatchRow
+                        key={match.id}
+                        match={match}
+                        reading={reading}
+                        showTime={false}
+                        showIdentity={!group.shared}
+                      />
+                    ))}
+                  </ReaderTimeGroup>
                 ))}
               </ReaderMatchList>
               <ReaderMatchList
@@ -169,7 +184,7 @@ function NowPage() {
                 }
               >
                 {board.justFinished.map((match) => (
-                  <ReaderMatchRow key={match.id} match={match} reading={reading} />
+                  <ReaderMatchRow key={match.id} match={match} reading={reading} showTime={false} />
                 ))}
               </ReaderMatchList>
             </div>

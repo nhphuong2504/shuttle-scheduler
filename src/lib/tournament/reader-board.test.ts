@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DeskMatch } from "./desk-matches";
 import {
+  groupByTime,
   inPlayingOrder,
   matchesOfPlayer,
   nextMatchOf,
@@ -135,5 +136,38 @@ describe("inPlayingOrder", () => {
       }),
     ];
     expect(inPlayingOrder(rows).map((m) => m.id)).toEqual(["started", "late", "untimed"]);
+  });
+});
+
+describe("groupByTime", () => {
+  it("joins neighbours that start at the same time, keeping the order", () => {
+    const groups = groupByTime([
+      match({ id: "a", scheduled: at("10:05") }),
+      match({ id: "b", scheduled: at("10:05") }),
+      match({ id: "c", scheduled: at("10:25") }),
+      match({ id: "d", scheduled: at("10:05") }),
+    ]);
+    expect(groups.map((g) => [g.scheduled, g.matches.map((m) => m.id)])).toEqual([
+      [at("10:05"), ["a", "b"]],
+      [at("10:25"), ["c"]],
+      [at("10:05"), ["d"]],
+    ]);
+  });
+
+  it("names the event and round only when the whole group shares them", () => {
+    const [same, mixed] = groupByTime([
+      match({ id: "a", scheduled: at("10:05"), tag: "MS", roundTag: "R2" }),
+      match({ id: "b", scheduled: at("10:05"), tag: "MS", roundTag: "R2" }),
+      match({ id: "c", scheduled: at("10:25"), tag: "MS", roundTag: "R2" }),
+      match({ id: "d", scheduled: at("10:25"), tag: "WS", roundTag: "R2" }),
+    ]);
+    expect(same?.shared).toEqual({ tag: "MS", roundTag: "R2" });
+    expect(mixed?.shared).toBeNull();
+  });
+
+  it("keeps untimed matches together under no time", () => {
+    const groups = groupByTime([match({ id: "a" }), match({ id: "b" })]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.scheduled).toBeNull();
   });
 });

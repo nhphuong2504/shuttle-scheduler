@@ -147,3 +147,33 @@ export function placementPath(
   }
   return { results, draw: null, next: null };
 }
+
+export interface TimeGroup {
+  /** The published start every match in the group shares, or null for untimed matches. */
+  scheduled: string | null;
+  matches: DeskMatch[];
+  /** The event and round when every match in the group has the same one, so a row need not repeat it. */
+  shared: Pick<DeskMatch, "tag" | "roundTag"> | null;
+}
+
+/**
+ * A list in playing order, cut into runs that start at the same published time.
+ *
+ * A hall calls a wave of matches at once - six at 10:25 - and listing each with its own
+ * "10:25" and its own "MS R2" was the noise that made the reader's lists hard to scan. Only
+ * neighbours are joined, so the order of the list is never changed by the grouping.
+ */
+export function groupByTime(matches: readonly DeskMatch[]): TimeGroup[] {
+  const groups: TimeGroup[] = [];
+  for (const match of matches) {
+    const last = groups[groups.length - 1];
+    if (last && last.scheduled === match.scheduled) last.matches.push(match);
+    else groups.push({ scheduled: match.scheduled, matches: [match], shared: null });
+  }
+  for (const group of groups) {
+    const [first] = group.matches;
+    const same = group.matches.every((m) => m.tag === first!.tag && m.roundTag === first!.roundTag);
+    group.shared = same && first!.tag ? { tag: first!.tag, roundTag: first!.roundTag } : null;
+  }
+  return groups;
+}

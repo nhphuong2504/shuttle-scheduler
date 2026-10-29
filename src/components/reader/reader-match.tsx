@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { timeLabel } from "@/lib/tournament/format";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
 import { sideThatWon } from "@/lib/tournament/match-winner";
+import type { TimeGroup } from "@/lib/tournament/reader-board";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,7 +29,11 @@ export interface MatchReading {
 function Side({ name, winner, mine }: { name: string; winner: boolean; mine: boolean }) {
   return (
     <span
-      className={cn("min-w-0 break-words", winner && "font-semibold", mine && "text-foreground")}
+      className={cn(
+        "block min-w-0 break-words",
+        winner && "font-semibold",
+        mine && "text-foreground",
+      )}
     >
       {winner ? <Check aria-hidden className="mr-1 inline size-4 align-[-2px]" /> : null}
       {name}
@@ -45,12 +50,21 @@ export function whereAndWhen(match: DeskMatch, reading: MatchReading): string {
   return court ?? time ?? "Court and time not assigned yet";
 }
 
+/**
+ * One match as a reader scans a list: where, who, and how it stands.
+ *
+ * The court leads in a column of its own, because it is the address a spectator walks to and
+ * a column of them reads down the hall. Each side gets its own line, so a doubles pair never
+ * wraps into the other pair's name. The event and round are the least read part and come
+ * last, small - or not at all, inside a group that already names them.
+ */
 export function ReaderMatchRow({
   match,
   reading,
   mineTeamId,
   aside,
-  place,
+  showTime = true,
+  showIdentity = true,
   id,
 }: {
   match: DeskMatch;
@@ -59,36 +73,50 @@ export function ReaderMatchRow({
   mineTeamId?: string | null;
   /** Replaces the default right-hand column (the status, or the score). */
   aside?: ReactNode;
-  /** Replaces the court-and-time line, for a list whose aside already carries the time. */
-  place?: ReactNode;
+  /** False inside a group headed by the time every match in it shares. */
+  showTime?: boolean;
+  /** False inside a group headed by the event and round every match in it shares. */
+  showIdentity?: boolean;
   /** An anchor, so a long list can be scrolled to this row. */
   id?: string;
 }) {
   const won = match.status === "reported" ? sideThatWon(match.initialGames) : null;
   const finished = match.status === "reported" || match.status === "walkover";
+  const court = reading.courtName(match.courtId);
   return (
     <li
       id={id}
-      className="grid scroll-mt-24 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3"
+      className="grid scroll-mt-28 grid-cols-[4rem_minmax(0,1fr)_auto] items-start gap-x-3 px-4 py-2.5 sm:grid-cols-[5rem_minmax(0,1fr)_auto]"
     >
-      <div className="min-w-0 space-y-1">
-        <p className="font-score text-t2 text-muted-foreground">
-          <MatchIdentity match={match} />
-        </p>
-        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-base">
-          <Side
-            name={reading.label(match.teams[0])}
-            winner={won === "a"}
-            mine={!!mineTeamId && match.teams[0] === mineTeamId}
-          />
-          <span className="text-muted-foreground">vs</span>
-          <Side
-            name={reading.label(match.teams[1])}
-            winner={won === "b"}
-            mine={!!mineTeamId && match.teams[1] === mineTeamId}
-          />
-        </p>
-        <p className="text-sm text-muted-foreground">{place ?? whereAndWhen(match, reading)}</p>
+      <div className="min-w-0 pt-px">
+        {court ? (
+          <p className="whitespace-nowrap font-display text-sm font-bold sm:text-base">{court}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Unassigned</p>
+        )}
+        {showTime && match.scheduled ? (
+          <p className="text-sm tabular-nums text-muted-foreground">
+            {timeLabel(match.scheduled, reading.timezone)}
+          </p>
+        ) : null}
+      </div>
+      <div className="min-w-0 text-base leading-snug">
+        <Side
+          name={reading.label(match.teams[0])}
+          winner={won === "a"}
+          mine={!!mineTeamId && match.teams[0] === mineTeamId}
+        />
+        <span className="sr-only"> vs </span>
+        <Side
+          name={reading.label(match.teams[1])}
+          winner={won === "b"}
+          mine={!!mineTeamId && match.teams[1] === mineTeamId}
+        />
+        {showIdentity ? (
+          <p className="mt-0.5 font-score text-xs text-muted-foreground">
+            <MatchIdentity match={match} />
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col items-end gap-1.5 text-right">
         {aside ?? (
@@ -96,7 +124,7 @@ export function ReaderMatchRow({
             {/* "Scheduled" is what every listed match is until it is called: it tells a reader nothing. */}
             {finished || match.status === "scheduled" ? null : <StatusPill status={match.status} />}
             {match.score ? (
-              <span className="whitespace-nowrap font-score text-base font-semibold tabular-nums">
+              <span className="whitespace-nowrap font-score text-sm font-semibold tabular-nums sm:text-base">
                 {match.score}
               </span>
             ) : match.status === "walkover" ? (
@@ -109,7 +137,50 @@ export function ReaderMatchRow({
   );
 }
 
-/** A titled list of matches with its own empty sentence, so an empty list still says what belongs there. */
+/**
+ * The matches of one wave - those published for the same time - under one heading.
+ *
+ * The heading carries the time, and the event and round when the whole wave shares them, so
+ * the rows beneath carry neither. It stays in view while its rows scroll by.
+ */
+export function ReaderTimeGroup({
+  group,
+  reading,
+  children,
+}: {
+  group: TimeGroup;
+  reading: MatchReading;
+  /** The rows, drawn with `showTime={false}` and, when the group is shared, `showIdentity={false}`. */
+  children: ReactNode;
+}) {
+  const count = group.matches.length;
+  return (
+    <li>
+      <h3 className="sticky top-0 z-10 flex flex-wrap items-baseline gap-x-3 border-b border-hairline bg-background px-4 py-1.5 text-sm">
+        <span className="font-display font-bold tabular-nums">
+          {group.scheduled ? timeLabel(group.scheduled, reading.timezone) : "Time to be set"}
+        </span>
+        {group.shared ? (
+          <span className="font-score text-muted-foreground">
+            <MatchIdentity match={group.shared} />
+          </span>
+        ) : null}
+        <span className="ml-auto text-muted-foreground">
+          {count} {count === 1 ? "match" : "matches"}
+        </span>
+      </h3>
+      <ul className="divide-y divide-hairline">{children}</ul>
+    </li>
+  );
+}
+
+/**
+ * A titled list of matches with its own empty sentence, so an empty list still says what belongs there.
+ *
+ * A list is flat - a hairline frame and rules, no shadow - so the raised cards on a page are
+ * only the ones that matter most: the courts in play and a player's next match. An empty list
+ * is a sentence under its title, not a frame around nothing.
+ */
 export function ReaderMatchList({
   title,
   empty,
@@ -124,20 +195,19 @@ export function ReaderMatchList({
   headingId: string;
 }) {
   return (
-    <section
-      aria-labelledby={headingId}
-      className="rounded-xl border border-hairline bg-surface shadow-panel"
-    >
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-2.5">
-        <h2 id={headingId} className="font-display text-base font-bold tracking-tight">
+    <section aria-labelledby={headingId} className="min-w-0">
+      <header className="flex min-h-11 flex-wrap items-center justify-between gap-2 pb-1">
+        <h2 id={headingId} className="font-display text-lg font-bold tracking-tight">
           {title}
         </h2>
         {right}
       </header>
       {empty ? (
-        <p className="px-4 py-6 text-sm text-muted-foreground">{empty}</p>
+        <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <ul className="divide-y divide-hairline">{children}</ul>
+        <ul className="divide-y divide-hairline overflow-clip rounded-xl border border-hairline bg-surface">
+          {children}
+        </ul>
       )}
     </section>
   );
