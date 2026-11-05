@@ -53,6 +53,54 @@ function Side({
   );
 }
 
+/**
+ * A reported score, game by game, with only each game's winning number in bold.
+ *
+ * Bolding the whole score made every result shout equally; bolding the number that took the
+ * game lets a reader see who won each game - and so who came back - without reading digits.
+ * The games read side A first, the same order as the names beside them.
+ */
+export function GameScores({
+  match,
+  stacked = false,
+  className,
+}: {
+  match: DeskMatch;
+  /** One game per line, for a phone row too narrow for three games side by side. */
+  stacked?: boolean;
+  className?: string;
+}) {
+  const games = match.initialGames;
+  if (!games?.length) {
+    return match.score ? (
+      <span className={cn("whitespace-nowrap font-score tabular-nums", className)}>
+        {match.score}
+      </span>
+    ) : null;
+  }
+  return (
+    <span
+      className={cn(
+        "flex whitespace-nowrap font-score tabular-nums",
+        stacked ? "flex-col items-end" : "gap-3",
+        className,
+      )}
+    >
+      {games.map((game, index) => (
+        <span key={index}>
+          <span className={game.a > game.b ? "font-bold text-foreground" : undefined}>
+            {game.a}
+          </span>
+          –
+          <span className={game.b > game.a ? "font-bold text-foreground" : undefined}>
+            {game.b}
+          </span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** Where and when, as one quiet line: the court, then the time. */
 export function whereAndWhen(match: DeskMatch, reading: MatchReading): string {
   const court = reading.courtName(match.courtId);
@@ -135,9 +183,7 @@ export function ReaderMatchRow({
             {/* "Scheduled" is what every listed match is until it is called: it tells a reader nothing. */}
             {finished || match.status === "scheduled" ? null : <StatusPill status={match.status} />}
             {match.score ? (
-              <span className="whitespace-nowrap font-score text-sm font-semibold tabular-nums sm:text-base">
-                {match.score}
-              </span>
+              <GameScores match={match} stacked className="text-sm sm:text-base" />
             ) : match.status === "walkover" ? (
               <StatusPill status={match.status} />
             ) : null}
@@ -179,8 +225,8 @@ export function ReaderTimeGroup({
   const count = group.matches.length;
   return (
     <li>
-      <h3 className="sticky top-0 z-10 flex flex-wrap items-baseline gap-x-3 border-b border-hairline bg-background px-4 py-1.5 text-sm">
-        <span className="font-display font-bold tabular-nums">
+      <h3 className="sticky top-0 z-10 flex flex-wrap items-baseline gap-x-3 border-b border-hairline bg-muted px-4 py-2 text-sm">
+        <span className="font-display text-base font-extrabold tabular-nums">
           {group.scheduled ? timeLabel(group.scheduled, reading.timezone) : "Time to be set"}
         </span>
         {group.shared ? (
@@ -237,14 +283,14 @@ export function ReaderMatchList({
         <>
           <ul
             className={cn(
-              "divide-y divide-hairline overflow-clip rounded-xl border border-hairline bg-surface",
+              "divide-y divide-hairline overflow-clip rounded-2xl border border-hairline bg-surface",
               wide && "lg:hidden",
             )}
           >
             {children}
           </ul>
           {wide ? (
-            <div className="hidden rounded-xl border border-hairline bg-surface lg:block">
+            <div className="hidden overflow-clip rounded-2xl border border-hairline bg-surface lg:block">
               {wide}
             </div>
           ) : null}
@@ -284,7 +330,9 @@ export function ReaderPage({
     <div className={className}>
       <div className="mb-4 flex flex-none flex-wrap items-center gap-x-4 gap-y-2 watch-short:mb-2">
         <div className="min-w-0">
-          <h1 className="font-display text-xl font-bold tracking-tight">{title}</h1>
+          <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+            {title}
+          </h1>
           {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
         </div>
         {controls ? (

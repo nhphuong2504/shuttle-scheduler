@@ -5,6 +5,7 @@ import { EmptyState, StatusPill } from "@/components/app-shell";
 import { MatchIdentity } from "@/components/match-identity";
 import { readerDayLabel } from "@/components/reader/day-picker";
 import {
+  GameScores,
   ReaderMatchList,
   MatchSidesInline,
   ReaderMatchRow,
@@ -184,7 +185,7 @@ function TimetablePage() {
                             reading={reading}
                             showTime={false}
                             showIdentity={!group.shared}
-                            aside={<MatchState match={match} />}
+                            aside={<MatchState match={match} stacked />}
                           />
                         ))}
                       </ReaderTimeGroup>
@@ -276,14 +277,12 @@ function DayTable({ rows, reading }: { rows: readonly DeskMatch[]; reading: Matc
 }
 
 /** A live match says so and a finished one gives its score: the time is the group's heading. */
-function MatchState({ match }: { match: DeskMatch }) {
+function MatchState({ match, stacked = false }: { match: DeskMatch; stacked?: boolean }) {
   if (match.status === "in-progress" || match.status === "walkover") {
     return <StatusPill status={match.status} />;
   }
   return match.score ? (
-    <span className="whitespace-nowrap font-score text-sm tabular-nums text-muted-foreground">
-      {match.score}
-    </span>
+    <GameScores match={match} stacked={stacked} className="text-sm text-muted-foreground" />
   ) : null;
 }
 

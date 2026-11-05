@@ -22,6 +22,7 @@ import { useScrollable } from "@/hooks/useScrollable";
 import { normalizeTournamentStatus } from "@/lib/auth/authorization";
 import { attributeMatchesToDays, resolveSelectedDay } from "@/lib/tournament/day-scope";
 import type { DeskMatch } from "@/lib/tournament/desk-matches";
+import { timeLabel } from "@/lib/tournament/format";
 import {
   groupByTime,
   hallBoard,
@@ -91,6 +92,11 @@ function NowPage() {
     const ids = new Set(dayCourts.filter((row) => row.day_id === dayId).map((row) => row.court_id));
     return hallBoard(courts, ids, board.live);
   }, [courts, dayCourts, dayId, board.live]);
+  // Up next is in playing order, so the first match listed for a court is the one it waits for.
+  const nextOnCourt = new Map<string, DeskMatch>();
+  for (const match of board.upNext) {
+    if (match.courtId && !nextOnCourt.has(match.courtId)) nextOnCourt.set(match.courtId, match);
+  }
 
   // Times read in the browser's zone, as the Desk and Scores print them, so one match has one time.
   const reading: MatchReading = { label, courtName };
@@ -168,6 +174,7 @@ function NowPage() {
                         <FreeCourt
                           key={tile.court!.id}
                           number={tile.court!.number}
+                          next={nextOnCourt.get(tile.court!.id) ?? null}
                           folded={folded}
                         />
                       );
@@ -274,28 +281,44 @@ function CourtCard({
     started != null && now != null ? Math.max(0, Math.floor((now - started) / 60_000)) : null;
   // A sample tournament is a snapshot, so its matches have no running time worth printing.
   const minutes = elapsed != null && elapsed <= MAX_SHOWN_MINUTES && !demo ? elapsed : null;
+  const startedLabel = started != null && !demo ? timeLabel(match.startedAt) : null;
   return (
     <li
       className={cn(
-        "flex min-w-0 flex-col gap-2 rounded-xl border border-hairline bg-surface p-3 shadow-panel sm:p-4",
+        "flex min-w-0 flex-col gap-3 rounded-2xl border border-hairline bg-surface p-3 shadow-panel sm:p-4",
         folded && "max-sm:hidden",
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight sm:text-xl watch-wall:text-2xl watch-wall-short:text-xl">
+        <p className="whitespace-nowrap font-display text-lg font-extrabold tracking-tight sm:text-2xl watch-wall:text-2xl watch-wall-short:text-xl">
           {reading.courtName(match.courtId) ?? "Unassigned"}
         </p>
         <StatusPill status={match.status} />
       </div>
-      <div className="min-w-0 text-base font-semibold leading-snug watch-wall:text-lg watch-wall-short:text-base">
-        <p className="break-words">{reading.label(match.teams[0])}</p>
-        <span className="sr-only"> vs </span>
-        <p className="break-words">{reading.label(match.teams[1])}</p>
+      <div className="min-w-0">
+        <p className="font-score text-xs font-semibold text-muted-foreground sm:text-sm">
+          <MatchIdentity match={match} />
+        </p>
+        {/*
+          The second side opens with a quiet "vs": the names stay at reading weight, and the
+          word marks where one side ends without a rule or a box around either.
+        */}
+        <p className="mt-1 text-sm leading-normal sm:text-base watch-wall:text-lg watch-wall-short:text-base">
+          <span className="block break-words">{reading.label(match.teams[0])}</span>
+          <span className="block break-words">
+            <span className="mr-1.5 text-muted-foreground">vs</span>
+            {reading.label(match.teams[1])}
+          </span>
+        </p>
       </div>
-      <p className="mt-auto flex flex-wrap items-baseline justify-between gap-x-3 font-score text-xs text-muted-foreground">
-        <MatchIdentity match={match} />
-        {minutes != null ? <span className="tabular-nums">{minutes} min</span> : null}
-      </p>
+      {startedLabel || minutes != null ? (
+        <p className="mt-auto flex flex-wrap items-baseline justify-between gap-x-3 border-t border-hairline pt-2.5 text-xs text-muted-foreground tabular-nums sm:text-sm">
+          {startedLabel ? <span>Started {startedLabel}</span> : <span />}
+          {minutes != null ? (
+            <span className="font-semibold text-foreground">{minutes} min</span>
+          ) : null}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -304,18 +327,37 @@ function CourtCard({
  * A court with nothing on it, kept in its place so the hall never reshuffles as matches start
  * and finish. Quiet on purpose: a spectator is looking for the courts in play.
  */
-function FreeCourt({ number, folded }: { number: number; folded: boolean }) {
+function FreeCourt({
+  number,
+  next,
+  folded,
+}: {
+  number: number;
+  /** The first match still to come on this court, so a free court says when it fills. */
+  next: DeskMatch | null;
+  folded: boolean;
+}) {
   return (
     <li
       className={cn(
-        "flex min-w-0 flex-col gap-1 rounded-xl border border-dashed border-hairline p-3 text-muted-foreground sm:p-4",
+        "flex min-w-0 flex-col gap-2 rounded-2xl border-[1.5px] border-dashed border-border-control/45 p-3 text-muted-foreground sm:p-4",
         folded && "max-sm:hidden",
       )}
     >
-      <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight sm:text-xl">
-        Court {number}
-      </p>
-      <p className="text-sm">Free</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-2">
+        <p className="whitespace-nowrap font-display text-lg font-extrabold tracking-tight sm:text-2xl">
+          Court {number}
+        </p>
+        <p className="text-sm font-semibold">Free</p>
+      </div>
+      {next?.scheduled ? (
+        <p className="mt-auto text-sm">
+          Next here at{" "}
+          <span className="font-semibold tabular-nums text-foreground">
+            {timeLabel(next.scheduled)}
+          </span>
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -333,17 +375,21 @@ function MyNextTeaser({
     <Link
       to="/tournaments/$tournamentId/me"
       params={{ tournamentId }}
-      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 transition-colors hover:bg-primary/10"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-hairline bg-surface px-4 py-3 shadow-panel transition-colors hover:border-primary/50"
     >
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-primary-ink">
+        <span className="block text-sm font-semibold text-muted-foreground">
           {match.status === "in-progress" ? "You are on court" : "Your next match"}
         </span>
-        <span className="block break-words font-semibold">
-          {reading.label(match.teams[0])} vs {reading.label(match.teams[1])}
+        <span className="block font-display text-lg font-extrabold tracking-tight">
+          {whereAndWhen(match, reading)}
+        </span>
+        <span className="block break-words text-sm">
+          {reading.label(match.teams[0])}{" "}
+          <span className="text-muted-foreground">vs</span> {reading.label(match.teams[1])}
         </span>
       </span>
-      <span className="text-sm text-muted-foreground">{whereAndWhen(match, reading)}</span>
+      <span className="text-sm font-semibold text-primary">My matches</span>
     </Link>
   );
 }

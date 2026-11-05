@@ -27,30 +27,30 @@ export function ReaderDayPicker({
   return (
     // One row that scrolls sideways on a phone, as Schedule's filters do, so a long event never
     // spends a second row of the screen on its days.
-    <div
-      role="group"
-      aria-label="Day"
-      className="-mx-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden"
-    >
-      {days.map((day) => {
-        const active = day.id === selectedId;
-        return (
-          <button
-            key={day.id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onSelect(day.id)}
-            className={cn(
-              "min-h-11 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold tabular-nums transition-colors",
-              active
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-input bg-surface text-muted-foreground hover:bg-muted/60",
-            )}
-          >
-            {readerDayLabel(day)}
-          </button>
-        );
-      })}
+    // A segmented switch: one grey track, the chosen day lifted out of it in white, so the days
+    // read as one control rather than a row of buttons competing with the page's links.
+    <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
+      <div role="group" aria-label="Day" className="inline-flex gap-1 rounded-xl bg-muted p-1">
+        {days.map((day) => {
+          const active = day.id === selectedId;
+          return (
+            <button
+              key={day.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onSelect(day.id)}
+              className={cn(
+                "min-h-11 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-sm tabular-nums transition-colors",
+                active
+                  ? "bg-surface font-bold text-foreground shadow-sm"
+                  : "font-semibold text-muted-foreground hover:bg-surface/60 hover:text-foreground",
+              )}
+            >
+              {readerDayLabel(day)}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

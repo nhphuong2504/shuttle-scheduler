@@ -125,9 +125,17 @@ function PlayersPage() {
                     <Link
                       to="/tournaments/$tournamentId/players/$playerId"
                       params={{ tournamentId, playerId: player.id }}
-                      className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-hairline bg-surface px-4 py-3 shadow-panel transition-colors hover:bg-muted/50"
+                      className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-hairline bg-surface px-4 py-3 transition-colors hover:border-primary/50"
                     >
-                      <span className="min-w-0 break-words font-semibold">{player.name}</span>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span
+                          aria-hidden
+                          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-muted-foreground"
+                        >
+                          {initialsOf(player.name)}
+                        </span>
+                        <span className="min-w-0 break-words font-semibold">{player.name}</span>
+                      </span>
                       <span className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
                         {player.id === me ? (
                           <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary-ink">
@@ -146,4 +154,13 @@ function PlayersPage() {
       </div>
     </ReaderPage>
   );
+}
+
+/** Two letters for a name's badge: first and last word, so a list scans by face rather than by text. */
+function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "?";
+  const first = words[0]!.charAt(0);
+  const last = words.length > 1 ? words[words.length - 1]!.charAt(0) : "";
+  return (first + last).toUpperCase();
 }

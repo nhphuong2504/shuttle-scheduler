@@ -152,6 +152,11 @@ breakpoints:
   many columns as the screen holds, as the Desk's does. From 1200×600 (`watch-wall`) Now is one
   viewport tall like the Desk's console, for a laptop or a screen on the venue's wall.
 - **Schedule follows the running order's rule**: rows on a phone or tablet, a table from `lg`.
+- **A court tile names both sides at reading weight**, the second opening with a muted "vs";
+  bold names, a rule or a box around each side were all tried and read as noise. A free court
+  says when it fills ("Next here at 10:25").
+- **A score bolds only each game's winning number** (`GameScores`), so who took each game reads
+  without comparing digits. The day switch is one segmented control, not a row of pills.
 
 ## Not decided
 

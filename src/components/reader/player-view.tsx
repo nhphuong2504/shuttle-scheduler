@@ -189,7 +189,7 @@ function NextMatchCard({
     <section
       aria-label="Next match"
       className={cn(
-        "space-y-4 rounded-xl border p-5 shadow-panel",
+        "space-y-4 rounded-2xl border p-5 shadow-panel",
         call && !onCourt ? "border-primary/40 bg-primary/5" : "border-hairline bg-surface",
       )}
     >
@@ -205,15 +205,18 @@ function NextMatchCard({
         {/* Every next match is scheduled until it is called; only a change of state is news. */}
         {match.status === "scheduled" ? null : <StatusPill status={match.status} />}
       </div>
+      {/* Where and when lead: it is what a player walks to, and the largest type on the page. */}
+      <p className="font-display text-3xl font-extrabold leading-tight tracking-tight tabular-nums">
+        {whereAndWhen(match, reading)}
+      </p>
       <div>
         <p className="text-sm text-muted-foreground">{opponent ? "Against" : "Match"}</p>
-        <p className="break-words font-display text-2xl font-bold leading-tight tracking-tight">
+        <p className="break-words text-lg font-semibold leading-snug">
           {opponent
             ? reading.label(opponent)
             : `${reading.label(match.teams[0])} vs ${reading.label(match.teams[1])}`}
         </p>
       </div>
-      <p className="font-display text-xl font-bold tabular-nums">{whereAndWhen(match, reading)}</p>
       <p className="font-score text-t2 text-muted-foreground">
         <MatchIdentity match={match} />
       </p>
