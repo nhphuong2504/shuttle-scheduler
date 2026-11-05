@@ -820,6 +820,13 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
    * anyone else it is where a card in Explore opens the tournament, so the two agree.
    */
   const homeSection = access.can_edit ? DESK_PATH : readerHomeFor(tournament?.status);
+  /**
+   * Whether that answer is final. Until access and the tournament have loaded, an editor reads
+   * as a reader and an unknown status as upcoming, so the logo would point at Players and a click
+   * in that window would carry an operator away from the Desk. It is drawn without a link until
+   * both are known, rather than with one that changes under the pointer.
+   */
+  const homeKnown = !accessLoading && tournament != null;
   const pathname = useLocation({ select: (location) => location.pathname });
   const sectionRow = useSectionRowScroll(pathname, sections.length);
   const readOnly = !accessLoading && !access.can_edit;
@@ -875,7 +882,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             offered, so a read-only reader lands on Entries rather than on a Desk their nav
             does not carry.
           */}
-          {tournamentId ? (
+          {tournamentId && homeKnown ? (
             <Link to={homeSection} params={{ tournamentId }} aria-label="Tournova" className="flex items-center gap-2.5">
               <BrandMark />
             </Link>
