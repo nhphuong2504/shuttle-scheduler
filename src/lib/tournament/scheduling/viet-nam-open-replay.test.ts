@@ -17,10 +17,27 @@
  *     counted the overdue match there, refused every retry and the match never got a time.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { planPlacementSchedule } from "../placement-schedule";
 import snapshotsJson from "./fixtures/viet-nam-open-day2-snapshots.json";
+
+/**
+ * The planner reads a day's window ("09:00") in the process's own zone, as the organiser's
+ * browser does, and this is a Chicago tournament replayed at Chicago instants. Pinned here
+ * because the replay only means anything in the venue's zone: on CI's UTC runner the same
+ * windows open five hours later and the 12:12 pass has no day left to place into.
+ */
+const VENUE_TZ = "America/Chicago";
+let previousTz: string | undefined;
+beforeAll(() => {
+  previousTz = process.env["TZ"];
+  process.env["TZ"] = VENUE_TZ;
+});
+afterAll(() => {
+  if (previousTz === undefined) delete process.env["TZ"];
+  else process.env["TZ"] = previousTz;
+});
 
 type Row = Record<string, unknown> & {
   id: string;
