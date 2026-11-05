@@ -56,6 +56,13 @@ const TWO_DAYS = [
   day(2, "2026-09-18", "09:00:00", "18:00:00"),
 ];
 
+/**
+ * The fixtures write instants without a zone ("2026-09-17T09:00:00"), so they are read in the
+ * process's own zone; the venue is declared to be that same zone so a window and a stamp agree on
+ * any machine. That the venue's zone, not the process's, decides is pinned in `zoned-time.test.ts`
+ * and the Viet Nam Open replay.
+ */
+const VENUE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const at = (stamp: string) => new Date(stamp).getTime();
 const SLOT = () => 20;
 
@@ -69,7 +76,7 @@ describe("attributeMatchesToDays", () => {
     // on a court has still placed it on a day, and the desk must show it there.
     const { byDayId, untimed } = attributeMatchesToDays(TWO_DAYS, [
       match("planned", { scheduled: "2026-09-18T10:00:00", courtId: null }),
-    ]);
+    ], VENUE_TZ);
 
     expect(byDayId.get("d2")?.map((row) => row.id)).toEqual(["planned"]);
     expect(byDayId.get("d1")).toEqual([]);
@@ -86,7 +93,7 @@ describe("attributeMatchesToDays", () => {
     ];
     const { byDayId } = attributeMatchesToDays(days, [
       match("overrun", { status: "in-progress", startedAt: "2026-09-19T00:20:00" }),
-    ]);
+    ], VENUE_TZ);
 
     expect(byDayId.get("d1")).toEqual([]);
     expect(byDayId.get("d2")?.map((row) => row.id)).toEqual(["overrun"]);
@@ -96,14 +103,14 @@ describe("attributeMatchesToDays", () => {
     const { byDayId, untimed } = attributeMatchesToDays(TWO_DAYS, [
       match("timed", { scheduled: "2026-09-17T10:00:00" }),
       match("untimed", { courtId: "c1" }),
-    ]);
+    ], VENUE_TZ);
 
     expect(byDayId.get("d1")?.map((row) => row.id)).toEqual(["timed"]);
     expect(untimed.map((row) => row.id)).toEqual(["untimed"]);
   });
 
   it("gives every configured day a bucket, including empty ones", () => {
-    const { byDayId } = attributeMatchesToDays(TWO_DAYS, []);
+    const { byDayId } = attributeMatchesToDays(TWO_DAYS, [], VENUE_TZ);
     expect([...byDayId.keys()]).toEqual(["d1", "d2"]);
   });
 
@@ -117,7 +124,7 @@ describe("attributeMatchesToDays", () => {
         startedAt: "2026-09-17T16:05:00",
         endedAt: "2026-09-18T09:30:00",
       }),
-    ]);
+    ], VENUE_TZ);
 
     expect(byDayId.get("d1")?.map((row) => row.id)).toEqual(["played"]);
     expect(byDayId.get("d2")).toEqual([]);
@@ -139,10 +146,10 @@ describe("attributeMatchesToDays", () => {
   });
 
   it("identifies the day a single instant belongs to", () => {
-    expect(dayIdForTime(TWO_DAYS, at("2026-09-18T10:00:00"))).toBe("d2");
+    expect(dayIdForTime(TWO_DAYS, at("2026-09-18T10:00:00"), VENUE_TZ)).toBe("d2");
     // After both windows have closed, the last day that had opened still owns it.
-    expect(dayIdForTime(TWO_DAYS, at("2026-09-18T23:50:00"))).toBe("d2");
-    expect(dayIdForTime([], at("2026-09-18T10:00:00"))).toBeNull();
+    expect(dayIdForTime(TWO_DAYS, at("2026-09-18T23:50:00"), VENUE_TZ)).toBe("d2");
+    expect(dayIdForTime([], at("2026-09-18T10:00:00"), VENUE_TZ)).toBeNull();
   });
 });
 
@@ -151,17 +158,19 @@ describe("attributeMatchesToDays", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveSelectedDay", () => {
-  const none = attributeMatchesToDays(TWO_DAYS, []);
+  const none = attributeMatchesToDays(TWO_DAYS, [], VENUE_TZ);
 
   it("returns null when there are no configured days", () => {
     expect(
-      resolveSelectedDay({ days: [], attribution: none, now: Date.now(), pickedDayId: null }),
+      resolveSelectedDay({
+        timeZone: VENUE_TZ, days: [], attribution: none, now: Date.now(), pickedDayId: null }),
     ).toBeNull();
   });
 
   it("prefers the day whose window contains now", () => {
     expect(
       resolveSelectedDay({
+        timeZone: VENUE_TZ,
         days: TWO_DAYS,
         attribution: none,
         now: at("2026-09-18T10:00:00"),
@@ -175,6 +184,7 @@ describe("resolveSelectedDay", () => {
     // a day that has since emptied, so a realtime update must never move the pick.
     expect(
       resolveSelectedDay({
+        timeZone: VENUE_TZ,
         days: TWO_DAYS,
         attribution: none,
         now: at("2026-09-18T10:00:00"),
@@ -186,6 +196,7 @@ describe("resolveSelectedDay", () => {
   it("falls back when the picked day no longer exists", () => {
     expect(
       resolveSelectedDay({
+        timeZone: VENUE_TZ,
         days: TWO_DAYS,
         attribution: none,
         now: at("2026-09-18T10:00:00"),
@@ -199,10 +210,11 @@ describe("resolveSelectedDay", () => {
     // active day and only the ongoing work can.
     const attribution = attributeMatchesToDays(TWO_DAYS, [
       match("live", { status: "in-progress", startedAt: "2026-09-18T23:50:00" }),
-    ]);
+    ], VENUE_TZ);
 
     expect(
       resolveSelectedDay({
+        timeZone: VENUE_TZ,
         days: TWO_DAYS,
         attribution,
         now: at("2026-09-19T00:20:00"),
@@ -215,10 +227,11 @@ describe("resolveSelectedDay", () => {
     const attribution = attributeMatchesToDays(TWO_DAYS, [
       match("later", { scheduled: "2026-09-18T10:00:00" }),
       match("earlier", { scheduled: "2026-09-17T10:00:00" }),
-    ]);
+    ], VENUE_TZ);
 
     expect(
       resolveSelectedDay({
+        timeZone: VENUE_TZ,
         days: TWO_DAYS,
         attribution,
         now: at("2026-09-20T10:00:00"),
@@ -239,16 +252,18 @@ describe("resolveSelectedDay", () => {
     // A window of one minute is behind `now`, so containment does not fire and the date decides.
     expect(
       resolveSelectedDay({
+        timeZone: VENUE_TZ,
         days,
-        attribution: attributeMatchesToDays(days, []),
+        attribution: attributeMatchesToDays(days, [], VENUE_TZ),
         now: at("2026-09-18T10:00:00"),
         pickedDayId: null,
       }),
     ).toBe("d2");
 
-    const empty = attributeMatchesToDays(days, []);
+    const empty = attributeMatchesToDays(days, [], VENUE_TZ);
     expect(
       resolveSelectedDay({
+        timeZone: VENUE_TZ,
         days,
         attribution: { byDayId: empty.byDayId, untimed: [] },
         now: Date.now(),

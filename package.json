@@ -21,6 +21,7 @@
     "ci:shard-plan": "node scripts/shard-plan.mjs",
     "bench:scheduling": "vitest run --config vitest.benchmark.config.ts",
     "bench:strategies": "vitest run --config vitest.strategy.config.ts",
+    "analysis:aloha": "node analysis/aloha-2026/export.mjs && node analysis/aloha-2026/analyze.mjs && node analysis/aloha-2026/charts.mjs",
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/agent/verify.mjs",
     "test:e2e": "playwright test",

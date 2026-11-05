@@ -133,11 +133,36 @@ Scale in use on the Desk: panel title 16px bold, nav 14px semibold, body and chi
   are visually quieter and sit apart, and anything destructive asks for confirmation.
 - **Do not move things when data changes.** Realtime updates change content, not layout.
 
+## Reader pages
+
+Now, Schedule, My matches and Players are the Watch screens inside a tournament. They are read
+on every screen the app supports, so their layout is set by the screen rather than by two
+breakpoints:
+
+- **The first match is on screen without scrolling**, at 320px, on a phone held sideways and on a
+  1366×768 laptop. `ReaderPage` puts the title and the page's controls (days, filters) on one row
+  with no subtitle, and `watch-short` (under 500px high) drops the tournament header's date line.
+- **A match row leads with its court**, in a column of its own, then one side per line. A wave of
+  matches that share a published time sits under one heading carrying the time - and the event
+  and round when the whole wave shares them - rather than each row repeating them.
+- **Lists are flat**: a hairline frame and rules. Shadow is kept for the courts in play and a
+  player's next match. An empty list is a sentence under its title, not an empty frame.
+- **Now shows the whole hall**: every court the day plays on, in number order, a free one as a
+  quiet dashed tile, so a realtime update changes a tile and never the layout. The grid fits as
+  many columns as the screen holds, as the Desk's does. From 1200×600 (`watch-wall`) Now is one
+  viewport tall like the Desk's console, for a laptop or a screen on the venue's wall.
+- **Schedule follows the running order's rule**: rows on a phone or tablet, a table from `lg`.
+- **A court tile names both sides at reading weight**, the second opening with a muted "vs";
+  bold names, a rule or a box around each side were all tried and read as noise. A free court
+  says when it fills ("Next here at 10:25").
+- **A score bolds only each game's winning number** (`GameScores`), so who took each game reads
+  without comparing digits. The day switch is one segmented control, not a row of pills.
+
 ## Not decided
 
 - A dark theme. It was removed on purpose; a dark Desk is an open question for dim halls.
-- The Watch screens' final layout (Landing, Explore). Their mockups were deleted once the code
-  became the reference, so there is nothing to build from but the pages themselves.
+- The final layout of Landing and Explore. Their mockups were deleted once the code became the
+  reference, so there is nothing to build from but the pages themselves.
 - Whether the type scale tokens in `styles.css` (`--type-t1` to `--type-t4`) should move to match
   the sizes above. The Desk currently sets sizes with utility classes.
 

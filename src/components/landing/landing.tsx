@@ -117,7 +117,10 @@ export function Landing() {
             </h2>
             <ul className="flex flex-col gap-[18px]">
               <PlayerPoint icon={<LayoutGrid className="size-5" />} title="Follow every court, live">
-                The court board is open to anyone — no account needed.
+                On court, up next and just finished — open to anyone, no account needed.
+              </PlayerPoint>
+              <PlayerPoint icon={<UserRound className="size-5" />} title="See your next match">
+                Your court, your opponent, and the draw a win leads to.
               </PlayerPoint>
               <PlayerPoint icon={<SquareCheck className="size-5" />} title="Register from the tournament page">
                 Sign in, choose your events and name your partner.

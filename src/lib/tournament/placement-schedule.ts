@@ -140,16 +140,20 @@ export function frozenMatchIdsFor(input: {
  * only ever needs the day's id. The two must agree; `planPlacementSchedule` passing a frozen match
  * to the wrong day would pin it where no day plays it, which the court check below then catches.
  */
-function dayOwning(start: number, orderedDays: readonly TournamentDay[]): number {
+function dayOwning(
+  start: number,
+  orderedDays: readonly TournamentDay[],
+  zone: string,
+): number {
   const byWindow = [...orderedDays].sort((a, b) => {
-    const startA = dayWindowBounds(a).start;
-    const startB = dayWindowBounds(b).start;
+    const startA = dayWindowBounds(a, zone).start;
+    const startB = dayWindowBounds(b, zone).start;
     if (startA !== startB) return startA - startB;
     return a.day_number - b.day_number;
   });
   let index = 0;
   for (let candidate = 0; candidate < byWindow.length; candidate += 1) {
-    if (dayWindowBounds(byWindow[candidate]!).start <= start) index = candidate;
+    if (dayWindowBounds(byWindow[candidate]!, zone).start <= start) index = candidate;
   }
   return index;
 }
@@ -364,6 +368,8 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     freezeHorizonMinutes = 0,
   } = input;
   const placeReady = input.mode === "place-ready";
+  // Every window, break and calendar day is the venue's clock, as the server reads them.
+  const timeZone = tournament.venue_timezone;
 
   if (!days.length) {
     throw new Error("A tournament needs at least one day before a schedule can be built.");
@@ -609,7 +615,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
     ) {
       continue;
     }
-    const owningDay = orderedDays[dayOwning(committed.start, orderedDays)];
+    const owningDay = orderedDays[dayOwning(committed.start, orderedDays, timeZone)];
     if (!owningDay) {
       release(item);
       continue;
@@ -631,14 +637,16 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
       // A match may not sleep inside a break. The day runner steps movable work over breaks, so a
       // pin that kept a break-violating time would preserve exactly what the run exists to fix.
       const breaks = normalizeBreaks(
-        breakWindowsFor(owningDay, breaksByDayId?.get(owningDay.id)),
-        dayWindowBounds(owningDay).end,
+        breakWindowsFor(owningDay, breaksByDayId?.get(owningDay.id), timeZone),
+        dayWindowBounds(owningDay, timeZone).end,
       );
       if (breaks.some((brk) => start < brk.end && brk.start < end)) continue;
       // Every day but the last is a wall, and the last day is where a long plan is allowed to
       // overrun. So a pin crossing a non-final day's close is invalid; the same on the final day is
       // left alone.
-      if (owningDay.id !== lastCourtDayId && end > dayWindowBounds(owningDay).end) continue;
+      if (owningDay.id !== lastCourtDayId && end > dayWindowBounds(owningDay, timeZone).end) {
+        continue;
+      }
     }
     // The court's decided history, kept exactly as it was: two fixed matches on one resource is a
     // physical impossibility the problem validator rejects.
@@ -811,6 +819,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
 
   const run = runPlanDays({
     orderedDays,
+    timeZone,
     allCourts,
     ...(dayCourtIds ? { dayCourtIds } : {}),
     ...(breaksByDayId ? { breaksByDayId } : {}),
@@ -894,7 +903,12 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
   // at the desk. Filled after the diff rather than inside it, because only this layer knows the
   // days and the clock the plan was computed against.
   const changeDayNumber = new Map<string, number>();
-  for (const slice of sliceRowsByDay(diff.changes, orderedDays, (change) => new Date(change.toStart))) {
+  for (const slice of sliceRowsByDay(
+    diff.changes,
+    orderedDays,
+    (change) => new Date(change.toStart),
+    timeZone,
+  )) {
     for (const change of slice.rows) changeDayNumber.set(change.matchId, slice.day.day_number);
   }
   for (const change of diff.changes) {
@@ -905,6 +919,7 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
 
   const dayFinishes = compareDayFinishes({
     days: orderedDays,
+    timeZone,
     placementMatches,
     tierMatches,
     placementSlotMinutes: placementSlot,
@@ -1059,6 +1074,8 @@ export function planPlacementSchedule(input: PlanPlacementScheduleInput): Placem
  */
 export function compareDayFinishes(input: {
   days: readonly TournamentDay[];
+  /** The venue's IANA zone, which places each day's window on the timeline. */
+  timeZone: string;
   placementMatches: readonly PlacementMatch[];
   tierMatches: readonly TierDrawMatch[];
   placementSlotMinutes: number;
@@ -1067,7 +1084,7 @@ export function compareDayFinishes(input: {
   changes: readonly PlanChange[];
   now?: number;
 }): DayFinishComparison[] {
-  const { days } = input;
+  const { days, timeZone } = input;
   if (!days.length) return [];
   const now = input.now ?? Date.now();
 
@@ -1081,22 +1098,24 @@ export function compareDayFinishes(input: {
   const timedPlacement = input.placementMatches.filter((match) => instantOf(match) != null);
   const timedKnockout = input.tierMatches.filter((match) => instantOf(match) != null);
 
-  const placementSlices = sliceRowsByDay(timedPlacement, days, (match) => instantOf(match)!);
-  const knockoutSlices = sliceRowsByDay(timedKnockout, days, (match) => instantOf(match)!);
+  const placementSlices = sliceRowsByDay(timedPlacement, days, (match) => instantOf(match)!, timeZone);
+  const knockoutSlices = sliceRowsByDay(timedKnockout, days, (match) => instantOf(match)!, timeZone);
   const slotSlices = sliceRowsByDay(
     input.slots.filter((slot) => Number.isFinite(slot.start.getTime())),
     days,
     (slot) => slot.start,
+    timeZone,
   );
 
   /** Sorted the way `sliceRowsByDay` sorts, so index i is the same day in every list. */
   const orderedDays = [...days].sort(
     (a, b) =>
-      dayWindowBounds(a).start - dayWindowBounds(b).start || a.day_number - b.day_number,
+      dayWindowBounds(a, timeZone).start - dayWindowBounds(b, timeZone).start ||
+      a.day_number - b.day_number,
   );
 
   return orderedDays.map((day, index) => {
-    const closeMs = dayWindowBounds(day).end;
+    const closeMs = dayWindowBounds(day, timeZone).end;
 
     const placementNow = projectedFinishFromRemainingMatches(
       placementSlices[index]?.rows ?? [],

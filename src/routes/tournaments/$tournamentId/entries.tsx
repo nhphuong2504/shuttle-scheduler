@@ -289,10 +289,12 @@ function EntriesPage() {
       */}
       <div
         className={cn(
-          // A reader's two counts sit side by side on a phone rather than filling its first screen.
-          "mb-4 grid gap-3 sm:grid-cols-2",
-          canEdit ? "grid-cols-1" : "grid-cols-2",
-          canEdit ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-4",
+          // How many tiles there are depends on the caller and the tournament's state, so the row
+          // is a wrapping flex rather than a fixed grid: each line shares its width among the
+          // tiles on it, and a short row never leaves empty columns. A reader's counts sit two
+          // to a line on a phone rather than filling its first screen.
+          "mb-4 flex flex-wrap gap-3 *:min-w-38 *:flex-1",
+          canEdit && "max-sm:*:basis-full",
         )}
       >
         <StatTile label="Players" value={teams ? stats.entered : null} hint="Taking part" />

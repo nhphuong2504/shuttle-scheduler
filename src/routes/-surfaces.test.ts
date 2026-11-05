@@ -651,7 +651,8 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     // `resolveSelectedDay` and `dayOperationalCounts` are the desk's own day scoping - the
     // thing that makes it a desk rather than a tournament page. Their *library* is shared
     // and asserted elsewhere; what must not multiply is the call site. Non-route files are
-    // out of scope because they are the library.
+    // out of scope because they are the library. The reader's Now is the one other caller:
+    // it is the Desk's Watch-mode counterpart, held to the same one-day scope by product rule.
     const callers = files.filter(
       (file) =>
         file.startsWith(`routes${sep}`) &&
@@ -659,7 +660,9 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
           readFileSync(join(__dirname, "..", file), "utf8"),
         ),
     );
-    expect(callers).toEqual([deskFile]);
+    expect(callers.sort()).toEqual(
+      [deskFile, join("routes", "tournaments", "$tournamentId", "now.tsx")].sort(),
+    );
   });
 
   it("defines the desk's route in exactly one file", () => {
@@ -675,19 +678,17 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     expect(definers).toEqual([deskFile]);
   });
 
-  it("offers the desk to readers, in its read-only form", () => {
-    // The read-only row is the operational sections *including the Desk*, derived rather
-    // than restated so the two lists cannot drift. The Desk itself withholds the operator's
-    // panels from a caller without `can_edit`; the nav split stays on `can_edit`, not on a
-    // session, so a signed-in viewer and a visitor meet the same board.
+  it("gives readers the Watch sections, and keeps the Desk read-only for a direct visit", () => {
+    // A reader's nav names a reader's questions - Now, My matches, Draws, Players - rather than
+    // the operational sections with their controls withheld. The split stays on `can_edit`, not
+    // on a session, so a signed-in viewer and a visitor meet the same pages. The logo and the
+    // Explore cards share one answer for where to open.
     const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
-    // Still derived: sorted into the reader's order, never restated, so a new section reaches
-    // readers by default. The logo and the Explore cards share one answer for where to open.
-    expect(shell).toMatch(/READ_ONLY_SECTIONS = \[\.\.\.SECTIONS\]\.sort\(/);
+    expect(shell).toMatch(/READ_ONLY_SECTIONS = \[\s*\{ label: "Now", scoped: "\/tournaments\/\$tournamentId\/now" \}/);
     expect(shell).toMatch(/homeSection = access\.can_edit \? DESK_PATH : readerHomeFor\(/);
     const desk = readFileSync(join(src, deskFile), "utf8");
-    // The board is the whole read-only Desk: what a tile opens says it is for reading, and
-    // the score desk's writes are hidden from a caller without `can_edit`.
+    // The Desk is still reachable by URL, and still read-only for a caller without `can_edit`:
+    // what a tile opens says it is for reading, and the score desk's writes are hidden.
     expect(desk).toMatch(/canEdit\s*\?\s*"Open score desk"\s*:\s*"View match"/);
     expect(desk).toMatch(/className=\{canEdit \? "flex gap-2" : "hidden"\}/);
     // Call next is available by default, only for tournament operators.
@@ -722,7 +723,8 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     // The switcher belongs to the tournament identity, for a caller who may edit.
     expect(shell).toMatch(/access\.can_edit \? <TournamentSwitcher[\s\S]{0,60}?\/> : null/);
     // The row itself: Browse for everyone, My tournaments and New tournament once signed in.
-    expect(shell).toMatch(/\{ label: "Browse tournaments", to: "\/explore" \}/);
+    // A narrow phone draws Browse alone (`short`); the full label stays the link's name.
+    expect(shell).toMatch(/\{ label: "Browse tournaments", short: "Browse", to: "\/explore" \}/);
     expect(shell).toMatch(/\{ label: "My tournaments", to: "\/me\/tournaments" \}/);
     expect(shell).toMatch(/<Link to="\/tournaments\/new" className=\{NEW_TOURNAMENT_CLASS\}>/);
     // The create door is drawn by the shared row, never written into the workspace header.
@@ -885,7 +887,8 @@ describe("the workspace chrome is mounted once, by the layout", () => {
       // `schedule.tsx` is the one exception and it is a delegation: it chooses between
       // the two format views and renders neither a header nor any content of its own.
       if (file === join("routes", "tournaments", "$tournamentId", "schedule.tsx")) continue;
-      expect(source, file).toMatch(/<Page\b/);
+      // A reader page draws its title row with `ReaderPage`, a `Page` laid out for a phone.
+      expect(source, file).toMatch(/<(Reader)?Page\b/);
     }
   });
 
@@ -916,7 +919,14 @@ describe("no shipped link points at a route that does not resolve", () => {
   const tree = readFileSync(join(src, "routeTree.gen.ts"), "utf8");
 
   /** Every id the router generated, which is every address that resolves. */
-  const defined = new Set([...tree.matchAll(/\bid: '([^']*)'/g)].map((match) => match[1]));
+  // An index route's id ends in a slash (`/players/`) and is linked without it, the way the
+  // router resolves it, so both spellings count.
+  const defined = new Set(
+    [...tree.matchAll(/\bid: '([^']*)'/g)].flatMap((match) => {
+      const id = match[1] ?? "";
+      return id.length > 1 && id.endsWith("/") ? [id, id.slice(0, -1)] : [id];
+    }),
+  );
 
   /** Literal link targets - `to="/x"` and `to: "/x"` - with any search or hash stripped. */
   const targets = (source: string): string[] =>

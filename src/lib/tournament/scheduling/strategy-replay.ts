@@ -287,7 +287,10 @@ function tournamentRow(courts: number, timing?: ReplayConfig["timing"]): Tournam
     registration_closes_at: null,
     venue_address: null,
     venue_name: null,
-    venue_timezone: "UTC",
+    // Every instant here is built on the process's clock (`setHours`, `${DAY_ONE}T09:00:00`), so the
+    // venue is that same zone: the planner reads day windows on the venue's clock, and the two
+    // must agree or every replay shifts by the machine's offset from UTC.
+    venue_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   } as Tournament;
 }
 

@@ -114,32 +114,32 @@ const SECTIONS = [
 ] as const;
 
 /**
- * What a reader without the edit right is offered: every operational section, the Desk included.
+ * What a reader without the edit right is offered: the Watch sections, not the operator's.
  *
- * The Desk used to be withheld because it is where a moderator works in real time. It now has a
- * read-only variant for readers - the day's court board and progress, with none of the acts and
- * none of the operator's alerts - so the nav no longer needs to hide it. Derived from `SECTIONS`
- * rather than restated, so a section added later is offered to everyone reading the tournament
- * by default.
+ * A reader brings questions rather than an order of work - what is on court, when do I play,
+ * how far did they get, who is in - so their nav names those questions instead of the six
+ * operational pages with the controls taken away. Now is the day's hall (one day, no
+ * tournament-wide forecast, like the Desk), Schedule is every scheduled match day by day, My
+ * matches is the player's own page, Draws is the bracket page every reader already had, and
+ * Players is the way to find someone.
  *
- * The order is the reader's, not the operator's. A reader comes to find a match and see its
- * score, so Scores and Schedule lead; on a phone the row scrolls, and in the operator's order
- * those two were the ones pushed off the screen. A section with no rank here keeps its place
- * after the ranked ones. Where a reader *opens* is `readerHomeFor`.
+ * The operational pages stay reachable by URL - a shared `…/scores?q=` link still works, and
+ * Now links to Scores for every result - only their nav entries are gone, the same arrangement
+ * Pools and Draws have. Where a reader *opens* is `readerHomeFor`.
  */
-const READER_RANK: Partial<Record<(typeof SECTIONS)[number]["label"], number>> = {
-  Scores: 0,
-  Schedule: 1,
-  Knockout: 2,
-  Entries: 3,
-  Placement: 4,
-  Desk: 5,
-};
-const READ_ONLY_SECTIONS = [...SECTIONS].sort(
-  (a, b) =>
-    (READER_RANK[a.label] ?? Number.MAX_SAFE_INTEGER) -
-    (READER_RANK[b.label] ?? Number.MAX_SAFE_INTEGER),
-);
+const READ_ONLY_SECTIONS = [
+  { label: "Now", scoped: "/tournaments/$tournamentId/now" },
+  { label: "Schedule", scoped: "/tournaments/$tournamentId/timetable" },
+  { label: "My matches", scoped: "/tournaments/$tournamentId/me" },
+  { label: "Draws", scoped: "/tournaments/$tournamentId/knockout" },
+  { label: "Players", scoped: "/tournaments/$tournamentId/players" },
+] as const;
+
+/**
+ * The reader's own pages, which are written for reading rather than derived from an operator's.
+ * The read-only notice is about a page with its controls withheld, so it is not drawn on these.
+ */
+const READER_PAGES = ["/now", "/timetable", "/me", "/players"];
 
 /**
  * The entries that belong to the people who run the tournament.
@@ -186,7 +186,13 @@ const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as
  * be a list of the caller's own work. What is left does not change with the session, so
  * the row does not move once the session settles.
  */
-const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as const;
+/**
+ * `short` is what a phone narrower than 23rem draws: the whole bar used to wrap there, and its
+ * second row put the tournament a further 60px down. The full label stays the link's name.
+ */
+const PUBLIC_SECTIONS = [
+  { label: "Browse tournaments", short: "Browse", to: "/explore" },
+] as const;
 
 /**
  * The same bar for somebody signed in, with the place their own tournaments live.
@@ -195,7 +201,7 @@ const PUBLIC_SECTIONS = [{ label: "Browse tournaments", to: "/explore" }] as con
  * rather than in it: it is something to do, not somewhere to be.
  */
 const SIGNED_IN_SECTIONS = [
-  { label: "Browse tournaments", to: "/explore" },
+  { label: "Browse tournaments", short: "Browse", to: "/explore" },
   { label: "My tournaments", to: "/me/tournaments" },
 ] as const;
 const NEW_TOURNAMENT_CLASS =
@@ -765,7 +771,16 @@ function PrimaryNav({ signedIn, marked }: { signedIn: boolean; marked: boolean }
             className={NAV_ITEM_CLASS}
             {...(marked ? { activeProps: { className: NAV_ACTIVE_CLASS } } : {})}
           >
-            {item.label}
+            {"short" in item ? (
+              <>
+                <span aria-hidden="true" className="hidden max-[23rem]:inline">
+                  {item.short}
+                </span>
+                <span className="max-[23rem]:sr-only">{item.label}</span>
+              </>
+            ) : (
+              item.label
+            )}
           </Link>
         ))}
       </nav>
@@ -805,6 +820,13 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
    * anyone else it is where a card in Explore opens the tournament, so the two agree.
    */
   const homeSection = access.can_edit ? DESK_PATH : readerHomeFor(tournament?.status);
+  /**
+   * Whether that answer is final. Until access and the tournament have loaded, an editor reads
+   * as a reader and an unknown status as upcoming, so the logo would point at Players and a click
+   * in that window would carry an operator away from the Desk. It is drawn without a link until
+   * both are known, rather than with one that changes under the pointer.
+   */
+  const homeKnown = !accessLoading && tournament != null;
   const pathname = useLocation({ select: (location) => location.pathname });
   const sectionRow = useSectionRowScroll(pathname, sections.length);
   const readOnly = !accessLoading && !access.can_edit;
@@ -860,7 +882,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             offered, so a read-only reader lands on Entries rather than on a Desk their nav
             does not carry.
           */}
-          {tournamentId ? (
+          {tournamentId && homeKnown ? (
             <Link to={homeSection} params={{ tournamentId }} aria-label="Tournova" className="flex items-center gap-2.5">
               <BrandMark />
             </Link>
@@ -886,9 +908,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3">
+        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3 watch-short:pb-2 watch-short:pt-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight">
+            <p className="min-w-0 break-words font-display text-xl font-bold leading-tight tracking-tight sm:text-2xl watch-short:text-lg">
               {tournament?.name ?? "Loading…"}
             </p>
             {tournament ? (
@@ -899,7 +921,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             ) : null}
             {tournament?.is_demo ? <DemoPill /> : null}
           </div>
-          {meta ? <p className="mt-1 break-words text-sm text-muted-foreground">{meta}</p> : null}
+          {meta ? (
+            <p className="mt-1 break-words text-sm text-muted-foreground watch-short:hidden">{meta}</p>
+          ) : null}
           <div className="mt-2 flex justify-end empty:hidden sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:self-center">
             {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
           </div>
@@ -946,8 +970,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6">
-        {readOnly ? <ReadOnlyNotice signedIn={signedIn} /> : null}
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 watch-short:py-3">
+        {readOnly && !READER_PAGES.some((page) => pathname.endsWith(page) || pathname.includes(`${page}/`)) ? (
+          <ReadOnlyNotice signedIn={signedIn} />
+        ) : null}
         {/*
           The sentence the pill cannot hold.
 
@@ -964,7 +990,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           means "the moment this snapshot describes", never "updating now".
         */}
         {tournament?.is_demo ? (
-          <Notice tone="info" data-testid="demo-notice">
+          <Notice tone="info" data-testid="demo-notice" className="watch-short:mb-2 watch-short:py-1.5">
             <strong className="font-bold">Sample tournament.</strong> Not a real event.{" "}
             <InfoNote label="About the sample tournament" className="align-middle">
               <p>

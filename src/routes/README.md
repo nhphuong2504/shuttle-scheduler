@@ -41,6 +41,8 @@ src/routes/
     entries.tsx  settings.tsx  access.tsx
     placement.tsx  knockout.tsx  schedule.tsx
     scores.tsx  pools.tsx  draws.tsx
+    now.tsx  timetable.tsx  me.tsx   the reader's Watch pages
+    players.index.tsx  players.$playerId.tsx
 ```
 
 Two things about that list are easy to get wrong:

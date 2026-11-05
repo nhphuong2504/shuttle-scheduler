@@ -34,10 +34,23 @@
 
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
 const ENV_PATH = join(ROOT, "integration", ".env");
+
+/**
+ * The Supabase CLI's own entry point, run with the current Node binary.
+ *
+ * Not `npx supabase`: on Windows `npx` is a `.cmd` shim, which a child process can only reach
+ * through `shell: true`, and Node warns that a shell concatenates rather than escapes its
+ * arguments (`DEP0190`). Resolving the file avoids the shell, the shim, and the warning, and
+ * behaves the same on every platform. `scripts/e2e-final.mjs` resolves the Playwright entry the
+ * same way and for the same reason.
+ */
+const require = createRequire(import.meta.url);
+const SUPABASE_CLI = require.resolve("supabase/dist/supabase.js");
 
 /**
  * The six values, and the `supabase status` key each is drawn from.
@@ -88,7 +101,7 @@ function applyValues(existing, values) {
 function localValues() {
   let raw;
   try {
-    raw = execFileSync("npx", ["supabase", "status", "-o", "json"], {
+    raw = execFileSync(process.execPath, [SUPABASE_CLI, "status", "-o", "json"], {
       cwd: ROOT,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],

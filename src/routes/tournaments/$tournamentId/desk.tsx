@@ -148,6 +148,7 @@ import {
   resolveSelectedDay,
 } from "@/lib/tournament/day-scope";
 import { courtsForDay, dayWindowBounds } from "@/lib/tournament/scheduling/day-plan";
+import { venueZoneOf } from "@/lib/tournament/zoned-time";
 
 /** How long a ready match may sit without a time before the Desk says so on its own. */
 const STRANDED_NOTICE_MS = 60_000;
@@ -435,9 +436,11 @@ function Desk() {
    * calendar date. Court plays no part: a match with a time but no court still belongs to its
    * day. A match with no usable time is reported separately and never assigned on a guess.
    */
+  // The venue's clock, which the windows and "today" are on wherever the desk is opened.
+  const venueZone = venueZoneOf(tournament);
   const attribution = useMemo(
-    () => attributeMatchesToDays(orderedDays, allMatches),
-    [orderedDays, allMatches],
+    () => attributeMatchesToDays(orderedDays, allMatches, venueZone),
+    [orderedDays, allMatches, venueZone],
   );
 
   /**
@@ -448,8 +451,15 @@ function Desk() {
    * no configured window contains `now`.
    */
   const selectedDayId = useMemo(
-    () => resolveSelectedDay({ days: orderedDays, attribution, now, pickedDayId }),
-    [orderedDays, attribution, now, pickedDayId],
+    () =>
+      resolveSelectedDay({
+        days: orderedDays,
+        attribution,
+        now,
+        pickedDayId,
+        timeZone: venueZone,
+      }),
+    [orderedDays, attribution, now, pickedDayId, venueZone],
   );
   const selectedDay = useMemo(
     () => orderedDays.find((day) => day.id === selectedDayId) ?? null,
@@ -499,7 +509,7 @@ function Desk() {
     [dayMatches, tournament, viewNow],
   );
 
-  const dayCloseMs = selectedDay ? dayWindowBounds(selectedDay).end : null;
+  const dayCloseMs = selectedDay ? dayWindowBounds(selectedDay, venueZone).end : null;
 
   const courtStates = courtsOnSelectedDay.map((court) => ({
     court,
@@ -674,7 +684,13 @@ function Desk() {
                 </button>
               ))}
             </div>
-            <span className="ml-auto flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            {/*
+              The status shares the line with the day buttons and the console's controls by
+              wrapping its own text, rather than holding its full width and pushing the controls
+              onto a line of their own when the schedule runs long. Below its minimum it still
+              drops to its own line as a whole, as on a phone.
+            */}
+            <span className="ml-auto flex min-w-64 flex-1 flex-wrap items-baseline justify-end gap-x-4 gap-y-1 text-right">
               <DayScheduleStatus latestFinishMs={dayCounts.latestFinishMs} closeMs={dayCloseMs} />
               {/*
                 The day's pace as one count, in place of the per-court progress bars: those led
@@ -704,7 +720,7 @@ function Desk() {
               </span>
             </span>
             {consoleBar ? (
-              <span className="hidden items-center gap-2 desk-console:flex">{controls}</span>
+              <span className="hidden shrink-0 items-center gap-2 desk-console:flex">{controls}</span>
             ) : null}
           </div>
         ) : null}

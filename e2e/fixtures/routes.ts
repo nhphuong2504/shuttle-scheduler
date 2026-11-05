@@ -24,7 +24,7 @@ export const routes = {
    *
    * The only surface written for a participant rather than an operator: what the tournament
    * is, whether the window is open, and how to enter. Explore's reading trip opens a card on
-   * the read-only workspace at `entries` instead, so this page is reached from **Register**
+   * the read-only workspace at `players` or `now` instead, so this page is reached from **Register**
    * and from the participant-facing sweeps.
    */
   tournament: `/tournaments/${TOURNAMENT_ID}`,
@@ -34,6 +34,11 @@ export const routes = {
   knockout: `/tournaments/${TOURNAMENT_ID}/knockout`,
   schedule: `/tournaments/${TOURNAMENT_ID}/schedule`,
   scores: `/tournaments/${TOURNAMENT_ID}/scores`,
+  /** The reader's Watch pages: the day's hall, the full schedule, the followed player, and everyone playing. */
+  now: `/tournaments/${TOURNAMENT_ID}/now`,
+  timetable: `/tournaments/${TOURNAMENT_ID}/timetable`,
+  me: `/tournaments/${TOURNAMENT_ID}/me`,
+  players: `/tournaments/${TOURNAMENT_ID}/players`,
   settings: `/tournaments/${TOURNAMENT_ID}/settings`,
   access: `/tournaments/${TOURNAMENT_ID}/access`,
   /** The reviewer's queue. Editor-gated, so its signed-out reading is the notice. */

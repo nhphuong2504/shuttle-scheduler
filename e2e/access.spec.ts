@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
+import { TOURNAMENT_ID } from "./fixtures/desk-mock";
 import { routes } from "./fixtures/routes";
 
 /**
@@ -176,12 +177,13 @@ test.describe("a viewer", () => {
     await page.waitForLoadState("networkidle");
 
     const nav = page.getByRole("navigation", { name: /tournament sections/i });
-    // The sections reading a tournament is made of: the Desk's read-only board, who is in,
-    // the draws, when it plays, and the results. The read-only workspace still opens on
-    // Entries.
-    for (const label of ["Desk", "Entries", "Placement", "Knockout", "Schedule", "Scores"]) {
+    // The sections reading a tournament is made of: the day's hall, the followed player, the
+    // draws and who is playing. The operational pages stay reachable by URL - this one was
+    // opened directly - but they are not the reader's nav.
+    for (const label of ["Now", "Schedule", "My matches", "Draws", "Players"]) {
       await expect(nav.getByRole("link", { name: label, exact: true })).toBeVisible();
     }
+    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
     // What is withheld is the kind of act on the tournament: Setup and Access are about
     // configuring this tournament and deciding who else may operate it. A nav entry that
     // leads to a page saying no is a worse answer than not offering the trip, so the entries
@@ -212,16 +214,16 @@ test.describe("a viewer", () => {
     page,
   }) => {
     // The logo is the one link outside the nav, and for a read-only reader it goes where a card
-    // opens the tournament: Scores, since this one is in progress (`readerHomeFor`).
+    // opens the tournament: Now, since this one is in progress (`readerHomeFor`).
     await page.goto(routes.entries, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
-    // The reader's sections lead with what a reader came for, in the reader's order.
+    // The reader's sections are the Watch pages, named for a reader's questions.
     await expect(
       page.getByRole("navigation", { name: "Tournament sections" }).getByRole("link"),
-    ).toHaveText(["Scores", "Schedule", "Knockout", "Entries", "Placement", "Desk"]);
+    ).toHaveText(["Now", "Schedule", "My matches", "Draws", "Players"]);
     const header = page.getByRole("banner");
     await header.getByRole("link", { name: /tournova/i }).click();
-    await expect(page).toHaveURL(new RegExp(`${routes.scores}$`));
+    await expect(page).toHaveURL(new RegExp(`${routes.now}$`));
   });
 });
 
@@ -335,6 +337,33 @@ test.describe("the owner", () => {
     await expect(list.getByText(/^Owner$/)).toBeVisible();
     await expect(page.getByRole("button", { name: /^remove$/i })).toHaveCount(0);
   });
+
+  /**
+   * Signing out ends the operator's view without a reload.
+   *
+   * The caller's access is cached per tournament, and the cache used to outlive the session:
+   * an owner who signed out and came back to their tournament was still shown the operator's
+   * sections and controls until they refreshed the page. The way back is the one a visitor
+   * takes - Browse tournaments, then the card - all client-side, so the page is never reloaded
+   * and only the cache can answer, which is exactly the case.
+   */
+  test("loses the operator's view on signing out, without a reload", async ({ page }) => {
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    const sections = page.getByRole("navigation", { name: /tournament sections/i });
+    await expect(sections.getByRole("link", { name: "Setup", exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: /sign out/i }).click();
+    await expect(page).toHaveURL(/\/auth$/);
+    await page.getByRole("main").getByRole("link", { name: "Browse tournaments" }).click();
+    await expect(page).toHaveURL(new RegExp(`${routes.explore}$`));
+    await page.locator(`a[href*="${TOURNAMENT_ID}"]`).first().click();
+    await expect(page).toHaveURL(new RegExp(TOURNAMENT_ID));
+
+    await expect(page.getByText(/read-only view/i).first()).toBeVisible();
+    await expect(sections.getByRole("link", { name: "Setup", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /sign out/i })).toHaveCount(0);
+  });
 });
 
 test.describe("a signed-out visitor", () => {
@@ -399,9 +428,11 @@ test.describe("a signed-out visitor", () => {
     await expect(page.getByRole("button", { name: /add entry/i })).toHaveCount(0);
     await expect(page.locator("main input")).toHaveCount(0);
 
-    // And the Desk is offered, as a board: nothing that starts a match.
+    // The reader's nav is the Watch pages, and the Desk stays reachable by URL as a board:
+    // nothing that starts a match.
     const nav = page.getByRole("navigation", { name: /tournament sections/i });
-    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Now", exact: true })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Desk", exact: true })).toHaveCount(0);
     await page.goto(routes.desk, { waitUntil: "load" });
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading", { name: "Court board" })).toBeVisible();
@@ -431,8 +462,8 @@ test.describe("a signed-out visitor", () => {
     // must not spend the header's public slot on something else - and it has to be in the
     // same place the list they left had it: beside the brand, not in the section row.
     await page.getByRole("link", { name: TOURNAMENT_NAME }).first().click();
-    // An in-progress tournament opens on Scores (`readerHomeFor`).
-    await expect(page).toHaveURL(new RegExp(`${routes.scores}$`));
+    // An in-progress tournament opens on Now (`readerHomeFor`).
+    await expect(page).toHaveURL(new RegExp(`${routes.now}$`));
 
     const header = page.getByRole("banner");
     const back = header.getByRole("link", { name: "Browse tournaments" });

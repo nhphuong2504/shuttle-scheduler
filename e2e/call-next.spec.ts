@@ -21,10 +21,13 @@ async function openDesk(page: Page) {
   await installAppMock(page, { preset: "states", role: "user" });
   await openCell(page, routes.desk, MATRIX_CELLS[0]!);
   await expect(page.getByRole("heading", { name: "Court board" })).toBeVisible();
-  expect(
-    await page.getByRole("button", { name: /^Call next, Court/ }).count(),
+  // Waited for, not counted once: the board draws before the caller's access arrives, and the
+  // operator's controls join it on the next render. A one-shot count read 0 on a slow CI runner
+  // while the snapshot taken moments later showed Call next on three courts.
+  await expect(
+    page.getByRole("button", { name: /^Call next, Court/ }).first(),
     "Call next must be available by default for tournament operators",
-  ).toBeGreaterThan(0);
+  ).toBeVisible();
 }
 
 test.describe("Call next", () => {

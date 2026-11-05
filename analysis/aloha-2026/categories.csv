@@ -1,0 +1,6 @@
+﻿category_id,code,name,gender,entry_type,sort_order,active
+52493058-69d6-4552-8c45-9210ba9cdb45,MS,Men's Singles,men,individual,1,true
+5a2d41ce-d1a2-40d6-982f-c15bd00691a9,WD,Women's Doubles,women,pair,2,true
+707a3297-35d8-4f47-a424-61c2d21b6223,XD,Mixed Doubles,mixed,pair,3,true
+b4ceb639-54e0-4446-a3b5-3d478295f1e7,MD,Men's Doubles,men,pair,4,true
+1388ac45-6e8c-4153-bff3-579b9ec70f47,WS,Women's Singles,women,individual,5,true

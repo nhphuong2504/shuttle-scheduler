@@ -97,11 +97,21 @@ function KnockoutPage() {
       title="Knockout"
       subtitle="The four A/B/C/D knockout brackets."
       actions={
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
-            {canEdit ? "Enter results in Scores" : "See all scores"}
-          </Link>
-        </Button>
+        <>
+          {/* A reader reaches this page as Draws, so the placement rounds that feed it are one tap away. */}
+          {canEdit ? null : (
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/tournaments/$tournamentId/placement" params={{ tournamentId }}>
+                Placement rounds
+              </Link>
+            </Button>
+          )}
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/tournaments/$tournamentId/scores" params={{ tournamentId }}>
+              {canEdit ? "Enter results in Scores" : "See all scores"}
+            </Link>
+          </Button>
+        </>
       }
     >
       {wrongFormat ? null : <PlacementTierLegend />}

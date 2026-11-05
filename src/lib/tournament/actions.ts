@@ -30,6 +30,7 @@ import {
   type SchedulePlanDiff,
 } from "./schedule-diff";
 import { computeStandings, poolIsComplete } from "./standings";
+import { wallClockMs } from "./zoned-time";
 
 async function ok<T>(
   p: PromiseLike<{ data: T; error: { message: string } | null }>,
@@ -435,9 +436,9 @@ export async function reportDrawMatch(matchId: string, games: GameScore[], rule:
   );
 }
 
-function combineDateTime(date: string, time: string) {
-  const normalized = time.length === 5 ? `${time}:00` : time;
-  return new Date(`${date}T${normalized}`);
+/** A day's wall-clock time at the venue, as the database reads `date + time`. */
+function combineDateTime(date: string, time: string, zone: string) {
+  return new Date(wallClockMs(date, time, zone));
 }
 
 export interface ScheduleSummary {
@@ -539,8 +540,8 @@ export function planDay(
     ? tournament.group_rest_gap_minutes
     : tournament.knockout_rest_gap_minutes;
   const date = dayConfig.date;
-  const dayStart = combineDateTime(date, dayConfig.start_time);
-  const planningEnd = combineDateTime(date, dayConfig.end_time);
+  const dayStart = combineDateTime(date, dayConfig.start_time, tournament.venue_timezone);
+  const planningEnd = combineDateTime(date, dayConfig.end_time, tournament.venue_timezone);
   const nextWholeMinute = Math.ceil(Date.now() / 60_000) * 60_000;
   const isGroupRebuild =
     isGroupStage &&

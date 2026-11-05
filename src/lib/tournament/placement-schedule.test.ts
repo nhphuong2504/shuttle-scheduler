@@ -32,6 +32,13 @@ import { normalizeBreaks, startAfterBreaks } from "@/lib/scheduling";
 // Fixtures
 // ---------------------------------------------------------------------------
 
+/**
+ * The fixtures write instants without a zone ("2026-09-17T09:00:00"), so they are read in the
+ * process's own zone; the venue is declared to be that same zone so a window and a stamp agree on
+ * any machine. That the venue's zone, not the process's, decides is pinned in `zoned-time.test.ts`
+ * and the Viet Nam Open replay.
+ */
+const VENUE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const TOURNAMENT_ID = "t1";
 
 function tournament(overrides: Partial<Tournament> = {}): Tournament {
@@ -68,7 +75,7 @@ function tournament(overrides: Partial<Tournament> = {}): Tournament {
     registration_closes_at: null,
     venue_address: null,
     venue_name: null,
-    venue_timezone: "UTC",
+    venue_timezone: VENUE_TZ,
     ...overrides,
   };
 }
@@ -1603,6 +1610,7 @@ describe("sliceRowsByDay", () => {
       [row("a", "2026-09-17T09:00:00")],
       [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "18:00:00")],
       startOf,
+      VENUE_TZ,
     );
 
     expect(slices.map((slice) => slice.day.day_number)).toEqual([1, 2]);
@@ -1619,6 +1627,7 @@ describe("sliceRowsByDay", () => {
       [row("late", "2026-09-17T23:50:00"), row("early", "2026-09-18T00:10:00")],
       [queueDay(1, "23:36:00", "23:59:00"), queueDay(2, "00:00:00", "01:30:00")],
       startOf,
+      VENUE_TZ,
     );
 
     expect(slices[0]!.rows.map((r) => r.id)).toEqual(["late"]);
@@ -1634,6 +1643,7 @@ describe("sliceRowsByDay", () => {
       [row("overrun", "2026-09-19T00:20:00")],
       [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "23:30:00")],
       startOf,
+      VENUE_TZ,
     );
 
     expect(slices[0]!.rows).toEqual([]);
@@ -1647,6 +1657,7 @@ describe("sliceRowsByDay", () => {
       [row("early", "2026-09-17T08:40:00")],
       [queueDay(1, "09:00:00", "18:00:00"), queueDay(2, "09:00:00", "18:00:00")],
       startOf,
+      VENUE_TZ,
     );
 
     expect(slices[0]!.rows.map((r) => r.id)).toEqual(["early"]);
@@ -1657,6 +1668,7 @@ describe("sliceRowsByDay", () => {
       [],
       [queueDay(2, "09:00:00", "18:00:00"), queueDay(1, "09:00:00", "18:00:00")],
       startOf,
+      VENUE_TZ,
     );
 
     expect(slices.map((slice) => slice.day.day_number)).toEqual([1, 2]);
@@ -1674,13 +1686,14 @@ describe("sliceRowsByDay", () => {
       ],
       [queueDay(1, "09:00:00", "18:00:00")],
       startOf,
+      VENUE_TZ,
     );
 
     expect(slices[0]!.rows.map((r) => r.id)).toEqual(["first", "second", "third"]);
   });
 
   it("returns nothing for a tournament with no days", () => {
-    expect(sliceRowsByDay([row("a", "2026-09-17T09:00:00")], [], startOf)).toEqual([]);
+    expect(sliceRowsByDay([row("a", "2026-09-17T09:00:00")], [], startOf, VENUE_TZ)).toEqual([]);
   });
 
   /** A day with a chosen date, so the two orders can be pulled apart on purpose. */
@@ -1700,6 +1713,7 @@ describe("sliceRowsByDay", () => {
       [row("onDayTwo", "2026-09-20T10:00:00"), row("onDayOne", "2026-09-21T10:00:00")],
       [dayAt(1, "2026-09-21"), dayAt(2, "2026-09-20")],
       startOf,
+      VENUE_TZ,
     );
 
     // Chronological, so the earlier-dated day comes back first despite its number.
@@ -1715,6 +1729,7 @@ describe("sliceRowsByDay", () => {
       [row("first", "2026-09-20T10:00:00"), row("later", "2026-09-25T10:00:00")],
       [dayAt(1, "2026-09-20"), dayAt(2, "2026-09-25")],
       startOf,
+      VENUE_TZ,
     );
 
     expect(slices.map((slice) => slice.day.day_number)).toEqual([1, 2]);

@@ -78,6 +78,8 @@ export function matchStartMs(match: DayScopedMatch): number | null {
 export function attributeMatchesToDays<T extends DayScopedMatch>(
   days: readonly TournamentDay[],
   matches: readonly T[],
+  /** The venue's IANA zone (`tournaments.venue_timezone`), whose clock the windows are on. */
+  zone: string,
 ): DayAttribution<T> {
   const byDayId = new Map<string, T[]>();
   for (const day of days) byDayId.set(day.id, []);
@@ -91,7 +93,7 @@ export function attributeMatchesToDays<T extends DayScopedMatch>(
 
   if (!days.length) return { byDayId, untimed };
 
-  const slices = sliceRowsByDay(timed, days, (match) => new Date(matchStartMs(match)!));
+  const slices = sliceRowsByDay(timed, days, (match) => new Date(matchStartMs(match)!), zone);
   for (const slice of slices) byDayId.set(slice.day.id, slice.rows);
 
   return { byDayId, untimed };
@@ -102,9 +104,10 @@ export function matchesForDay<T extends DayScopedMatch>(
   days: readonly TournamentDay[],
   matches: readonly T[],
   dayId: string | null,
+  zone: string,
 ): T[] {
   if (!dayId) return [];
-  return attributeMatchesToDays(days, matches).byDayId.get(dayId) ?? [];
+  return attributeMatchesToDays(days, matches, zone).byDayId.get(dayId) ?? [];
 }
 
 /**
@@ -112,9 +115,13 @@ export function matchesForDay<T extends DayScopedMatch>(
  * last day that had already opened. Used for things that carry one timestamp rather than a
  * match row, such as a pool's scheduled end.
  */
-export function dayIdForTime(days: readonly TournamentDay[], ms: number): string | null {
+export function dayIdForTime(
+  days: readonly TournamentDay[],
+  ms: number,
+  zone: string,
+): string | null {
   if (!days.length) return null;
-  const slices = sliceRowsByDay([{ ms }], days, (row) => new Date(row.ms));
+  const slices = sliceRowsByDay([{ ms }], days, (row) => new Date(row.ms), zone);
   const found = slices.find((slice) => slice.rows.length > 0);
   return found?.day.id ?? null;
 }
@@ -122,6 +129,8 @@ export function dayIdForTime(days: readonly TournamentDay[], ms: number): string
 export interface ResolveSelectedDayInput<T extends DayScopedMatch> {
   days: readonly TournamentDay[];
   attribution: DayAttribution<T>;
+  /** The venue's IANA zone: "the window contains now" and "today" are the venue's. */
+  timeZone: string;
   /** Injectable clock, so the resolution is testable rather than wall-clock. */
   now: number;
   /**
@@ -160,7 +169,7 @@ export function resolveSelectedDay<T extends DayScopedMatch>(
   if (input.pickedDayId && known.has(input.pickedDayId)) return input.pickedDayId;
 
   const containing = ordered.find((day) => {
-    const { start, end } = dayWindowBounds(day);
+    const { start, end } = dayWindowBounds(day, input.timeZone);
     return input.now >= start && input.now <= end;
   });
   if (containing) return containing.id;
@@ -176,7 +185,7 @@ export function resolveSelectedDay<T extends DayScopedMatch>(
   );
   if (unfinished) return unfinished.id;
 
-  const todayKey = localDateKey(input.now);
+  const todayKey = localDateKey(input.now, input.timeZone);
   const today = ordered.find((day) => day.date === todayKey);
   if (today) return today.id;
 

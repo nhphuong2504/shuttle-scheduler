@@ -22,6 +22,13 @@ import { describe, expect, it } from "vitest";
 import { planPlacementSchedule } from "../placement-schedule";
 import snapshotsJson from "./fixtures/viet-nam-open-day2-snapshots.json";
 
+/*
+ * No process timezone is pinned here, on purpose. The planner reads each day's window on the
+ * venue's clock (`venue_timezone`, America/Chicago in the fixture), so the replay must give the
+ * same placements on CI's UTC runner as on a laptop in the venue's zone. It used to read the
+ * process's zone, which placed nothing on UTC: the windows opened five hours late.
+ */
+
 type Row = Record<string, unknown> & {
   id: string;
   status: string;
