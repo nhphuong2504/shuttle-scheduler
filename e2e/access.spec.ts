@@ -598,6 +598,16 @@ test.describe("the workspace header", () => {
     // A. A logo that moves you to a different event than the one on screen is worse than
     // one that does nothing.
     const header = page.getByRole("banner");
+    // The logo's target is the caller's home, so it is the Desk only once access has said this
+    // caller may edit; until then it is a reader's home. Network idle does not mean that answer
+    // has rendered (a slow CI runner clicked first and landed on Players), so wait for the
+    // editor-only Setup tab, which appears on the same render as the Desk target.
+    await expect(
+      page.getByRole("navigation", { name: /tournament sections/i }).getByRole("link", {
+        name: "Setup",
+        exact: true,
+      }),
+    ).toBeVisible();
     await header.getByRole("link", { name: /tournova/i }).click();
     await expect(page).toHaveURL(new RegExp(`${routes.desk}$`));
   });
