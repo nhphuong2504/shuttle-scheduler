@@ -10,6 +10,8 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { bindQueryCacheToUser } from "@/lib/auth/session-cache";
 
 import appCss from "../styles.css?url";
 
@@ -141,6 +143,10 @@ function RootComponent() {
   useEffect(() => {
     document.documentElement.dataset["hydrated"] = "true";
   }, []);
+
+  // The cache holds one user's answers: a sign-out or sign-in empties it, so the operator's
+  // access cannot outlive the session that earned it.
+  useEffect(() => bindQueryCacheToUser(queryClient, supabase.auth), [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
+import { TOURNAMENT_ID } from "./fixtures/desk-mock";
 import { routes } from "./fixtures/routes";
 
 /**
@@ -335,6 +336,33 @@ test.describe("the owner", () => {
     await expect(list.getByText("desk@example.test")).toBeVisible();
     await expect(list.getByText(/^Owner$/)).toBeVisible();
     await expect(page.getByRole("button", { name: /^remove$/i })).toHaveCount(0);
+  });
+
+  /**
+   * Signing out ends the operator's view without a reload.
+   *
+   * The caller's access is cached per tournament, and the cache used to outlive the session:
+   * an owner who signed out and came back to their tournament was still shown the operator's
+   * sections and controls until they refreshed the page. The way back is the one a visitor
+   * takes - Browse tournaments, then the card - all client-side, so the page is never reloaded
+   * and only the cache can answer, which is exactly the case.
+   */
+  test("loses the operator's view on signing out, without a reload", async ({ page }) => {
+    await page.goto(routes.entries, { waitUntil: "load" });
+    await page.waitForLoadState("networkidle");
+    const sections = page.getByRole("navigation", { name: /tournament sections/i });
+    await expect(sections.getByRole("link", { name: "Setup", exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: /sign out/i }).click();
+    await expect(page).toHaveURL(/\/auth$/);
+    await page.getByRole("main").getByRole("link", { name: "Browse tournaments" }).click();
+    await expect(page).toHaveURL(new RegExp(`${routes.explore}$`));
+    await page.locator(`a[href*="${TOURNAMENT_ID}"]`).first().click();
+    await expect(page).toHaveURL(new RegExp(TOURNAMENT_ID));
+
+    await expect(page.getByText(/read-only view/i).first()).toBeVisible();
+    await expect(sections.getByRole("link", { name: "Setup", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /sign out/i })).toHaveCount(0);
   });
 });
 
