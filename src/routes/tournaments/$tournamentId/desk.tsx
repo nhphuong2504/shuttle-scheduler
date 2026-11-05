@@ -148,6 +148,7 @@ import {
   resolveSelectedDay,
 } from "@/lib/tournament/day-scope";
 import { courtsForDay, dayWindowBounds } from "@/lib/tournament/scheduling/day-plan";
+import { venueZoneOf } from "@/lib/tournament/zoned-time";
 
 /** How long a ready match may sit without a time before the Desk says so on its own. */
 const STRANDED_NOTICE_MS = 60_000;
@@ -435,9 +436,11 @@ function Desk() {
    * calendar date. Court plays no part: a match with a time but no court still belongs to its
    * day. A match with no usable time is reported separately and never assigned on a guess.
    */
+  // The venue's clock, which the windows and "today" are on wherever the desk is opened.
+  const venueZone = venueZoneOf(tournament);
   const attribution = useMemo(
-    () => attributeMatchesToDays(orderedDays, allMatches),
-    [orderedDays, allMatches],
+    () => attributeMatchesToDays(orderedDays, allMatches, venueZone),
+    [orderedDays, allMatches, venueZone],
   );
 
   /**
@@ -448,8 +451,15 @@ function Desk() {
    * no configured window contains `now`.
    */
   const selectedDayId = useMemo(
-    () => resolveSelectedDay({ days: orderedDays, attribution, now, pickedDayId }),
-    [orderedDays, attribution, now, pickedDayId],
+    () =>
+      resolveSelectedDay({
+        days: orderedDays,
+        attribution,
+        now,
+        pickedDayId,
+        timeZone: venueZone,
+      }),
+    [orderedDays, attribution, now, pickedDayId, venueZone],
   );
   const selectedDay = useMemo(
     () => orderedDays.find((day) => day.id === selectedDayId) ?? null,
@@ -499,7 +509,7 @@ function Desk() {
     [dayMatches, tournament, viewNow],
   );
 
-  const dayCloseMs = selectedDay ? dayWindowBounds(selectedDay).end : null;
+  const dayCloseMs = selectedDay ? dayWindowBounds(selectedDay, venueZone).end : null;
 
   const courtStates = courtsOnSelectedDay.map((court) => ({
     court,

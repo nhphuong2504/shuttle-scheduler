@@ -81,6 +81,7 @@ import { placementMatchLabel as placementIdentityLabel } from "@/lib/tournament/
 import { type PlanChange } from "@/lib/tournament/schedule-diff";
 import { ruleForStage, type ScoringRule } from "@/lib/tournament/scoring";
 import { buildStageProgress } from "@/lib/tournament/stage-progress";
+import { venueZoneOf } from "@/lib/tournament/zoned-time";
 import { cn } from "@/lib/utils";
 import { StageProgressList } from "@/components/stage-progress";
 import {
@@ -305,6 +306,8 @@ export function PlacementScheduler() {
   // Looks again at any ready match without a time, so there is nothing to press for it.
   useAutoScheduleReconciler();
   const { tournament, days, loading } = useTournamentScope();
+  // Day windows are the venue's clock, as the server and the planner read them.
+  const venueZone = venueZoneOf(tournament);
   // Scheduling and the stage reset are both `can_edit_tournament` in the database, so
   // the page has one flag rather than the two it used to gate on.
   const access = useScopedAccess();
@@ -975,7 +978,7 @@ export function PlacementScheduler() {
     for (let index = plannerDays.length - 1; index >= 0; index -= 1) {
       const day = plannerDays[index];
       if (!day || courtsFor(day).length === 0) continue;
-      return dayWindowBounds(day).end;
+      return dayWindowBounds(day, venueZone).end;
     }
     return null;
   }, [plannerDays, courtsFor]);
@@ -1006,7 +1009,7 @@ export function PlacementScheduler() {
       fields,
       offered: courtHoursOffered(
         plannerDays.map((day) => {
-          const { start, end } = dayWindowBounds(day);
+          const { start, end } = dayWindowBounds(day, venueZone);
           return {
             courts: courtsFor(day).length,
             windowMinutes: Math.max((end - start) / 60000, 0),
@@ -1104,8 +1107,8 @@ export function PlacementScheduler() {
   }, [placementMatches, tierMatches, draws, categoryMap, courtMap, labelEntrant]);
 
   const daySlices = useMemo(
-    () => sliceRowsByDay(rows, tournamentDays, (row) => row.start),
-    [rows, tournamentDays],
+    () => sliceRowsByDay(rows, tournamentDays, (row) => row.start, venueZone),
+    [rows, tournamentDays, venueZone],
   );
 
   /**
@@ -1199,7 +1202,7 @@ export function PlacementScheduler() {
     }
     const now = Date.now();
     const containing = daySlices.find((slice) => {
-      const { start, end } = dayWindowBounds(slice.day);
+      const { start, end } = dayWindowBounds(slice.day, venueZone);
       return now >= start && now <= end;
     });
     if (containing) return containing.day.id;

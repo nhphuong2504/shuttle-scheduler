@@ -22,6 +22,7 @@ import type { DeskMatch } from "@/lib/tournament/desk-matches";
 import { compareEventOrder } from "@/lib/tournament/event-order";
 import { timeLabel } from "@/lib/tournament/format";
 import { groupByTime, inPlayingOrder, isFinished } from "@/lib/tournament/reader-board";
+import { venueZoneOf } from "@/lib/tournament/zoned-time";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/timetable")({
@@ -64,6 +65,7 @@ function TimetablePage() {
     [categories],
   );
   const orderedDays = useMemo(() => [...days].sort((a, b) => a.day_number - b.day_number), [days]);
+  const venueZone = venueZoneOf(data.tournament);
 
   const sections = useMemo(() => {
     const scheduled = matches.filter(
@@ -72,9 +74,9 @@ function TimetablePage() {
         (eventId === "all" || m.categoryId === eventId) &&
         !(hideFinished && isFinished(m)),
     );
-    const { byDayId } = attributeMatchesToDays(orderedDays, scheduled);
+    const { byDayId } = attributeMatchesToDays(orderedDays, scheduled, venueZone);
     return orderedDays.map((day) => ({ day, rows: inPlayingOrder(byDayId.get(day.id) ?? []) }));
-  }, [matches, orderedDays, eventId, hideFinished]);
+  }, [matches, orderedDays, eventId, hideFinished, venueZone]);
 
   const total = sections.reduce((sum, section) => sum + section.rows.length, 0);
   const playing = normalizeTournamentStatus(data.tournament?.status) === "in_progress";

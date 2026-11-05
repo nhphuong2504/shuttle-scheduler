@@ -30,6 +30,7 @@ import {
   nextMatchOf,
   nowBoard,
 } from "@/lib/tournament/reader-board";
+import { venueZoneOf } from "@/lib/tournament/zoned-time";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/tournaments/$tournamentId/now")({
@@ -76,12 +77,15 @@ function NowPage() {
   }, []);
 
   const orderedDays = useMemo(() => [...days].sort((a, b) => a.day_number - b.day_number), [days]);
+  // "Which day is on" is the venue's question, asked on the venue's clock.
+  const venueZone = venueZoneOf(tournament);
   const attribution = useMemo(
-    () => attributeMatchesToDays(orderedDays, matches),
-    [orderedDays, matches],
+    () => attributeMatchesToDays(orderedDays, matches, venueZone),
+    [orderedDays, matches, venueZone],
   );
   const dayId = resolveSelectedDay({
     days: orderedDays,
+    timeZone: venueZone,
     attribution,
     now: now ?? 0,
     pickedDayId,

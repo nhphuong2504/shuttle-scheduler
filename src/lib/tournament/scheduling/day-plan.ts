@@ -14,6 +14,7 @@
 import type { BaselineSlot, SolverDiagnostics, TimeWindow } from "@/lib/scheduling";
 
 import type { Court, TournamentDay, TournamentDayBreak } from "../data";
+import { dateKeyInZone, wallClockMs } from "../zoned-time";
 import { composeDayPlan } from "./composition";
 import type { DayOneSchedulerOptions } from "./policy";
 import type { StageItem } from "./stage-items";
@@ -40,9 +41,9 @@ export interface PlacementDayFill {
   overrunMinutes: number;
 }
 
-function combineDateTime(date: string, time: string): Date {
-  const normalized = time.length === 5 ? `${time}:00` : time;
-  return new Date(`${date}T${normalized}`);
+/** A day's wall-clock time at the venue, as the database reads `date + time`. */
+function combineDateTime(date: string, time: string, zone: string): Date {
+  return new Date(wallClockMs(date, time, zone));
 }
 
 /**
@@ -100,10 +101,14 @@ export function courtsAddedToDays(
  * one value also makes it impossible to pair a start from one day with an end from
  * another.
  */
-export function dayWindowBounds(day: TournamentDay): { start: number; end: number } {
+export function dayWindowBounds(
+  day: TournamentDay,
+  /** The venue's IANA zone (`tournaments.venue_timezone`): a window is the venue's clock. */
+  zone: string,
+): { start: number; end: number } {
   return {
-    start: combineDateTime(day.date, day.start_time).getTime(),
-    end: combineDateTime(day.date, day.end_time).getTime(),
+    start: combineDateTime(day.date, day.start_time, zone).getTime(),
+    end: combineDateTime(day.date, day.end_time, zone).getTime(),
   };
 }
 
@@ -111,19 +116,17 @@ export function dayWindowBounds(day: TournamentDay): { start: number; end: numbe
 export function breakWindowsFor(
   day: TournamentDay,
   breaks: readonly TournamentDayBreak[] | undefined,
+  zone: string,
 ): TimeWindow[] {
   return (breaks ?? []).map((brk) => ({
-    start: combineDateTime(day.date, brk.start_time).getTime(),
-    end: combineDateTime(day.date, brk.end_time).getTime(),
+    start: combineDateTime(day.date, brk.start_time, zone).getTime(),
+    end: combineDateTime(day.date, brk.end_time, zone).getTime(),
   }));
 }
 
-/** A local `YYYY-MM-DD` key, so a fixed match can be attributed to exactly one day. */
-export function localDateKey(ms: number): string {
-  const date = new Date(ms);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
+/** The venue's `YYYY-MM-DD` at an instant, so a fixed match can be attributed to exactly one day. */
+export function localDateKey(ms: number, zone: string): string {
+  return dateKeyInZone(ms, zone);
 }
 
 /**
@@ -168,17 +171,19 @@ export function sliceRowsByDay<T>(
   rows: readonly T[],
   days: readonly TournamentDay[],
   startOf: (row: T) => Date,
+  /** The venue's zone, which places each day's opening on the timeline. */
+  zone: string,
 ): DaySlice<T>[] {
   const ordered = [...days].sort((a, b) => {
-    const startA = dayWindowBounds(a).start;
-    const startB = dayWindowBounds(b).start;
+    const startA = dayWindowBounds(a, zone).start;
+    const startB = dayWindowBounds(b, zone).start;
     if (startA !== startB) return startA - startB;
     return a.day_number - b.day_number;
   });
   const slices: DaySlice<T>[] = ordered.map((day) => ({ day, rows: [] }));
   if (!slices.length) return slices;
 
-  const starts = ordered.map((day) => dayWindowBounds(day).start);
+  const starts = ordered.map((day) => dayWindowBounds(day, zone).start);
 
   for (const row of rows) {
     const at = startOf(row).getTime();
@@ -307,6 +312,8 @@ function runStageForDay(input: {
 
 export interface PlanDaysInput {
   orderedDays: readonly TournamentDay[];
+  /** The venue's IANA zone: every day's window and break is read on the venue's clock. */
+  timeZone: string;
   allCourts: readonly Court[];
   dayCourtIds?: ReadonlyMap<string, ReadonlySet<string>> | undefined;
   breaksByDayId?: ReadonlyMap<string, readonly TournamentDayBreak[]> | undefined;
@@ -371,6 +378,7 @@ export interface PlanDaysResult {
 export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
   const {
     orderedDays,
+    timeZone,
     allCourts,
     dayCourtIds,
     breaksByDayId,
@@ -408,7 +416,9 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
 
   /** This day's anchors, so a fixed match is counted on exactly one day. */
   const anchorsOn = (items: readonly StageItem[], dayKey: string) =>
-    items.filter((item) => item.fixed && item.start != null && localDateKey(item.start) === dayKey);
+    items.filter(
+      (item) => item.fixed && item.start != null && localDateKey(item.start, timeZone) === dayKey,
+    );
 
   /**
    * This day's planner-pinned items.
@@ -421,7 +431,8 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
    */
   const frozenOn = (items: readonly StageItem[], dayKey: string) =>
     items.filter(
-      (item) => item.frozen === true && item.start != null && localDateKey(item.start) === dayKey,
+      (item) =>
+        item.frozen === true && item.start != null && localDateKey(item.start, timeZone) === dayKey,
     );
 
   const daysWithCourts = orderedDays.filter(
@@ -479,9 +490,9 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
   };
 
   for (const day of orderedDays) {
-    const dayStart = combineDateTime(day.date, day.start_time);
-    const planningEnd = combineDateTime(day.date, day.end_time);
-    const dayKey = localDateKey(dayStart.getTime());
+    const dayStart = combineDateTime(day.date, day.start_time, timeZone);
+    const planningEnd = combineDateTime(day.date, day.end_time, timeZone);
+    const dayKey = localDateKey(dayStart.getTime(), timeZone);
     lastPlanningEndMs = Math.max(lastPlanningEndMs, planningEnd.getTime());
 
     const courts = courtsForDay(allCourts, dayCourtIds?.get(day.id) ?? new Set());
@@ -503,7 +514,7 @@ export function runPlanDays(input: PlanDaysInput): PlanDaysResult {
     }
     lastCourtDayPlanningEndMs = Math.max(lastCourtDayPlanningEndMs, planningEnd.getTime());
 
-    const breaks = breakWindowsFor(day, breaksByDayId?.get(day.id));
+    const breaks = breakWindowsFor(day, breaksByDayId?.get(day.id), timeZone);
     // Every day but the last one that has courts is a wall. The last day is left to
     // overrun, which is where a tournament's overrun forecast belongs: there is
     // nowhere after it to defer to.
