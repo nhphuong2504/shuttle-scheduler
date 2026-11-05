@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures/app";
 import { routes } from "./fixtures/routes";
-import { deskFixture } from "./fixtures/desk-mock";
+import { REFERENCE, VENUE_TZ, deskFixture } from "./fixtures/desk-mock";
 
 /**
  * One schedule route, two scheduling views, chosen by the stored format.
@@ -55,7 +55,12 @@ test.describe("the placement format gets the placement scheduler", () => {
     // A verdict line, not a plan dump: it says what would move.
     await expect(dialog.getByText(/would move|Nothing would move/)).toBeVisible();
     // The moves are grouped under their day, and carry both the old and the new value.
-    await expect(dialog.getByRole("heading", { name: /Oct/ })).toBeVisible();
+    // The fixture's day is today (`REFERENCE` is noon of the current day), so the heading's month
+    // is read from it: a literal month only passed in the month the test was written.
+    const month = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: VENUE_TZ }).format(
+      REFERENCE,
+    );
+    await expect(dialog.getByRole("heading", { name: new RegExp(month) })).toBeVisible();
     await expect(dialog.getByRole("columnheader", { name: "Shift" })).toBeVisible();
     // The refusal is named beside the control it disables rather than only in the body.
     await expect(dialog.getByRole("button", { name: "Keep current schedule" })).toBeEnabled();
