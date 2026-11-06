@@ -1,0 +1,422 @@
+/*
+ * The front door's world: a wall of stapled photocopied sheets. Only `components/landing/`
+ * uses anything in this file; product UI keeps the tokens in `styles.css`.
+ *
+ * The faces are served from this app rather than a font host, so the first viewport draws
+ * in its own lettering on a venue's wifi.
+ */
+@font-face {
+  font-family: "Antonio";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/antonio-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo Black";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/archivo-black-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Iosevka Charon Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/iosevka-charon-mono-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Iosevka Charon Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/iosevka-charon-mono-700-latin.woff2") format("woff2");
+}
+
+:root {
+  /* Photocopy toner. Every sheet is light stock, so one ink reads on all of them. */
+  --flyer-ink: #111111;
+  --flyer-wall: #d8ccb3;
+  --flyer-green: #c9e03a;
+  --flyer-pink: #f2668b;
+  --flyer-pink-pressed: #e04a74;
+  --flyer-mint: #8fe0bd;
+  --flyer-paper: #f4efe1;
+  --flyer-poster: "Antonio", "Arial Narrow", sans-serif;
+  --flyer-type: "Iosevka Charon Mono", ui-monospace, monospace;
+}
+
+html:has(.flyer-wall) {
+  scrollbar-gutter: auto;
+}
+
+.flyer-wall {
+  position: relative;
+  container-type: inline-size;
+  background-color: var(--flyer-wall);
+  color: var(--flyer-ink);
+  font-family: var(--flyer-type);
+}
+.flyer-frame {
+  background-image: url("../../../assets/plates/wall-texture.webp");
+  background-size: 376px 568px;
+}
+.flyer-wall ::selection {
+  background: var(--flyer-ink);
+  color: var(--flyer-green);
+}
+.flyer-wall :focus-visible {
+  outline: 3px solid var(--flyer-ink);
+  outline-offset: 3px;
+}
+
+/*
+ * The first viewport. From `lg` the frame keeps the approved composition's 16:9 shape and
+ * every piece sits at its measured place, so it scales as one sheet; below that the same
+ * pieces stack in reading order.
+ */
+.flyer-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1rem 1rem 2.5rem;
+}
+
+/* The banner is printed straight onto the wall: no bar, no rule. */
+.flyer-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 1rem 0;
+  background: var(--flyer-wall);
+}
+.flyer-logo {
+  font-family: "Archivo Black", var(--flyer-poster);
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.flyer-nav {
+  display: flex;
+  gap: 0.25rem 1.25rem;
+  font-family: var(--flyer-poster);
+  font-weight: 500;
+  font-size: 1rem;
+}
+.flyer-nav :is(a, button),
+.flyer-logo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.flyer-nav :is(a, button):hover,
+.flyer-follow:hover {
+  text-decoration-thickness: 2px;
+  text-decoration-line: underline;
+}
+
+.flyer-headline {
+  font-family: var(--flyer-poster);
+  font-weight: 700;
+  font-size: clamp(2.1rem, 1rem + 8cqw, 4.5rem);
+  line-height: 0.98;
+  letter-spacing: -0.005em;
+}
+.flyer-calls {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.flyer-start {
+  display: flex;
+  flex-wrap: wrap;
+}
+.flyer-field,
+.flyer-cta {
+  min-height: 52px;
+  border: 2px solid var(--flyer-ink);
+  color: var(--flyer-ink);
+  font-size: 1rem;
+}
+.flyer-field {
+  flex: 1 1 14rem;
+  padding: 0 1rem;
+  background: var(--flyer-paper);
+  font-family: var(--flyer-type);
+}
+.flyer-field::placeholder {
+  color: var(--flyer-ink);
+  opacity: 1;
+}
+.flyer-cta {
+  flex: 1 1 14rem;
+  padding: 0 1rem;
+  background: var(--flyer-pink);
+  font-family: var(--flyer-poster);
+  font-weight: 700;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+.flyer-cta:hover {
+  background: var(--flyer-pink-pressed);
+}
+.flyer-follow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration-line: underline;
+  text-underline-offset: 4px;
+}
+.flyer-slip-label {
+  font-family: var(--flyer-poster);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.flyer-slip-court,
+.flyer-slip-time {
+  font-family: var(--flyer-poster);
+  font-weight: 700;
+  line-height: 1;
+}
+.flyer-slip-court {
+  font-size: 2.25rem;
+}
+.flyer-slip-time {
+  font-size: 1.6rem;
+}
+.flyer-slip-players {
+  font-family: var(--flyer-poster);
+  font-weight: 500;
+  line-height: 1.2;
+}
+.flyer-old-time {
+  font-size: 1rem;
+}
+/* Struck through by hand with a marker, not by the type. */
+.flyer-old-time s {
+  position: relative;
+  text-decoration: none;
+}
+.flyer-old-time s::after {
+  content: "";
+  position: absolute;
+  left: -4%;
+  right: -2%;
+  top: 52%;
+  height: 0.2em;
+  border-radius: 999px;
+  background: var(--flyer-ink);
+  rotate: -2.5deg;
+}
+.flyer-next {
+  font-family: var(--flyer-poster);
+  font-weight: 700;
+  font-size: clamp(1.9rem, 7cqw, 2.8rem);
+  line-height: 1.05;
+}
+
+/* Reflow sheets on narrow screens and portrait tablets. */
+@media (width < 960px), (orientation: portrait) {
+  .flyer-wall {
+    min-height: 100svh;
+    background: var(--flyer-wall) url("../../../assets/plates/wall-texture.webp") repeat;
+  }
+  .flyer-header {
+    background: transparent;
+    gap: 0 0.75rem;
+  }
+  .flyer-nav { gap: 0.8rem; }
+  .flyer-frame {
+    max-width: 54rem;
+    margin-inline: auto;
+    gap: clamp(0.75rem, 2vw, 1.25rem);
+    padding: clamp(0.75rem, 3vw, 2rem);
+    background: transparent;
+  }
+  .flyer-field { min-width: 0; }
+  .flyer-group-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    padding: 1.5rem 1.25rem;
+    background: var(--flyer-green) url("../../../assets/plates/flyer-grain.webp") repeat;
+    box-shadow: 2px 5px 6px #33251245;
+  }
+  .flyer-group-slip {
+    align-self: flex-end;
+    width: min(16rem, 80%);
+    padding: 1rem 1.25rem;
+    background: var(--flyer-mint);
+    box-shadow: 2px 4px 5px #33251240;
+    rotate: 1.5deg;
+  }
+  .flyer-old-time {
+    align-self: flex-start;
+    padding: 0.6rem 1rem;
+    background: var(--flyer-pink);
+  }
+}
+
+@media (min-width: 960px) and (orientation: landscape) {
+  .flyer-wall {
+    width: 100%;
+  }
+  .flyer-header {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 2;
+    padding: 0.4cqw 2.9cqw 0 1.56cqw;
+    background: none;
+  }
+  .flyer-logo {
+    position: absolute;
+    left: 2.28cqw;
+    top: 0.94cqw;
+    min-height: 0;
+    height: 3.28cqw;
+    font-size: calc(0.8192rem + 1.536cqw);
+    transform: scaleX(0.88);
+    transform-origin: left;
+  }
+  .flyer-nav {
+    position: absolute;
+    left: 74.69cqw;
+    top: 1.72cqw;
+    width: 22.34cqw;
+    height: 1.95cqw;
+    justify-content: space-between;
+    gap: 0;
+    font-size: calc(0.48rem + 0.9cqw);
+  }
+  .flyer-nav :is(a, button) {
+    min-height: 0;
+    height: 100%;
+  }
+  .flyer-frame {
+    display: block;
+    padding: 0;
+    background: var(--flyer-wall) url("../../../assets/plates/landing-wall.webp") center / 100% 100% no-repeat;
+    width: 100%;
+    /* Let zoom increase the paper height along with its printed controls. */
+    height: max(100svh, 29rem + 15cqw);
+    container-type: size;
+    overflow: hidden;
+  }
+  .flyer-group-sheet,
+  .flyer-start {
+    display: contents;
+  }
+  .flyer-piece,
+  .flyer-group-slip {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: var(--w);
+    height: var(--h);
+  }
+  .flyer-headline {
+    font-size: min(7.4cqw, 12.9cqh, 2.32rem + 4.35cqw);
+    transform: translateY(-1cqw) scaleX(0.945);
+    transform-origin: left top;
+    -webkit-text-stroke: 0.23cqw currentColor;
+    line-height: 0.96;
+    letter-spacing: -0.06em;
+    word-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .flyer-calls {
+    font-size: min(3.4cqh, 0.6048rem + 1.134cqw);
+    transform: scaleX(0.85);
+    transform-origin: left;
+    white-space: nowrap;
+    line-height: 1.36;
+  }
+  .flyer-field,
+  .flyer-cta {
+    min-height: 0;
+    border-width: 0.2cqw;
+  }
+  .flyer-field {
+    padding: 0 1.1cqw;
+    font-size: calc(0.56rem + 1.05cqw);
+    font-weight: 700;
+  }
+  .flyer-cta {
+    padding: 0;
+    font-size: calc(0.576rem + 1.08cqw);
+  }
+  .flyer-follow {
+    min-height: 0;
+    font-size: calc(0.464rem + 0.87cqw);
+    white-space: nowrap;
+  }
+  .flyer-old-time {
+    font-size: calc(0.48rem + 0.9cqw);
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .flyer-old-time s {
+    margin-right: 1.2cqw;
+  }
+  .flyer-next {
+    font-size: min(6.55cqh, 1.1776rem + 2.208cqw);
+    -webkit-text-stroke: 0.04cqw currentColor;
+    letter-spacing: 0.015em;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  .flyer-group-slip > * {
+    position: absolute;
+    left: 0;
+    right: 0;
+    line-height: 1;
+  }
+  .flyer-slip-label {
+    top: 0;
+    font-size: calc(0.4896rem + 0.918cqw);
+  }
+  .flyer-slip-court {
+    top: 16.6%;
+    font-size: calc(1.296rem + 2.43cqw);
+  }
+  .flyer-slip-time {
+    top: 47%;
+    font-size: calc(0.912rem + 1.71cqw);
+  }
+  .flyer-slip-players {
+    top: 69.4%;
+    font-size: calc(0.5632rem + 1.056cqw);
+    line-height: 1.25;
+  }
+}
+
+@media (max-width: 579px) {
+  .flyer-group-sheet {
+    padding: 1rem;
+    gap: 0.625rem;
+  }
+  .flyer-group-slip { padding-block: 0.75rem; }
+  .flyer-frame { gap: 0.625rem; }
+}
+
+@media (min-width: 580px) and (max-width: 959px), (min-width: 580px) and (orientation: portrait) {
+  .flyer-frame {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .flyer-group-sheet,
+  .flyer-next { grid-column: 1 / -1; }
+  .flyer-group-slip { grid-column: 2; grid-row: 2; width: 13rem; }
+  .flyer-old-time { grid-column: 1; grid-row: 2; align-self: center; justify-self: end; }
+}

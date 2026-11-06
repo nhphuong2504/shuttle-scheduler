@@ -1036,9 +1036,22 @@ export function PublicShell(
      * and footer. Only the visitor's front door uses it: everywhere else the shell owns the
      * page title so every page reads the same way.
      */
-    | { bare: true; children: ReactNode },
+    | { bare: true; children: ReactNode }
+    /**
+     * The visitor's front door draws its own banner as well: it is printed on the same wall
+     * as the page, and the poster is the complete page.
+     */
+    | { bare: true; header: ReactNode; className?: string; children: ReactNode },
 ) {
   const { signedIn } = useSession();
+  if ("header" in props) {
+    return (
+      <div className={cn("flex min-h-screen flex-col", props.className)}>
+        {props.header}
+        <main className="w-full flex-1">{props.children}</main>
+      </div>
+    );
+  }
   return (
     <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
       <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">

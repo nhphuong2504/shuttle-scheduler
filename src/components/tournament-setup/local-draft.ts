@@ -63,6 +63,34 @@ export function clearLocalDraft(): void {
   }
 }
 
+/**
+ * A name typed somewhere else - the front door's sheet - for the create flow to start from.
+ *
+ * Kept apart from the draft so the flow can still begin from its own blank form (which reads
+ * the browser's zone), and taken once so it cannot rename a later tournament.
+ */
+const OFFERED_NAME_KEY = "tournova:new-tournament-name:v1";
+
+export function offerTournamentName(name: string): void {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  try {
+    window.sessionStorage.setItem(OFFERED_NAME_KEY, trimmed);
+  } catch {
+    // The flow opens with an empty name instead.
+  }
+}
+
+export function takeOfferedTournamentName(): string | null {
+  try {
+    const name = window.sessionStorage.getItem(OFFERED_NAME_KEY);
+    window.sessionStorage.removeItem(OFFERED_NAME_KEY);
+    return name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Whether the saved form holds anything beyond the defaults, for "your answers were kept". */
 export function hasLocalDraft(): boolean {
   const saved = loadLocalDraft();

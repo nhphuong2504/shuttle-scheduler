@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import "./components/landing/flyer.css";
 
 /*
  * The Desk's console layout: a laptop or larger, held as one viewport-tall screen with the
