@@ -23,7 +23,7 @@ const ACTION_OUTLINE =
 /**
  * The focus ring on the dark live card.
  *
- * The page's own ring is violet, which sits at about 2.8:1 against the card's near-black, under
+ * The page's own ring is cobalt, which sits at about 2.96:1 against the card's near-black, under
  * the 3:1 a focus indicator needs. A light ring with an offset the colour of the card clears it
  * on every control the card holds.
  */
