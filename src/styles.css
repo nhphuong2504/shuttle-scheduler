@@ -26,7 +26,7 @@
 /*
  * Tournova design tokens. The principles live in docs/design-principles.md;
  * this file is the implementation. Semantic tokens only: never hardcode a colour in a
- * component. Core palette: ground, surface, ink, violet (interaction), green (live).
+ * component. Core palette: ground, surface, ink, cobalt (interaction), green (live).
  */
 
 @theme inline {
@@ -188,14 +188,14 @@
   --popover: #FFFFFF;
   --popover-foreground: #171A1D;
 
-  /* Interaction: buttons, links, active nav, selected tab. Nothing else is violet. */
-  --primary: #5B4FC7;
+  /* Interaction: buttons, links, active nav, selected tab. Nothing else is cobalt. */
+  --primary: #2F5BD3;
   --primary-foreground: #FFFFFF;
   /**
    * Hover darkens rather than lightens, and that direction is the requirement.
    *
    * The shadcn default is `hover:bg-primary/90`, which composites the fill 10% toward
-   * whatever is behind it. Over white that lifts `--primary` from 6.20:1 to 5.00:1 and
+   * whatever is behind it. Over white that lifts `--primary` from 5.90:1 to 4.85:1 and
    * `--destructive` from 4.93:1 to 4.22:1 - so the *hovered* state, which is the state
    * axe measures whenever a pointer is left resting on a control after a click, fell
    * under 4.5:1 on every destructive button and on `badge`'s `/80` variants. A fill
@@ -206,13 +206,13 @@
    * the pair it carries. Lightness alone moves - the hue does not - so the two read as
    * the same colour pressed in.
    *
-   * `--primary-hover` 8.76:1 and `--destructive-hover` 6.31:1 against white, both with
+   * `--primary-hover` 8.27:1 and `--destructive-hover` 6.31:1 against white, both with
    * more headroom than the fills they replace.
    */
-  --primary-hover: #4337AE;
+  --primary-hover: #2347A8;
 
   /* Primary as ink on a translucent primary tint (chips, ready court). Same value as --primary, kept as a pair so the two roles can diverge. */
-  --primary-ink: #5B4FC7;
+  --primary-ink: #2F5BD3;
   --secondary: #ECEEED;
   --secondary-foreground: #171A1D;
   --muted: #EDEFEE;
@@ -232,7 +232,7 @@
   --border: #D9DDDF;
   --border-control: #7F8A91;
   --input: var(--border-control);
-  --ring: #5B4FC7;
+  --ring: #2F5BD3;
 
   /* Edge of a selected segment or tab. Clears 3:1 against the muted container it sits on. */
   --border-selected: #6F7A82;
@@ -241,9 +241,9 @@
   --warn-surface: #FAF0E1;
   --warn-border: #E8CFA3;
   --warn-foreground: #8F5300;
-  --info-surface: #ECEAFA;
-  --info-border: #C9C4F0;
-  --info-foreground: #3F35A0;
+  --info-surface: #E6EDFB;
+  --info-border: #BFD0F3;
+  --info-foreground: #1F3F96;
   --danger-surface: #FBEAEB;
   --danger-border: #EDB9BD;
   --danger-foreground: #B3343D;

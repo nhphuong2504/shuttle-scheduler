@@ -197,7 +197,7 @@ function AuthPage() {
               {
                 title: "Run your own tournament",
                 tag: "Organisers",
-                tone: "border-violet-200/80 bg-violet-50 text-violet-700",
+                tone: "border-blue-200/80 bg-blue-50 text-blue-700",
                 text: "Set up events, build the schedule and add editors to help.",
               },
               {

@@ -109,7 +109,7 @@ same refresh policy so multiple moderators share the last call time.
 ## Day bar
 
 The selected day is the dark one - foreground fill, surface text - rather than the accent:
-purple means "act", and choosing which day to look at is navigation. The rest of the bar is the
+cobalt means "act", and choosing which day to look at is navigation. The rest of the bar is the
 day's pace: expected finish, closing time, and matches done.
 
 ## Ready matches with no time
