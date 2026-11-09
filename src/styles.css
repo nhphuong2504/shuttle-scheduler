@@ -3,6 +3,22 @@
 @import "tw-animate-css";
 @import "./components/landing/flyer.css";
 
+/* Served from this app, so titles and numerals draw in their own lettering on venue wifi. */
+@font-face {
+  font-family: "Roboto Condensed";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/roboto-condensed-latin-wght.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Saira Extra Condensed";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/saira-extra-condensed-800-latin.woff2") format("woff2");
+}
+
 /*
  * The Desk's console layout: a laptop or larger, held as one viewport-tall screen with the
  * board scrolling inside itself. Below 1200px wide or 600px high the page scrolls instead.
@@ -27,7 +43,7 @@
 /*
  * Tournova design tokens. The principles live in docs/design-principles.md;
  * this file is the implementation. Semantic tokens only: never hardcode a colour in a
- * component. Core palette: ground, surface, ink, cobalt (interaction), green (live).
+ * component. Core palette: ground, surface, ink, navy (interaction), green (live).
  */
 
 @theme inline {
@@ -38,9 +54,13 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
 
-  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  /* Titles, panel titles and court numbers. */
+  --font-display: "Roboto Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-score: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  /* A single large number standing on its own (a score being entered, 404).
+     Its figures are proportional, so never use it where digits must line up. */
+  --font-numeral: "Saira Extra Condensed", "Roboto Condensed", "Arial Narrow", sans-serif;
   /* Marketing labels on the front door only (times, step names). Product UI never uses it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -189,14 +209,14 @@
   --popover: #FFFFFF;
   --popover-foreground: #171A1D;
 
-  /* Interaction: buttons, links, active nav, selected tab. Nothing else is cobalt. */
-  --primary: #2F5BD3;
+  /* Interaction: buttons, links, active nav, selected tab. Nothing else is navy. */
+  --primary: #22397A;
   --primary-foreground: #FFFFFF;
   /**
    * Hover darkens rather than lightens, and that direction is the requirement.
    *
    * The shadcn default is `hover:bg-primary/90`, which composites the fill 10% toward
-   * whatever is behind it. Over white that lifts `--primary` from 5.90:1 to 4.85:1 and
+   * whatever is behind it. Over white that lifts `--primary` from 10.86:1 to 8.14:1 and
    * `--destructive` from 4.93:1 to 4.22:1 - so the *hovered* state, which is the state
    * axe measures whenever a pointer is left resting on a control after a click, fell
    * under 4.5:1 on every destructive button and on `badge`'s `/80` variants. A fill
@@ -207,13 +227,13 @@
    * the pair it carries. Lightness alone moves - the hue does not - so the two read as
    * the same colour pressed in.
    *
-   * `--primary-hover` 8.27:1 and `--destructive-hover` 6.31:1 against white, both with
+   * `--primary-hover` 13.41:1 and `--destructive-hover` 6.31:1 against white, both with
    * more headroom than the fills they replace.
    */
-  --primary-hover: #2347A8;
+  --primary-hover: #1A2C5E;
 
   /* Primary as ink on a translucent primary tint (chips, ready court). Same value as --primary, kept as a pair so the two roles can diverge. */
-  --primary-ink: #2F5BD3;
+  --primary-ink: #22397A;
   --secondary: #ECEEED;
   --secondary-foreground: #171A1D;
   --muted: #EDEFEE;
@@ -233,7 +253,7 @@
   --border: #D9DDDF;
   --border-control: #7F8A91;
   --input: var(--border-control);
-  --ring: #2F5BD3;
+  --ring: #22397A;
 
   /* Edge of a selected segment or tab. Clears 3:1 against the muted container it sits on. */
   --border-selected: #6F7A82;

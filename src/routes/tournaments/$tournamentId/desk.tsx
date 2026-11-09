@@ -1680,7 +1680,7 @@ export function MatchOperationsDialog({
             {Array.from({ length: rows }).map((_, i) => (
               <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <Input
-                  className="h-14 w-full text-center font-score text-3xl font-bold tabular-nums"
+                  className="h-14 w-full text-center font-numeral text-4xl font-extrabold"
                   inputMode="numeric"
                   placeholder="—"
                   autoFocus={i === 0 && canEditScores}
@@ -1692,7 +1692,7 @@ export function MatchOperationsDialog({
                 />
                 <span className="w-6 text-center font-score text-2xl text-muted-foreground">:</span>
                 <Input
-                  className="h-14 w-full text-center font-score text-3xl font-bold tabular-nums"
+                  className="h-14 w-full text-center font-numeral text-4xl font-extrabold"
                   inputMode="numeric"
                   placeholder="—"
                   value={values[i]?.[1] ?? ""}
