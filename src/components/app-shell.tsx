@@ -205,13 +205,17 @@ const SIGNED_IN_SECTIONS = [
   { label: "My tournaments", to: "/me/tournaments" },
 ] as const;
 const NEW_TOURNAMENT_CLASS =
-  "inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-info-surface px-4 text-sm font-bold text-info-foreground transition-colors hover:bg-info-border/60";
+  "inline-flex min-h-11 items-center gap-1.5 px-2.5 text-[0.9375rem] font-semibold text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
 
-/** Shared so the two nav branches cannot drift into two different-looking navs. */
+/**
+ * Shared so the two nav branches cannot drift into two different-looking navs.
+ *
+ * Drawn as the front door draws its header: plain ink words on the page's own ground, an
+ * underline on hover, and the open one marked by a standing underline and weight.
+ */
 const NAV_ITEM_CLASS =
-  "inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
-const NAV_ACTIVE_CLASS =
-  "bg-primary text-primary-foreground shadow-panel hover:bg-primary hover:text-primary-foreground";
+  "inline-flex min-h-11 items-center px-2.5 text-[0.9375rem] text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
+const NAV_ACTIVE_CLASS = "font-semibold underline";
 /**
  * The sections of one tournament, as tabs on a rule rather than as pills.
  *
@@ -310,10 +314,10 @@ function SiteFooter() {
 function BrandMark() {
   return (
     <>
-      <TournovaMark className="h-8 w-auto shrink-0 text-primary" />
+      <TournovaMark className="h-6 w-auto shrink-0 text-foreground" />
       {/* On a phone the mark alone carries the brand, so the header fits on one row. The
           links around it are named "Tournova" for that reason. */}
-      <span className="hidden font-display text-lg font-bold tracking-tight text-foreground sm:inline">Tournova</span>
+      <span className="hidden font-body text-[1.375rem] font-semibold tracking-[-0.02em] text-foreground sm:inline">Tournova</span>
     </>
   );
 }
@@ -349,38 +353,36 @@ function SessionBlock() {
   const href = useLocation({ select: (location) => location.href });
   if (!signedIn) {
     return (
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-11 px-4 text-sm"
+      <button
+        type="button"
+        className={NAV_ITEM_CLASS}
         onClick={() => navigate({ to: "/auth", search: signInSearch(href) })}
       >
         Sign in
-      </Button>
+      </button>
     );
   }
 
   return (
     <>
       {isPlatformAdmin ? <ViewModeSwitch /> : null}
-      <div className="flex shrink-0 items-center gap-2 border-l border-hairline pl-2 sm:gap-3 sm:pl-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <MatchNotifications />
         {/* From `lg` only: on a tablet the email pushed Sign out onto a second header row. */}
         <span className="hidden max-w-48 items-center gap-1.5 text-sm text-muted-foreground lg:inline-flex">
           <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
           <span className="truncate" title={session?.userEmail ?? undefined}>{session?.userEmail}</span>
         </span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-11"
+        <button
+          type="button"
+          className={NAV_ITEM_CLASS}
           onClick={async () => {
             await supabase.auth.signOut();
             navigate({ to: "/auth", replace: true });
           }}
         >
           Sign out
-        </Button>
+        </button>
       </div>
     </>
   );
@@ -871,7 +873,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         list and the sections are found together. The header scrolls away with the page: it is
         too tall to keep on screen, and a section is one tap from the top.
       */}
-      <header className="border-b border-hairline bg-surface">
+      <header className="border-b border-hairline bg-background">
+        {/* The operator's bar keeps its compact height: every pixel here moves the Desk and the
+            setup wizard's fields closer to their sticky action bar. */}
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           {/*
             The brand goes to the tournament you are looking at, never to `/`. It used to
@@ -883,7 +887,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             does not carry.
           */}
           {tournamentId && homeKnown ? (
-            <Link to={homeSection} params={{ tournamentId }} aria-label="Tournova" className="flex items-center gap-2.5">
+            <Link to={homeSection} params={{ tournamentId }} aria-label="Tournova" className="flex min-h-11 items-center gap-2">
               <BrandMark />
             </Link>
           ) : (
@@ -900,10 +904,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             tournament must not take the rest of the app away - and a reader who arrived from
             Explore finds the way back where the list they came from had it.
           */}
-          <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
-          <PrimaryNav signedIn={signedIn} marked={false} />
-
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-1 gap-y-1">
+            <PrimaryNav signedIn={signedIn} marked={false} />
             <SessionBlock />
           </div>
         </div>
@@ -1054,14 +1056,13 @@ export function PublicShell(
   }
   return (
     <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
-      <header className="sticky top-0 z-30 border-b border-hairline bg-surface shadow-sm">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5">
-          <Link to="/" aria-label="Tournova" className="flex items-center gap-2.5">
+      <header className="sticky top-0 z-30 bg-background">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:py-4">
+          <Link to="/" aria-label="Tournova" className="flex min-h-11 items-center gap-2">
             <BrandMark />
           </Link>
-          <span aria-hidden="true" className="hidden h-4 w-px bg-hairline sm:block" />
-          <PrimaryNav signedIn={signedIn} marked />
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-1 gap-y-1">
+            <PrimaryNav signedIn={signedIn} marked />
             <SessionBlock />
           </div>
         </div>
