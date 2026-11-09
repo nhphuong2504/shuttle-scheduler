@@ -135,10 +135,6 @@ test.describe("the bare domain", () => {
     );
     const banner = page.getByRole("banner");
     await expect(banner.getByRole("link", { name: /sign in/i })).toHaveAttribute("href", /\/auth/);
-    await banner.getByRole("button", { name: "How it works" }).click();
-    await expect(page.getByRole("dialog", { name: "How it works" })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(banner.getByRole("button", { name: "How it works" })).toBeFocused();
   });
 });
 

@@ -34,7 +34,7 @@ appears only when it carries meaning, and one colour carries one meaning.
 | Text, secondary | `--muted-foreground` | `#5B656C` | Supporting text, captions |
 | Hairline | `--border` | `#D9DDDF` | Decorative edges only |
 | Control edge | `--border-control` | `#7F8A91` | Anything the user must locate: inputs, selects |
-| Interaction | `--primary` | `#2F5BD3` | Buttons, links, active nav, selected tab |
+| Interaction | `--primary` | `#22397A` | Buttons, links, active nav, selected tab |
 | Live | `--state-live-chip` | `#D6F1E3` | A live match: its status chip, and the connection badge |
 | Playing | `--play`, `--play-surface` | `#16865C`, `#D6F1E3` | A court with a match on it right now |
 | Success | `--success`, `--success-surface`, `--success-foreground` | `#16865C`, `#D6F1E3`, `#0E5A3A` | Healthy, completed: the family's fill, surface and ink |
@@ -43,8 +43,8 @@ appears only when it carries meaning, and one colour carries one meaning.
 
 Rules:
 
-- **Cobalt is for interaction and nothing else.** If a thing is not clickable and not selected,
-  it is not cobalt. A "ready" court tinted cobalt is acceptable because it is an action waiting.
+- **Navy is for interaction and nothing else.** If a thing is not clickable and not selected,
+  it is not navy. A "ready" court tinted navy is acceptable because it is an action waiting.
 - **Green is for live, and it never stands alone.** Green is the colour a reader already
   associates with "live", and it carries three roles: a court that is playing, a match that is
   live, and the connection being up. Every one of them also has a word and a glyph, so the hue is
@@ -71,7 +71,7 @@ Rules:
   at 4.5:1, and lightening it spends that headroom. `--destructive` is 4.93:1 at rest, so the
   shadcn `hover:bg-destructive/90` default composited to 4.22:1 — under the floor, in the one
   state a pointer left resting on a control produces. Hover therefore moves *toward* the ink
-  (`--primary-hover` 8.27:1, `--destructive-hover` 6.31:1) rather than away from it, so the
+  (`--primary-hover` 13.41:1, `--destructive-hover` 6.31:1) rather than away from it, so the
   hovered state can never be the state that fails. Lightness moves and the hue does not, so the
   control reads as the same colour pressed in.
 - **Colour is never the only signal.** Every state also has a word and a glyph. Green and red
@@ -93,20 +93,32 @@ and a board of green washes would bury them.
 | --- | --- | --- |
 | Playing | A match is on | Green chip with ring on a white tile: the normal state, so it does not tint the tile |
 | Overrun | On court past its slot | Amber chip with ring, amber wash: a delay, not a danger |
-| Ready | Free, next match can start | Cobalt wash |
+| Ready | Free, next match can start | Navy wash |
 | Waiting | Free, next match not ready yet | Neutral, a deeper grey than Idle; the line beneath says why |
 | Idle | Free, nothing queued | Neutral |
 
 ## Type
 
-Two families: **Bricolage Grotesque** (`font-display`) for page titles, panel titles and court
-numbers, **Instrument Sans** for everything else.
+Three families:
 
-The visitor's front door adds a third, **JetBrains Mono** (`font-mono`), for its own small labels
-only - clock times and step names around the scheduling demo. Product UI never uses it, including
-the pictures of the Desk on that page. The same page uses cobalt for "moved later" in its
-scheduling diagram: an exception to "cobalt is for interaction", kept because it is the
-scheduler's action being shown, and confined to that illustration.
+- **Roboto Condensed** (`font-display`) for page titles, panel titles, court numbers and the
+  wordmark. Its figures are tabular, so times and counts in titles still line up.
+- **Instrument Sans** (`font-body`, `font-score`) for everything else: body text, tables,
+  forms, buttons and status pills, where a condensed face would cost legibility at 14px on a
+  live Desk.
+- **Saira Extra Condensed** 800 (`font-numeral`) for a single large number standing on its own:
+  a score being entered on the Desk, the 404. Its figures are proportional, so it is never used
+  where digits must align in a column.
+
+Roboto Condensed and Saira are served from `public/fonts/`, not a font host.
+
+The visitor's front door is drawn as the organiser's board: one printed sheet per court on the
+app's own grey ground (`src/components/landing/court-sheets.css`). Its header is the app's
+header style - ink mark and wordmark, plain text links, the open one underlined - so moving
+between the landing and the app keeps the brand and nav in place. Two exceptions are
+deliberate and stay on that page: the sheets' clock times use **JetBrains Mono** (`font-mono`),
+which product UI never uses, and the clash it circles is magenta, a hue the app does not have,
+because it is a highlighter mark on a picture of paper rather than a state the app reports.
 
 - **Body and controls: 14px minimum, 16px for what is read on the move.** Names on a court tile
   and match names in dialogs are 16px. 12px is for tertiary detail only

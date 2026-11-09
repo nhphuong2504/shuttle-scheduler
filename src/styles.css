@@ -1,7 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
-@import "./components/landing/flyer.css";
+@import "./components/landing/court-sheets.css";
 
 /* Served from this app, so titles and numerals draw in their own lettering on venue wifi. */
 @font-face {
