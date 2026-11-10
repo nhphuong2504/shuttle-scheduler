@@ -122,18 +122,19 @@ test.describe("the bare domain", () => {
     // ways forward - rather than marketing copy that is expected to keep changing.
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByRole("main").getByRole("link", { name: "Run a tournament" })).toHaveAttribute(
-      "href",
-      "/tournaments/new",
-    );
-    // Scoped to `main`, because the nav carries the same label: the assertion is that the
-    // page offers a way forward, not that the bar does.
+    // Scoped to `main`, because the nav carries the same destinations: the assertion is that
+    // the page offers a way forward, not that the bar does.
     const main = page.getByRole("main");
-    await expect(main.getByRole("link", { name: "Browse tournaments" })).toHaveAttribute(
+    // Running one starts from a name, so the way in is a form that leads to the create flow.
+    await expect(
+      main.locator('form[action="/tournaments/new"]').getByRole("button", { name: /run a tournament/i }),
+    ).toBeVisible();
+    await expect(main.getByRole("link", { name: "Follow a tournament" })).toHaveAttribute(
       "href",
       routes.explore,
     );
-    await expect(main.getByRole("link", { name: /sign in/i })).toBeVisible();
+    const banner = page.getByRole("banner");
+    await expect(banner.getByRole("link", { name: /sign in/i })).toHaveAttribute("href", /\/auth/);
   });
 });
 
@@ -161,7 +162,7 @@ test.describe("the sign-in return address", () => {
     // A parameter that changes nothing is still a parameter: it would lengthen the front
     // door's own address to say what the fallback already says.
     await expect(
-      page.getByRole("main").getByRole("link", { name: /sign in/i }).first(),
+      page.getByRole("banner").getByRole("link", { name: /sign in/i }),
     ).toHaveAttribute("href", "/auth");
   });
 

@@ -2449,7 +2449,7 @@ export function PlacementScheduler() {
                                 {timeLabel(row.start)}
                               </td>
                               <td>
-                                {/* Neutral: cobalt is for what can be pressed, and this chip cannot. */}
+                                {/* Neutral: navy is for what can be pressed, and this chip cannot. */}
                                 <span className="inline-flex whitespace-nowrap rounded-md bg-muted px-1.5 py-0.5 font-score text-t2 font-semibold text-foreground" title={row.courtNumber ? undefined : "Court not assigned"}>
                                   {row.courtNumber ? `Court ${row.courtNumber}` : "Unassigned"}
                                 </span>

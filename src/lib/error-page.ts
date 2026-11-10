@@ -30,7 +30,7 @@ export function renderErrorPage(): string {
         --color-surface: #FFFFFF;
         --color-muted-foreground: #5B656C;
         --color-border-control: #7F8A91;
-        --color-primary: #2F5BD3;
+        --color-primary: #22397A;
         --color-primary-foreground: #FFFFFF;
       }
       body {

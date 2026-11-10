@@ -12,8 +12,9 @@ import { cn } from "@/lib/utils";
 /**
  * The one control that changes *which* tournament you are working in.
  *
- * It sits beside the tournament identity, apart from its section navigation. The panel
- * anchors to the trigger's wrapper and stays within the viewport on narrow screens.
+ * It is the tournament name's own chevron, apart from the section navigation: what it changes
+ * and where it is are one place. The panel anchors to the identity block under the name and
+ * stays within the viewport on narrow screens.
  *
  * ## A disclosure, not a menu, and not a select
  *
@@ -134,13 +135,28 @@ export function TournamentSwitcher({ currentId }: { currentId: string | null }) 
   };
 
   return (
-    <div ref={wrapper} className="relative ml-auto flex shrink-0 items-center">
+    /*
+     * Not `relative`: the list anchors to the workspace's identity block (`WorkspaceShell`), so it
+     * opens under the name at the content's own left edge and never runs off a phone's screen.
+     */
+    <div ref={wrapper} className="flex shrink-0 items-center">
       <Button
         ref={trigger}
         type="button"
         size="sm"
         variant="ghost"
-        className="h-11 gap-1.5 px-3 text-muted-foreground hover:text-foreground"
+        /**
+         * The name's own chevron. The visible mark is the chevron alone, because the name beside
+         * it already says what it acts on; the control's name and its tooltip say what it does.
+         */
+        aria-label="Switch tournament"
+        title="Switch tournament"
+        /*
+         * A 44px target whose negative block margin keeps the name's line at the name's own
+         * height: a taller row moved every operator page down 6px, and the setup wizard's date
+         * pickers into its sticky action bar.
+         */
+        className="-my-1 size-11 shrink-0 p-0 text-muted-foreground hover:text-foreground"
         /**
          * `aria-haspopup` is deliberately absent. It announces a *menu*, and a menu
          * promises arrow-key navigation between items that this does not implement.
@@ -152,14 +168,13 @@ export function TournamentSwitcher({ currentId }: { currentId: string | null }) 
         disabled={busy}
         onClick={() => setOpen((was) => !was)}
       >
-        Switch tournament
-        <ChevronDown aria-hidden className={cn("transition-transform", open && "rotate-180")} />
+        <ChevronDown aria-hidden className={cn("size-5 transition-transform", open && "rotate-180")} />
       </Button>
 
       {open ? (
         <div
           id={panelId}
-          className="absolute right-0 top-full z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
+          className="absolute left-4 top-full z-40 -mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
         >
           {isLoading ? (
             <p className="px-2 py-2 text-t4 text-muted-foreground">Loading your tournaments…</p>

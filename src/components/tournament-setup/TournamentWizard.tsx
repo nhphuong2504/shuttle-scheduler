@@ -20,6 +20,7 @@ import {
   clearLocalDraft,
   loadLocalDraft,
   saveLocalDraft,
+  takeOfferedTournamentName,
 } from "@/components/tournament-setup/local-draft";
 import {
   effectiveRegistration,
@@ -207,8 +208,16 @@ export function TournamentWizard({
   // (storage does not exist on the server), then keep it up to date.
   useEffect(() => {
     if (!isNew) return;
-    const saved = loadLocalDraft();
-    setForm(saved ?? freshForm());
+    const start = loadLocalDraft() ?? freshForm();
+    const offered = takeOfferedTournamentName();
+    if (offered) {
+      // Saved at once: the offer is taken only once, and this effect can run again first.
+      const named = { ...start, basics: { ...start.basics, name: offered } };
+      saveLocalDraft(named);
+      setForm(named);
+    } else {
+      setForm(start);
+    }
     setDraftRead(true);
   }, [isNew]);
 

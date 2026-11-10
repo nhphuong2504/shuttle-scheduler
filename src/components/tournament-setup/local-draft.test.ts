@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { clearLocalDraft, hasLocalDraft, loadLocalDraft, saveLocalDraft } from "./local-draft";
+import {
+  clearLocalDraft,
+  hasLocalDraft,
+  loadLocalDraft,
+  offerTournamentName,
+  saveLocalDraft,
+  takeOfferedTournamentName,
+} from "./local-draft";
 import { defaultForm } from "./types";
 
 beforeEach(() => window.sessionStorage.clear());
@@ -49,6 +56,24 @@ describe("the create flow's local draft", () => {
 
   it("ignores a save that is not JSON", () => {
     window.sessionStorage.setItem("tournova:new-tournament:v1", "{not json");
+    expect(loadLocalDraft()).toBeNull();
+  });
+});
+
+describe("a name offered from the front door", () => {
+  it("is given to the create flow once, trimmed", () => {
+    offerTournamentName("  City Open  ");
+    expect(takeOfferedTournamentName()).toBe("City Open");
+    expect(takeOfferedTournamentName()).toBeNull();
+  });
+
+  it("is not offered when nothing was typed", () => {
+    offerTournamentName("   ");
+    expect(takeOfferedTournamentName()).toBeNull();
+  });
+
+  it("leaves the draft itself alone", () => {
+    offerTournamentName("City Open");
     expect(loadLocalDraft()).toBeNull();
   });
 });

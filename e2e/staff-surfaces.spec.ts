@@ -97,17 +97,18 @@ const violationIds = (results: { violations: { id: string }[] }): string[] =>
 async function openStaffShell(page: Page): Promise<void> {
   await page.goto(routes.desk, { waitUntil: "load" });
   await page.waitForLoadState("networkidle");
-  const signOut = await page.getByRole("button", { name: /sign out/i }).count();
-  requirePrerequisite(signOut > 0, "The authenticated shell did not render");
+  const account = await page.getByRole("button", { name: "Account" }).count();
+  requirePrerequisite(account > 0, "The authenticated shell did not render");
 }
 
 test.describe("staff surfaces", () => {
   test("the session is a staff session", async ({ page }) => {
     await openStaffShell(page);
 
-    // The chip carries the email alone; a platform admin is told apart by the User / Admin
-    // view switch beside it. If it is missing the session is not a staff one, and every
+    // The account menu carries the email alone; a platform admin is told apart by the User /
+    // Admin view switch inside it. If it is missing the session is not a staff one, and every
     // assertion below would be meaningless rather than failing on its own.
+    await page.getByRole("banner").getByRole("button", { name: "Account" }).click();
     const account = await page.getByText(/@example\.test/).first().textContent();
     expect(account ?? "", "the account chip should show the email only").not.toMatch(/admin|user/i);
     await expect(
