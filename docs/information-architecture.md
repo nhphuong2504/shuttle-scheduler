@@ -136,9 +136,10 @@ day has gone with matches still unplayed is not - it can still be completed from
 dialog says how many matches would stay unplayed.
 
 The workspace nav is split by the edit right, not by the session. A caller who may edit gets
-the operational six (`desk`, `entries`, `placement`, `knockout`, `schedule`, `scores`) plus the
-three editor entries (`registrations`, `settings`, `access`). The editor entries are gated on
-`can_edit`, because a nav entry that leads to a page saying no is a worse answer than not
+nine sections in three groups, separated by a rule: the day (`desk`, `scores`), the plan in the
+order of work (`registrations`, `entries`, `placement`, `knockout`, `schedule`), and the
+tournament's administration (`settings`, `access`) at the row's far end. The editor entries are
+gated on `can_edit`, because a nav entry that leads to a page saying no is a worse answer than not
 offering the trip; the pages themselves still refuse, since the nav is presentation.
 
 A read-only reader — a signed-in viewer or an anonymous visitor — gets the **Watch sections**:
@@ -165,7 +166,7 @@ you".
 
 The header's own line — brand, then the tournament's name and status — carries one more entry
 for a reader, and it follows the same split as the section nav. An operator gets the workspace
-switcher beside the tournament name, because the tournaments they may work in are a list they hold and
+switcher as the tournament name's own chevron, because the tournaments they may work in are a list they hold and
 moving between them is their own act. A reader gets **Browse tournaments** at `/explore`, in
 the position `PublicShell` puts its public nav: immediately after the brand. It is the entry a
 card came in by, and a reader who left the list should find the way back where they left it.

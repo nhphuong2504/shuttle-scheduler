@@ -219,6 +219,6 @@ name. The green cue describes player availability, independently of account reac
 preview, In Tournova and Not linked describe the player’s account contact status without treating a
 missing account as an error. Instructions to call at the venue stay outside the Contact column. The send button names the recipient count.
 
-Notifications belong in the account header, not over court or score controls. The trigger is a quiet, 44px circular bell before the account identity and Sign out,
+Notifications belong in the account header, not over court or score controls. The trigger is a quiet, 44px circular bell before the account menu (the caller's initial and a chevron, holding the email, the platform admin's view switch and Sign out; on a phone also My tournaments and New tournament, so the bar stays one row),
 with a compact unread badge and a complete accessible name at every screen size. Inbox items give the event
 its own heading, an explicit unread label, and court/date/time metadata with a timezone.

@@ -1,8 +1,16 @@
 import { useTournamentRegistrationQueue } from "@/lib/tournament/registration/review";
 import { MatchNotifications } from "@/components/match-notifications";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
-import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useRef, useState } from "react";
+import { ChevronDown, Plus } from "lucide-react";
+import {
+  type ComponentPropsWithoutRef,
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 
 import { TournovaMark } from "@/components/brand/tournova-mark";
 import { NextStepCard } from "@/components/next-step-card";
@@ -104,13 +112,22 @@ const DESK_PATH = "/tournaments/$tournamentId/desk" as const;
  * of the two names had to give. The operator page lists who is already in the
  * tournament, which is what "Entries" says and "Registration" no longer does.
  */
+/**
+ * The operator's row is drawn in three groups, in this order: the day (`day`: Desk and Scores,
+ * where matches run), the plan (`plan`: from the requests to the schedule, in the order the work
+ * happens), and the tournament's own administration (`admin`: Setup and Access, pushed to the
+ * row's far end). Nine flat tabs mixed the moderator's two pages in with the organiser's seven,
+ * and put Registrations at the far end, away from the Entries it feeds. Only an operator is
+ * offered this list, so Registrations, which needs the edit right, can live in it.
+ */
 const SECTIONS = [
-  { label: "Desk", scoped: DESK_PATH },
-  { label: "Entries", scoped: "/tournaments/$tournamentId/entries" },
-  { label: "Placement", scoped: "/tournaments/$tournamentId/placement" },
-  { label: "Knockout", scoped: "/tournaments/$tournamentId/knockout" },
-  { label: "Schedule", scoped: "/tournaments/$tournamentId/schedule" },
-  { label: "Scores", scoped: "/tournaments/$tournamentId/scores" },
+  { label: "Desk", scoped: DESK_PATH, group: "day" },
+  { label: "Scores", scoped: "/tournaments/$tournamentId/scores", group: "day" },
+  { label: "Registrations", scoped: "/tournaments/$tournamentId/registrations", group: "plan" },
+  { label: "Entries", scoped: "/tournaments/$tournamentId/entries", group: "plan" },
+  { label: "Placement", scoped: "/tournaments/$tournamentId/placement", group: "plan" },
+  { label: "Knockout", scoped: "/tournaments/$tournamentId/knockout", group: "plan" },
+  { label: "Schedule", scoped: "/tournaments/$tournamentId/schedule", group: "plan" },
 ] as const;
 
 /**
@@ -144,17 +161,16 @@ const READER_PAGES = ["/now", "/timetable", "/me", "/players"];
 /**
  * The entries that belong to the people who run the tournament.
  *
- * All are gated on `can_edit` rather than on being signed in, because each is about changing
- * this tournament: Registrations is where requests are decided and entrants are created, Setup
- * is where its configuration and lifecycle live, and Access is who else may operate it. A
+ * Gated on `can_edit` rather than on being signed in, because each is about changing this
+ * tournament: Setup is where its configuration and lifecycle live, and Access is who else may
+ * operate it (Registrations, where requests are decided, sits with the plan in `SECTIONS`). A
  * viewer is offered none of them - the pages themselves say plainly that they cannot be used,
  * but a nav entry that leads to a page telling you no is a worse answer than not offering the
  * trip.
  */
 const EDITOR_SECTIONS = [
-  { label: "Registrations", scoped: "/tournaments/$tournamentId/registrations" },
-  { label: "Setup", scoped: "/tournaments/$tournamentId/settings" },
-  { label: "Access", scoped: "/tournaments/$tournamentId/access" },
+  { label: "Setup", scoped: "/tournaments/$tournamentId/settings", group: "admin" },
+  { label: "Access", scoped: "/tournaments/$tournamentId/access", group: "admin" },
 ] as const;
 
 /**
@@ -205,7 +221,7 @@ const SIGNED_IN_SECTIONS = [
   { label: "My tournaments", to: "/me/tournaments" },
 ] as const;
 const NEW_TOURNAMENT_CLASS =
-  "inline-flex min-h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
+  "inline-flex min-h-11 items-center gap-1.5 px-2.5 max-sm:hidden text-sm font-semibold text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
 
 /**
  * Shared so the two nav branches cannot drift into two different-looking navs.
@@ -216,7 +232,11 @@ const NEW_TOURNAMENT_CLASS =
  */
 const NAV_ITEM_CLASS =
   "inline-flex min-h-11 items-center px-2.5 text-sm font-medium text-muted-foreground decoration-[1.5px] underline-offset-4 transition-colors hover:text-foreground hover:underline";
-const NAV_ACTIVE_CLASS = "font-semibold text-foreground underline";
+/**
+ * `activeProps` appends to the item's classes rather than merging them, so the open link's ink is
+ * marked important: without it the item's own muted ink wins on stylesheet order.
+ */
+const NAV_ACTIVE_CLASS = "font-semibold !text-foreground underline";
 /**
  * The sections of one tournament, as tabs on a rule rather than as pills.
  *
@@ -335,8 +355,10 @@ function BrandMark() {
  * Decorative — the email beside it carries the
  * meaning — so it stays out of the accessibility tree.
  *
- * Account utilities stay together: the inbox bell leads the identity and sign-out action.
- * The email truncates on desktop and is hidden on smaller screens to keep room for controls.
+ * Account utilities stay together: the inbox bell, then one account menu that holds the
+ * identity, the platform admin's view switch and Sign out. They used to sit in the bar as four
+ * separate things, which wrapped the bar onto a second row at 1024px and a third on a phone, and
+ * the view switch - a preference with nothing behind it yet - was the loudest control in it.
  *
  * ## Signing in returns you to the page you were on
  *
@@ -366,27 +388,129 @@ function SessionBlock() {
   }
 
   return (
-    <>
-      {isPlatformAdmin ? <ViewModeSwitch /> : null}
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        <MatchNotifications />
-        {/* From `lg` only: on a tablet the email pushed Sign out onto a second header row. */}
-        <span className="hidden max-w-48 items-center gap-1.5 text-sm text-muted-foreground lg:inline-flex">
-          <span aria-hidden className="size-1.5 rounded-full bg-presence-ink" />
-          <span className="truncate" title={session?.userEmail ?? undefined}>{session?.userEmail}</span>
-        </span>
-        <button
-          type="button"
-          className={NAV_ITEM_CLASS}
-          onClick={async () => {
-            await supabase.auth.signOut();
-            navigate({ to: "/auth", replace: true });
-          }}
+    <div className="flex shrink-0 items-center gap-1">
+      <MatchNotifications />
+      <AccountMenu
+        email={session?.userEmail ?? null}
+        isPlatformAdmin={isPlatformAdmin}
+        onSignOut={async () => {
+          await supabase.auth.signOut();
+          navigate({ to: "/auth", replace: true });
+        }}
+      />
+    </div>
+  );
+}
+
+const MENU_ITEM_CLASS =
+  "flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * The signed-in caller's own menu: who they are, how they view the app, and how to leave.
+ *
+ * A disclosure rather than a `role="menu"`, for the reason `TournamentSwitcher` gives: the items
+ * are real links and buttons that follow the trigger in the document, so Tab reaches them in
+ * order; Escape closes and returns focus, and a press anywhere else closes. It also closes on
+ * navigation, so a link chosen from it does not leave it open over the next page.
+ *
+ * On a phone it also carries My tournaments and New tournament, which the bar drops below `sm`
+ * so the brand, Browse, the bell and this trigger fit on one row.
+ */
+function AccountMenu({
+  email,
+  isPlatformAdmin,
+  onSignOut,
+}: {
+  email: string | null;
+  isPlatformAdmin: boolean;
+  onSignOut: () => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  const pathname = useLocation({ select: (location) => location.pathname });
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const initial = (email?.trim().charAt(0) || "?").toUpperCase();
+
+  return (
+    <div ref={wrapper} className="relative flex shrink-0 items-center">
+      <button
+        ref={trigger}
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((was) => !was)}
+        title={email ?? undefined}
+        className="inline-flex min-h-11 items-center gap-1 rounded-full px-1 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <span
+          aria-hidden="true"
+          className="grid size-8 place-items-center rounded-full border border-hairline bg-surface text-sm font-semibold text-foreground"
         >
-          Sign out
-        </button>
-      </div>
-    </>
+          {initial}
+        </span>
+        <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", open && "rotate-180")} />
+        <span className="sr-only">Account</span>
+      </button>
+
+      {open ? (
+        <div
+          id={panelId}
+          className="absolute right-0 top-full z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
+        >
+          <p className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-muted-foreground">
+            {/* The presence mark: see the note on `SessionBlock`. Decorative; the email carries it. */}
+            <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-presence-ink" />
+            <span className="min-w-0 truncate" title={email ?? undefined}>
+              {email}
+            </span>
+          </p>
+          <div className="border-t border-hairline py-1 sm:hidden">
+            <Link to="/me/tournaments" className={MENU_ITEM_CLASS}>
+              My tournaments
+            </Link>
+            <Link to="/tournaments/new" className={MENU_ITEM_CLASS}>
+              <Plus aria-hidden="true" className="size-4" />
+              New tournament
+            </Link>
+          </div>
+          {isPlatformAdmin ? (
+            <div className="flex items-center justify-between gap-2 border-t border-hairline px-2.5 py-2">
+              <span className="text-sm text-muted-foreground">View as</span>
+              <ViewModeSwitch />
+            </div>
+          ) : null}
+          <div className="border-t border-hairline pt-1">
+            <button type="button" className={MENU_ITEM_CLASS} onClick={() => void onSignOut()}>
+              Sign out
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -772,7 +896,8 @@ function PrimaryNav({ signedIn, marked }: { signedIn: boolean; marked: boolean }
           <Link
             key={item.to}
             to={item.to}
-            className={NAV_ITEM_CLASS}
+            // Below `sm` the account menu carries My tournaments, so Browse is the bar's one link.
+            className={cn(NAV_ITEM_CLASS, "short" in item ? undefined : "max-sm:hidden")}
             {...(marked ? { activeProps: { className: NAV_ACTIVE_CLASS } } : {})}
           >
             {"short" in item ? (
@@ -915,11 +1040,16 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
         </div>
 
-        <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3 watch-short:pb-2 watch-short:pt-1.5">
+        {/* `relative` so the switcher's list anchors to the identity block, under the name. */}
+        <div className="relative mx-auto max-w-[1400px] px-4 pb-4 pt-3 watch-short:pb-2 watch-short:pt-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl watch-short:text-lg">
-              {tournament?.name ?? "Loading…"}
-            </p>
+            {/* The switcher is drawn against the name it changes, as the name's own chevron. */}
+            <div className="flex min-w-0 items-center gap-0.5">
+              <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl watch-short:text-lg">
+                {tournament?.name ?? "Loading…"}
+              </p>
+              {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
+            </div>
             {tournament ? (
               <TournamentStatusPill
                 status={normalizeTournamentStatus(tournament.status)}
@@ -929,13 +1059,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             {tournament?.is_demo ? <DemoPill /> : null}
           </div>
           {meta ? (
-            // Pinned to the first column: without a switcher beside it, auto-placement put the
-            // when-and-where in the empty second column, a screen's width from the name it describes.
-            <p className="mt-1 break-words text-sm text-muted-foreground sm:col-start-1 watch-short:hidden">{meta}</p>
+            <p className="mt-1 break-words text-sm text-muted-foreground watch-short:hidden">{meta}</p>
           ) : null}
-          <div className="mt-2 flex justify-end empty:hidden sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:self-center">
-            {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}
-          </div>
         </div>
 
         <div>
@@ -951,12 +1076,24 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             )}
           >
             {tournamentId
-              ? sections.map((item) => {
+              ? sections.map((item, index) => {
                   const waiting =
                     item.scoped === PENDING_REGISTRATIONS_PATH ? pendingRegistrations : 0;
+                  // A rule between the operator's groups; the administration group is pushed to
+                  // the row's far end. The reader's sections carry no group and draw no rule.
+                  const group = "group" in item ? item.group : undefined;
+                  const previous = sections[index - 1];
+                  const previousGroup = previous && "group" in previous ? previous.group : undefined;
+                  const opensGroup = group !== undefined && previousGroup !== undefined && group !== previousGroup;
                   return (
+                    <Fragment key={item.scoped}>
+                    {opensGroup ? (
+                      <span
+                        aria-hidden="true"
+                        className={cn("mx-1.5 h-5 w-px shrink-0 bg-hairline", group === "admin" && "ml-auto")}
+                      />
+                    ) : null}
                     <Link
-                      key={item.scoped}
                       to={item.scoped}
                       params={{ tournamentId }}
                       className={TAB_ITEM_CLASS}
@@ -971,6 +1108,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                         </>
                       ) : null}
                     </Link>
+                    </Fragment>
                   );
                 })
               : null}

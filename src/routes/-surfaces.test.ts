@@ -731,6 +731,24 @@ describe("the desk lives in one file, and `/` is a page of its own", () => {
     expect(workspace).not.toContain('to="/tournaments/new"');
   });
 
+  it("groups the operator's sections: the day, the plan, then the administration", () => {
+    const shell = readFileSync(join(src, "components", "app-shell.tsx"), "utf8");
+    const labels = [...shell.matchAll(/\{ label: "([^"]+)", scoped: [^}]*group: "(day|plan|admin)" \}/g)].map(
+      (match) => `${match[2]}:${match[1]}`,
+    );
+    expect(labels).toEqual([
+      "day:Desk",
+      "day:Scores",
+      "plan:Registrations",
+      "plan:Entries",
+      "plan:Placement",
+      "plan:Knockout",
+      "plan:Schedule",
+      "admin:Setup",
+      "admin:Access",
+    ]);
+  });
+
   it("leaves the temporary shim gone from `/`, not merely shadowed", () => {
     const home = read("index.tsx");
     // S6 replaced the shim with the real surface. A shim left behind - even one whose

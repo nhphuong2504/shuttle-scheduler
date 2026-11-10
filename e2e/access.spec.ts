@@ -353,6 +353,8 @@ test.describe("the owner", () => {
     const sections = page.getByRole("navigation", { name: /tournament sections/i });
     await expect(sections.getByRole("link", { name: "Setup", exact: true })).toBeVisible();
 
+    // Sign out lives in the account menu, beside the inbox.
+    await page.getByRole("banner").getByRole("button", { name: "Account" }).click();
     await page.getByRole("button", { name: /sign out/i }).click();
     await expect(page).toHaveURL(/\/auth$/);
     await page.getByRole("main").getByRole("link", { name: "Browse tournaments" }).click();
@@ -362,7 +364,7 @@ test.describe("the owner", () => {
 
     await expect(page.getByText(/read-only view/i).first()).toBeVisible();
     await expect(sections.getByRole("link", { name: "Setup", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /sign out/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Account" })).toHaveCount(0);
   });
 });
 
