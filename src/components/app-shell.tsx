@@ -205,17 +205,18 @@ const SIGNED_IN_SECTIONS = [
   { label: "My tournaments", to: "/me/tournaments" },
 ] as const;
 const NEW_TOURNAMENT_CLASS =
-  "inline-flex min-h-11 items-center gap-1.5 px-2.5 text-[0.9375rem] font-semibold text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
+  "inline-flex min-h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
 
 /**
  * Shared so the two nav branches cannot drift into two different-looking navs.
  *
- * Drawn as the front door draws its header: plain ink words on the page's own ground, an
- * underline on hover, and the open one marked by a standing underline and weight.
+ * Plain words on the page's own ground, an underline on hover, and the open one marked by a
+ * standing underline and weight. The app's bar sits a step behind the tournament it frames:
+ * muted ink at rest, so the tournament's name and its sections read first.
  */
 const NAV_ITEM_CLASS =
-  "inline-flex min-h-11 items-center px-2.5 text-[0.9375rem] text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
-const NAV_ACTIVE_CLASS = "font-semibold underline";
+  "inline-flex min-h-11 items-center px-2.5 text-sm font-medium text-muted-foreground decoration-[1.5px] underline-offset-4 transition-colors hover:text-foreground hover:underline";
+const NAV_ACTIVE_CLASS = "font-semibold text-foreground underline";
 /**
  * The sections of one tournament, as tabs on a rule rather than as pills.
  *
@@ -314,10 +315,11 @@ function SiteFooter() {
 function BrandMark() {
   return (
     <>
-      <TournovaMark className="h-6 w-auto shrink-0 text-foreground" />
+      {/* The mark is the header's one navy: the brand's anchor, at a size below the title it frames. */}
+      <TournovaMark className="h-5 w-auto shrink-0 text-primary" />
       {/* On a phone the mark alone carries the brand, so the header fits on one row. The
           links around it are named "Tournova" for that reason. */}
-      <span className="hidden font-body text-[1.375rem] font-semibold tracking-[-0.02em] text-foreground sm:inline">Tournova</span>
+      <span className="hidden font-body text-lg font-semibold tracking-[-0.02em] text-foreground sm:inline">Tournova</span>
     </>
   );
 }
@@ -414,7 +416,7 @@ function ViewModeSwitch() {
           className={cn(
             "min-h-7 rounded-full px-3 font-semibold capitalize transition-colors",
             viewMode === option
-              ? "bg-primary text-primary-foreground"
+              ? "bg-surface text-foreground shadow-sm ring-1 ring-hairline"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -876,6 +878,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       <header className="border-b border-hairline bg-background">
         {/* The operator's bar keeps its compact height: every pixel here moves the Desk and the
             setup wizard's fields closer to their sticky action bar. */}
+        {/* A hairline under the app's bar, so it reads as a tier of its own above the tournament. */}
+        <div className="border-b border-hairline">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           {/*
             The brand goes to the tournament you are looking at, never to `/`. It used to
@@ -909,10 +913,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             <SessionBlock />
           </div>
         </div>
+        </div>
 
         <div className="mx-auto max-w-[1400px] px-4 pb-4 pt-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-3 watch-short:pb-2 watch-short:pt-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <p className="min-w-0 break-words font-display text-xl font-bold leading-tight tracking-tight sm:text-2xl watch-short:text-lg">
+            <p className="min-w-0 break-words font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl watch-short:text-lg">
               {tournament?.name ?? "Loading…"}
             </p>
             {tournament ? (
@@ -924,7 +929,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             {tournament?.is_demo ? <DemoPill /> : null}
           </div>
           {meta ? (
-            <p className="mt-1 break-words text-sm text-muted-foreground watch-short:hidden">{meta}</p>
+            // Pinned to the first column: without a switcher beside it, auto-placement put the
+            // when-and-where in the empty second column, a screen's width from the name it describes.
+            <p className="mt-1 break-words text-sm text-muted-foreground sm:col-start-1 watch-short:hidden">{meta}</p>
           ) : null}
           <div className="mt-2 flex justify-end empty:hidden sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:self-center">
             {access.can_edit ? <TournamentSwitcher currentId={tournamentId} /> : null}

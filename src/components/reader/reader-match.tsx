@@ -330,7 +330,8 @@ export function ReaderPage({
     <div className={className}>
       <div className="mb-4 flex flex-none flex-wrap items-center gap-x-4 gap-y-2 watch-short:mb-2">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+          {/* A step below the tournament's name in the header, so the name stays the page's largest words. */}
+          <h1 className="font-display text-xl font-extrabold tracking-tight sm:text-2xl">
             {title}
           </h1>
           {meta ? <p className="text-sm text-muted-foreground">{meta}</p> : null}
