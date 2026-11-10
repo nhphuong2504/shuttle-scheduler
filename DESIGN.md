@@ -1,16 +1,18 @@
 ---
-name: Tournova landing (The Match Call)
-description: The Watch-mode front door of Tournova, drawn as a match-call slip in src/components/landing/; brand, interaction, UI type and the shared condensed faces are inherited from the app's tokens in src/styles.css.
+name: Tournova landing (The Court Board)
+description: The Watch-mode front door of Tournova, drawn as the organiser's board of court sheets in src/components/landing/; the wall, sheet stock, ink, brand, UI type and interaction colour are the app's own tokens from src/styles.css.
 colors:
   primary: "#22397A"
-  primary-hover: "#1A2C5E"
   foreground: "#171A1D"
-  slip-blue: "#22397a"
-  slip-rule: "#2f4673"
-  slip-paper: "#f7f7f6"
-  slip-ink: "#0b0b0b"
   muted-foreground: "#5B656C"
-  slip-pink-stock: "#faacbe"
+  wall: "#F4F5F4"
+  sheet: "#FFFFFF"
+  ink: "#111111"
+  ink-raised: "#2B2B2B"
+  ink-soft: "#3A3D40"
+  rule: "#2A2A2A"
+  mark: "#D81B8A"
+  hatch: "rgb(17 17 17 / 0.42)"
 typography:
   wordmark:
     fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
@@ -18,267 +20,464 @@ typography:
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "-0.02em"
-  numerals:
-    fontFamily: "Saira Extra Condensed, Roboto Condensed, Arial Narrow, sans-serif"
-    fontSize: "6.6rem"
-    fontWeight: 800
-    lineHeight: 0.82
-    letterSpacing: "-0.03em"
   headline:
-    fontFamily: "League Gothic, Arial Narrow, sans-serif"
-    fontSize: "clamp(3.4rem, 1.2rem + 11cqw, 5.75rem)"
-    fontWeight: 400
-    lineHeight: 0.9
-    letterSpacing: "-0.005em"
-  value:
-    fontFamily: "Roboto Condensed, Arial Narrow, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(1.45rem, 0.6rem + 4.5cqw, 1.9rem)"
-    fontWeight: 700
-    lineHeight: 1
-    fontFeature: "tnum"
-  action:
-    fontFamily: "Roboto Condensed, Arial Narrow, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.375rem"
-    fontWeight: 700
-    lineHeight: 1
-    letterSpacing: "-0.01em"
-  copy-heading:
-    fontFamily: "Roboto Condensed, Arial Narrow, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.35rem"
-    fontWeight: 700
-    lineHeight: 1.15
-  print:
-    fontFamily: "Roboto Condensed, Arial Narrow, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1rem"
+    fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(2rem, 5.2vw, 3.5rem)"
+    fontWeight: 600
+    lineHeight: 1.04
+    letterSpacing: "-0.03em"
+  subhead:
+    fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(1.125rem, 2.2vw, 1.5rem)"
     fontWeight: 500
-    lineHeight: 1.25
-  label:
+    lineHeight: 1.3
+    letterSpacing: "-0.01em"
+  sheet-title:
+    fontFamily: "Roboto Condensed, Arial Narrow, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.9375rem"
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: "0.06em"
+  time:
+    fontFamily: "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace"
+    fontSize: "0.75rem"
+    fontWeight: 400
+    fontFeature: "tnum"
+  clash-note:
+    fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 600
+    lineHeight: 1.3
+  clash-shift:
     fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.875rem"
-    fontWeight: 500
+    fontWeight: 600
     lineHeight: 1.2
   nav:
     fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 500
-  link:
-    fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1rem"
-    fontWeight: 600
-  input:
+    lineHeight: 1.2
+  action:
     fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 500
+    lineHeight: 1.2
+  link:
+    fontFamily: "Instrument Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 500
+    lineHeight: 1.2
 rounded:
-  none: "0"
+  sheet: "3px"
+  action: "2px"
 spacing:
   xs: "0.25rem"
   sm: "0.5rem"
-  md: "0.75rem"
+  sheet-pad: "0.875rem"
   gutter: "1rem"
-  row: "1.25rem"
-  inset-wide: "2rem"
+  form-gap: "0.625rem"
+  row: "1.75rem"
+  hero-inset: "2rem"
 components:
-  button-call:
-    backgroundColor: "transparent"
-    textColor: "{colors.primary}"
-    typography: "{typography.action}"
-    rounded: "{rounded.none}"
-    padding: "0 1.25rem"
-    height: "52px"
-  button-call-hover:
-    textColor: "{colors.primary-hover}"
-  input-name:
-    backgroundColor: "transparent"
-    textColor: "{colors.slip-ink}"
-    typography: "{typography.input}"
-    rounded: "{rounded.none}"
-    padding: "0 0.9rem"
-    height: "48px"
+  wordmark-link:
+    textColor: "{colors.foreground}"
+    typography: "{typography.wordmark}"
+    height: "44px"
   nav-link:
     textColor: "{colors.muted-foreground}"
     typography: "{typography.nav}"
+    padding: "0 0.625rem"
     height: "44px"
   nav-link-hover:
     textColor: "{colors.foreground}"
+  court-sheet:
+    backgroundColor: "{colors.sheet}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.sheet}"
+    padding: "0.875rem 0.875rem 1rem"
+  sheet-title:
+    textColor: "{colors.ink}"
+    typography: "{typography.sheet-title}"
+    padding: "0 0 0.375rem 0.125rem"
+  time-row:
+    textColor: "{colors.ink-soft}"
+    typography: "{typography.time}"
+    padding: "0 0.625rem 0 0.25rem"
+    height: "{spacing.row}"
+  time-row-moved:
+    textColor: "{colors.mark}"
+  clash-note:
+    backgroundColor: "{colors.sheet}"
+    textColor: "{colors.ink}"
+    typography: "{typography.clash-note}"
+    padding: "0.75rem 1.125rem"
+  action-primary:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.sheet}"
+    typography: "{typography.action}"
+    rounded: "{rounded.action}"
+    padding: "0 1.5rem"
+    height: "48px"
+  action-primary-hover:
+    backgroundColor: "{colors.ink-raised}"
   follow-link:
-    textColor: "{colors.primary}"
+    textColor: "{colors.ink}"
     typography: "{typography.link}"
     height: "44px"
-  field-label:
-    textColor: "{colors.slip-blue}"
-    typography: "{typography.label}"
-  call-number:
-    textColor: "{colors.slip-ink}"
-    typography: "{typography.numerals}"
-    rounded: "{rounded.none}"
-    padding: "0.4rem 0.75rem 0.5rem"
+  headline:
+    textColor: "{colors.ink}"
+    typography: "{typography.headline}"
 ---
 
-# Design System: Tournova landing (The Match Call)
+# Design System: Tournova landing (The Court Board)
 
 ## Overview
 
-**Creative North Star: "The Match Call"**
+**Creative North Star: "The Court Board"**
 
-The landing is the Watch-mode front door of the same Tournova system described in `docs/design-principles.md`, not a separate product. Its slip world (paper, tears, stamps, the League Gothic headline and the `--slip-*` print tokens) lives in `src/components/landing/`, styled by `src/components/landing/call-slip.css`. Everything else is inherited from the app's tokens in `src/styles.css`: the TournovaMark and the Roboto Condensed wordmark, the header nav labels (Sign in stays a plain nav link, by the user's choice), Instrument Sans for labels, fields and links, the app's condensed faces for printed values and the call number, and the app's navy (`--primary`) as the signal of interaction: the stamped action, body links, focus, selection and caret. The app's navy was taken from the slip's own ballpoint print, so the page and the product share one ink. A visitor who signs in should feel they walked through a door, not into another company.
+The landing is the Watch-mode front door of the same Tournova system described in
+`docs/design-principles.md`, not a separate product, and it is drawn as the thing the
+product actually makes: the organiser's board on the hall wall, one printed sheet per court
+pinned up for the day. Its world lives in `src/components/landing/` — `landing.tsx` for the
+six sheets and the clash, `court-sheets.css` for everything visual, scoped to `.cs-page`.
+Nothing else is new. The wall is the app's own `--background`, the sheet is the app's own
+`--surface`, the type families are the app's, the wordmark and nav are the app header's, and
+the only two token values the page adds are pen black on the sheet and the app's `--primary`
+for the mark and the focus ring. A visitor who signs in walks through a door, not into another
+company.
 
-The page is one match-call slip torn off a tournament desk pad. White carbonless paper with a faint grain, ballpoint-navy form rules and labels, black condensed numerals and headline at billboard scale, and a red rubber CALLED stamp. The copies underneath (canary, then pink) peek out below a torn edge and carry the next calls. The slip reads like a filled-in form rather than a marketing layout: every element is a printed field, a filled value, a stamp, a sheet, or one of the app's own controls set on the paper.
+The page shows a problem already solved. Six court sheets hang slightly askew on the grey
+wall with a stamped time column and a hand-hatched match column; between them one clash is
+circled in highlighter magenta — L. Tran plays 11:10 and 11:22 — and next to the circle the
+sheet it touches already reads the new time with the old one struck through. That is the
+product's promise drawn before it is said: when a match runs late, the rest of the day keeps
+up. The headline under the board says the same in one line, and one dark button offers the
+one action.
 
-Density is low and the scale contrast is extreme. A giant boxed number and a two-line gothic headline sit next to small, precise form labels. Paper materials (grain, tears, stamp ink, the copies' edge shading, the action's rough frame) live in raster plates; everything drawn in CSS is flat and ruled.
+Density is low and the two materials are plain: card stock and pen. Every mark on the page is
+either a rule, a hatch, a struck time or a circle drawn by hand, so the board reads as
+something a person made at a desk — not a screenshot of software. The only hue the app does
+not own is the highlighter, and it appears once.
 
 **Key Characteristics:**
-- Carbonless-paper ground with a tiled grain plate; no cream or aged tone.
-- One navy for the whole product: the app's interaction colour and the slip's ballpoint print are the same ink.
-- On the slip, navy acts on the mark, stamped action, follow link, focus, selection and caret; printed labels and rules are navy but never act.
-- The app's mark, wordmark, nav labels, Instrument Sans, Roboto Condensed and Saira carry over; only League Gothic is the landing's alone.
-- Red appears only inside the CALLED stamp raster.
-- Torn edges, stamps and the copies are raster plates, used as images or as masks.
-- One authored motion: the stamp presses down once.
+- The wall is the app's `--background` and the sheets are its `--surface`; there is no separate landing palette.
+- One navy, used only by the brand mark and the focus ring; everything else is pen black, paper white and muted grey.
+- One highlighter magenta, used only for the circled clash and the time it moved.
+- Times are JetBrains Mono with tabular figures — the one place a visitor sees the app's mono face.
+- Court names are Roboto Condensed small caps; everything read as interface is Instrument Sans.
+- Sheets are pinned, not placed: each carries a small tilt, a lift and a paper shadow.
+- One authored motion: the sheets pin down in order, then the circle is drawn around the clash.
 
 ## Colors
 
-A white-paper palette with one navy ink shared by print and interaction, red only as the picture of a stamp, and canary and pink as paper stock.
+Paper, pen and one highlighter on the app's own grey wall. There is no second palette to
+learn: four neutrals and one ink come from the app, magenta comes from a marker.
 
 ### Primary
-- **Tournova Navy** (primary, through `--slip-action`): the TournovaMark, the stamped action's label and frame, the follow link, the focus outline, text selection and the input caret. It is the app's `--primary` (also `--primary-ink` and `--ring`), aliased, never redefined on the landing.
-- **Pressed Navy** (primary-hover, through `--slip-action-hover`): the stamped action on hover; the frame follows because it is inked in `currentColor`.
+- **Tournova Navy** (#22397A): the brand mark at 20px in the header and the 2px focus outline
+  on every focusable thing. It is the app's `--primary`, read, never redefined. It is not a
+  fill, not a link colour and not a border on this page.
 
 ### Secondary
-- **Ballpoint Navy** (slip-blue): printed form labels (No., Court, Time, Match call, Tournament name). It holds the same value as `--primary` because the app's navy was taken from it; the two stay named apart, so retuning interaction cannot silently re-ink the printed form, and print never takes on the hover or focus states.
-- **Form-Rule Navy** (slip-rule): the 1.5px rules under labels, around the number box, around the name field and across the slip. Slightly greyer than the label navy so rules recede behind text.
-
-### Tertiary
-- **Pink Stock** (slip-pink-stock): the base of the pink sheet that fills the page below the slip, multiplied with the paper grain so it meets the pink in the copies plate. The canary copy and the stamp's red exist only inside their plates; no CSS-drawn element is red.
+- **Highlighter Magenta** (#D81B8A, `--cs-mark`): the 2.5px ring around the clash note, the
+  colour of the time that moved, and the tint of the note's shadow. It is a marker stroke on
+  a picture of paper, not a status the app reports.
 
 ### Neutral
-- **Carbonless White** (slip-paper): the page ground, under the tiled paper grain; also the selection text colour.
-- **Carbon Black** (slip-ink): numerals, headline, filled values, copy print, input text.
-- **App Ink** (foreground): the wordmark, and a nav link on hover or when it is the open page, as in the app header.
-- **Muted Ink** (muted-foreground): header nav links at rest, Sign in included, as in the app header.
+- **Wall** (#F4F5F4, `--background`): the page ground; the board hangs on the same grey as
+  every other Tournova screen.
+- **Sheet Stock** (#FFFFFF, `--surface`): the court sheets and the clash note; the app's card
+  surface, untoned.
+- **Pen Black** (#111111, `--cs-ink`): sheet titles, the clash note's text, the headline, the
+  subhead, the follow link, and the fill of the one action.
+- **Soft Ink** (#3A3D40, `--cs-ink-soft`): the times in the stamp column. Times are read at a
+  glance across a room, so they stay dark rather than grey.
+- **Rule** (#2A2A2A, `--cs-rule`): every 1.5px line — the sheet grid, the row rules, the
+  time column's edge. Ruled a shade softer than the ink it frames so the numbers stay first.
+- **Hatch** (rgb(17 17 17 / 0.42), `--cs-hatch`): the diagonal pen strokes filling a match
+  slot. The lighter `rgb(17 17 17 / 0.28)` and `rgb(17 17 17 / 0.34)` steps exist for the
+  fine-line and dense patterns only.
+- **Muted Ink** (#5B656C, `--muted-foreground`): header nav at rest, and the old time once it
+  is struck through. The strike is deliberate — `court-sheets.css` records that the struck
+  time still reads at 4.5:1 on the wall and 6:1 on the sheet.
+- **App Ink** (#171A1D, `--foreground`): the wordmark, and a nav link on hover.
+- **Raised Black** (#2B2B2B): the one action's hover fill.
 
 ### Named Rules
-**The One Navy Rule.** Print and interaction share one navy. What tells them apart is form, not hue: an interactive thing is a stamped frame, a link with an arrow, a focus outline or a selection; print is a small sentence-case label or a ruled line, and it never changes on hover or focus.
+**The Wall-First Rule.** The page ground is `--background` and the sheets are `--surface`.
+Never introduce a landing-only paper, cream or tinted ground: the board has to look like it
+was pinned to the same wall the app runs on.
 
-**The Print Never Acts Rule.** A navy label or rule is never clickable and never stands in for a control; the header nav, Sign in included, keeps the app header's neutral treatment (Muted Ink at rest, App Ink on hover) and turns navy only for focus.
+**The One Navy Rule.** Navy is the mark and the focus ring, and nothing else. Links, borders,
+titles and the primary action are ink; if a landing element wants to look interactive by
+being navy, it is wrong — the action is dark and a link is underlined ink.
 
-**The Copies Are Stock Rule.** Canary and pink are paper stock, not accents. They appear as sheets under the slip (plate or pink fill), never as text, buttons or highlights. What is printed on a copy belongs to that sheet: in the landscape composition the copy heading's second line runs into the canary's torn edge and is cut along the tear by the canary mask, as a real carbon copy would be.
+**The Highlighter Rule.** Magenta is a mark drawn on a picture of paper, never a state. It
+may ring the clash and ink the time that moved; it may not colour a button, a label, an icon
+or anything a visitor can press. The app has no magenta, and this page keeps it that way.
+
+**The Blind-Proof Rule.** Nothing is carried by hue alone: the time that moved is also bold
+and the old time is also struck through, and the clash is also the only note with a ring.
 
 ## Typography
 
-**Brand and Title Font:** Roboto Condensed (`--font-display`, variable, with Arial Narrow fallback), on the slip for filled-in values, player names, the action label and copy lines (`--slip-form`)
-**Numeral Font:** Saira Extra Condensed 800 (`--font-numeral`, through `--slip-number`), for the call number
-**UI Font:** Instrument Sans (`--font-body`, through `--slip-ui`), for the wordmark, labels, nav, the name input and the follow link
-**Headline Font:** League Gothic (`--slip-numerals`, with Arial Narrow fallback), the landing's alone
+**Display Font:** Roboto Condensed (variable, self-hosted from `public/fonts/`, with Arial
+Narrow fallback) — court names only, in condensed small caps.
+**Body Font:** Instrument Sans (Google Fonts, 400–700, with `ui-sans-serif`) — the wordmark,
+nav, headline, subhead, the clash note and the action.
+**Mono Font:** JetBrains Mono (Google Fonts, 500/700, with `ui-monospace`) — the clock times
+in the sheets, and nowhere else.
 
-**Character:** The app's families carry everything the visitor reads as interface, so the header and form feel like Tournova, and the app's condensed title and numeral faces print the slip's values and number. League Gothic alone shouts the promise at poster scale. League Gothic, Roboto Condensed and Saira are self-hosted so the first viewport draws in its own lettering on venue wifi.
+**Character:** Two voices, as on a real board. The condensed face prints the sheet's fixed
+label — which court this is — in small tracked caps, and the mono face prints the times in a
+column whose digits line up. Everything the visitor reads as a sentence, or presses, is
+Instrument Sans. Roboto Condensed and Saira are served by the app; Instrument Sans and
+JetBrains Mono come from Google Fonts with `display=swap`, so a cold venue connection draws
+the page in fallback faces rather than nothing.
 
 ### Hierarchy
-- **Numerals** (Saira Extra Condensed 800, 6.6rem phones, 9.5rem tablets, 25.6cqw landscape, line-height 0.82, 0.75 in landscape): the call number inside its ruled box. One per slip; its figures are proportional, so it is used only for a number standing alone.
-- **Headline** (League Gothic 400, fluid clamp, line-height 0.9, balanced wrap): the promise printed as the slip's title, one line per sentence when width allows.
-- **Wordmark** (Instrument Sans 600, 1.125rem, -0.02em): Tournova beside the mark (1.25rem tall, in Tournova Navy), at the app header's scale.
-- **Value** (Roboto Condensed 700, fluid clamp, line-height 1, tabular figures, never wraps): a filled-in field value such as court and time; it shrinks on the narrowest phones instead of breaking "Court 4".
-- **Action** (Roboto Condensed 700, 1.375rem on phones and tablets, clamp(1.375rem, 2.65cqw, 2.8rem) in landscape, never squeezed): the stamped action label.
-- **Copy heading** (Roboto Condensed 700, 1.35rem on phones, clamp(1.0625rem, 2.15cqw, 2.25rem) in landscape, line-height 1.15, 1.12 in landscape): the line printed on the next copy.
-- **Print** (Roboto Condensed 500, 1rem, clamp(1rem, 1.7cqw, 1.8rem) in landscape, line-height 1.25): player names. Copy lines use the same face at 700 with tabular figures (1.1rem on phones, clamp(1rem, 2.05cqw, 2.15rem) in landscape), and the following number at 700 (1.1rem on phones, clamp(1rem, 2.2cqw, 2.3rem) in landscape).
-- **Link** (Instrument Sans 600, 1rem, clamp(1rem, 1.6cqw, 1.7rem) in landscape): the follow link.
-- **Input** (Instrument Sans 500, 1rem, clamp(1rem, 1.5cqw, 1.6rem) in landscape): what the visitor types into the name field.
-- **Nav** (Instrument Sans 500, 0.875rem): header items, Sign in included, as plain links in Muted Ink.
-- **Label** (Instrument Sans 500, 0.875rem on phones and tablets, clamp(0.875rem, 1.64cqw, 1.72rem) in landscape and clamp(0.875rem, 1.5cqw, 1.6rem) for the name label, line-height 1.2, Ballpoint Navy, sentence case): printed form labels.
-
-In the landscape composition the slip is one printed form: everything inside it is sized in container-query units in the comp's proportions to its neighbours, set about 15% under the 1280x720 comp, with rem floors at the app's sizes and rem caps that stop growth near 1680px wide. The call number, headline, values, stamp and plates scale uncapped with the sheet. Only the header above the tear stays near the app's scale. In `call-slip.css` the variable `--slip-numerals` holds League Gothic (the headline) and `--slip-number` holds the numeral face (the digits). Choose by role, not by variable name.
+- **Headline** (Instrument Sans 600, `clamp(2rem, 5.2vw, 3.5rem)`, 1.04, −0.03em,
+  `text-wrap: balance`): the promise under the board, two lines, centred. It is the page's h1
+  and the only large type on it.
+- **Subhead** (Instrument Sans 500, `clamp(1.125rem, 2.2vw, 1.5rem)`, −0.01em): one line of
+  plain explanation below the actions.
+- **Wordmark** (Instrument Sans 600, 1.125rem, −0.02em): Tournova beside the mark (1.25rem,
+  Tournova Navy), at the app header's size.
+- **Sheet title** (Roboto Condensed 600, 0.9375rem, 0.06em tracking, uppercase): "Court 1" to
+  "Court 6", printed on the sheet's top edge in a slightly smaller face than the times it
+  governs.
+- **Time** (JetBrains Mono 400, 0.75rem, tabular figures): the stamp column, one row per
+  slot. Tabular figures are the point — the column reads as a column, and a struck old time
+  sits level with the new one after it.
+- **Clash note / shift** (Instrument Sans 600, 1rem / 0.875rem): the circled sentence and the
+  "+12 min" that follows it.
+- **Nav** (Instrument Sans 500, 0.875rem): Browse tournaments and Sign in, plain links.
+- **Action / Link** (Instrument Sans 500, 1rem): the one button's label, and the follow link.
 
 ### Named Rules
-**The Printed-Label Rule.** Labels are the form's own field names, in Ballpoint Navy sentence case Instrument Sans, sitting on a rule. They name the value beneath them; they never introduce a section or sell.
+**The Clock Is Mono Rule.** A time on this page is JetBrains Mono with tabular figures. Never
+set a time in the body face, and never set anything else in the mono face — its use here is a
+deliberate exception the app does not extend to product UI.
 
-**The Fill-In Rule.** What the slip has already printed (times, courts, names, copy lines) is Roboto Condensed with tabular figures where digits align; the lone call number goes to Saira and the headline to League Gothic. What the visitor reads as interface or types is Instrument Sans.
+**The Board Is Not Set In Display Rule.** Roboto Condensed is on this page for court names
+only. The headline, the note, the times' neighbours and every control are Instrument Sans;
+the marketing voice is never condensed.
 
-**The One Form Rule.** The header above the tear is the app's header at the app's scale. Below it, the slip is one printed form whose parts keep their proportions to each other: labels, names, the field, the action, the follow link and the copy lines grow with the sheet alongside the number and headline, never below the app's sizes and capped for very wide screens, so no part of the form is set at a different scale from the rest.
-
-**The Poster Face Rule.** League Gothic never leaves `src/components/landing/`, and the landing never sets its interface in any condensed face.
+**The Struck Time Rule.** When a slot moves, the old time stays and is struck through, and the
+new time is bold magenta after it. Replacing the old time, fading it out, or showing only the
+new one deletes the evidence that the day kept up.
 
 ## Layout
 
-The slip is a single container (`inline-size` container query) over a full-height page. Gutters are 1rem on phones and 2rem from 640px. The pink sheet continues below the slip to fill the viewport, inset to match the pink copy in the plate.
+The page is a wall: a header row, a centred hero holding the board, then the headline, the one
+action and a line of explanation. The header keeps the app header's own measure — max
+1400px, 0.75rem by 1rem padding rising to 1rem from 640px — so the brand does not shift
+between the landing and the app. The hero is max 1200px, centred, with 1.5rem by 1rem by
+4rem padding, opening to 2rem by 1.5rem by 5rem from 640px.
 
-- **Phones (below 640px):** reading order on a two-column grid. Header wraps, wordmark above the nav row; below 23rem "Browse tournaments" shortens to "Browse", the same breakpoint and short label as the app header. Number box left, fields right in two columns (Match call spans both), the stamp right-aligned below, then the headline, a top-ruled form block (label, field, action stacked), the follow link and the copies band (13.5rem tall, bleeding to both edges).
-- **Tablets (640px to 959px, and any portrait width from 640px):** number box and a three-column field row share the first grid row; the stamp lands under the fields beside the number. The form becomes a two-column row (field, then action), the follow link below.
-- **Landscape from 960px:** the slip holds a fixed 16:9 frame (56.25cqw tall) and every element sits at its measured place in percent of a 1280x720 composition, so the whole form scales as one sheet; interface type inside it is capped near 1680px wide. The header is set near the app's size and centred in the strip above the tear. Two full-width navy rules divide the headline, the form row and the copies. This absolute composition belongs to this page; new landing sections use the grid rhythm above, not the percentages.
+The board is one CSS grid of six sheets plus the clash, and it lays out in three steps:
 
-Spacing rhythm: 0.25rem, 0.5rem, 0.75rem, 1rem, 1.25rem, 2rem. Field grids use 0.9rem by 1rem gaps; the slip uses 1.25rem rows. Every link, nav item, field and button keeps the app's 44px minimum target at every width, the landscape composition included.
+- **Phones (below 640px):** two sheets across (courts 1 and 2), the clash on its own row, then
+  court 6 on a third row at `min(100%, 15rem)`. Courts 3, 4 and 5 are not drawn: three sheets
+  already make the point at this width, and a fourth would push the headline off the first
+  screen. Gaps are 1rem by 0.75rem.
+- **Tablets (640px to 959px):** six columns; courts 1, 2 and 3 sit across the first row, and
+  the second row is split in half — the clash on the left, court 6 on the right. Gaps of
+  1.25rem.
+- **Laptops and walls (from 960px):** twelve columns, no row gap and 1.75rem columns. Courts
+  1–4 hang across the top row; court 5, the clash and court 6 hang on the second row, each
+  nudged up by a different amount (−1.5rem, −0.5rem, −0.25rem) so the pins do not read as a
+  second row of a table.
+
+Inside a sheet, the grid is two columns: an `auto` stamp column and a `1fr` match column, both
+ruled 1.5px. The sheet draws only its top and right rule and the neighbour supplies the others,
+so two sheets meeting never print a double line. Rows are `1.75rem` high, the same as the
+hatch's row rhythm, so the pen strokes of the match column land on the rules of the stamp
+column in every sheet.
+
+Spacing rhythm: 0.25rem, 0.5rem, 0.625rem, 0.875rem, 1rem, 1.75rem, 2rem. The headline sits
+2.75rem under the board on phones (1.5rem from 960px), the actions 1.75rem below it, and the
+subhead 3rem below those. Every link, nav item and the action keeps a 44px target (48px for
+the action) at every width.
+
+### Named Rules
+**The Pinned Rule.** A sheet is pinned, never placed: each carries its own tilt between −2.2
+and 2.4 degrees, its own lift, and a paper shadow. No two sheets share an angle, and nothing
+except a sheet and the circled note is allowed to be askew.
+
+**The Rows Meet Rule.** The sheet rule, the row height (1.75rem) and the hatch's row rhythm are
+one measurement. If the row height changes, every hatch pattern changes with it, or the board
+stops looking drawn by hand on ruled stock.
 
 ## Elevation & Depth
 
-Flat surfaces, with depth only where one sheet of paper lies on another. The slip lies on the copies, which lie on the pink sheet; the overlap is shown by the torn edges and edge shading in the raster plates (top tear, copies plate) and by soft CSS shadows that trace those tears. The stamp's ink texture and the action frame's rough print are rasters too.
+Depth is physical: paper lying on a wall, not surfaces floating over a background. A sheet at
+rest casts a soft three-layer shadow just wide enough to lift its edge off the grey; on hover
+it rises 4px and the shadow deepens. The circled clash note gets one magenta-tinted shadow so
+the mark reads as ink pressed hard enough to bruise the paper. Nothing else on the page has a
+shadow — no header, no button, no text.
+
+### Shadow Vocabulary
+- **Sheet at rest** (`0 1px 0 rgb(0 0 0 / 0.04), 0 8px 18px -6px rgb(0 0 0 / 0.18), 0 2px 4px rgb(0 0 0 / 0.06)`):
+  every court sheet, under its tilt and lift.
+- **Sheet lifted** (`0 1px 0 rgb(0 0 0 / 0.04), 0 16px 28px -10px rgb(0 0 0 / 0.24), 0 3px 6px rgb(0 0 0 / 0.07)`):
+  the same sheet 4px higher on hover.
+- **Marked note** (`0 6px 16px -8px rgb(216 27 138 / 0.4)`): the clash note only, tinted by the
+  highlighter.
 
 ### Named Rules
-**The Paper-Only Depth Rule.** Elevation exists only where one sheet lies on another, and every shadow follows a real torn edge: the top tear carries a soft `drop-shadow` of its own fibres, and each copy's tear casts a blurred neutral band (rgb(20 20 24 / 0.3), 4px / 0.3cqw drop, 3px / 0.25cqw blur) shaped by that sheet's own outline mask (`copies-slip-mask.png`, `copies-yellow-mask.png`: the outline nudged down minus itself). The canary's tear also shows a 2px white paper rim from the same mask. No `box-shadow` on any CSS-drawn box, and no shadow that does not trace a sheet.
+**The Paper-Lift Rule.** Elevation exists only where paper lifts off the wall. No shadow on
+the header, the button, the headline or any CSS-drawn line, and no shadow that is not tied to
+a sheet or to the circled note.
 
 ## Shapes
 
-The slip's printed matter is square (radius 0): the number box, the field rules, the name input. Structure is drawn with 1.5px Form-Rule Navy strokes, as open underlines for fields and closed boxes for the number and the input; in landscape the poster rules (number box, field underlines, slip dividers) scale to 0.12 to 0.16cqw while the name field keeps 1.5px. Irregular silhouettes (torn edges, the stamp's rough frame, the action's double-ruled frame) come only from rasters, either placed as images or applied as CSS masks and inked with a token colour.
+Card stock, straight rules and one drawn mark. Sheets are 3px-rounded at the corners (the
+paper's own give, not a UI pill); the internal grid is square, drawn with 1.5px Rule strokes
+and joined so no side doubles. Hatch fills are repeating linear gradients at three angles —
+diagonal −55°, fine −45°, and a cross hatch at ±45° — in four patterns across the six sheets
+(diagonal, fine, cross twice, dense twice), each with its own spacing and stroke weight, so
+neighbouring sheets never repeat a stroke. The match column also carries a row rhythm drawn as
+a repeating gradient, which is what makes the slots read as slots.
 
-**The Ruled-Form Rule.** If the slip prints it in CSS, it is a straight navy rule or a square ruled box. If it is torn, inked or rough, it is a plate.
+The clash is the page's one drawn gesture: a 2.5px magenta rectangle ringing a white note, a
+"+12 min" beside it, and a hand-drawn arrow — a curved SVG path with a separate head, 48 by 20,
+2px stroke, round caps — pointing at the sheet that moved. On a phone the arrow turns 90° and
+points down, because the sheet is then below.
+
+The one action is a 2px-rounded dark block; the follow link is text with a 1.5px underline 5px
+under it, thickening to 2.5px on hover. There are no icons on the page except that arrow.
+
+### Named Rules
+**The Ruled-Form Rule.** If the board prints a line, it is a 1.5px Rule stroke, square, and
+shared with its neighbour rather than doubled. Rounded corners belong to the paper, not to
+anything printed on it.
+
+**The Drawn-Mark Rule.** The circle and the arrow are the only two marks that are not type or
+rules, and both must look drawn: a 2.5px ring and a two-path SVG arrow. Never replace them
+with a chip, a badge, an icon font or a clip-path.
 
 ## Components
 
-### Buttons
-Stamped, not filled: the primary action is navy ink printed inside a stamp frame on the paper.
-- **Shape:** the double-ruled stamp frame comes from the cta-frame plate, used as a CSS mask stretched to the button and filled with `currentColor`; no CSS border or radius.
-- **Primary:** transparent fill, Tournova Navy label and frame, label never wraps. Phones and tablets: 52px minimum height, 0 1.25rem padding. Landscape: the comp's box (30.47% by 11.94% of the slip).
-- **Hover / Focus:** label and frame shift together to Pressed Navy (a 160ms ease-out colour transition when motion is allowed). Focus draws the shared 2px navy outline at 3px offset. On press the label drops 1px.
-- **Sign in:** a plain nav link like Browse tournaments: Instrument Sans 500, Muted Ink, App Ink and an underline on hover, the shared navy focus outline.
-- There is one primary action per slip; secondary actions are links.
+### Header
+- **Shape:** one row, the app header's: mark plus wordmark left, plain links right, 1400px max,
+  44px targets.
+- **Brand:** the TournovaMark at 20px in Tournova Navy, then "Tournova" in Instrument Sans 600
+  1.125rem at App Ink.
+- **Nav:** Browse tournaments and Sign in in Instrument Sans 500 0.875rem, Muted Ink at rest,
+  App Ink plus a 1.5px underline at 4px offset on hover (150ms colour transition), 0.625rem of
+  side padding each.
+- **Mobile:** below 420px the label shortens to "Browse" while the full label stays in the
+  accessibility tree, the same breakpoint and the same short word as the app header.
+- **Focus:** the shared 2px navy outline at 3px offset.
 
-### Inputs / Fields
-- **Style:** a square 1.5px Form-Rule Navy box at every width, transparent over the paper, 0.9rem inline padding, Carbon Black Instrument Sans 500, navy caret; 48px minimum height on phones and tablets, and in landscape the comp's box (36.48% wide, max(2.75rem, 7.22%) tall). The label sits above it as a printed form label.
-- **Focus:** the 2px navy outline drawn flush (offset 0) so it reads as the box's own edge thickening.
+### Court sheet (signature)
+The page's unit and its whole argument: a white sheet, tilted and pinned, holding a court's
+day.
+- **Shape:** 3px radius, 0.875rem padding (1rem at the foot), the shadow from Elevation, tilt
+  and lift from the Pinned Rule.
+- **Title:** "Court N" in Roboto Condensed 600 uppercase 0.9375rem, 0.06em tracked, above the
+  grid.
+- **Grid:** stamp column plus hatched match column, 1.5px Rule strokes, 1.75rem rows.
+- **Hover:** rises 4px with a 220ms `cubic-bezier(0.2, 0.7, 0.2, 1)` transform and a 220ms
+  shadow ease. The sheet is an illustration, not a control: hovering it does not open
+  anything.
 
-### Navigation
-- **Style:** the app header's mark, labels and short-label breakpoint. Left: the TournovaMark in Tournova Navy (1.25rem tall) beside the Instrument Sans wordmark in App Ink. Right: "Browse tournaments" and Sign in, in Instrument Sans 500, Muted Ink, each with a 44px minimum target. There is no placeholder item: a section is added to the nav when its page exists.
-- **Hover:** App Ink and a 1.5px underline at 4px offset (a 150ms colour transition).
-- **Mobile:** the header wraps, wordmark above the nav row; "Browse" replaces the full label below 23rem.
+### Stamp column and time rows
+- **Style:** JetBrains Mono 0.75rem tabular figures in Soft Ink, one 1.75rem row per slot,
+  0.625rem right padding, 1.5px rules below each.
+- **Moved slot:** the old time is wrapped in `<s>` in Muted Ink; the new time follows it in bold
+  Highlighter Magenta. Both sit on the same row, so the change reads as a correction on a
+  printed sheet.
+- **Why struck:** the row is 12px type, and the strike is the second channel that carries
+  "this moved" when the colour does not.
+
+### Match column (hatch)
+- **Style:** a grid of repeating row rules (1.5px every 1.75rem) under one of four hand-hatch
+  patterns: diagonal, cross, fine lines or dense — each court keeps its own.
+- **Rule:** the pattern belongs to the court, not to a match state. It is decoration that says
+  "this slot is taken", and it never encodes a status.
+
+### Clash note and shift (signature)
+- **Shape:** white note, 2.5px Highlighter Magenta ring, 0.75rem by 1.125rem padding, the marked
+  note shadow, no radius beyond the paper's 3px.
+- **Text:** "Rest clash: L. Tran plays 11:10 and 11:22" in Instrument Sans 600 1rem, Pen Black.
+- **Shift:** "+12 min" in Instrument Sans 600 0.875rem beside the note, then the drawn arrow.
+- **Layout:** note and shift sit centred side by side with 0.5rem between them; below 640px the
+  pair stacks and the arrow rotates 90°.
+- **One per page:** exactly one clash is circled. A second circle would turn the promise into a
+  feature list.
+
+### Primary action
+- **Shape:** Pen Black block, 2px radius, 48px high, 1.5rem side padding, label in Instrument
+  Sans 500 1rem, Sheet White.
+- **Behaviour:** a real `<button type="submit">` inside a plain `<form method="get">` to
+  `/tournaments/new`, so the create flow is reachable before the page's script has loaded.
+- **Hover / Active:** fill to Raised Black over 160ms; on press the block drops 1px.
+- **Focus:** the shared navy outline. There is one primary action, and it is not navy: navy on
+  this page is the brand, and a dark block is what a person would print.
 
 ### Follow link
-Tournova Navy Instrument Sans 600 (sizes under Typography) with an inline arrow, 44px minimum target; on hover it underlines like the nav, and when motion is allowed the arrow slides 0.2em right (220ms, ease-out-expo).
+- **Style:** Instrument Sans 500 1rem in Pen Black, underlined at 1.5px with a 5px offset,
+  thickening to 2.5px on hover, 44px target. No arrow, no navy.
+- **Pairing:** it sits beside the action, 2.25rem away, so following a tournament reads as the
+  secondary road it is.
 
-### Call number box (signature)
-A square 1.5px ruled box holding a small navy "No." label and the call number in Saira Extra Condensed at billboard scale. It is the slip's anchor and appears once.
-
-### Ruled field (signature)
-Navy label on a 1.5px rule, value or names below. Values are Roboto Condensed 700 with tabular figures; player names drop to 500.
-
-### Stamp
-The CALLED status is a raster stamp (stamp plate) placed on the slip from the first frame. When motion is allowed it presses once: 620ms, 350ms delay, from slightly large, rotated and blurred to settled. This is the only authored entrance motion; with reduced motion the stamp is simply there.
-
-### Copies band
-The canary and pink copies are a single raster plate under the slip's bottom tear. Text printed on the canary copy (the next call line and a short heading) is Roboto Condensed 700 in Carbon Black, confined by a mask of the canary sheet's own outline (copies-yellow-mask plate), so where a line runs into the torn edge it is cut along the tear rather than by a straight box edge. In the landscape composition the heading's second line is deliberately cut this way. The following number sits on the pink copy.
+### Headline and subhead
+- **Headline:** two lines, centred, `text-wrap: balance`, an h1 inside the hero's labelled
+  `<section>`.
+- **Subhead:** "When a match runs late, the rest of the day keeps up." in Instrument Sans 500,
+  muted at the clamp above, 3rem under the actions.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep the slip world (plates, League Gothic, `--slip-*` print tokens) inside `src/components/landing/`, and take brand, interaction, UI type and the condensed faces from the app's tokens in `src/styles.css`.
-- **Do** use the app's navy (`--primary`, aliased as `--slip-action`) for the primary action, body links, focus, selection and caret; header nav and Sign in stay Muted Ink at rest.
-- **Do** make interaction legible by form when it shares the print's navy: a stamped frame, an arrowed link, an outline.
-- **Do** reuse the app header's mark, wordmark, nav labels and short-label breakpoint rather than drawing landing versions; Sign in is a plain nav link here.
-- **Do** draw the slip's structure with 1.5px Form-Rule Navy rules and square boxes (radius 0).
-- **Do** put labels in Ballpoint Navy sentence case Instrument Sans directly above the rule they name.
-- **Do** render paper (grain, tears, copies, stamp ink, the action frame) as raster plates, placed as images or applied as masks, and self-host every face.
-- **Do** keep the header at the app's scale and let the slip below it scale as one form in the comp's proportions, never below the app's sizes or 44px targets and capped near 1680px wide; keep the shared 2px navy focus outline.
-- **Do** respect reduced motion: the stamp press, the action's colour transition and the follow-arrow slide run only under `prefers-reduced-motion: no-preference`.
+- **Do** build the page from the app's tokens — `--background` wall, `--surface` sheet,
+  `--foreground` ink, `--primary` mark and focus — and keep the `--cs-*` names local to
+  `src/components/landing/court-sheets.css`.
+- **Do** reuse the app header's mark, wordmark, nav labels, 44px targets and the 420px short
+  label; the landing header is that header, not a version of it.
+- **Do** pin every sheet with its own tilt, lift and shadow, and let the sheets on the second
+  row sit at different heights.
+- **Do** strike the old time and print the new one in magenta bold on the same row.
+- **Do** keep exactly one circled clash, and let the sheet it touches already show the moved
+  time.
+- **Do** print court names in Roboto Condensed small caps and times in JetBrains Mono tabular
+  figures; set everything else in Instrument Sans.
+- **Do** give the board a `role="img"` with a label that states the six sheets and the clash,
+  so a screen reader gets the same argument as the picture.
+- **Do** run the arrival motion — sheets pinning in 60ms steps, then the circle — only under
+  `prefers-reduced-motion: no-preference`, and keep the shared 2px navy focus outline.
 
 ### Don't:
-- **Don't** apply `--slip-*` tokens, League Gothic or the paper plates to Desk, Schedule, Explore or any product UI.
-- **Don't** make a printed navy label or rule clickable, or give it hover or focus states.
-- **Don't** make anything red that the visitor can act on; red is only the CALLED stamp, a picture of a rubber stamp rather than a state.
-- **Don't** add `box-shadow` to CSS-drawn boxes, cast a shadow that does not trace a torn sheet, or round the slip's printed boxes; rough corners belong only to paper and stamp rasters.
-- **Don't** use cream, aged or tinted paper for the slip; the ground is Carbonless White under grain.
-- **Don't** use canary or pink as accent colours for text, buttons or highlights.
-- **Don't** imitate torn edges or stamp texture with CSS gradients or clip-paths; roughness always comes from a plate.
+- **Don't** invent a landing palette. No cream, no paper tint, no second grey: the wall is
+  `--background` and the sheet is `--surface`.
+- **Don't** use navy for links, borders, titles or the action; navy is the mark and the focus
+  ring here.
+- **Don't** use magenta on anything a visitor can press, or as a badge/chip/status colour.
+- **Don't** set times in the body face or set anything but times in the mono face.
+- **Don't** let the hatch encode state, and don't vary its density to mean anything other than
+  which court's sheet it is.
+- **Don't** replace the circle, the shift or the arrow with an icon, a pill, a tooltip or a
+  badge; the marks are drawn, not componentised.
+- **Don't** add a second primary action, or a nav item whose page does not exist yet.
+- **Don't** let any sheet, note or header grow a shadow that is not in the Shadow Vocabulary.
 
 ### Honest exceptions
 These differ from `docs/design-principles.md` on purpose and stay on this page:
-- The slip's printed labels and rules are navy without being interactive, although navy means interaction in the app; they are a picture of a printed form, not controls.
-- The CALLED stamp is red although product red means danger, because it is a picture of a rubber stamp rather than a state the app reports.
-- The slip's square corners differ from the app's rounded cards.
-- The name field is ruled in Form-Rule Navy rather than `--border-control`; it is the slip's printed box, and its contrast on the paper is higher than the app's control edge.
+- **JetBrains Mono is used for the clock times**, although product UI never uses `font-mono`.
+  A board's times are set in a mono face; the product's own numbers use Saira and Instrument
+  Sans.
+- **Magenta exists only here.** The app has green (live), amber (overrun) and red
+  (destructive); this page adds a highlighter hue because the circle is a mark on paper rather
+  than a state the app reports.
+- **The primary action is dark, not navy.** The app's primary button is navy; the landing's one
+  action is a printed black block, because on this page navy belongs to the brand mark.
+- **Sheets are 3px-rounded** while the app's own surfaces round at up to 1rem (`--radius`);
+  card stock has a corner, a UI surface has a curve.
+- **Selection is ink on the wall** (`::selection` inverts pen and paper) rather than the app's
+  navy selection, so the page's one navy stays the mark.
+- `court-sheets.css` restates the mono stack as `--cs-mono` instead of reading `--font-mono`.
+  The stacks are identical today; the duplicate exists so the landing's type cannot change
+  under the product's token.

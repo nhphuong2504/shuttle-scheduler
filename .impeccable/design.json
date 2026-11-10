@@ -1,15 +1,16 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-10T20:16:11.302Z",
-  "title": "Design System: Tournova landing (The Match Call)",
-  "scope": "The landing's slip world (paper, tears, stamps, League Gothic, --slip-* print tokens) lives in src/components/landing/; brand, the shared navy, UI type and the condensed title and numeral faces are inherited from the app's tokens in src/styles.css. It is the Watch-mode front door of the system in docs/design-principles.md, not a separate product.",
+  "generatedAt": "2026-11-10T20:52:00.000Z",
+  "title": "Design System: Tournova landing (The Court Board)",
+  "scope": "The landing's board world (court sheets, hatch, the circled clash) lives in src/components/landing/ and is styled by court-sheets.css under .cs-page; the wall, sheet stock, ink, type families, brand mark and focus colour are the app's tokens in src/styles.css. It is the Watch-mode front door of the system in docs/design-principles.md, not a separate product.",
   "extensions": {
     "colorMeta": {
       "primary": {
         "role": "primary",
         "displayName": "Tournova Navy",
-        "canonical": "#22397A",
-        "source": "--primary (also --primary-ink, --ring) in src/styles.css, aliased as --slip-action",
+        "canonical": "oklch(35% 0.11 266)",
+        "source": "--primary in src/styles.css",
+        "note": "Read, never redefined: the TournovaMark at 20px and the 2px focus outline. It is not a fill, a link colour or a border on this page.",
         "tonalRamp": [
           "oklch(15% 0.044 266)",
           "oklch(25% 0.110 266)",
@@ -21,414 +22,458 @@
           "oklch(95% 0.044 266)"
         ]
       },
-      "primary-hover": {
-        "role": "primary",
-        "displayName": "Pressed Navy",
-        "canonical": "#1A2C5E",
-        "source": "--primary-hover, aliased as --slip-action-hover",
-        "tonalRamp": [
-          "oklch(15% 0.036 266)",
-          "oklch(25% 0.090 266)",
-          "oklch(35% 0.090 266)",
-          "oklch(45% 0.090 266)",
-          "oklch(55% 0.090 266)",
-          "oklch(70% 0.090 266)",
-          "oklch(85% 0.090 266)",
-          "oklch(95% 0.036 266)"
-        ]
-      },
-      "slip-blue": {
+      "mark": {
         "role": "secondary",
-        "displayName": "Ballpoint Navy",
-        "canonical": "#22397a",
+        "displayName": "Highlighter Magenta",
+        "canonical": "oklch(59% 0.235 349)",
+        "source": "--cs-mark in src/components/landing/court-sheets.css",
+        "note": "A marker stroke on a picture of paper: the 2.5px ring around the clash, the time that moved, and the tint of the note's shadow. Never a status, never pressable.",
         "tonalRamp": [
-          "oklch(15% 0.044 266)",
-          "oklch(25% 0.110 266)",
-          "oklch(35% 0.110 266)",
-          "oklch(45% 0.110 266)",
-          "oklch(55% 0.110 266)",
-          "oklch(70% 0.110 266)",
-          "oklch(85% 0.110 266)",
-          "oklch(95% 0.044 266)"
-        ],
-        "note": "Same value as --primary (the app navy was taken from it); named apart so print never inherits interaction states."
-      },
-      "slip-rule": {
-        "role": "secondary",
-        "displayName": "Form-Rule Navy",
-        "canonical": "#2f4673",
-        "tonalRamp": [
-          "oklch(15% 0.032 262)",
-          "oklch(25% 0.080 262)",
-          "oklch(35% 0.080 262)",
-          "oklch(45% 0.080 262)",
-          "oklch(55% 0.080 262)",
-          "oklch(70% 0.080 262)",
-          "oklch(85% 0.080 262)",
-          "oklch(95% 0.032 262)"
+          "oklch(18% 0.090 349)",
+          "oklch(28% 0.160 349)",
+          "oklch(38% 0.200 349)",
+          "oklch(48% 0.220 349)",
+          "oklch(59% 0.235 349)",
+          "oklch(72% 0.190 349)",
+          "oklch(85% 0.110 349)",
+          "oklch(95% 0.040 349)"
         ]
       },
-      "slip-pink-stock": {
-        "role": "tertiary",
-        "displayName": "Pink Stock",
-        "canonical": "#faacbe",
-        "tonalRamp": [
-          "oklch(15% 0.036 5)",
-          "oklch(25% 0.090 5)",
-          "oklch(35% 0.090 5)",
-          "oklch(45% 0.090 5)",
-          "oklch(55% 0.090 5)",
-          "oklch(70% 0.090 5)",
-          "oklch(85% 0.090 5)",
-          "oklch(95% 0.036 5)"
-        ]
-      },
-      "slip-paper": {
+      "ink": {
         "role": "neutral",
-        "displayName": "Carbonless White",
-        "canonical": "#f7f7f6",
+        "displayName": "Pen Black",
+        "canonical": "oklch(15.5% 0 0)",
+        "source": "--cs-ink in court-sheets.css (#111111)",
         "tonalRamp": [
-          "oklch(15% 0.001 100)",
-          "oklch(25% 0.003 100)",
-          "oklch(35% 0.003 100)",
-          "oklch(45% 0.003 100)",
-          "oklch(55% 0.003 100)",
-          "oklch(70% 0.003 100)",
-          "oklch(85% 0.003 100)",
-          "oklch(95% 0.001 100)"
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
-      "slip-ink": {
+      "ink-raised": {
         "role": "neutral",
-        "displayName": "Carbon Black",
-        "canonical": "#0b0b0b",
+        "displayName": "Raised Black",
+        "canonical": "oklch(26% 0 0)",
+        "source": "the action's :hover fill in court-sheets.css (#2B2B2B)",
         "tonalRamp": [
-          "oklch(15% 0.000 0)",
-          "oklch(25% 0.000 0)",
-          "oklch(35% 0.000 0)",
-          "oklch(45% 0.000 0)",
-          "oklch(55% 0.000 0)",
-          "oklch(70% 0.000 0)",
-          "oklch(85% 0.000 0)",
-          "oklch(95% 0.000 0)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(36% 0 0)",
+          "oklch(46% 0 0)",
+          "oklch(56% 0 0)",
+          "oklch(71% 0 0)",
+          "oklch(86% 0 0)",
+          "oklch(95% 0 0)"
         ]
       },
-      "foreground": {
+      "ink-soft": {
         "role": "neutral",
-        "displayName": "App Ink",
-        "canonical": "#171A1D",
-        "source": "--foreground",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(33% 0.006 250)",
+        "source": "--cs-ink-soft in court-sheets.css (#3A3D40)",
+        "note": "The stamp column's times: read at a glance across a room, so still dark rather than grey.",
         "tonalRamp": [
           "oklch(15% 0.003 250)",
-          "oklch(25% 0.008 250)",
-          "oklch(35% 0.008 250)",
-          "oklch(45% 0.008 250)",
-          "oklch(55% 0.008 250)",
-          "oklch(70% 0.008 250)",
-          "oklch(85% 0.008 250)",
-          "oklch(95% 0.003 250)"
+          "oklch(23% 0.006 250)",
+          "oklch(33% 0.006 250)",
+          "oklch(43% 0.006 250)",
+          "oklch(55% 0.006 250)",
+          "oklch(70% 0.006 250)",
+          "oklch(85% 0.004 250)",
+          "oklch(95% 0.002 250)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(25% 0 0)",
+        "source": "--cs-rule in court-sheets.css (#2A2A2A)",
+        "note": "Every 1.5px line: sheet grid, row rules, the stamp column's edge. A shade softer than the ink it frames.",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "hatch": {
+        "role": "neutral",
+        "displayName": "Hatch",
+        "canonical": "rgb(17 17 17 / 0.42)",
+        "source": "--cs-hatch in court-sheets.css",
+        "note": "The pen strokes filling a match slot. rgb(17 17 17 / 0.28) and rgb(17 17 17 / 0.34) are the fine-line and dense steps.",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "wall": {
+        "role": "neutral",
+        "displayName": "Wall",
+        "canonical": "oklch(97% 0.002 145)",
+        "source": "--background in src/styles.css (#F4F5F4)",
+        "note": "The page ground: the board hangs on the same grey as every other Tournova screen.",
+        "tonalRamp": [
+          "oklch(15% 0.002 145)",
+          "oklch(25% 0.002 145)",
+          "oklch(35% 0.002 145)",
+          "oklch(45% 0.002 145)",
+          "oklch(55% 0.002 145)",
+          "oklch(70% 0.002 145)",
+          "oklch(85% 0.002 145)",
+          "oklch(97% 0.002 145)"
+        ]
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Sheet Stock",
+        "canonical": "oklch(100% 0 0)",
+        "source": "--surface in src/styles.css (#FFFFFF)",
+        "note": "The court sheets and the clash note: the app's card surface, untoned.",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(100% 0 0)"
         ]
       },
       "muted-foreground": {
         "role": "neutral",
         "displayName": "Muted Ink",
-        "canonical": "#5B656C",
-        "source": "--muted-foreground in src/styles.css",
+        "canonical": "oklch(49% 0.018 240)",
+        "source": "--muted-foreground in src/styles.css (#5B656C)",
+        "note": "Header nav at rest, and the old time once it is struck through. court-sheets.css records that the struck time still reads at 4.5:1 on the wall and 6:1 on the sheet.",
         "tonalRamp": [
           "oklch(15% 0.006 240)",
           "oklch(25% 0.015 240)",
           "oklch(35% 0.020 240)",
-          "oklch(45% 0.020 240)",
-          "oklch(55% 0.020 240)",
+          "oklch(49% 0.020 240)",
+          "oklch(58% 0.020 240)",
           "oklch(70% 0.020 240)",
           "oklch(85% 0.012 240)",
           "oklch(95% 0.004 240)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "App Ink",
+        "canonical": "oklch(21% 0.008 250)",
+        "source": "--foreground in src/styles.css (#171A1D)",
+        "note": "The wordmark, and a nav link on hover.",
+        "tonalRamp": [
+          "oklch(15% 0.003 250)",
+          "oklch(21% 0.008 250)",
+          "oklch(33% 0.008 250)",
+          "oklch(45% 0.008 250)",
+          "oklch(55% 0.008 250)",
+          "oklch(70% 0.008 250)",
+          "oklch(85% 0.003 250)",
+          "oklch(95% 0.003 250)"
         ]
       }
     },
     "typographyMeta": {
       "wordmark": {
         "displayName": "Wordmark",
-        "purpose": "Tournova beside the mark: Instrument Sans 600, 1.125rem, -0.02em, at the app header scale."
-      },
-      "numerals": {
-        "displayName": "Numerals",
-        "purpose": "The call number in its ruled box; one per slip; poster matter, scales with the sheet. --slip-number = var(--font-numeral), Saira Extra Condensed 800; proportional figures, lone numbers only."
+        "purpose": "Tournova beside the 20px mark, at the app header's size: Instrument Sans 600, 1.125rem, -0.02em."
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "The promise printed as the slip's title; poster matter, scales with the sheet. CSS variable --slip-numerals (named against its role)."
+        "purpose": "The promise under the board: the page's h1 in Instrument Sans 600, clamp(2rem, 5.2vw, 3.5rem), balanced to two lines."
       },
-      "value": {
-        "displayName": "Value",
-        "purpose": "Filled-in field values (court, time); tabular, never wraps; scales with the sheet in landscape."
+      "subhead": {
+        "displayName": "Subhead",
+        "purpose": "One line of plain explanation below the actions: Instrument Sans 500, clamp(1.125rem, 2.2vw, 1.5rem)."
       },
-      "action": {
-        "displayName": "Action",
-        "purpose": "The stamped primary action's label, in navy (Roboto Condensed via --slip-form = var(--font-display))."
+      "sheet-title": {
+        "displayName": "Sheet title",
+        "purpose": "\"Court N\" printed on the sheet's top edge: Roboto Condensed 600, 0.9375rem, uppercase, 0.06em tracked."
       },
-      "copy-heading": {
-        "displayName": "Copy heading",
-        "purpose": "The line printed on the canary copy."
+      "time": {
+        "displayName": "Time",
+        "purpose": "The stamp column, one row per slot: JetBrains Mono, 0.75rem, tabular figures so the column reads as a column. The page's only mono."
       },
-      "print": {
-        "displayName": "Print",
-        "purpose": "Player names; copy lines at 700 with tabular figures."
+      "clash-note": {
+        "displayName": "Clash note",
+        "purpose": "The circled sentence in Instrument Sans 600, 1rem, Pen Black."
       },
-      "label": {
-        "displayName": "Label",
-        "purpose": "Printed form labels in Ballpoint Navy sentence case Instrument Sans."
+      "clash-shift": {
+        "displayName": "Clash shift",
+        "purpose": "The \"+12 min\" beside the note: Instrument Sans 600, 0.875rem."
       },
       "nav": {
         "displayName": "Nav",
-        "purpose": "Header items, Sign in included, as plain links in Instrument Sans 500, 0.875rem; Muted Ink at rest, App Ink on hover."
+        "purpose": "Browse tournaments and Sign in as plain links: Instrument Sans 500, 0.875rem, Muted Ink at rest, App Ink on hover."
+      },
+      "action": {
+        "displayName": "Action",
+        "purpose": "The one button's label: Instrument Sans 500, 1rem, Sheet White on Pen Black."
       },
       "link": {
         "displayName": "Link",
-        "purpose": "The follow link, navy Instrument Sans 600."
-      },
-      "input": {
-        "displayName": "Input",
-        "purpose": "What the visitor types into the name field."
+        "purpose": "The follow link: Instrument Sans 500, 1rem, Pen Black, underlined rather than navy."
       }
     },
     "shadows": [
       {
-        "name": "tear-fibres",
-        "value": "filter: drop-shadow(0 2px 1.5px rgb(30 40 60 / 0.35))",
-        "purpose": "The top tear plate lifting off the slip beneath it."
+        "name": "sheet-rest",
+        "value": "0 1px 0 rgb(0 0 0 / 0.04), 0 8px 18px -6px rgb(0 0 0 / 0.18), 0 2px 4px rgb(0 0 0 / 0.06)",
+        "purpose": "Every court sheet, under its tilt and lift: just wide enough to lift the edge off the grey wall."
       },
       {
-        "name": "tear-band",
-        "value": "rgb(20 20 24 / 0.3); mask: sheet outline offset 4px (0.3cqw landscape) minus itself; filter: blur(3px) (0.25cqw landscape)",
-        "purpose": "The band a torn sheet casts on the one below: under the slip's bottom tear (copies-slip-mask.png) and the canary tear (copies-yellow-mask.png)."
+        "name": "sheet-lift",
+        "value": "0 1px 0 rgb(0 0 0 / 0.04), 0 16px 28px -10px rgb(0 0 0 / 0.24), 0 3px 6px rgb(0 0 0 / 0.07)",
+        "purpose": "The same sheet 4px higher on hover."
       },
       {
-        "name": "tear-rim",
-        "value": "rgb(251 251 249); same mask, 2px (0.17cqw) offset; blur(0.4px)",
-        "purpose": "The white paper rim showing under the canary tear."
+        "name": "clash-marked",
+        "value": "0 6px 16px -8px rgb(216 27 138 / 0.4)",
+        "purpose": "The circled clash note only: ink pressed hard enough to bruise the paper."
       }
     ],
     "borders": [
       {
-        "name": "form-rule",
-        "value": "1.5px solid #2f4673",
-        "purpose": "Field underlines, number box, name field, slip dividers; in landscape the poster rules scale to 0.12-0.16cqw while the name field keeps 1.5px."
+        "name": "sheet-rule",
+        "value": "1.5px solid #2A2A2A",
+        "purpose": "The sheet grid, the stamp column's edge and every row rule. A sheet draws only its top and right rule so neighbours never print a double line."
+      },
+      {
+        "name": "clash-ring",
+        "value": "2.5px solid #D81B8A",
+        "purpose": "The highlighter ring around the one clash note."
       }
     ],
     "focus": [
       {
         "name": "focus-navy",
-        "value": "outline: 2px solid var(--primary, #22397A); outline-offset: 3px;",
-        "purpose": "Every focusable element on the landing; the name field draws it at offset 0. Selection is navy with Carbonless White text; the caret is navy."
+        "value": "outline: 2px solid var(--primary); outline-offset: 3px;",
+        "purpose": "Every focusable element on the landing. Selection inverts pen and paper (ink background, wall text) so navy stays the mark's alone."
       }
     ],
     "motion": [
       {
-        "name": "stamp-press",
-        "value": "620ms cubic-bezier(0.16, 1, 0.3, 1) 350ms both",
-        "purpose": "The CALLED stamp presses once, from scale 1.14 / -1.5deg / blur 1.5px to settled. Reduced motion: none."
+        "name": "sheet-pin",
+        "value": "cs-pin 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both; 60ms stagger per sheet",
+        "purpose": "The sheets pin down in order, from 14px low and twice their tilt. Only under prefers-reduced-motion: no-preference."
       },
       {
-        "name": "arrow-nudge",
-        "value": "translate 220ms cubic-bezier(0.16, 1, 0.3, 1)",
-        "purpose": "Follow-link arrow slides 0.2em on hover. Only under prefers-reduced-motion: no-preference."
+        "name": "clash-circle",
+        "value": "cs-circle 420ms ease-out 620ms both",
+        "purpose": "The circle arrives after the sheets have settled, from scale 0.94. Only under prefers-reduced-motion: no-preference."
       },
       {
-        "name": "action-ink",
-        "value": "color 160ms ease-out",
-        "purpose": "The stamped action's label and frame shift to Pressed Navy together (the frame is currentColor). Only under prefers-reduced-motion: no-preference."
+        "name": "sheet-hover",
+        "value": "transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 220ms ease",
+        "purpose": "A hovered sheet rises 4px. The sheet is an illustration, not a control."
+      },
+      {
+        "name": "action-press",
+        "value": "background 160ms ease, transform 160ms ease",
+        "purpose": "The one action's fill moves to Raised Black and drops 1px on press."
+      },
+      {
+        "name": "nav-ink",
+        "value": "color 150ms ease-out",
+        "purpose": "A nav link moves from Muted Ink to App Ink and underlines."
       }
     ],
     "breakpoints": [
       {
         "name": "nav-short",
-        "value": "23rem",
-        "note": "max-width: 'Browse tournaments' shortens to 'Browse', matching the app header"
+        "value": "420px",
+        "note": "max-width: 'Browse tournaments' shortens to 'Browse' while the full label stays in the accessibility tree, matching the app header"
       },
       {
-        "name": "tablet",
+        "name": "board-tablet",
         "value": "640px",
-        "note": "640-959px, or any portrait width from 640px"
+        "note": "six columns; courts 1-3 across the top, clash and court 6 splitting the second row; courts 3, 4 and 5 begin to appear"
       },
       {
-        "name": "landscape",
+        "name": "board-wall",
         "value": "960px",
-        "note": "min-width 960px and landscape orientation: fixed 16:9 slip composition"
+        "note": "twelve columns; courts 1-4 across the top, courts 5, the clash and 6 on the second row at staggered heights"
       }
     ],
-    "plates": [
-      {
-        "name": "paper",
-        "path": "assets/plates/paper.png",
-        "purpose": "Tiled paper grain for the page and, multiplied over Pink Stock, the pink sheet."
-      },
-      {
-        "name": "top-tear",
-        "path": "assets/plates/top-tear.png",
-        "purpose": "Torn edge under the header."
-      },
-      {
-        "name": "copies",
-        "path": "assets/plates/copies.webp",
-        "purpose": "Canary and pink copies under the slip (copies.png is the source)."
-      },
-      {
-        "name": "copies-slip-mask",
-        "path": "assets/plates/copies-slip-mask.png",
-        "purpose": "Outline of the slip's bottom tear; shapes the shadow it casts on the copies."
-      },
-      {
-        "name": "copies-yellow-mask",
-        "path": "assets/plates/copies-yellow-mask.png",
-        "purpose": "Outline of the canary sheet: confines the copy print (cut along the tear where a line runs into it, intended in landscape) and shapes the canary tear's shadow and rim."
-      },
-      {
-        "name": "stamp",
-        "path": "assets/plates/stamp.png",
-        "purpose": "CALLED status stamp; the only red on the page."
-      },
-      {
-        "name": "cta-frame",
-        "path": "assets/plates/cta-frame.png",
-        "purpose": "Double-ruled stamp frame around the primary action, used as a CSS mask filled with currentColor (navy)."
-      }
-    ]
+    "plates": []
   },
   "components": [
     {
-      "name": "Stamped Call Button",
+      "name": "Court Sheet",
+      "kind": "card",
+      "refersTo": "court-sheet",
+      "description": "The page's unit: a white sheet, tilted and pinned, holding one court's day in a stamp column and a hatched match column.",
+      "html": "<div class=\"ds-sheet\"><p class=\"ds-sheet-title\">Court 2</p><div class=\"ds-sheet-grid\"><ol class=\"ds-times\"><li>09:00</li><li>09:25</li><li>09:50</li><li class=\"ds-moved\"><s>11:10</s>11:22</li></ol><div class=\"ds-slots\"></div></div></div>",
+      "css": ".ds-sheet { --rule: #2A2A2A; width: 16rem; padding: 0.875rem 0.875rem 1rem; background: #FFFFFF; border-radius: 3px; box-shadow: 0 1px 0 rgb(0 0 0 / 0.04), 0 8px 18px -6px rgb(0 0 0 / 0.18), 0 2px 4px rgb(0 0 0 / 0.06); transform: rotate(1.4deg); transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 220ms ease; } .ds-sheet:hover { transform: translateY(-4px) rotate(1.4deg); box-shadow: 0 1px 0 rgb(0 0 0 / 0.04), 0 16px 28px -10px rgb(0 0 0 / 0.24), 0 3px 6px rgb(0 0 0 / 0.07); } .ds-sheet-title { margin: 0 0 0.375rem 0.125rem; color: #111111; font-family: 'Roboto Condensed', 'Arial Narrow', ui-sans-serif, system-ui, sans-serif; font-size: 0.9375rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; } .ds-sheet-grid { display: grid; grid-template-columns: auto 1fr; border: 1.5px solid var(--rule); border-left: 0; border-bottom: 0; } .ds-times { margin: 0; padding: 0; list-style: none; border-right: 1.5px solid var(--rule); } .ds-times li { display: flex; align-items: center; gap: 0.375rem; height: 1.75rem; padding: 0 0.625rem 0 0.25rem; border-bottom: 1.5px solid var(--rule); color: #3A3D40; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; font-variant-numeric: tabular-nums; } .ds-times s { color: #5B656C; } .ds-moved { color: #D81B8A !important; font-weight: 700; } .ds-slots { background-image: repeating-linear-gradient(45deg, transparent 0 7px, rgb(17 17 17 / 0.42) 7px 8px), repeating-linear-gradient(-45deg, transparent 0 7px, rgb(17 17 17 / 0.42) 7px 8px); }"
+    },
+    {
+      "name": "Clash Note",
+      "kind": "custom",
+      "refersTo": "clash-note",
+      "description": "The one circled clash: a white note inside a 2.5px highlighter ring, with '+12 min' and a hand-drawn arrow beside it.",
+      "html": "<div class=\"ds-clash\"><p class=\"ds-clash-note\">Rest clash:<br>L. Tran plays 11:10<br>and 11:22</p><p class=\"ds-clash-shift\"><span>+12 min</span><svg viewBox=\"0 0 48 20\" aria-hidden=\"true\"><path d=\"M2 4 C 14 18, 30 18, 44 12\"/><path d=\"M37 7 L 45 12 L 37 17\"/></svg></p></div>",
+      "css": ".ds-clash { display: flex; align-items: center; justify-content: center; gap: 0.5rem; } .ds-clash-note { margin: 0; padding: 0.75rem 1.125rem; background: #FFFFFF; border: 2.5px solid #D81B8A; color: #111111; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: 1rem; font-weight: 600; line-height: 1.3; text-align: left; box-shadow: 0 6px 16px -8px rgb(216 27 138 / 0.4); } .ds-clash-shift { display: flex; flex-direction: column; align-items: center; margin: 0; color: #111111; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; white-space: nowrap; } .ds-clash-shift svg { width: 3rem; height: 1.25rem; fill: none; stroke: #111111; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }"
+    },
+    {
+      "name": "Primary Action",
       "kind": "button",
-      "refersTo": "button-call",
-      "description": "The one primary action: navy ink in a stamp frame. The shipped frame is the cta-frame plate as a mask filled with currentColor; this snippet approximates it with a double border in currentColor.",
-      "html": "<button class=\"ds-call-btn\"><span class=\"ds-call-label\">Run a tournament — free</span></button>",
-      "css": ".ds-call-btn { display: inline-grid; place-items: center; min-height: 52px; padding: 0 1.25rem; background: transparent; color: var(--primary, #22397A); border: 4px double currentColor; border-radius: 0; cursor: pointer; } .ds-call-label { font-family: var(--font-display, 'Roboto Condensed', 'Arial Narrow', sans-serif); font-weight: 700; font-size: 1.375rem; line-height: 1; letter-spacing: -0.01em; white-space: nowrap; } .ds-call-btn:hover { color: var(--primary-hover, #1A2C5E); } .ds-call-btn:focus-visible { outline: 2px solid var(--primary, #22397A); outline-offset: 3px; } .ds-call-btn:active .ds-call-label { margin-top: 1px; } @media (prefers-reduced-motion: no-preference) { .ds-call-btn { transition: color 160ms ease-out; } }"
-    },
-    {
-      "name": "Name Field",
-      "kind": "input",
-      "refersTo": "input-name",
-      "description": "Square navy-ruled field with a printed navy label above it; typed text is Instrument Sans, caret and focus are navy.",
-      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Tournament name</span><input class=\"ds-name\" autocomplete=\"off\"></label>",
-      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.3rem; background: #f7f7f6; padding: 1rem; } .ds-field-label { color: #22397a; font-family: var(--font-body, 'Instrument Sans', ui-sans-serif, system-ui, sans-serif); font-weight: 500; font-size: 0.875rem; line-height: 1.2; } .ds-name { min-height: 48px; padding: 0 0.9rem; border: 1.5px solid #2f4673; border-radius: 0; background: transparent; color: #0b0b0b; caret-color: var(--primary, #22397A); font-family: var(--font-body, 'Instrument Sans', ui-sans-serif, system-ui, sans-serif); font-size: 1rem; font-weight: 500; } .ds-name:focus-visible { outline: 2px solid var(--primary, #22397A); outline-offset: 0; } .ds-name::selection { background: var(--primary, #22397A); color: #f7f7f6; }"
-    },
-    {
-      "name": "Header Nav",
-      "kind": "nav",
-      "refersTo": "nav-link",
-      "description": "The app header's mark, wordmark and navigation above the tear; Sign in is a plain link. Navigation includes only existing pages.",
-      "html": "<header class=\"ds-nav\"><a class=\"ds-logo\" href=\"#\" aria-label=\"Tournova\"><svg class=\"ds-mark\" viewBox=\"0 0 100 84.1\" fill=\"currentColor\" aria-hidden=\"true\"><path fill-rule=\"evenodd\" d=\"M90.8 0.1 92.8 0.0 93.7 0.2 95.2 0.6 96.7 1.5 97.8 2.4 98.9 3.9 99.6 5.4 100.0 6.8 100.0 9.1 99.8 10.1 99.2 11.7 98.4 13.0 97.3 14.1 96.3 14.9 95.0 15.6 94.0 15.9 93.2 16.1 91.8 16.1 90.2 15.9 88.7 15.3 87.3 14.5 86.3 13.5 85.1 11.9 84.5 10.2 84.2 8.9 84.2 7.4 84.5 5.8 85.2 4.1 85.9 3.1 87.0 1.9 87.8 1.3 89.2 0.5ZM16.4 1.9 20.4 1.8 81.0 1.8 82.2 1.9 82.4 2.0 82.2 2.2 81.4 2.4 72.6 4.8 60.1 8.6 51.5 11.5 42.6 15.0 34.8 18.4 28.3 21.7 25.3 23.4 23.2 24.7 21.3 26.3 20.1 27.5 19.8 27.7 0.5 27.7 0.1 27.6 0.0 27.2 6.2 10.3 6.9 8.7 7.6 7.5 8.4 6.4 9.3 5.3 10.6 4.2 11.5 3.6 12.7 2.9 13.6 2.5 14.9 2.1ZM81.1 9.0 81.4 9.1 81.5 9.3 81.6 10.6 81.8 11.3 82.5 13.0 82.9 13.8 84.4 15.7 85.5 16.7 86.3 17.2 86.4 17.5 86.3 17.6 85.9 17.8 81.9 19.0 78.1 20.4 75.8 21.3 72.2 22.9 69.9 24.1 68.0 25.3 65.9 26.9 64.4 28.4 63.5 29.6 62.4 31.3 61.7 33.1 61.3 34.6 61.2 36.0 61.2 44.0 61.1 44.2 61.0 44.5 60.7 44.6 59.4 44.6 44.4 44.6 44.1 44.5 44.0 44.1 44.0 36.6 43.9 36.1 43.6 35.7 43.0 35.2 42.6 35.0 41.8 34.9 27.0 35.0 26.4 35.3 26.0 35.6 25.8 36.1 25.7 36.7 25.8 37.2 26.1 37.7 26.5 38.0 27.1 38.2 40.3 38.2 40.7 38.3 40.8 38.8 40.8 53.7 40.5 54.0 40.1 54.0 22.2 54.0 21.7 54.0 21.5 53.8 21.4 53.3 21.4 47.0 21.4 38.2 21.5 35.3 21.9 33.8 22.1 33.1 22.9 31.6 23.7 30.4 25.2 28.9 26.4 28.0 27.3 27.5 33.3 24.7 40.3 21.8 50.0 18.2 59.2 15.2 66.6 12.9 72.2 11.3ZM44.2 47.9 45.9 47.8 59.7 47.9 61.0 47.9 61.1 48.1 61.2 48.4 61.2 62.9 61.1 63.3 60.8 63.5 59.9 63.6 43.1 63.5 42.4 63.6 41.9 63.7 41.5 64.0 41.2 64.3 41.0 64.7 40.8 65.2 40.8 72.6 40.7 72.9 40.4 73.1 22.0 73.1 21.6 73.0 21.4 72.8 21.4 72.5 21.4 57.9 21.5 57.5 21.6 57.4 22.0 57.3 41.6 57.3 42.2 57.3 42.9 57.1 43.3 56.9 43.7 56.4 44.0 55.8 44.0 48.5 44.1 48.1ZM44.2 66.9 60.5 66.9 61.0 66.9 61.1 67.1 61.2 67.4 61.1 68.2 60.7 71.0 60.1 72.9 59.4 74.5 58.0 76.9 56.7 78.4 55.7 79.5 54.0 80.9 52.6 81.8 51.4 82.5 50.1 83.0 48.3 83.6 46.0 84.1 22.2 84.1 21.7 84.0 21.5 83.9 21.4 82.8 21.5 77.0 21.5 76.6 21.7 76.4 42.2 76.4 42.6 76.3 43.2 76.0 43.7 75.5 44.0 74.8 44.0 67.4 44.0 67.1Z\"/></svg><span>Tournova</span></a><nav><a href=\"#\">Browse tournaments</a><a href=\"#\">Sign in</a></nav></header>",
-      "css": ".ds-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25rem 1.5rem; padding: 0.5rem 1rem; background: #f7f7f6; } .ds-logo { display: inline-flex; align-items: center; gap: 0.45em; min-height: 44px; color: var(--foreground, #171A1D); font-family: var(--font-body, 'Instrument Sans', ui-sans-serif, system-ui, sans-serif); font-weight: 600; font-size: 1.125rem; line-height: 1; letter-spacing: -0.02em; text-decoration: none; } .ds-mark { height: 1.25rem; width: auto; flex-shrink: 0; color: var(--primary, #22397A); } .ds-nav nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0 1.1rem; font-family: var(--font-body, 'Instrument Sans', ui-sans-serif, system-ui, sans-serif); font-weight: 500; font-size: 0.875rem; } .ds-nav nav a { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted-foreground, #5B656C); text-decoration: none; } .ds-nav nav a:hover { color: var(--foreground, #171A1D); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 4px; } .ds-nav :focus-visible { outline: 2px solid var(--primary, #22397A); outline-offset: 3px; } @media (prefers-reduced-motion: no-preference) { .ds-nav nav a { transition: color 150ms; } }"
+      "refersTo": "action-primary",
+      "description": "The page's one action: a printed Pen Black block inside a plain GET form, reachable before the script loads.",
+      "html": "<form action=\"/tournaments/new\" method=\"get\"><button type=\"submit\" class=\"ds-action\">Run a tournament — free</button></form>",
+      "css": ".ds-action { display: inline-flex; align-items: center; min-height: 48px; padding: 0 1.5rem; background: #111111; color: #FFFFFF; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: 1rem; font-weight: 500; border: 0; border-radius: 2px; cursor: pointer; transition: background 160ms ease, transform 160ms ease; } .ds-action:hover { background: #2B2B2B; } .ds-action:active { transform: translateY(1px); } .ds-action:focus-visible { outline: 2px solid #22397A; outline-offset: 3px; }"
     },
     {
       "name": "Follow Link",
       "kind": "custom",
       "refersTo": "follow-link",
-      "description": "Secondary route in navy Instrument Sans with a sliding arrow.",
-      "html": "<a class=\"ds-follow\" href=\"#\">Follow a tournament <svg class=\"ds-follow-arrow\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></a>",
-      "css": ".ds-follow { display: inline-flex; align-items: center; gap: 0.6rem; min-height: 44px; color: var(--primary, #22397A); font-family: var(--font-body, 'Instrument Sans', ui-sans-serif, system-ui, sans-serif); font-weight: 600; font-size: 1rem; text-decoration: none; } .ds-follow-arrow { width: 1.15em; height: 1.15em; } .ds-follow:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; } .ds-follow:focus-visible { outline: 2px solid var(--primary, #22397A); outline-offset: 3px; } @media (prefers-reduced-motion: no-preference) { .ds-follow-arrow { transition: translate 220ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-follow:hover .ds-follow-arrow { translate: 0.2em 0; } }"
+      "description": "The secondary road: underlined ink, no arrow, no navy.",
+      "html": "<a class=\"ds-follow\" href=\"#\">Follow a tournament</a>",
+      "css": ".ds-follow { display: inline-flex; align-items: center; min-height: 44px; color: #111111; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: 1rem; font-weight: 500; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 5px; } .ds-follow:hover { text-decoration-thickness: 2.5px; } .ds-follow:focus-visible { outline: 2px solid #22397A; outline-offset: 3px; }"
     },
     {
-      "name": "Call Number Box",
-      "kind": "card",
-      "refersTo": "call-number",
-      "description": "Square ruled box with the printed No. label and the call number at billboard scale; one per slip.",
-      "html": "<div class=\"ds-number\"><span class=\"ds-no\">No.</span><span class=\"ds-digits\">37</span></div>",
-      "css": ".ds-number { display: inline-flex; flex-direction: column; padding: 0.4rem 0.75rem 0.5rem; border: 1.5px solid #2f4673; border-radius: 0; background: #f7f7f6; } .ds-no { color: #22397a; font-family: var(--font-body, 'Instrument Sans', ui-sans-serif, system-ui, sans-serif); font-weight: 500; font-size: 0.875rem; line-height: 1.2; } .ds-digits { color: #0b0b0b; font-family: var(--font-numeral, 'Saira Extra Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif); font-weight: 800; font-size: 6.6rem; line-height: 0.82; letter-spacing: -0.03em; }"
+      "name": "Header Nav",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "The app header's own row: 20px navy mark, Instrument Sans wordmark, plain links in muted ink.",
+      "html": "<header class=\"ds-header\"><a class=\"ds-logo\" href=\"#\" aria-label=\"Tournova\"><svg class=\"ds-mark\" viewBox=\"0 0 100 84.1\" fill=\"currentColor\" aria-hidden=\"true\"><path fill-rule=\"evenodd\" d=\"M90.8 0.1 92.8 0.0 93.7 0.2 95.2 0.6 96.7 1.5 97.8 2.4 98.9 3.9 99.6 5.4 100.0 6.8 100.0 9.1 99.8 10.1 99.2 11.7 98.4 13.0 97.3 14.1 96.3 14.9 95.0 15.6 94.0 15.9 93.2 16.1 91.8 16.1 90.2 15.9 88.7 15.3 87.3 14.5 86.3 13.5 85.1 11.9 84.5 10.2 84.2 8.9 84.2 7.4 84.5 5.8 85.2 4.1 85.9 3.1 87.0 1.9 87.8 1.3 89.2 0.5ZM16.4 1.9 20.4 1.8 81.0 1.8 82.2 1.9 82.4 2.0 82.2 2.2 81.4 2.4 72.6 4.8 60.1 8.6 51.5 11.5 42.6 15.0 34.8 18.4 28.3 21.7 25.3 23.4 23.2 24.7 21.3 26.3 20.1 27.5 19.8 27.7 0.5 27.7 0.1 27.6 0.0 27.2 6.2 10.3 6.9 8.7 7.6 7.5 8.4 6.4 9.3 5.3 10.6 4.2 11.5 3.6 12.7 2.9 13.6 2.5 14.9 2.1ZM81.1 9.0 81.4 9.1 81.5 9.3 81.6 10.6 81.8 11.3 82.5 13.0 82.9 13.8 84.4 15.7 85.5 16.7 86.3 17.2 86.4 17.5 86.3 17.6 85.9 17.8 81.9 19.0 78.1 20.4 75.8 21.3 72.2 22.9 69.9 24.1 68.0 25.3 65.9 26.9 64.4 28.4 63.5 29.6 62.4 31.3 61.7 33.1 61.3 34.6 61.2 36.0 61.2 44.0 61.1 44.2 61.0 44.5 60.7 44.6 59.4 44.6 44.4 44.6 44.1 44.5 44.0 44.1 44.0 36.6 43.9 36.1 43.6 35.7 43.0 35.2 42.6 35.0 41.8 34.9 27.0 35.0 26.4 35.3 26.0 35.6 25.8 36.1 25.7 36.7 25.8 37.2 26.1 37.7 26.5 38.0 27.1 38.2 40.3 38.2 40.7 38.3 40.8 38.8 40.8 53.7 40.5 54.0 40.1 54.0 22.2 54.0 21.7 54.0 21.5 53.8 21.4 53.3 21.4 47.0 21.4 38.2 21.5 35.3 21.9 33.8 22.1 33.1 22.9 31.6 23.7 30.4 25.2 28.9 26.4 28.0 27.3 27.5 33.3 24.7 40.3 21.8 50.0 18.2 59.2 15.2 66.6 12.9 72.2 11.3ZM44.2 47.9 45.9 47.8 59.7 47.9 61.0 47.9 61.1 48.1 61.2 48.4 61.2 62.9 61.1 63.3 60.8 63.5 59.9 63.6 43.1 63.5 42.4 63.6 41.9 63.7 41.5 64.0 41.2 64.3 41.0 64.7 40.8 65.2 40.8 72.6 40.7 72.9 40.4 73.1 22.0 73.1 21.6 73.0 21.4 72.8 21.4 72.5 21.4 57.9 21.5 57.5 21.6 57.4 22.0 57.3 41.6 57.3 42.2 57.3 42.9 57.1 43.3 56.9 43.7 56.4 44.0 55.8 44.0 48.5 44.1 48.1ZM44.2 66.9 60.5 66.9 61.0 66.9 61.1 67.1 61.2 67.4 61.1 68.2 60.7 71.0 60.1 72.9 59.4 74.5 58.0 76.9 56.7 78.4 55.7 79.5 54.0 80.9 52.6 81.8 51.4 82.5 50.1 83.0 48.3 83.6 46.0 84.1 22.2 84.1 21.7 84.0 21.5 83.9 21.4 82.8 21.5 77.0 21.5 76.6 21.7 76.4 42.2 76.4 42.6 76.3 43.2 76.0 43.7 75.5 44.0 74.8 44.0 67.4 44.0 67.1Z\"/></svg><span>Tournova</span></a><nav aria-label=\"Primary\"><a href=\"#\">Browse tournaments</a><a href=\"#\">Sign in</a></nav></header>",
+      "css": ".ds-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 1400px; padding: 0.75rem 1rem; background: #F4F5F4; } .ds-logo { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; color: #171A1D; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: 1.125rem; font-weight: 600; letter-spacing: -0.02em; text-decoration: none; } .ds-mark { width: auto; height: 1.25rem; flex-shrink: 0; color: #22397A; } .ds-header nav { display: flex; align-items: center; gap: 0.25rem; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; } .ds-header nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.625rem; color: #5B656C; text-decoration: none; text-underline-offset: 4px; transition: color 150ms ease-out; } .ds-header nav a:hover { color: #171A1D; text-decoration: underline; text-decoration-thickness: 1.5px; } .ds-header :focus-visible { outline: 2px solid #22397A; outline-offset: 3px; }"
     },
     {
-      "name": "Ruled Field",
+      "name": "Stamp Column Row",
       "kind": "custom",
-      "refersTo": "field-label",
-      "description": "Printed navy label on a form rule with the filled-in value below.",
-      "html": "<dl class=\"ds-rfield\"><div><dt>Court</dt><dd>Court 4</dd></div><div><dt>Time</dt><dd>11:10</dd></div></dl>",
-      "css": ".ds-rfield { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem 1rem; margin: 0; padding: 1rem; background: #f7f7f6; } .ds-rfield dt { padding-bottom: 0.15rem; border-bottom: 1.5px solid #2f4673; color: #22397a; font-family: var(--font-body, 'Instrument Sans', ui-sans-serif, system-ui, sans-serif); font-weight: 500; font-size: 0.875rem; line-height: 1.2; } .ds-rfield dd { margin: 0.3rem 0 0; color: #0b0b0b; font-family: var(--font-display, 'Roboto Condensed', 'Arial Narrow', sans-serif); font-weight: 700; font-size: 1.9rem; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }"
+      "refersTo": "time-row",
+      "description": "One slot of the stamp column: mono tabular time on a 1.75rem ruled row; the moved slot keeps the old time struck and prints the new one bold magenta.",
+      "html": "<ol class=\"ds-rows\"><li class=\"ds-row\">09:00</li><li class=\"ds-row ds-row-moved\"><s>11:10</s>11:22</li></ol>",
+      "css": ".ds-rows { margin: 0; padding: 0; list-style: none; width: 7rem; border: 1.5px solid #2A2A2A; border-bottom: 0; border-left: 0; } .ds-row { display: flex; align-items: center; gap: 0.375rem; height: 1.75rem; padding: 0 0.625rem 0 0.25rem; border-bottom: 1.5px solid #2A2A2A; color: #3A3D40; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; font-variant-numeric: tabular-nums; } .ds-row s { color: #5B656C; } .ds-row-moved { color: #D81B8A; font-weight: 700; }"
+    },
+    {
+      "name": "Headline",
+      "kind": "custom",
+      "refersTo": "headline",
+      "description": "The promise under the board: two balanced Instrument Sans lines, the page's only large type.",
+      "html": "<h1 class=\"ds-headline\">Every court in order.<br>Everyone knows what&rsquo;s next.</h1>",
+      "css": ".ds-headline { margin: 0; max-width: 20ch; color: #111111; font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; font-size: clamp(2rem, 5.2vw, 3.5rem); font-weight: 600; line-height: 1.04; letter-spacing: -0.03em; text-wrap: balance; text-align: center; }"
     }
   ],
   "narrative": {
-    "northStar": "The Match Call",
-    "overview": "The landing is the Watch-mode front door of the same Tournova system described in `docs/design-principles.md`, not a separate product. Its slip world (paper, tears, stamps, the League Gothic headline and the `--slip-*` print tokens) lives in `src/components/landing/`, styled by `src/components/landing/call-slip.css`. Everything else is inherited from the app's tokens in `src/styles.css`: the TournovaMark and the Roboto Condensed wordmark, the header nav labels (Sign in stays a plain nav link, by the user's choice), Instrument Sans for labels, fields and links, the app's condensed faces for printed values and the call number, and the app's navy (`--primary`) as the signal of interaction: the stamped action, body links, focus, selection and caret. The app's navy was taken from the slip's own ballpoint print, so the page and the product share one ink. A visitor who signs in should feel they walked through a door, not into another company.\n\nThe page is one match-call slip torn off a tournament desk pad. White carbonless paper with a faint grain, ballpoint-navy form rules and labels, black condensed numerals and headline at billboard scale, and a red rubber CALLED stamp. The copies underneath (canary, then pink) peek out below a torn edge and carry the next calls. The slip reads like a filled-in form rather than a marketing layout: every element is a printed field, a filled value, a stamp, a sheet, or one of the app's own controls set on the paper.\n\nDensity is low and the scale contrast is extreme. A giant boxed number and a two-line gothic headline sit next to small, precise form labels. Paper materials (grain, tears, stamp ink, the copies' edge shading, the action's rough frame) live in raster plates; everything drawn in CSS is flat and ruled.",
+    "northStar": "The Court Board",
+    "overview": "The landing is the Watch-mode front door of the same Tournova system described in `docs/design-principles.md`, not a separate product, and it is drawn as the thing the product actually makes: the organiser's board on the hall wall, one printed sheet per court pinned up for the day. Its world lives in `src/components/landing/` — `landing.tsx` for the six sheets and the clash, `court-sheets.css` for everything visual, scoped to `.cs-page`. Nothing else is new. The wall is the app's own `--background`, the sheet is the app's own `--surface`, the type families are the app's, the wordmark and nav are the app header's, and the only two token values the page adds are pen black on the sheet and the app's `--primary` for the mark and the focus ring. A visitor who signs in walks through a door, not into another company.\n\nThe page shows a problem already solved. Six court sheets hang slightly askew on the grey wall with a stamped time column and a hand-hatched match column; between them one clash is circled in highlighter magenta — L. Tran plays 11:10 and 11:22 — and next to the circle the sheet it touches already reads the new time with the old one struck through. That is the product's promise drawn before it is said: when a match runs late, the rest of the day keeps up. The headline under the board says the same in one line, and one dark button offers the one action.\n\nDensity is low and the two materials are plain: card stock and pen. Every mark on the page is either a rule, a hatch, a struck time or a circle drawn by hand, so the board reads as something a person made at a desk — not a screenshot of software. The only hue the app does not own is the highlighter, and it appears once.",
     "keyCharacteristics": [
-      "Carbonless-paper ground with a tiled grain plate; no cream or aged tone.",
-      "One navy for the whole product: the app's interaction colour and the slip's ballpoint print are the same ink.",
-      "On the slip, navy acts on the mark, stamped action, follow link, focus, selection and caret; printed labels and rules are navy but never act.",
-      "The app's mark, wordmark, nav labels, Instrument Sans, Roboto Condensed and Saira carry over; only League Gothic is the landing's alone.",
-      "Red appears only inside the CALLED stamp raster.",
-      "Torn edges, stamps and the copies are raster plates, used as images or as masks.",
-      "One authored motion: the stamp presses down once."
+      "The wall is the app's `--background` and the sheets are its `--surface`; there is no separate landing palette.",
+      "One navy, used only by the brand mark and the focus ring; everything else is pen black, paper white and muted grey.",
+      "One highlighter magenta, used only for the circled clash and the time it moved.",
+      "Times are JetBrains Mono with tabular figures — the one place a visitor sees the app's mono face.",
+      "Court names are Roboto Condensed small caps; everything read as interface is Instrument Sans.",
+      "Sheets are pinned, not placed: each carries a small tilt, a lift and a paper shadow.",
+      "One authored motion: the sheets pin down in order, then the circle is drawn around the clash."
     ],
     "rules": [
       {
+        "name": "The Wall-First Rule",
+        "body": "The page ground is `--background` and the sheets are `--surface`. Never introduce a landing-only paper, cream or tinted ground: the board has to look like it was pinned to the same wall the app runs on.",
+        "section": "colors"
+      },
+      {
         "name": "The One Navy Rule",
-        "body": "Print and interaction share one navy. What tells them apart is form, not hue: an interactive thing is a stamped frame, a link with an arrow, a focus outline or a selection; print is a small sentence-case label or a ruled line, and it never changes on hover or focus.",
+        "body": "Navy is the mark and the focus ring, and nothing else. Links, borders, titles and the primary action are ink; if a landing element wants to look interactive by being navy, it is wrong — the action is dark and a link is underlined ink.",
         "section": "colors"
       },
       {
-        "name": "The Print Never Acts Rule",
-        "body": "A navy label or rule is never clickable and never stands in for a control; the header nav, Sign in included, keeps the app header's neutral treatment (Muted Ink at rest, App Ink on hover) and turns navy only for focus.",
+        "name": "The Highlighter Rule",
+        "body": "Magenta is a mark drawn on a picture of paper, never a state. It may ring the clash and ink the time that moved; it may not colour a button, a label, an icon or anything a visitor can press. The app has no magenta, and this page keeps it that way.",
         "section": "colors"
       },
       {
-        "name": "The Copies Are Stock Rule",
-        "body": "Canary and pink are paper stock, not accents. They appear as sheets under the slip (plate or pink fill), never as text, buttons or highlights. What is printed on a copy belongs to that sheet: in the landscape composition the copy heading's second line runs into the canary's torn edge and is cut along the tear by the canary mask, as a real carbon copy would be.",
+        "name": "The Blind-Proof Rule",
+        "body": "Nothing is carried by hue alone: the time that moved is also bold and the old time is also struck through, and the clash is also the only note with a ring.",
         "section": "colors"
       },
       {
-        "name": "The Printed-Label Rule",
-        "body": "Labels are the form's own field names, in Ballpoint Navy sentence case Instrument Sans, sitting on a rule. They name the value beneath them; they never introduce a section or sell.",
+        "name": "The Clock Is Mono Rule",
+        "body": "A time on this page is JetBrains Mono with tabular figures. Never set a time in the body face, and never set anything else in the mono face — its use here is a deliberate exception the app does not extend to product UI.",
         "section": "typography"
       },
       {
-        "name": "The Fill-In Rule",
-        "body": "What the slip has already printed (times, courts, names, copy lines) is Roboto Condensed with tabular figures where digits align; the lone call number goes to Saira and the headline to League Gothic. What the visitor reads as interface or types is Instrument Sans.",
+        "name": "The Board Is Not Set In Display Rule",
+        "body": "Roboto Condensed is on this page for court names only. The headline, the note, the times' neighbours and every control are Instrument Sans; the marketing voice is never condensed.",
         "section": "typography"
       },
       {
-        "name": "The One Form Rule",
-        "body": "The header above the tear is the app's header at the app's scale. Below it, the slip is one printed form whose parts keep their proportions to each other: labels, names, the field, the action, the follow link and the copy lines grow with the sheet alongside the number and headline, never below the app's sizes and capped for very wide screens, so no part of the form is set at a different scale from the rest.",
+        "name": "The Struck Time Rule",
+        "body": "When a slot moves, the old time stays and is struck through, and the new time is bold magenta after it. Replacing the old time, fading it out, or showing only the new one deletes the evidence that the day kept up.",
         "section": "typography"
       },
       {
-        "name": "The Poster Face Rule",
-        "body": "League Gothic never leaves `src/components/landing/`, and the landing never sets its interface in any condensed face.",
-        "section": "typography"
+        "name": "The Pinned Rule",
+        "body": "A sheet is pinned, never placed: each carries its own tilt between -2.2 and 2.4 degrees, its own lift, and a paper shadow. No two sheets share an angle, and nothing except a sheet and the circled note is allowed to be askew.",
+        "section": "layout"
       },
       {
-        "name": "The Paper-Only Depth Rule",
-        "body": "Elevation exists only where one sheet lies on another, and every shadow follows a real torn edge: the top tear carries a soft `drop-shadow` of its own fibres, and each copy's tear casts a blurred neutral band (rgb(20 20 24 / 0.3), 4px / 0.3cqw drop, 3px / 0.25cqw blur) shaped by that sheet's own outline mask (`copies-slip-mask.png`, `copies-yellow-mask.png`: the outline nudged down minus itself). The canary's tear also shows a 2px white paper rim from the same mask. No `box-shadow` on any CSS-drawn box, and no shadow that does not trace a sheet.",
+        "name": "The Rows Meet Rule",
+        "body": "The sheet rule, the row height (1.75rem) and the hatch's row rhythm are one measurement. If the row height changes, every hatch pattern changes with it, or the board stops looking drawn by hand on ruled stock.",
+        "section": "layout"
+      },
+      {
+        "name": "The Paper-Lift Rule",
+        "body": "Elevation exists only where paper lifts off the wall. No shadow on the header, the button, the headline or any CSS-drawn line, and no shadow that is not tied to a sheet or to the circled note.",
         "section": "elevation"
       },
       {
         "name": "The Ruled-Form Rule",
-        "body": "If the slip prints it in CSS, it is a straight navy rule or a square ruled box. If it is torn, inked or rough, it is a plate.",
+        "body": "If the board prints a line, it is a 1.5px Rule stroke, square, and shared with its neighbour rather than doubled. Rounded corners belong to the paper, not to anything printed on it.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Drawn-Mark Rule",
+        "body": "The circle and the arrow are the only two marks that are not type or rules, and both must look drawn: a 2.5px ring and a two-path SVG arrow. Never replace them with a chip, a badge, an icon font or a clip-path.",
         "section": "shapes"
       }
     ],
     "dos": [
-      "Do keep the slip world (plates, League Gothic, `--slip-*` print tokens) inside `src/components/landing/`, and take brand, interaction, UI type and the condensed faces from the app's tokens in `src/styles.css`.",
-      "Do use the app's navy (`--primary`, aliased as `--slip-action`) for the primary action, body links, focus, selection and caret; header nav and Sign in stay Muted Ink at rest.",
-      "Do make interaction legible by form when it shares the print's navy: a stamped frame, an arrowed link, an outline.",
-      "Do reuse the app header's mark, wordmark, nav labels and short-label breakpoint rather than drawing landing versions; Sign in is a plain nav link here.",
-      "Do draw the slip's structure with 1.5px Form-Rule Navy rules and square boxes (radius 0).",
-      "Do put labels in Ballpoint Navy sentence case Instrument Sans directly above the rule they name.",
-      "Do render paper (grain, tears, copies, stamp ink, the action frame) as raster plates, placed as images or applied as masks, and self-host every face.",
-      "Do keep the header at the app's scale and let the slip below it scale as one form in the comp's proportions, never below the app's sizes or 44px targets and capped near 1680px wide; keep the shared 2px navy focus outline.",
-      "Do respect reduced motion: the stamp press, the action's colour transition and the follow-arrow slide run only under `prefers-reduced-motion: no-preference`."
+      "Do build the page from the app's tokens — `--background` wall, `--surface` sheet, `--foreground` ink, `--primary` mark and focus — and keep the `--cs-*` names local to `src/components/landing/court-sheets.css`.",
+      "Do reuse the app header's mark, wordmark, nav labels, 44px targets and the 420px short label; the landing header is that header, not a version of it.",
+      "Do pin every sheet with its own tilt, lift and shadow, and let the sheets on the second row sit at different heights.",
+      "Do strike the old time and print the new one in magenta bold on the same row.",
+      "Do keep exactly one circled clash, and let the sheet it touches already show the moved time.",
+      "Do print court names in Roboto Condensed small caps and times in JetBrains Mono tabular figures; set everything else in Instrument Sans.",
+      "Do give the board a `role=\"img\"` with a label that states the six sheets and the clash, so a screen reader gets the same argument as the picture.",
+      "Do run the arrival motion — sheets pinning in 60ms steps, then the circle — only under `prefers-reduced-motion: no-preference`, and keep the shared 2px navy focus outline."
     ],
     "donts": [
-      "Don't apply `--slip-*` tokens, League Gothic or the paper plates to Desk, Schedule, Explore or any product UI.",
-      "Don't make a printed navy label or rule clickable, or give it hover or focus states.",
-      "Don't make anything red that the visitor can act on; red is only the CALLED stamp, a picture of a rubber stamp rather than a state.",
-      "Don't add `box-shadow` to CSS-drawn boxes, cast a shadow that does not trace a torn sheet, or round the slip's printed boxes; rough corners belong only to paper and stamp rasters.",
-      "Don't use cream, aged or tinted paper for the slip; the ground is Carbonless White under grain.",
-      "Don't use canary or pink as accent colours for text, buttons or highlights.",
-      "Don't imitate torn edges or stamp texture with CSS gradients or clip-paths; roughness always comes from a plate."
+      "Don't invent a landing palette. No cream, no paper tint, no second grey: the wall is `--background` and the sheet is `--surface`.",
+      "Don't use navy for links, borders, titles or the action; navy is the mark and the focus ring here.",
+      "Don't use magenta on anything a visitor can press, or as a badge/chip/status colour.",
+      "Don't set times in the body face or set anything but times in the mono face.",
+      "Don't let the hatch encode state, and don't vary its density to mean anything other than which court's sheet it is.",
+      "Don't replace the circle, the shift or the arrow with an icon, a pill, a tooltip or a badge; the marks are drawn, not componentised.",
+      "Don't add a second primary action, or a nav item whose page does not exist yet.",
+      "Don't let any sheet, note or header grow a shadow that is not in the Shadow Vocabulary."
     ],
     "exceptions": [
-      "The slip's printed labels and rules are navy without being interactive, although navy means interaction in the app; they are a picture of a printed form, not controls.",
-      "The CALLED stamp is red although product red means danger, because it is a picture of a rubber stamp rather than a state the app reports.",
-      "The slip's square corners differ from the app's rounded cards.",
-      "The name field is ruled in Form-Rule Navy rather than `--border-control`; it is the slip's printed box, and its contrast on the paper is higher than the app's control edge."
+      "JetBrains Mono is used for the clock times, although product UI never uses `font-mono`. A board's times are set in a mono face; the product's own numbers use Saira and Instrument Sans.",
+      "Magenta exists only here. The app has green (live), amber (overrun) and red (destructive); this page adds a highlighter hue because the circle is a mark on paper rather than a state the app reports.",
+      "The primary action is dark, not navy. The app's primary button is navy; the landing's one action is a printed black block, because on this page navy belongs to the brand mark.",
+      "Sheets are 3px-rounded while the app's own surfaces round at up to 1rem (`--radius`); card stock has a corner, a UI surface has a curve.",
+      "Selection is ink on the wall (`::selection` inverts pen and paper) rather than the app's navy selection, so the page's one navy stays the mark.",
+      "`court-sheets.css` restates the mono stack as `--cs-mono` instead of reading `--font-mono`. The stacks are identical today; the duplicate exists so the landing's type cannot change under the product's token."
     ]
   }
 }
