@@ -125,10 +125,6 @@ function BoardHeader({ signIn }: { signIn: ReturnType<typeof signInSearch> }) {
           </span>
           <span className="cs-nav-full">Browse tournaments</span>
         </Link>
-        {/* Its explainer is still being written, so the item holds its place without acting yet. */}
-        <button type="button" aria-disabled="true" aria-description="Coming soon" className="cs-nav-pending">
-          How it works
-        </button>
         <Link to="/auth" search={signIn}>
           Sign in
         </Link>

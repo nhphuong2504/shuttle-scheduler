@@ -52,36 +52,39 @@
   align-items: center;
   gap: 0.5rem;
   min-height: 44px;
-  font-size: 1.375rem;
+  /* The app header's wordmark and mark: 18px name, a 20px mark in the one navy. */
+  font-size: 1.125rem;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--cs-ink);
+  color: var(--foreground);
 }
 .cs-logo-mark {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: auto;
+  height: 1.25rem;
+  flex-shrink: 0;
+  color: var(--primary);
 }
+/* The app header's nav: muted at rest, ink and an underline on hover. */
 .cs-nav {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 }
-.cs-nav > a,
-.cs-nav > button {
+.cs-nav > a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
   padding: 0 0.625rem;
-  color: var(--cs-ink);
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-decoration-thickness: 1.5px;
   text-underline-offset: 4px;
+  transition: color 150ms ease-out;
 }
 .cs-nav > a:hover {
+  color: var(--foreground);
   text-decoration: underline;
-}
-.cs-nav-pending {
-  color: var(--muted-foreground) !important;
-  cursor: default;
 }
 .cs-nav-short {
   display: none;
@@ -97,9 +100,6 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-  }
-  .cs-nav-pending {
-    display: none !important;
   }
 }
 

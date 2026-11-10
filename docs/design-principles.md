@@ -101,9 +101,10 @@ and a board of green washes would bury them.
 
 Three families:
 
-- **Roboto Condensed** (`font-display`) for page titles, panel titles, court numbers and the
-  wordmark. Its figures are tabular, so times and counts in titles still line up.
-- **Instrument Sans** (`font-body`, `font-score`) for everything else: body text, tables,
+- **Roboto Condensed** (`font-display`) for page titles, panel titles, the tournament's name
+  in the workspace header and court numbers. Its figures are tabular, so times and counts in
+  titles still line up.
+- **Instrument Sans** (`font-body`, `font-score`) for everything else: the wordmark, body text, tables,
   forms, buttons and status pills, where a condensed face would cost legibility at 14px on a
   live Desk.
 - **Saira Extra Condensed** 800 (`font-numeral`) for a single large number standing on its own:
@@ -114,8 +115,10 @@ Roboto Condensed and Saira are served from `public/fonts/`, not a font host.
 
 The visitor's front door is drawn as the organiser's board: one printed sheet per court on the
 app's own grey ground (`src/components/landing/court-sheets.css`). Its header is the app's
-header style - ink mark and wordmark, plain text links, the open one underlined - so moving
-between the landing and the app keeps the brand and nav in place. Two exceptions are
+header style - a navy mark (20px) beside an ink wordmark (18px), plain text links in muted ink
+(14px, 500) that turn ink and underline on hover, the open one ink and underlined - so moving
+between the landing and the app keeps the brand and nav in place. The mark is the header's one
+navy; the bar sits a step behind the page title it frames. Two exceptions are
 deliberate and stay on that page: the sheets' clock times use **JetBrains Mono** (`font-mono`),
 which product UI never uses, and the clash it circles is magenta, a hue the app does not have,
 because it is a highlighter mark on a picture of paper rather than a state the app reports.
