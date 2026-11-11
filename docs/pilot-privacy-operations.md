@@ -1,6 +1,6 @@
 # US pilot privacy operations
 
-Owner: Phuong Nguyen. Requests: nhphuong@iastate.edu. These are prelaunch
+Owner: Phuong Nguyen. Requests: support@tournova.app. These are prelaunch
 operating instructions, not a legal opinion or evidence that deployment is approved.
 
 ## Release scope and limits
@@ -32,7 +32,7 @@ The website policies are expressly labelled pilot drafts. Do not remove that lab
 or represent this checkout as legal clearance. The owner must confirm these facts:
 
 - This contact inbox is monitored; publishing the supplied email/name is intentional.
-  The university email does not imply university ownership or endorsement.
+  It forwards through Cloudflare Email Routing to the owner's inbox.
 - Inspect actual Supabase/Cloudflare regions, access logs, backup expiry, subprocessors
   and contracts. Root configuration was not read out or changed to test hosted systems.
 - Set a retention schedule for accounts, registration requests, entrants, audit records,
