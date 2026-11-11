@@ -5,7 +5,6 @@
       "id": "ui",
       "patterns": [
         "src/components/**",
-        "src/index.css",
         "src/styles.css"
       ],
       "risk": "high",
@@ -202,7 +201,9 @@
     {
       "id": "database",
       "patterns": [
-        "supabase/migrations/**"
+        "supabase/migrations/**",
+        "supabase/config.toml",
+        "supabase/seed/**"
       ],
       "risk": "high",
       "integration": true,
@@ -266,7 +267,12 @@
         "*config*",
         ".github/**",
         ".nvmrc",
-        ".gitignore"
+        ".gitignore",
+        ".prettier*",
+        ".gitattributes",
+        ".env.example",
+        "bunfig.toml",
+        "components.json"
       ],
       "risk": "high",
       "integration": false,
@@ -281,12 +287,92 @@
       "browserTests": []
     },
     {
+      "id": "app-shell",
+      "patterns": [
+        "src/server.ts",
+        "src/start.ts",
+        "src/routeTree.gen.ts",
+        "src/hooks/**",
+        "src/lib/*.ts",
+        "src/lib/routing/**",
+        "src/lib/security/**",
+        "src/lib/legal/**"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/information-architecture.md"
+      ],
+      "entries": [
+        "src/start.ts",
+        "src/server.ts",
+        "src/lib/routing/redirect.ts"
+      ],
+      "tests": [
+        "src/lib/routing",
+        "src/lib/security"
+      ],
+      "browserTests": [
+        "e2e/routing.spec.ts",
+        "e2e/hydration.spec.ts"
+      ]
+    },
+    {
+      "id": "static",
+      "patterns": [
+        "public/**",
+        "workers/**"
+      ],
+      "risk": "high",
+      "integration": false,
+      "documents": [
+        "docs/deployment.md"
+      ],
+      "entries": [
+        "workers/www-redirect/worker.js"
+      ],
+      "tests": [],
+      "browserTests": []
+    },
+    {
+      "id": "analysis",
+      "patterns": [
+        "analysis/**"
+      ],
+      "risk": "standard",
+      "integration": false,
+      "documents": [],
+      "entries": [
+        "analysis/aloha-2026/README.md"
+      ],
+      "tests": [],
+      "browserTests": []
+    },
+    {
+      "id": "agent-tooling",
+      "patterns": [
+        ".agents/**",
+        ".claude/**",
+        ".codex/**",
+        ".impeccable/**"
+      ],
+      "risk": "standard",
+      "integration": false,
+      "documents": [
+        "docs/agent-workflow.md"
+      ],
+      "entries": [
+        "AGENTS.md"
+      ],
+      "tests": [],
+      "browserTests": []
+    },
+    {
       "id": "documentation",
       "patterns": [
         "docs/**",
         "**/*.md",
-        "AGENTS.md",
-        "README.md"
+        "*.md"
       ],
       "risk": "standard",
       "integration": false,

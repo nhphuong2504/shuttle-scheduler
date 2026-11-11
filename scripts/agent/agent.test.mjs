@@ -18,7 +18,7 @@ import {
 } from "./core.mjs";
 import { section, localLinks, validateReferences } from "./documents.mjs";
 import { diagnose, localIntegration } from "./doctor.mjs";
-import { runSteps, redactor, lineSink, npmInvocation } from "./runner.mjs";
+import { runSteps, redactor, lineSink, npmInvocation, pruneRuns } from "./runner.mjs";
 
 function fixture(t, git = false) {
   const root = mkdtempSync(path.join(os.tmpdir(), "tournova-agent-test-"));
@@ -463,4 +463,17 @@ test("child cleanup of an artifact parent cannot silently discard verification e
     readFileSync(path.join(root, result.report.steps[0].log), "utf8"),
     /evidence was lost/,
   );
+});
+
+test("old run directories are pruned to the newest ten; other files are left alone", (t) => {
+  const root = fixture(t);
+  const base = path.join(root, "test-results/agent");
+  const names = Array.from({ length: 13 }, (_, i) => `2026-01-${String(i + 1).padStart(2, "0")}T00-00-00-000Z-aaaaaaaa`);
+  for (const name of names) mkdirSync(path.join(base, name), { recursive: true });
+  writeFileSync(path.join(base, "discovery.json"), "{}\n");
+  mkdirSync(path.join(base, "notes"));
+  assert.deepEqual(pruneRuns(root), names.slice(0, 3));
+  assert.ok(!existsSync(path.join(base, names[2])) && existsSync(path.join(base, names[3])));
+  assert.ok(existsSync(path.join(base, "discovery.json")) && existsSync(path.join(base, "notes")));
+  assert.deepEqual(pruneRuns(root), []);
 });

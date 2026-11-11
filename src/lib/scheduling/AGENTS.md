@@ -8,4 +8,4 @@ validation. Keep every fixture/seed/run combination when restructuring tests.
 
 Benchmarks/replay remain separate from the normal regression gate. Scheduling edits take
 the full high-risk gate; SQL guards and RPC callers also require local integration.
-The landing scheduling demo must continue to show the live product's actual policy.
+The landing's reflow and rest claims must continue to match the live product's actual policy.
