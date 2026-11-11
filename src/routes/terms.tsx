@@ -12,66 +12,67 @@ function TermsPage() {
     <PolicyPage title="Pilot terms of use">
       <PolicySection title="Using the pilot">
         <p>
-          These terms describe the free tournament software provided by {OPERATOR_NAME}, based in
-          Iowa. There are no platform payments in this pilot. Create an account only if you are at
-          least 18 and agree to these terms. Keep your credentials private and provide accurate
-          account information.
+          These terms cover the free tournament software provided by {OPERATOR_NAME}, based in
+          Iowa. There are no payments in this pilot. Create an account only if you are at least 18
+          and agree to these terms. Keep your password private and your account details accurate.
+          Children must not create accounts; see the{" "}
+          <Link to="/privacy" className="underline underline-offset-4">
+            Privacy Policy
+          </Link>{" "}
+          for how they can take part.
         </p>
-        <p>
-          Children may participate in a tournament through an authorised adult organiser or parent.
-          Children must not create an account. Registration approval does not grant permission to
-          operate a tournament.
-        </p>
+        <p>Being approved to play in a tournament does not give you permission to operate it.</p>
       </PolicySection>
       <PolicySection title="Organisers and information entered for others">
         <p>
-          Organisers are responsible for running their events, venue arrangements, entry decisions,
-          participant communications and appropriate permissions for the data they enter. Before
-          entering another person’s information, explain the use of Tournova and obtain appropriate
-          authority, including from a parent or guardian where needed. Use an adult contact for a
-          child and enter only information necessary to run the event.
+          Organisers are responsible for their events, venues, entry decisions, communications with
+          participants and the permissions for the data they enter. Before entering someone else’s
+          information, tell them how Tournova uses it and get appropriate permission, from a parent
+          or guardian where needed.
         </p>
         <p>
-          Do not put children’s real names or contact details in public tournament titles,
-          descriptions, venue fields or other public text. Do not submit unlawful, abusive,
-          infringing or unnecessarily sensitive information. You retain your rights in your content
-          and permit the processing needed to provide the service and display information as
-          described in the Privacy Policy.
+          Do not put children’s names or contact details in public text such as titles,
+          descriptions or venue fields. Do not submit unlawful, abusive, infringing or unnecessarily
+          sensitive information. You keep the rights to your content and allow us to process and
+          display it as described in the Privacy Policy.
         </p>
       </PolicySection>
       <PolicySection title="Schedules, results and availability">
         <p>
-          Check schedules, scores and entry details with the organiser. The pilot may contain errors
-          or become unavailable, including on poor venue wifi. Organisers should keep appropriate
-          exports and an alternative way to communicate changes. We do not promise uninterrupted
-          service or a particular tournament outcome.
+          Confirm schedules, scores and entries with the organiser. The pilot may contain errors or
+          be unavailable, including on poor venue wifi, so organisers should keep exports and
+          another way to announce changes.
         </p>
         <p>
-          The software does not replace supervision, medical advice, venue safety procedures or
-          event insurance. These terms are not an injury waiver for a participant or a child.
+          Tournova does not replace supervision, medical advice, venue safety procedures or event
+          insurance, and these terms are not an injury waiver.
         </p>
       </PolicySection>
-      <PolicySection title="Requests, restrictions and changes">
+      <PolicySection title="No warranty and limited liability">
+        <p>
+          The pilot is provided free, “as is” and “as available”, without warranties of any kind,
+          including fitness for a particular purpose or uninterrupted, error-free operation.
+        </p>
+        <p>
+          To the extent the law allows, {OPERATOR_NAME} is not liable for indirect, incidental or
+          consequential losses, or for lost data, results or opportunities, arising from use of the
+          pilot. Total liability for any claim is limited to US$50. Nothing in these terms limits
+          liability or rights that cannot lawfully be limited.
+        </p>
+      </PolicySection>
+      <PolicySection title="Restrictions, changes and governing law">
         <p>
           We may restrict access or content to address misuse, security concerns or legal
-          obligations. Contact us to report an issue or discuss a restriction. Material changes to
-          account terms will require a new acknowledgement before being represented as accepted; the
-          version you accepted is recorded separately from editable profile data.
-        </p>
-        <p>
-          Applicable law governs your rights. Nothing here excludes liability or rights that cannot
-          lawfully be excluded. These draft terms do not require arbitration or waive class actions.
-        </p>
-        <p>
-          Read the{" "}
-          <Link to="/privacy" className="underline underline-offset-4">
-            Privacy Policy
-          </Link>{" "}
-          and use{" "}
+          obligations. You can stop using Tournova at any time and ask us to delete your account
+          through{" "}
           <Link to="/contact" className="underline underline-offset-4">
             Contact
-          </Link>{" "}
-          for requests or concerns.
+          </Link>
+          . If these terms change materially, we will ask you to accept the new version.
+        </p>
+        <p>
+          The laws of Iowa, United States, govern these terms. These terms do not require
+          arbitration or waive class actions.
         </p>
       </PolicySection>
     </PolicyPage>
