@@ -29,9 +29,9 @@ concurrency:
 #   - A broken mock fails the browser job rather than silently reaching production,
 #     because production is not the fallback - an abort is.
 #
-# `npm run lint` is deliberately absent. It reports a large pre-existing Prettier backlog
-# that predates this work, so it would fail every run for a reason unrelated to the change
-# under test. It is documented as out of scope rather than fixed or silently ignored.
+# `npm run lint` is deliberately absent. Formatting is no longer linted, but two intentional
+# control-character patterns still report as errors, so it would fail every run for a reason
+# unrelated to the change under test. Add it here once those are resolved.
 env:
   SUPABASE_URL: https://e2e-placeholder.supabase.co
   SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
