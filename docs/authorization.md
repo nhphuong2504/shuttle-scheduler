@@ -43,6 +43,18 @@ Source: `src/lib/auth/authorization.ts`, `src/hooks/useSession.ts`, RPC callers 
 migrations. Verify with the full gate plus real local authorization/registration/realtime
 integration. Mocked Playwright requests cannot validate backend permissions.
 
+## Pilot privacy defaults
+
+`20261111000000_pilot_privacy.sql` and `20261111010000_pilot_provisioning.sql`
+add server-recorded adult/Terms acknowledgement on new Auth identities, with no
+provisioning bypass. Existing identities are not retroactively marked accepted.
+`tournament_players` returns generated labels/no gender for non-operators of real
+tournaments, including withdrawn entries; demo names remain fictional. `search_players`
+is limited to entries in its specified tournament. These controls do not verify age,
+parental authority or anonymity and never grant operating rights. See
+[pilot operations](pilot-privacy-operations.md) for existing-account review, data requests,
+remaining release work and the acknowledged account-recreation path.
+
 ## Existing section links
 
 Old section anchors remain below as reading links. The detailed reference preserves the

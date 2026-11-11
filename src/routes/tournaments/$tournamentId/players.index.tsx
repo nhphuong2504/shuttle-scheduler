@@ -86,6 +86,7 @@ function PlayersPage() {
   return (
     <ReaderPage title="Players">
       <div className="space-y-4">
+        <p className="max-w-[70ch] text-sm leading-6 text-muted-foreground">Public views of real tournaments use player labels to limit disclosure of names. Ask the organiser for your label. Sample tournaments show fictional names.</p>
         <div className="max-w-md">
           <label htmlFor="players-search" className="mb-1.5 block text-sm font-semibold">
             Search by name

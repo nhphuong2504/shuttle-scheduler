@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Info, Lock, Mail } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { PublicShell } from "@/components/app-shell";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { pilotSignupMetadata } from "@/lib/legal/policy";
 import {
   localRedirect,
   normalizeSignInIntent,
@@ -96,6 +97,10 @@ function AuthPage() {
   const [problem, setProblem] = useState<string | null>(null);
   const [missing, setMissing] = useState<{ email?: string; password?: string }>({});
   const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+  const [adultConfirmed, setAdultConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [interactive, setInteractive] = useState(false);
+  useEffect(() => setInteractive(true), []);
 
   const signingIn = mode === "signin";
 
@@ -104,6 +109,8 @@ function AuthPage() {
     setProblem(null);
     setMissing({});
     setConfirmEmail(null);
+    setAdultConfirmed(false);
+    setTermsAccepted(false);
   };
 
   const submit = async (event: FormEvent) => {
@@ -113,6 +120,10 @@ function AuthPage() {
     if (!password) gaps.password = "Enter your password.";
     setMissing(gaps);
     setProblem(null);
+    if (!signingIn && (!adultConfirmed || !termsAccepted)) {
+      setProblem("Confirm you are at least 18 and agree to the pilot terms before creating an account.");
+      return;
+    }
     if (gaps.email || gaps.password) return;
 
     setBusy(true);
@@ -126,7 +137,10 @@ function AuthPage() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/` },
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: pilotSignupMetadata(),
+          },
         });
         if (error) throw error;
         // With confirmation on there is no session yet, so "you are in" would be a lie.
@@ -162,7 +176,7 @@ function AuthPage() {
       subtitle={
         signingIn
           ? "An account lets you register for a tournament, or run your own. Watching a tournament never needs one."
-          : "It takes an email and a password. Then you can register for a tournament or start your own."
+          : "Accounts are for adults aged 18 or older. Children can participate through an authorised adult organiser."
       }
     >
       <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:gap-10">
@@ -180,7 +194,7 @@ function AuthPage() {
               </p>
             </div>
             <span className="whitespace-nowrap rounded-full border border-info-border bg-info-surface px-3 py-1 text-sm font-semibold text-info-foreground">
-              Open sign-up
+              Adults 18+
             </span>
           </div>
           <ol className="space-y-3">
@@ -227,7 +241,7 @@ function AuthPage() {
           </ol>
           <p className="flex items-center gap-2 border-t border-hairline pt-4 text-sm text-muted-foreground">
             <Info aria-hidden="true" className="size-[18px] shrink-0" />
-            Anyone can create an account. Helping run somebody else's tournament needs its owner to
+            Adults can create an account. Helping run somebody else's tournament needs its owner to
             add you.
           </p>
         </aside>
@@ -265,6 +279,7 @@ function AuthPage() {
                     key={option.value}
                     type="button"
                     aria-pressed={mode === option.value}
+                    disabled={!interactive || busy}
                     onClick={() => switchMode(option.value)}
                     className={
                       mode === option.value
@@ -284,7 +299,7 @@ function AuthPage() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {signingIn
                     ? "Sign in with your email and password."
-                    : "Choose an email and a password. That's all it takes."}
+                    : "Confirm your eligibility before entering account details."}
                 </p>
               </div>
 
@@ -298,6 +313,22 @@ function AuthPage() {
                   </div>
                 ) : null}
   
+                {!signingIn ? (
+                  <fieldset className="space-y-3 border-b border-hairline pb-4">
+                    <legend className="mb-2 text-sm font-semibold">Before creating an account</legend>
+                    <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm leading-6">
+                      <input type="checkbox" checked={adultConfirmed} disabled={busy} className="mt-1.5 size-4 shrink-0 accent-primary" onChange={(event) => setAdultConfirmed(event.target.checked)} />
+                      <span>I am at least 18 years old.</span>
+                    </label>
+                    <p className="text-sm text-muted-foreground">Under 18? Do not enter your email here. Ask an adult organiser to arrange your tournament entry.</p>
+                    <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm leading-6">
+                      <input type="checkbox" checked={termsAccepted} disabled={busy} className="mt-1.5 size-4 shrink-0 accent-primary" onChange={(event) => setTermsAccepted(event.target.checked)} />
+                      <span>I agree to the <Link to="/terms" className="font-semibold underline underline-offset-4">pilot Terms</Link>. I have read the <Link to="/privacy" className="font-semibold underline underline-offset-4">Privacy Policy</Link>.</span>
+                    </label>
+                  </fieldset>
+                ) : null}
+
+                {signingIn || adultConfirmed ? <>
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
@@ -366,7 +397,9 @@ function AuthPage() {
                   )}
                 </div>
   
-                <Button type="submit" disabled={busy} className="mt-2 h-12 w-full gap-2 rounded-[10px] text-base font-semibold">
+                </> : null}
+
+                <Button type="submit" disabled={!interactive || busy} className="mt-2 h-12 w-full gap-2 rounded-[10px] text-base font-semibold">
                   {busy ? (
                     signingIn ? (
                       "Signing in…"

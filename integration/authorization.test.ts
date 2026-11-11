@@ -749,13 +749,18 @@ describe("player identity and the contact read", () => {
     expect(await contactRows(contactOwner, walkInPlayerId)).toEqual([]);
   });
 
-  it("finds people by name for an editor, one match at a time", async () => {
+  it("finds entered people by name without discovering unentered or other-tournament players", async () => {
     const found = await contactOwner.client.rpc("search_players", {
       p_tournament_id: contactTournamentId,
-      p_query: "itest-walk-in",
+      p_query: "itest-entered",
     });
     expect(found.error).toBeNull();
-    expect((found.data as { id: string }[]).map((p) => p.id)).toContain(walkInPlayerId);
+    expect((found.data as { id: string }[]).map((p) => p.id)).toContain(enteredPlayerId);
+    const unentered = await contactOwner.client.rpc("search_players", {
+      p_tournament_id: contactTournamentId, p_query: "itest-walk-in",
+    });
+    expect(unentered.error).toBeNull();
+    expect(unentered.data).toEqual([]);
     for (const row of (found.data ?? []) as Record<string, unknown>[]) {
       expect(Object.keys(row).sort()).toEqual(["gender", "id", "name"]);
     }
@@ -802,6 +807,15 @@ describe("player identity and the contact read", () => {
     // A person on no entry here is not listed, however the caller is signed in.
     expect(ids).not.toContain(unenteredPlayerId);
     expect(ids).not.toContain(walkInPlayerId);
+    for (const row of mine.data ?? []) {
+      expect(row.name).toBe(`Player ${row.id.slice(0, 8)}`);
+      expect(row.gender).toBeNull();
+    }
+    const operator = await contactOwner.client.rpc("tournament_players", {
+      p_tournament_id: contactTournamentId,
+    });
+    expect(operator.error).toBeNull();
+    expect(operator.data?.find((row) => row.id === enteredPlayerId)?.name).toMatch(/^itest-entered-/);
   });
 
   it("refuses a direct write to the request entries", async () => {
