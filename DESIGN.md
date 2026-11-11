@@ -149,8 +149,8 @@ company.
 
 The page shows a problem already solved. Six court sheets hang slightly askew on the grey
 wall with a stamped time column and a hand-hatched match column; between them one clash is
-circled in highlighter magenta — L. Tran plays 11:10 and 11:22 — and next to the circle the
-sheet it touches already reads the new time with the old one struck through. That is the
+circled in highlighter magenta — Court 6 is running 12 min late — and next to the circle the
+sheet it touches already reads the new times with the old ones struck through. That is the
 product's promise drawn before it is said: when a match runs late, the rest of the day keeps
 up. The headline under the board says the same in one line, and one dark button offers the
 one action.
@@ -163,7 +163,7 @@ not own is the highlighter, and it appears once.
 **Key Characteristics:**
 - The wall is the app's `--background` and the sheets are its `--surface`; there is no separate landing palette.
 - One navy, used only by the brand mark and the focus ring; everything else is pen black, paper white and muted grey.
-- One highlighter magenta, used only for the circled clash and the time it moved.
+- One highlighter magenta, used only for the circled clash and the times it moved.
 - Times are JetBrains Mono with tabular figures — the one place a visitor sees the app's mono face.
 - Court names are Roboto Condensed small caps; everything read as interface is Instrument Sans.
 - Sheets are pinned, not placed: each carries a small tilt, a lift and a paper shadow.
@@ -402,7 +402,8 @@ day.
 ### Clash note and shift (signature)
 - **Shape:** white note, 2.5px Highlighter Magenta ring, 0.75rem by 1.125rem padding, the marked
   note shadow, no radius beyond the paper's 3px.
-- **Text:** "Rest clash: L. Tran plays 11:10 and 11:22" in Instrument Sans 600 1rem, Pen Black.
+- **Text:** "Court 6 is running 12 min late. Its next matches have moved." in Instrument Sans 600 1rem, Pen Black.
+- **Numbers:** one court and one number. Court 6's last two rows read 10:40 struck to 10:52 and 11:05 struck to 11:17, both 12 minutes later; no other sheet moves. Change the note, the shift and the rows only together.
 - **Shift:** "+12 min" in Instrument Sans 600 0.875rem beside the note, then the drawn arrow.
 - **Layout:** note and shift sit centred side by side with 0.5rem between them; below 640px the
   pair stacks and the arrow rotates 90°.

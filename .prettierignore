@@ -6,3 +6,13 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# Agent tooling and design scratch state: third-party or generated, never ours to format.
+.agents
+.claude
+.codex
+.github/agents
+.github/hooks
+.github/skills
+.impeccable
+test-results

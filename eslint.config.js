@@ -1,12 +1,25 @@
 import js from "@eslint/js";
-import eslintPluginPrettier from "eslint-plugin-prettier/recommended";
+import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi", ".nitro", "node_modules"] },
+  {
+    ignores: [
+      "dist",
+      ".output",
+      ".vinxi",
+      ".nitro",
+      "node_modules",
+      "test-results",
+      ".agents",
+      ".claude",
+      ".github",
+      ".impeccable",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -36,5 +49,12 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
-  eslintPluginPrettier,
+  {
+    // Playwright fixtures receive a callback named `use`; it is not React's hook.
+    files: ["e2e/**/*.ts"],
+    rules: { "react-hooks/rules-of-hooks": "off" },
+  },
+  // Turns off the stylistic rules Prettier owns. Formatting is not linted: the backlog would
+  // bury every real finding.
+  eslintConfigPrettier,
 );

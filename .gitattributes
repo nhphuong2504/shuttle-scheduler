@@ -1,0 +1,2 @@
+# Regenerated with LF on every dev/build run; pin it so core.autocrlf cannot report a phantom diff.
+src/routeTree.gen.ts text eol=lf

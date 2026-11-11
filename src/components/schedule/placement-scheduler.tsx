@@ -981,7 +981,7 @@ export function PlacementScheduler() {
       return dayWindowBounds(day, venueZone).end;
     }
     return null;
-  }, [plannerDays, courtsFor]);
+  }, [plannerDays, courtsFor, venueZone]);
 
   /**
    * "Will it fit?": the active field sizes against the court time the configured days offer.
@@ -1021,7 +1021,7 @@ export function PlacementScheduler() {
         }),
       ),
     };
-  }, [tournament?.status, categories, teams, plannerDays, courtsFor, breaksByDay]);
+  }, [tournament?.status, categories, teams, plannerDays, courtsFor, breaksByDay, venueZone]);
 
   /**
    * When the already-scheduled matches end.
@@ -1208,7 +1208,7 @@ export function PlacementScheduler() {
     if (containing) return containing.day.id;
     const firstWithRows = daySlices.find((slice) => slice.rows.length > 0);
     return (firstWithRows ?? daySlices[0])?.day.id ?? "";
-  }, [daySlices, pickedDayId]);
+  }, [daySlices, pickedDayId, venueZone]);
 
   const matchLabel = (matchId: string) =>
     placementMatchLabel(matchId, placementMatches ?? [], tierMatches ?? [], labelEntrant);

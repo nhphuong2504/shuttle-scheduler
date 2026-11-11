@@ -84,7 +84,7 @@ function readEnvFile(path) {
  */
 function applyValues(existing, values) {
   const remaining = new Map(Object.entries(values));
-  const lines = existing.split("\n").map((line) => {
+  const lines = existing.split(/\r?\n/).map((line) => {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
     if (!match || !remaining.has(match[1])) return line;
     const name = match[1];

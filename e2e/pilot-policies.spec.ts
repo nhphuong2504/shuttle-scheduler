@@ -23,9 +23,9 @@ test("policy pages and operator contact are usable on a phone", async ({ page })
         .violations,
     ).toEqual([]);
   }
-  await expect(page.getByRole("link", { name: "nhphuong@iastate.edu" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "support@tournova.app" })).toHaveAttribute(
     "href",
-    "mailto:nhphuong@iastate.edu",
+    "mailto:support@tournova.app",
   );
 });
 

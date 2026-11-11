@@ -16,7 +16,7 @@ executes the checkpoint plan. A phase close uses the full gate even on a clean t
 Docs/copy/styling need lightweight review. Scheduling, scoring, authorization, SQL and
 RPC changes need stronger review explaining what could break and what was checked.
 Tests are the floor, not the argument. Every applicable CI check must pass before merge.
-`npm run lint` is not a gate because of the existing formatting backlog.
+`npm run lint` is not a gate yet: formatting is no longer linted, but its remaining findings are unresolved.
 
 ## Browser checks
 
@@ -66,7 +66,7 @@ Its JSON report stays at `test-results/e2e-report.json`. The sibling agent direc
 is outside that cleanup. Ignored `test-results/agent/<run-id>/` holds per-step redacted logs and a JSON manifest:
 revision, dirty source/config fingerprint, command, timestamps, duration, exit/signal and
 artifact paths. Only a completed fresh run is evidence for its recorded snapshot. Results
-are never used to skip checks. Main typecheck excludes the separate E2E TypeScript backlog;
+are never used to skip checks, and the runner keeps only the ten newest run directories. Main typecheck excludes the separate E2E TypeScript backlog;
 the maintenance baseline records its eight pre-existing diagnostics.
 
 The runner bounds excerpts, fails fast and forwards catchable interruptions to the child

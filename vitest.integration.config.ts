@@ -37,7 +37,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
  */
 export default defineConfig({
   plugins: [tsconfigPaths()],
-  // See (1) above. `integration/` has no .env, so no VITE_ variable is loaded from files.
+  // See (1) above. Only `integration/.env` is read, so no root VITE_ variable is loaded.
   envDir: "integration",
   test: {
     environment: "node",

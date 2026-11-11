@@ -50,6 +50,16 @@ supabase/.branches/
 # Local benchmark output (`npm run bench:scheduling` writes its report here)
 .benchmark/
 
+# Impeccable design skill: per-task scratch output and the launcher's self-downloaded
+# binaries. The skill text, hook configuration and `.impeccable/design.json` are source.
+.impeccable/build/
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/decision/
+.impeccable/surfaces/
+.impeccable/questions/
+**/skills/impeccable/scripts/bin/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

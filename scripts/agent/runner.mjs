@@ -8,6 +8,7 @@ import {
   writeFileSync,
   readdirSync,
   appendFileSync,
+  rmSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -85,6 +86,22 @@ export function lineSink(emit, redact) {
   };
 }
 
+/**
+ * Removes all but the newest `keep` run directories. Old runs are never reused as evidence,
+ * so they are only disk use. Run ids start with an ISO timestamp, so name order is age order.
+ */
+export function pruneRuns(root, keep = 10) {
+  const base = path.join(root, "test-results/agent");
+  if (!existsSync(base)) return [];
+  const stale = readdirSync(base, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}T/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .slice(0, -keep);
+  for (const name of stale) rmSync(path.join(base, name), { recursive: true, force: true });
+  return stale;
+}
+
 export async function runSteps(
   steps,
   {
@@ -101,6 +118,7 @@ export async function runSteps(
   const runId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
   const directory = path.join(root, "test-results/agent", runId);
   mkdirSync(directory, { recursive: true });
+  pruneRuns(root);
   const report = {
     runId,
     stage,

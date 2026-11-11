@@ -22,10 +22,6 @@ function ContactPage() {
           </a>{" "}
           for support, privacy requests, accessibility barriers or reports of inappropriate content.
         </p>
-        <p>
-          The email address is a contact address only. Tournova is not represented as an Iowa State
-          University service or as endorsed by the university.
-        </p>
       </PolicySection>
       <PolicySection title="Ask to view, correct, hide or delete data">
         <p>

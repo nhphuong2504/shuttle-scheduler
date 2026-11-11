@@ -12,100 +12,86 @@ function PrivacyPage() {
     <PolicyPage title="Pilot privacy policy">
       <PolicySection title="Who operates Tournova">
         <p>
-          {OPERATOR_NAME} operates Tournova from Iowa, United States. This draft covers the free US
-          pilot. Organisers also decide how to run their events and what participant information to
-          enter. For requests, use{" "}
+          {OPERATOR_NAME} operates Tournova from Iowa, United States, as a free US pilot. Organisers
+          decide how to run their events and what participant information to enter. For requests,
+          use{" "}
           <Link to="/contact" className="underline underline-offset-4">
             Contact and data requests
           </Link>
           .
         </p>
       </PolicySection>
-      <PolicySection title="Information used to provide the service">
+      <PolicySection title="Information we use">
         <p>
-          Accounts use an email address and authentication credentials. We record the terms version,
-          server time and the account holder’s statement that they are at least 18 when they sign
-          up. This is an acknowledgement, not proof of identity or age.
+          Accounts use an email address and password. When you sign up we record the terms version,
+          the time and your statement that you are at least 18. That statement is not proof of age.
         </p>
         <p>
-          Registration and organiser entry forms may collect player and partner names, email, phone,
-          gender, events and request notes. Organisers and people submitting entries can provide
-          information about others. We use this information for registration decisions, entries,
-          draws, schedules, scores and contacting participants. Do not enter payment details, health
-          information or identification documents.
+          Registration and entry forms may collect player and partner names, email, phone, gender,
+          events and notes. Organisers and people submitting entries may provide information about
+          others. We use it for registration decisions, entries, draws, schedules, scores and
+          contacting participants. Do not enter payment details, health information or
+          identification documents.
         </p>
         <p>
-          Operational records may include account and tournament identifiers, changes, match
-          notifications and security/access logs. Our infrastructure providers may process IP
-          addresses and technical request information to deliver and protect the service.
+          We also keep operational records such as tournament changes, match notifications and
+          security logs. Our hosting providers process IP addresses and technical request
+          information to deliver and protect the service.
         </p>
       </PolicySection>
       <PolicySection title="What others can see">
         <p>
-          Tournament names, event details, venue information, schedules and results are public. For
-          real tournaments, public player reads use generated player labels and omit gender.
-          Authorised tournament operators can see player names and relevant contact information.
-          Sample tournaments use fictional names.
+          Tournament names, event details, venues, schedules and results are public. On real
+          tournaments, public pages show generated player labels instead of names and do not show
+          gender. Authorised tournament operators can see player names and relevant contact
+          details. Sample tournaments use fictional names.
         </p>
         <p>
-          Organisers must keep personal information out of public free-text fields. A generated
-          label does not guarantee anonymity: a venue, event, schedule or information shared
-          elsewhere may identify a player. Authorised people may export data; copies already
-          downloaded or shared outside Tournova cannot be recalled by changing a page.
-        </p>
-      </PolicySection>
-      <PolicySection title="Children and adult-entered entries">
-        <p>
-          Accounts are for adults aged 18 or older. Children participate through an authorised
-          adult; we do not offer child self-service accounts in this pilot. Adults entering a child
-          must have appropriate authority, use an adult contact and minimise the information
-          entered. An organiser’s statement is not a substitute for legally required parental
-          consent.
-        </p>
-        <p>
-          If you believe a child has created an account or their information has been used
-          improperly, contact us to review restriction, correction or removal. Public player labels
-          are used without requiring a child’s date of birth.
+          A generated label is not full anonymity: the venue, event or information shared elsewhere
+          may still identify a player. Organisers must keep personal information out of public text
+          such as titles and descriptions. Copies that authorised people export or share outside
+          Tournova cannot be recalled.
         </p>
       </PolicySection>
-      <PolicySection title="Providers and browser storage">
+      <PolicySection title="Children">
         <p>
-          Supabase provides account and database services; Cloudflare provides hosting and network
-          delivery for the intended deployment. Google Fonts requests can send Google technical data
-          such as your IP address. We also use locally served fonts. Access by service providers is
-          needed to deliver these features; the exact deployed configuration and vendor retention
-          must be checked before launch.
+          Accounts are for adults aged 18 or older. Children take part only when an authorised adult
+          enters them. That adult must have appropriate permission from a parent or guardian, use an
+          adult contact and enter only what the event needs. If you believe a child has an account
+          or their information is being misused, contact us and we will review restricting,
+          correcting or removing it.
+        </p>
+      </PolicySection>
+      <PolicySection title="Service providers and browser storage">
+        <p>
+          Supabase provides accounts and the database. Cloudflare provides hosting and network
+          delivery. Some fonts load from Google Fonts, which receives your IP address and basic
+          request information. These providers process data only to deliver their part of the
+          service.
         </p>
         <p>
-          Browser storage keeps sign-in sessions and preferences such as a followed player or recent
-          tournament. Sign out on shared devices. The current application has no advertising or
-          analytics SDK identified in this review; hosting logs still exist. We do not sell personal
-          information or use it for targeted advertising in this pilot.
-        </p>
-        <p>
-          We do not use browser Do Not Track signals to change these essential service functions.
-          This draft does not claim that every external provider honours that signal; Google Fonts
-          is an external request, not a promise that no third party receives technical data.
+          Your browser stores your sign-in session, preferences such as a followed player, and
+          unsaved tournament setup drafts. Sign out on shared devices. Tournova has no advertising
+          or analytics trackers. We do not sell personal information or use it for targeted
+          advertising. We do not respond to browser Do Not Track signals because we do no
+          cross-site tracking.
         </p>
       </PolicySection>
       <PolicySection title="Retention and your requests">
         <p>
-          Data is retained to provide accounts, run events, preserve appropriate results and audit
-          history, address security issues and meet applicable obligations. Detailed retention
-          periods and backup expiry must be finalised before launch; this draft is not a promise of
-          immediate deletion from every system.
+          We keep information while it is needed to provide accounts, run events, preserve results
+          and audit history, handle security issues and meet legal obligations. Backups expire on
+          their own schedule, so deletion may not reach every copy at once.
         </p>
         <p>
-          Ask to access, correct, hide, delete or de-identify information through Contact. We verify
-          authority proportionately and explain any limits. Deleting a login alone does not delete
-          player, profile, request or tournament history. We review those records separately,
-          including whether results can be preserved without identifying a person. Backups and
-          copies already exported require separate handling.
+          Ask to access, correct, hide, delete or de-identify information through Contact. We may
+          ask for proportionate information to confirm your authority. Deleting an account does not
+          by itself delete player entries or tournament history; we review those separately,
+          including whether results can stay without identifying you.
         </p>
         <p>
-          We will update this page when practices change and show the revision date. Changes
-          requiring fresh agreement or consent will be handled separately. Contact us about an
-          accessibility barrier or privacy concern without creating an account.
+          If these practices change, we will update this page and its date. Changes that need your
+          agreement will ask for it again.
         </p>
       </PolicySection>
     </PolicyPage>

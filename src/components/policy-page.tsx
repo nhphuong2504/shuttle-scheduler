@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { PublicShell } from "@/components/app-shell";
-import { PILOT_TERMS_VERSION } from "@/lib/legal/policy";
+import { PILOT_TERMS_VERSION, POLICY_UPDATED } from "@/lib/legal/policy";
 
 export function PolicyPage({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <PublicShell title={title} subtitle="Pilot draft · Updated November 11, 2026">
+    <PublicShell title={title} subtitle={`Pilot draft · Updated ${POLICY_UPDATED}`}>
       <div className="mx-auto max-w-[70ch] space-y-8 pb-8 text-base leading-7">
         <nav
           aria-label="Policies and help"

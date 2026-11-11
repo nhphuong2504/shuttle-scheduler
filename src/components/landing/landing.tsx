@@ -6,8 +6,12 @@ import { signInSearch } from "@/lib/routing/redirect";
 
 /**
  * The front door is the organiser's board: one printed sheet per court, pinned up for the
- * day. One clash is circled, and the sheet it touches has already moved to make room -
- * which is the product's promise drawn before it is said.
+ * day. One late court is circled, and its sheet has already moved to make room - which is
+ * the product's promise drawn before it is said.
+ *
+ * One court, one number, so it reads at a glance: Court 6's 10:15 match runs 12 minutes over,
+ * and the two matches after it on that court each start 12 minutes later. The note and its
+ * arrow sit beside that sheet at every breakpoint. No other court moves.
  */
 
 type Hatch = "diag" | "cross" | "dense" | "lines";
@@ -29,8 +33,12 @@ const SHEETS: CourtSheet[] = [
   {
     court: 6,
     hatch: "dense",
-    // The clash pushes this court's last match back, and the sheet shows the new time.
-    rows: [...DAY.slice(0, 5).map((time) => ({ time })), { time: "11:22", was: "11:10" }],
+    // The court that ran over: both matches after the late one start 12 minutes later.
+    rows: [
+      ...DAY.slice(0, 4).map((time) => ({ time })),
+      { time: "10:52", was: "10:40" },
+      { time: "11:17", was: "11:05" },
+    ],
   },
 ];
 
@@ -43,7 +51,7 @@ export function Landing() {
         <div
           className="cs-board"
           role="img"
-          aria-label="Six court sheets for the day. A rest clash for L. Tran moves Court 6's last match 12 minutes later, to 11:22."
+          aria-label="Six court sheets for the day. Court 6 is running 12 minutes late, so its next two matches have moved from 10:40 to 10:52 and from 11:05 to 11:17. The other five courts are unchanged."
         >
           {SHEETS.map((sheet) => (
             <CourtCard key={sheet.court} sheet={sheet} />
@@ -51,11 +59,11 @@ export function Landing() {
 
           <div className="cs-clash">
             <p className="cs-clash-note">
-              Rest clash:
+              Court 6 is running
               <br />
-              L. Tran plays 11:10
+              12 min late. Its next
               <br />
-              and 11:22
+              matches have moved.
             </p>
             <p className="cs-clash-shift">
               <span>+12 min</span>

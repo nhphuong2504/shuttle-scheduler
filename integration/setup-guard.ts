@@ -75,6 +75,5 @@ try {
 afterAll(() => {
   // Fixture cleanup is owned by each spec file, which knows what it created. This only
   // reports the project, so a green run still states which database it just wrote to.
-  // eslint-disable-next-line no-console
   console.log(`[integration] ran against project ${TEST_PROJECT_REF}`);
 });

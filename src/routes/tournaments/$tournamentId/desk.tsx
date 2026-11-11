@@ -248,8 +248,8 @@ function Desk() {
    * board.
    */
   const conflictsQuery = useScheduleConflicts();
-  const conflicts = conflictsQuery.data ?? [];
-  const conflictsByMatch = useMemo(() => groupConflictsByMatch(conflicts), [conflicts]);
+  const conflicts = conflictsQuery.data;
+  const conflictsByMatch = useMemo(() => groupConflictsByMatch(conflicts ?? []), [conflicts]);
   const { data: tournamentDays } = useTournamentDays();
   // The two-round placement format keeps its own tables, so the desk reads them
   // alongside the round-robin ones rather than instead of them.

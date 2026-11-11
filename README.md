@@ -25,7 +25,7 @@ audience — participants — signs in to enter:
 
 ## Getting started
 
-You need Node.js with npm ([install with nvm](https://github.com/nvm-sh/nvm)).
+You need Node.js 22 with npm (`.nvmrc`; [install with nvm](https://github.com/nvm-sh/nvm)).
 
 ```sh
 npm install
@@ -69,7 +69,7 @@ and [verification](docs/verification.md) for prerequisites, reports and local in
 | `npm run test:e2e:record-auth` | Optional. Records a real staff session for manual checks against a live backend |
 | `npm run bench:scheduling` | Scheduler benchmark; prints its report to stdout. Compares greedy against the hybrid at 1/5/10/25 runs across six shapes — `small`, `medium`, `large`, `contended`, `multi-event` and `straggler`. The report adds stage-close times and the median change in progression and churn per run-count step, so it answers "did the change close stages earlier, and at what cost to finish time" rather than only `unscheduled` / `afterCutoff` / `makespan`. Overrides: `BENCH_ONLY`, `BENCH_REPS`, `BENCH_SEEDS`, and `BENCH_OUT` to also write the markdown to a file (e.g. `BENCH_OUT=.benchmark/hybrid-core.md`, git-ignored) |
 | `npm run lint` | ESLint. **Not a gate** — see below |
-| `npm run format` | Prettier write |
+| `npm run format -- <paths>` | Prettier write on the named paths only |
 
 ### The gates
 
@@ -81,10 +81,11 @@ CI runs the same checks, with the strict browser suite split across two runners.
 `test:e2e:final` runs Playwright once and asserts zero skips; there is no separate
 ordinary browser run before it. `test:e2e` remains available for focused iteration.
 
-`npm run lint` is deliberately **not** a gate. It reports a large pre-existing
-Prettier backlog that predates the current design work, so it is noise rather than
-signal; do not run a repo-wide format as part of an unrelated change. The other
-gates are green and expected to stay green.
+`npm run lint` is **not** a gate yet. It no longer reports formatting (Prettier is not
+run through ESLint), but two intentional control-character patterns and the fast-refresh
+warnings are still open. The repository-wide Prettier backlog remains: do not run a
+repo-wide format as part of an unrelated change. The other gates are green and expected
+to stay green.
 
 ## Testing notes
 
@@ -187,7 +188,6 @@ npm run deploy:check # build, verify the target, show what would be uploaded (no
 npm run deploy       # build, verify the target, upload
 ```
 
-`npm run deploy:dry` is an alias of `deploy:check`.
 
 The Worker is `tournova-ops`, named explicitly in [`vite.config.ts`](vite.config.ts).
 Nitro would otherwise derive the name from the git remote, which resolves to the existing

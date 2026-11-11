@@ -83,8 +83,5 @@ CI runs it once in its checks job; a lightweight docs-only workflow covers instr
 links when the main application workflow intentionally skips Markdown-only changes.
 Do not raise budgets or weaken requirements to make a measurement look better.
 
-Phase-close scope includes committed branch changes: the runner uses the local merge base
-with `origin/main` (or `main`) plus staged/unstaged/untracked changes, without fetching.
-Use `--base <existing-ref>` to choose an explicit comparison. If no local main baseline
-exists, integration is required conservatively. Committing a change does not remove it
-from phase-close risk selection. The manifest records the comparison commit.
+Phase-close comparison scope (merge base, `--base`, missing baseline) is defined once in
+[verification](verification.md#evidence-and-interruptions).

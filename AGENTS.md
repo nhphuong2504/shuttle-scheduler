@@ -3,7 +3,7 @@
 Tournova is a badminton tournament operations console: TanStack Start, React,
 TypeScript, Tailwind v4, Supabase and Cloudflare Workers. It must remain usable
 at a live tournament desk on imperfect wifi. The repository builds independently
-of an editor or hosted development platform; Cursor and Codex share these rules.
+of an editor or hosted development platform; Cursor, Codex and Claude Code share these rules.
 
 ## Start with the relevant context
 
@@ -38,8 +38,8 @@ do not copy their instructions into a second client-specific rule set.
   moving or redirecting a web address, and [roster freeze](docs/roster-freeze.md)
   before changing joins/withdrawals after matches exist.
 - The design is flexible; [design principles](docs/design-principles.md) are guidance.
-  Accessibility checks remain required. Landing (`src/components/landing/`) shows
-  the real product: update its Desk wording and scheduling demo when those change.
+  Accessibility checks remain required. Landing (`src/components/landing/`) claims
+  only real behaviour: update its reflow and rest wording when the product changes.
 
 ## Safety and persistence
 
