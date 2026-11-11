@@ -15,6 +15,17 @@ import { bindQueryCacheToUser } from "@/lib/auth/session-cache";
 
 import appCss from "../styles.css?url";
 
+/**
+ * Bumped whenever the mark's artwork changes. Bump it again for the next recolour.
+ *
+ * A browser keeps a site's favicon in its own store, keyed by the icon's URL, and it does not
+ * revalidate it the way it does every other asset - `Cache-Control: must-revalidate` on the SVG
+ * changes nothing. The file has been recoloured twice since it first shipped (violet, then
+ * cobalt, now navy) while this URL stayed `/brand/tournova-mark.svg`, so tabs that had loaded
+ * the earlier mark kept showing it. Changing the URL is the only way to make them ask again.
+ */
+const MARK_ICON_VERSION = "3";
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -115,7 +126,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@500;700&display=swap",
       },
-      { rel: "icon", href: "/brand/tournova-mark.svg", type: "image/svg+xml" },
+      {
+        rel: "icon",
+        href: `/brand/tournova-mark.svg?v=${MARK_ICON_VERSION}`,
+        type: "image/svg+xml",
+      },
     ],
   }),
   shellComponent: RootShell,
