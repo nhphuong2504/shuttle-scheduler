@@ -430,16 +430,6 @@ function MatchesPage() {
     }
     return [...groups.entries()];
   };
-  const groupByDraw = (rows: DeskMatch[]) => {
-    const byDraw = new Map<string, DeskMatch[]>();
-    for (const row of rows) {
-      const drawId = drawOfTierMatch.get(row.id) ?? "";
-      const list = byDraw.get(drawId) ?? [];
-      list.push(row);
-      byDraw.set(drawId, list);
-    }
-    return [...byDraw.entries()];
-  };
 
   /**
    * The order the event panels are drawn in: the standard order, MS -> WS -> MD -> WD -> XD.
@@ -471,7 +461,14 @@ function MatchesPage() {
     // The bracket panels read in event order, then A/B/C/D within an event, so an event's draws
     // stay together however their matches happen to be scheduled.
     const drawById = new Map((tierDraws ?? []).map((draw) => [draw.id, draw]));
-    return [...groupByDraw(visibleTier)].sort((a, b) => {
+    const byDraw = new Map<string, DeskMatch[]>();
+    for (const row of visibleTier) {
+      const drawId = drawOfTierMatch.get(row.id) ?? "";
+      const list = byDraw.get(drawId) ?? [];
+      list.push(row);
+      byDraw.set(drawId, list);
+    }
+    return [...byDraw.entries()].sort((a, b) => {
       const drawA = drawById.get(a[0]);
       const drawB = drawById.get(b[0]);
       const byEvent = compareEventIds(drawA?.category_id, drawB?.category_id, (id) =>
