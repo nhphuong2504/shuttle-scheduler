@@ -113,6 +113,9 @@ advances the entrant. A draw with one entrant has **no match row at all** (the b
 
 ## Caveats
 
+- **Player identities are synthetic.** The tournament is staging data: the 40 names in
+  `players.csv` and `tournament.json` are made up, while the schedule, the durations and the
+  audit trail are real output of the product.
 - **23 attached = false rows.** All are at 15:03:07 on day 1, placing the whole field at 15:02 — one
   minute before that day would have started. They were cleared within a minute and replaced
   wholesale by the 15:04:39 build that produced the day. They are the attempt that was abandoned
