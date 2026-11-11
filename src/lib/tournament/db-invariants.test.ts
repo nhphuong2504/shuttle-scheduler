@@ -1155,7 +1155,7 @@ describe("realtime publication membership migration", () => {
     // Set equality in both directions: a missing table drops its events, and a stale entry
     // would mean the migration is describing a database that no longer exists.
     // Fixed feeder definitions are private; in-app call records use recipient-scoped RPC polling.
-    expect(publishedTables()).toEqual(schemaTables().filter(table => !['placement_round_two_slots', 'match_calls', 'player_notifications'].includes(table)));
+    expect(publishedTables()).toEqual(schemaTables().filter(table => !['placement_round_two_slots', 'match_calls', 'player_notifications', 'account_policy_acceptances'].includes(table)));
   });
 
   it("covers the tables the desk depends on, explicitly", () => {

@@ -1,4 +1,5 @@
 import type { MyRegistrationEntry } from "@/lib/tournament/registration";
+import { EntryDataNotice } from "@/components/entry-data-notice";
 import { registrationKeys } from "@/lib/tournament/registration/keys";
 import {
   submitTournamentRegistration,
@@ -453,6 +454,7 @@ function RegisterForm({
         submit.mutate(entries);
       }}
     >
+      <EntryDataNotice />
       <ul className="space-y-2">
         {events.map((event) => {
           const choice = picked[event.id];

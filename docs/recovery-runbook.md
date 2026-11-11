@@ -178,6 +178,13 @@ how to repair the schema, so do not delete it mid-incident.
 
 ## The auth seam
 
+**Pilot signup guard:** after `20261111010000_pilot_provisioning.sql`, new identities
+require the real adult holder's current Terms acknowledgement. The legacy staff-login
+creation script cannot bypass that guard. Have the adult holder sign up through `/auth`
+at their verified restored email; normal profile linking preserves their role and
+relationships. Do not fabricate acknowledgement metadata in an administrative tool.
+See [pilot privacy operations](pilot-privacy-operations.md#accounts-and-recovery).
+
 `auth.users` is excluded from the backup on purpose — a partial `auth` restore is not
 something to attempt during an incident. So after restoring data:
 

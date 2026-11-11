@@ -11,15 +11,18 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as KnockoutRouteImport } from './routes/knockout'
 import { Route as MatchesRouteImport } from './routes/matches'
 import { Route as PlacementRouteImport } from './routes/placement'
 import { Route as PlacementScheduleRouteImport } from './routes/placement-schedule'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RegistrationRouteImport } from './routes/registration'
 import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as StaffRouteImport } from './routes/staff'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as MeTournamentsRouteImport } from './routes/me/tournaments'
 import { Route as TournamentsTournamentIdRouteRouteImport } from './routes/tournaments/$tournamentId/route'
 import { Route as TournamentsNewRouteImport } from './routes/tournaments/new'
@@ -51,6 +54,11 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
@@ -76,6 +84,11 @@ const PlacementScheduleRoute = PlacementScheduleRouteImport.update({
   path: '/placement-schedule',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegistrationRoute = RegistrationRouteImport.update({
   id: '/registration',
   path: '/registration',
@@ -94,6 +107,11 @@ const SetupRoute = SetupRouteImport.update({
 const StaffRoute = StaffRouteImport.update({
   id: '/staff',
   path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeTournamentsRoute = MeTournamentsRouteImport.update({
@@ -218,15 +236,18 @@ const TournamentsTournamentIdPlayersPlayerIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/explore': typeof ExploreRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
+  '/privacy': typeof PrivacyRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/terms': typeof TermsRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRouteRouteWithChildren
   '/me/tournaments': typeof MeTournamentsRoute
   '/tournaments/new': typeof TournamentsNewRoute
@@ -251,15 +272,18 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/explore': typeof ExploreRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
+  '/privacy': typeof PrivacyRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/terms': typeof TermsRoute
   '/me/tournaments': typeof MeTournamentsRoute
   '/tournaments/new': typeof TournamentsNewRoute
   '/tournaments/$tournamentId/access': typeof TournamentsTournamentIdAccessRoute
@@ -284,15 +308,18 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/explore': typeof ExploreRoute
   '/knockout': typeof KnockoutRoute
   '/matches': typeof MatchesRoute
   '/placement': typeof PlacementRoute
   '/placement-schedule': typeof PlacementScheduleRoute
+  '/privacy': typeof PrivacyRoute
   '/registration': typeof RegistrationRoute
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/terms': typeof TermsRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRouteRouteWithChildren
   '/me/tournaments': typeof MeTournamentsRoute
   '/tournaments/new': typeof TournamentsNewRoute
@@ -319,15 +346,18 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/contact'
     | '/explore'
     | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
+    | '/privacy'
     | '/registration'
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/terms'
     | '/tournaments/$tournamentId'
     | '/me/tournaments'
     | '/tournaments/new'
@@ -352,15 +382,18 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/contact'
     | '/explore'
     | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
+    | '/privacy'
     | '/registration'
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/terms'
     | '/me/tournaments'
     | '/tournaments/new'
     | '/tournaments/$tournamentId/access'
@@ -384,15 +417,18 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/contact'
     | '/explore'
     | '/knockout'
     | '/matches'
     | '/placement'
     | '/placement-schedule'
+    | '/privacy'
     | '/registration'
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/terms'
     | '/tournaments/$tournamentId'
     | '/me/tournaments'
     | '/tournaments/new'
@@ -418,15 +454,18 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  ContactRoute: typeof ContactRoute
   ExploreRoute: typeof ExploreRoute
   KnockoutRoute: typeof KnockoutRoute
   MatchesRoute: typeof MatchesRoute
   PlacementRoute: typeof PlacementRoute
   PlacementScheduleRoute: typeof PlacementScheduleRoute
+  PrivacyRoute: typeof PrivacyRoute
   RegistrationRoute: typeof RegistrationRoute
   ScheduleRoute: typeof ScheduleRoute
   SetupRoute: typeof SetupRoute
   StaffRoute: typeof StaffRoute
+  TermsRoute: typeof TermsRoute
   TournamentsTournamentIdRouteRoute: typeof TournamentsTournamentIdRouteRouteWithChildren
   MeTournamentsRoute: typeof MeTournamentsRoute
   TournamentsNewRoute: typeof TournamentsNewRoute
@@ -446,6 +485,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/explore': {
@@ -483,6 +529,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlacementScheduleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/registration': {
       id: '/registration'
       path: '/registration'
@@ -509,6 +562,13 @@ declare module '@tanstack/react-router' {
       path: '/staff'
       fullPath: '/staff'
       preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/me/tournaments': {
@@ -708,15 +768,18 @@ const TournamentsTournamentIdRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  ContactRoute: ContactRoute,
   ExploreRoute: ExploreRoute,
   KnockoutRoute: KnockoutRoute,
   MatchesRoute: MatchesRoute,
   PlacementRoute: PlacementRoute,
   PlacementScheduleRoute: PlacementScheduleRoute,
+  PrivacyRoute: PrivacyRoute,
   RegistrationRoute: RegistrationRoute,
   ScheduleRoute: ScheduleRoute,
   SetupRoute: SetupRoute,
   StaffRoute: StaffRoute,
+  TermsRoute: TermsRoute,
   TournamentsTournamentIdRouteRoute:
     TournamentsTournamentIdRouteRouteWithChildren,
   MeTournamentsRoute: MeTournamentsRoute,

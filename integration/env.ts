@@ -237,11 +237,14 @@ export async function createIdentity(role: PlatformRole, label: string): Promise
   const { error: profileError } = await admin.from("profiles").insert({ email, system_role: role });
   if (profileError) throw new Error(`seeding profiles failed: ${profileError.message}`);
 
+
   const { data: created, error: userError } = await admin.auth.admin.createUser({
     email,
     password,
     // Confirmed so sign-in works regardless of the project's confirmation setting.
     email_confirm: true,
+    // Synthetic adult fixture, never a real person's acknowledgement.
+    user_metadata: { pilot_adult_confirmed: true, pilot_terms_version: "2026-11-11-pilot-draft" },
   });
   if (userError) throw new Error(`creating the auth user failed: ${userError.message}`);
 
@@ -274,6 +277,7 @@ export async function createIdentity(role: PlatformRole, label: string): Promise
 export async function createUserIdentity(label: string): Promise<TestIdentity> {
   return createIdentity("user", label);
 }
+
 
 /**
  * A signed-in client for an identity this suite already provisioned.

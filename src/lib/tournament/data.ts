@@ -1006,8 +1006,8 @@ export function useCourts() {
  * report the whole platform as "Players" and let anyone list everybody who had ever played.
  * A page wants the names of the people on *this* tournament's entries, and
  * `tournament_players` answers exactly that: id, name and gender of everyone with a team row
- * here, no email, no phone, no link. Pickers that need to reach beyond the tournament use
- * `searchPlayers` instead.
+ * here, no email, no phone, no link. Operators receive real names/gender; other readers
+ * receive generated labels and no gender for real tournaments. Demo names are fictional.
  */
 export function usePlayers() {
   const tournamentId = useTournamentId();
@@ -1033,7 +1033,7 @@ export function usePlayers() {
 export const PLAYER_SEARCH_MIN_CHARS = 2;
 
 /**
- * Looks a person up in the global roster by name, for the desk adding an entry.
+ * Looks up a person already entered in this tournament, for another event entry.
  *
  * Editors of the tournament only, at least two characters, at most `limit` rows. Returns an
  * empty list for text that is too short rather than asking, so a half-typed box costs nothing.

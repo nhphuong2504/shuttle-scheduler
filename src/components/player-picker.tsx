@@ -9,7 +9,7 @@ import { PLAYER_SEARCH_MIN_CHARS, searchPlayers, type Player } from "@/lib/tourn
 const SEARCH_DEBOUNCE_MS = 250;
 
 /**
- * Chooses one person from the global roster by searching for them.
+ * Chooses a person already entered in this tournament by searching for them.
  *
  * The roster is not loaded: it is global, so it grows with every tournament ever run, and a
  * list of everyone is neither something a desk can scan nor something it should be able to
@@ -119,7 +119,7 @@ export function PlayerPicker({
       </ul>
       {!enough ? (
         <p className="text-sm text-muted-foreground">
-          Type at least {PLAYER_SEARCH_MIN_CHARS} letters of the name. Someone new? Add them first.
+          Search this tournament using at least {PLAYER_SEARCH_MIN_CHARS} letters. Someone new? Add them first.
         </p>
       ) : search.isError ? (
         <p className="text-sm text-danger-foreground">Could not search the roster.</p>

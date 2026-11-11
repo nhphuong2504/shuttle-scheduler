@@ -34,6 +34,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_policy_acceptances: {
+        Row: { user_id: string; terms_version: string; adult_confirmed: boolean; accepted_at: string }
+        Insert: { user_id: string; terms_version: string; adult_confirmed: boolean; accepted_at?: string }
+        Update: { user_id?: string; terms_version?: string; adult_confirmed?: boolean; accepted_at?: string }
+        Relationships: []
+      }
       categories: {
         Row: {
           active: boolean

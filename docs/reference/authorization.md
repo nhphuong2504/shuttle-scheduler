@@ -593,9 +593,13 @@ the placement stage — and be refused for exactly the entrants who have not bee
 
 Creation stays broader than reading, on purpose: an operator may create a walk-in they cannot
 read back, because contact data is readable only through an entry and a fresh walk-in has none.
-The people those screens render come from `tournament_players(tournament)` - id, name and gender of
-everyone with an entry in that tournament, no email and no link - and the desk finds someone new through
-`search_players(tournament, text)`, which only an editor of that tournament may call. The roster as a whole
+The people those screens render come from `tournament_players(tournament)` - id, display name and gender of
+everyone with an entry in that tournament, no email and no link. Under the pilot privacy migrations,
+non-operators receive generated labels and null gender for real tournaments, including withdrawn
+entries; operators retain real names/gender and demo events retain fictional names. The desk finds
+someone already entered through `search_players(tournament, text)`, limited to the specified
+tournament, which only an editor of that tournament may call. New walk-ins are selected immediately
+after creation. The roster as a whole
 is not readable by anyone: `public_players` is no longer granted to `anon` or `authenticated`
 ([`20261009000000`](../../supabase/migrations/20261009000000_scoped_player_reads.sql)). A walk-in is created with
 `add_walk_in_player`, which returns the id the table insert cannot.

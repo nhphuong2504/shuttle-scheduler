@@ -30,6 +30,7 @@ Three audiences, and the address says which one it belongs to:
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me**. A visitor is sent to `/auth` first, as on the create flow |
 | `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call. A visitor is sent to `/auth` first, carrying this address back and the `create` errand, rather than being shown a form whose submit the database would refuse |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
+| `/privacy`, `/terms`, `/contact` | Public pilot policy drafts and the operator's support/data-request contact; linked from both shells and the landing footer |
 | `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card in the read-only workspace instead (see `readerHomeFor` below), so a visitor who only came to read never sees this page |
 
 These are the only addresses that can be reached without naming a tournament. Each draws

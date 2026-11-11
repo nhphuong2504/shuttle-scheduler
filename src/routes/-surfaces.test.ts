@@ -874,6 +874,8 @@ describe("the workspace chrome is mounted once, by the layout", () => {
   const publicRoutes = [
     // The visitor's reading of `/`, which `routes/index.tsx` renders for a caller with no session.
     join("components", "landing", "landing.tsx"),
+    // Policy routes delegate to one public-shell reading layout.
+    join("components", "policy-page.tsx"),
     join("routes", "auth.tsx"),
     join("routes", "explore.tsx"),
     join("routes", "index.tsx"),

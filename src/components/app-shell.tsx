@@ -307,9 +307,8 @@ const NAV_BADGE_CLASS =
 /**
  * The foot of every page, in both shells.
  *
- * It carries only what exists: the name, the year, and the one public door. Privacy, terms
- * and support links are left out until those pages do, because a link to nothing is worse
- * than no link. The door is worded "Find a tournament" rather than repeating the header's
+ * Policies and contact stay reachable in both shells. The public door is worded
+ * "Find a tournament" rather than repeating the header's
  * "Browse tournaments", so a page never offers two links with the same name.
  */
 function SiteFooter() {
@@ -320,12 +319,19 @@ function SiteFooter() {
           <span className="font-display text-base font-bold text-foreground">Tournova</span>
           <span>© {new Date().getFullYear()} Tournova. All rights reserved.</span>
         </p>
+        <nav aria-label="Site information" className="flex flex-wrap gap-x-5 gap-y-1">
+        {([
+          ["/privacy", "Privacy"], ["/terms", "Terms"], ["/contact", "Contact"],
+        ] as const).map(([to, label]) => (
+          <Link key={to} to={to} className="inline-flex min-h-11 items-center font-semibold underline-offset-4 hover:underline">{label}</Link>
+        ))}
         <Link
           to="/explore"
           className="inline-flex min-h-11 items-center rounded-lg font-semibold transition-colors hover:text-foreground"
         >
           Find a tournament
         </Link>
+        </nav>
       </div>
     </footer>
   );
@@ -1196,6 +1202,7 @@ export function PublicShell(
       <div className={cn("flex min-h-screen flex-col", props.className)}>
         {props.header}
         <main className="w-full flex-1">{props.children}</main>
+        <SiteFooter />
       </div>
     );
   }
