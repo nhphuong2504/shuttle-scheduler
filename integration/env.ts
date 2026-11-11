@@ -42,7 +42,7 @@ function loadIntegrationEnvFile(): void {
     // No file: fall back to the ambient environment, and let `required()` report what is missing.
     return;
   }
-  for (const line of text.split("\n")) {
+  for (const line of text.split(/\r?\n/)) {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
     if (!match) continue;
     const name = match[1];

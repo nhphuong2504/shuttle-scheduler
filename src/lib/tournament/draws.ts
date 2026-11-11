@@ -5,7 +5,9 @@
  * Byes go to the best group-stage point differential.
  */
 
-export type DrawTier = "A" | "B" | "C" | "D";
+import type { DrawTier } from "./competition-format";
+
+export type { DrawTier };
 export const DRAW_TIERS: DrawTier[] = ["A", "B", "C", "D"];
 
 export interface Entrant {

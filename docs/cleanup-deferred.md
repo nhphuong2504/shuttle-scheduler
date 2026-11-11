@@ -19,6 +19,10 @@ tournament format or scoring rule was touched, and no rendered surface was remov
 | 32 packages | The eight shadcn-only runtime packages, the twenty `@radix-ui` packages whose only consumers were the deleted wrappers, and `@hookform/resolvers`, `date-fns`, `zod` and `@testing-library/jest-dom`, which had no import or test registration anywhere. 85 transitive packages left with them. |
 | `supabase/.temp/cli-latest` (untracked) | Machine-local CLI scratch state. `.gitignore` already ignored `supabase/.temp/`; the file was tracked anyway. |
 | `.cursor/plans/sport-agnostic_scheduling_core_3ca401f1.plan.md` | A superseded planning artifact. The scheduling core it describes is shipped under `src/lib/scheduling`, and its decisions are recorded in [`scheduling-decisions.md`](scheduling-decisions.md). |
+| The landing's `desk-preview.tsx`, `reader-preview.tsx`, `schedule-demo.tsx` and `schedule-demo-data.ts` (with its test) | Unreachable since the landing became the court board: no importer in `src`, `e2e`, `integration` or `scripts`. |
+| `src/lib/tournament/scheduling/badminton.ts` | No importer anywhere; the adapters in use are `policy.ts`, `composition.ts` and `formats/`. |
+| The second `DrawTier` declaration in `draws.ts` | Now re-exported from `competition-format.ts`, so the union has one definition. |
+| The `\n`-only split in `integration/env.ts` and `scripts/integration-target.mjs` | Both now split on `\r?\n`, so a CRLF `integration/.env` no longer reads as "not configured". |
 
 ## Deferred, with the evidence
 
@@ -38,14 +42,6 @@ with two-round placement ([`tournament-format.md`](tournament-format.md),
 "Legacy pool engine"). Removing it is a product decision about whether the format is still
 supported, not a cleanup, and it would touch scoring and standings paths that need the
 stronger review tier.
-
-### `DrawTier` is declared twice
-
-The same `"A" | "B" | "C" | "D"` union exists in
-[`competition-format.ts`](../src/lib/tournament/competition-format.ts) and
-[`draws.ts`](../src/lib/tournament/draws.ts). Consolidating it is a one-line change and
-behaviour-neutral, but it edits the `src/lib/tournament/**` review tier for no functional
-gain, so it is left as a separate, deliberate change rather than folded into a cleanup.
 
 ### `buildFirstRound` and `buildTierBracket` are not duplicates
 
@@ -71,23 +67,6 @@ It is not imported by `vite.config.ts` or any Vitest config, and it already arri
 dependency of `@tanstack/start-plugin-core` through `@tanstack/react-start`. The top-level
 entry looks like a version pin (`1.168.23`) rather than a direct import, so it was left in
 place until that intent is confirmed.
-
-### CRLF fragility in the other environment parsers
-
-`scripts/verify-build-target.mjs` split environment files on `\n` only. On a CRLF checkout
-every value kept a trailing `\r` and could never match the end-anchored capture, so the
-production guard reported a missing `VITE_SUPABASE_URL` instead of checking the build. That
-is fixed. The same construct survives in
-[`integration/env.ts`](../integration/env.ts) and `scripts/integration-target.mjs`:
-
-- [`integration/env.ts`](../integration/env.ts) uses the same anchored pattern, so
-  `integration/.env` values would be dropped on a CRLF checkout and the suite would report
-  itself as "not configured".
-- `scripts/integration-target.mjs` rewrites that file line by line and does not normalise
-  line endings.
-
-Both are outside the hermetic gates and were not exercised here, so they are recorded rather
-than changed. The integration suite needs its own run to prove a fix.
 
 ### Nothing reads `match_result_history` yet
 
