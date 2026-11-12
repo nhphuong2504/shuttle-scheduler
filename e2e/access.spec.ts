@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures/app";
 import { installAppMock } from "./fixtures/app-mock";
 import { TOURNAMENT_ID } from "./fixtures/desk-mock";
+import { MATRIX_CELLS, openCell } from "./fixtures/matrix";
 import { routes } from "./fixtures/routes";
 
 /**
@@ -388,8 +389,9 @@ test.describe("a signed-out visitor", () => {
   test("finds one player's matches across both stages, in a link that keeps the search", async ({
     page,
   }) => {
-    await page.goto(routes.scores, { waitUntil: "load" });
-    await page.waitForLoadState("networkidle");
+    // A network-idle SSR form can still be waiting for React's handlers on a cold
+    // runner. Use the shared hydration barrier before entering a search.
+    await openCell(page, routes.scores, MATRIX_CELLS[0]!);
     await page.getByPlaceholder("Search a player or pair…").fill("Kristinsson");
 
     // One list while a search is typed: the stage tabs split a player's matches in two.
