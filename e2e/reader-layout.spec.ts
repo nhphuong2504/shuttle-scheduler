@@ -115,30 +115,90 @@ for (const status of ["upcoming", "in_progress", "completed"] as const) {
         route.fulfill({ json: matches }),
       );
       if (status === "completed") {
-        const entrant = (tables["placement_entrants"] as { id: string }[])[0]!;
+        const entrants = tables["placement_entrants"] as { id: string; team_id: string }[];
+        const teams = tables["teams"] as Record<string, unknown>[];
         const category = (tables["categories"] as Record<string, unknown>[])[0]!;
         const draw = (tables["tier_draws"] as Record<string, unknown>[])[0]!;
-        const categories = Array.from({ length: 8 }, (_, i) => ({
+        const categories = Array.from({ length: 5 }, (_, i) => ({
           ...category,
           id: `category-${i}`,
           code: `E${i}`,
-          name: `Event ${i}`,
+          name: [
+            "Men's Singles",
+            "Women's Singles",
+            "Men's Doubles",
+            "Women's Doubles",
+            "Mixed Doubles",
+          ][i],
         }));
-        const draws = categories.map((entry, i) => ({
-          ...draw,
-          id: i === 0 ? draw.id : `draw-${i}`,
-          category_id: entry.id,
-          champion_id: entrant.id,
-        }));
+        const winnerTeams: Record<string, unknown>[] = [];
+        const winnerEntrants: Record<string, unknown>[] = [];
+        const draws = categories.flatMap((entry, i) =>
+          ["A", "B", "C", "D"].map((tier, j) => ({
+            ...draw,
+            id: i === 0 && j === 0 ? draw.id : `draw-${i}-${tier}`,
+            category_id: entry.id,
+            tier,
+            champion_id: (() => {
+              const index = i * 4 + j;
+              const entrant = entrants[index % entrants.length]!;
+              const team = teams.find((row) => row.id === entrant.team_id)!;
+              const teamId = `winner-team-${index}`;
+              const entrantId = `winner-${index}`;
+              winnerTeams.push({
+                ...team,
+                id: teamId,
+                category_id: entry.id,
+                ...(i < 2 ? { player_2_id: null } : {}),
+              });
+              winnerEntrants.push({
+                ...entrant,
+                id: entrantId,
+                team_id: teamId,
+                category_id: entry.id,
+              });
+              return entrantId;
+            })(),
+          })),
+        );
         await page.route("**/rest/v1/categories?*", (route) => route.fulfill({ json: categories }));
         await page.route("**/rest/v1/tier_draws?*", (route) => route.fulfill({ json: draws }));
+        await page.route("**/rest/v1/teams?*", (route) =>
+          route.fulfill({ json: [...teams, ...winnerTeams] }),
+        );
+        await page.route("**/rest/v1/placement_entrants?*", (route) =>
+          route.fulfill({ json: [...entrants, ...winnerEntrants] }),
+        );
       }
       await openCell(page, routes.now, MATRIX_CELLS[0]!);
       await expect(page.locator("#now-on-court")).toBeVisible();
       const lists = page.locator("#now-up-next").locator("xpath=ancestor::section/..");
       await expect(lists).not.toHaveCSS("overflow-y", "auto");
       if (status === "completed") {
-        await expect(page.getByRole("heading", { name: "Results", exact: true })).toBeVisible();
+        await expect(
+          page.getByRole("heading", { name: "Draw champions", exact: true }),
+        ).toBeVisible();
+        const champions = page.getByRole("region", { name: "Draw champions", exact: true });
+        await champions.screenshot({ path: `test-results/champions-${viewport.width}.png` });
+        await expect(champions.getByRole("definition")).toHaveCount(20);
+        await expect(champions.getByRole("definition").first().locator("span")).toHaveCount(1);
+        const first = champions.getByRole("definition").nth(8);
+        const names = first.locator(":scope > span");
+        await expect(names).toHaveCount(2);
+        const [a, b] = await Promise.all([names.nth(0).boundingBox(), names.nth(1).boundingBox()]);
+        if (viewport.width < 640) expect(b!.y).toBeGreaterThanOrEqual(a!.y + a!.height);
+        if (viewport.width >= 1024) {
+          const cells = champions.getByRole("definition");
+          const boxes = await Promise.all(
+            [0, 1, 2, 3].map((index) => cells.nth(index).boundingBox()),
+          );
+          expect(new Set(boxes.map((box) => Math.round(box!.x))).size).toBe(1);
+          expect(boxes[3]!.y).toBeGreaterThan(boxes[0]!.y);
+          const summary = await champions.boundingBox();
+          expect(summary!.height, "five events stay compact even with long names").toBeLessThan(
+            650,
+          );
+        }
         await expect(page.getByText("Play has finished", { exact: true })).toBeVisible();
         await expect(page.locator("#now-up-next").locator("..").getByRole("listitem")).toHaveCount(
           0,

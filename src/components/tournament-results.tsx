@@ -1,12 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Trophy } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowUpRight, Trophy } from "lucide-react";
+import { useId, useMemo } from "react";
 
-import { Panel } from "@/components/app-shell";
 import { PLACEMENT_TIERS } from "@/lib/tournament/competition-format";
 import {
   indexBy,
-  teamLabel,
+  teamPlayerIds,
   useCategories,
   usePlacementEntrants,
   usePlayers,
@@ -23,6 +22,7 @@ import {
  * one bracket is decided.
  */
 export function TournamentResults({ tournamentId }: { tournamentId: string }) {
+  const headingId = useId();
   const { data: categories } = useCategories();
   const { data: draws } = useTierDraws();
   const { data: entrants } = usePlacementEntrants();
@@ -35,7 +35,9 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
     const teamOfEntrant = new Map((entrants ?? []).map((entrant) => [entrant.id, entrant.team_id]));
     const name = (entrantId: string) => {
       const teamId = teamOfEntrant.get(entrantId);
-      return teamId ? teamLabel(teamMap.get(teamId), playerMap) : null;
+      return teamId
+        ? teamPlayerIds(teamMap.get(teamId)).map((id) => playerMap.get(id)?.name ?? "Unknown")
+        : [];
     };
     return (categories ?? [])
       .map((category) => ({
@@ -44,8 +46,8 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
           const draw = (draws ?? []).find(
             (entry) => entry.category_id === category.id && entry.tier === tier.tier,
           );
-          const champion = draw?.champion_id ? name(draw.champion_id) : null;
-          return champion ? [{ label: tier.label, champion }] : [];
+          const champion = draw?.champion_id ? name(draw.champion_id) : [];
+          return champion.length ? [{ label: tier.label, champion }] : [];
         }),
       }))
       .filter((row) => row.winners.length > 0);
@@ -54,40 +56,56 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
   if (!results.length) return null;
 
   return (
-    <Panel
-      title="Results"
-      right={
+    <section aria-labelledby={headingId} className="rounded-xl bg-surface px-4 py-3 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4">
+        <h2
+          id={headingId}
+          className="flex items-center gap-2 font-display text-lg font-bold tracking-tight"
+        >
+          <Trophy aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+          Draw champions
+        </h2>
         <Link
           to="/tournaments/$tournamentId/knockout"
           params={{ tournamentId }}
-          className="inline-flex min-h-11 items-center text-sm font-semibold text-primary-ink hover:underline"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
         >
-          See the brackets
+          View draws
+          <ArrowUpRight aria-hidden className="size-4" />
         </Link>
-      }
-    >
-      <ul className="grid gap-3 sm:grid-cols-2">
+      </div>
+      <ul className="grid gap-x-8 sm:grid-cols-2">
         {results.map(({ category, winners }) => (
-          <li key={category.id} className="rounded-lg border border-hairline p-3">
-            <p className="font-display text-base font-bold">
-              {category.code} — {category.name}
-            </p>
-            <dl className="mt-2 space-y-1.5 text-sm">
-              {winners.map((winner, index) => (
-                <div key={winner.label} className="flex items-baseline gap-2">
-                  <dt className="w-24 shrink-0 text-muted-foreground">
-                    {index === 0 ? (
-                      <Trophy aria-hidden className="mr-1 inline size-3.5 align-[-2px]" />
-                    ) : null}
-                    {winner.label}
-                  </dt>
-                  <dd className={index === 0 ? "font-semibold" : undefined}>{winner.champion}</dd>
+          <li key={category.id} className="min-w-0 border-t border-hairline py-2">
+            <h3 className="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-display text-base font-bold">
+              <span className="min-w-0 [overflow-wrap:anywhere]">{category.name}</span>
+              <span className="min-w-0 font-score text-sm font-medium tracking-normal text-muted-foreground [overflow-wrap:anywhere]">
+                {category.code}
+              </span>
+            </h3>
+            <dl className="mt-1.5 space-y-1">
+              {winners.map((winner) => (
+                <div
+                  key={winner.label}
+                  className="grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-baseline gap-x-2"
+                >
+                  <dt className="text-sm text-muted-foreground">{winner.label}</dt>
+                  <dd className="text-base font-medium leading-snug sm:text-sm sm:leading-tight">
+                    {winner.champion.map((player, index) => (
+                      <span key={index} className="block [overflow-wrap:anywhere] sm:inline">
+                        {player}
+                        {index < winner.champion.length - 1 ? (
+                          <span className="hidden sm:inline"> / </span>
+                        ) : null}
+                      </span>
+                    ))}
+                  </dd>
                 </div>
               ))}
             </dl>
           </li>
         ))}
       </ul>
-    </Panel>
+    </section>
   );
 }
