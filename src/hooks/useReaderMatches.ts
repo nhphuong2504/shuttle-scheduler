@@ -131,7 +131,7 @@ export function useReaderMatches() {
    * was loaded on screen and marks it stale - on venue wifi that is the ordinary case, and a
    * board that vanished behind an error would be worse than a slightly old one.
    */
-  const hasData = !!tournament && !!teams && !!players && !!placementMatches && !!tierDrawMatches;
+  const hasData = !!tournament && queries.every((query) => query.data !== undefined);
   const failed = queries.some((query) => query.isError);
   const error = failed && !hasData;
   const stale = failed && hasData;

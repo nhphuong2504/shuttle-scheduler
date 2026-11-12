@@ -91,7 +91,18 @@ function NowPage() {
     pickedDayId,
   });
   const dayMatches = dayId ? (attribution.byDayId.get(dayId) ?? []) : matches;
-  const board = nowBoard(dayMatches, { upNext: 6, justFinished: 6 });
+  const status = normalizeTournamentStatus(tournament?.status);
+  const dayBoard = nowBoard(dayMatches, { upNext: 6, justFinished: 6 });
+  // A forced close can retain unplayed rows. They remain in the timetable,
+  // but a finished tournament must not advertise them as about to be called.
+  const board = {
+    ...dayBoard,
+    live: status === "in_progress" ? dayBoard.live : [],
+    upNext: status === "completed" ? [] : dayBoard.upNext,
+  };
+  // Only an active hall needs independent columns. Results, empty days and
+  // pre-play schedules grow naturally, including a tall champions panel.
+  const wall = status === "in_progress" && board.live.length > 0 && !data.stale;
   const hall = useMemo(() => {
     const ids = new Set(dayCourts.filter((row) => row.day_id === dayId).map((row) => row.court_id));
     return hallBoard(courts, ids, board.live);
@@ -104,17 +115,27 @@ function NowPage() {
 
   // Times read in the browser's zone, as the Desk and Scores print them, so one match has one time.
   const reading: MatchReading = { label, courtName };
-  const status = normalizeTournamentStatus(tournament?.status);
-  const myNext = playerId ? nextMatchOf(matchesOfPlayer(matches, playerId)) : null;
+  const myNext =
+    status === "in_progress" && playerId ? nextMatchOf(matchesOfPlayer(matches, playerId)) : null;
 
   return (
     <ReaderPage
       title="Now"
-      className="watch-wall:flex watch-wall:h-dvh watch-wall:flex-col watch-wall:py-3 watch-wall-short:py-1.5"
+      className={
+        wall
+          ? "watch-wall:flex watch-wall:h-dvh watch-wall:flex-col watch-wall:py-3 watch-wall-short:py-1.5"
+          : ""
+      }
       controls={<ReaderDayPicker days={orderedDays} selectedId={dayId} onSelect={setPickedDayId} />}
       actions={<ReaderConnection live={live} />}
     >
-      <div className="space-y-5 watch-wall:flex watch-wall:min-h-0 watch-wall:flex-1 watch-wall:flex-col watch-wall:gap-4 watch-wall:space-y-0 [&>*]:flex-none">
+      <div
+        className={cn(
+          "space-y-5",
+          wall &&
+            "watch-wall:flex watch-wall:min-h-0 watch-wall:flex-1 watch-wall:flex-col watch-wall:gap-4 watch-wall:space-y-0 [&>*]:flex-none",
+        )}
+      >
         {status === "completed" ? <TournamentResults tournamentId={tournamentId} /> : null}
 
         {myNext ? (
@@ -126,12 +147,21 @@ function NowPage() {
             On a wall each column scrolls inside itself, so the hall stays where the eye left
             it while a long Up next runs on.
           */}
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start watch-wall:!flex-1 watch-wall:min-h-0 watch-wall:grid-rows-[minmax(0,1fr)] watch-wall:items-stretch">
+          <div
+            className={cn(
+              "grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start",
+              wall &&
+                "watch-wall:!flex-1 watch-wall:min-h-0 watch-wall:grid-rows-[minmax(0,1fr)] watch-wall:items-stretch",
+            )}
+          >
             <section
               ref={courtsRef}
               aria-labelledby="now-on-court"
               tabIndex={courtsScroll ? 0 : undefined}
-              className="min-w-0 rounded-xl watch-wall:min-h-0 watch-wall:overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+              className={cn(
+                "min-w-0 rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+                wall && "watch-wall:min-h-0 watch-wall:overflow-y-auto",
+              )}
             >
               {/* The same height as the lists' headings beside it, so the two columns start level. */}
               <h2
@@ -142,11 +172,19 @@ function NowPage() {
               </h2>
               {board.live.length === 0 ? (
                 <EmptyState
-                  title={status === "upcoming" ? "Play has not started" : "No match on court"}
+                  title={
+                    status === "completed"
+                      ? "Play has finished"
+                      : status === "upcoming"
+                        ? "Play has not started"
+                        : "No match on court"
+                  }
                   hint={
-                    status === "upcoming"
-                      ? "Find who is playing, and open a player for their matches."
-                      : "The next matches are listed as they are called."
+                    status === "completed"
+                      ? "Browse the results or find a player to see their matches."
+                      : status === "upcoming"
+                        ? "Find who is playing, and open a player for their matches."
+                        : "The next matches are listed as they are called."
                   }
                   action={
                     <Button size="sm" variant="outline" asChild>
@@ -203,12 +241,21 @@ function NowPage() {
               tabIndex={listsScroll ? 0 : undefined}
               role={listsScroll ? "region" : undefined}
               aria-label={listsScroll ? "Up next and just finished" : undefined}
-              className="grid gap-5 rounded-xl md:grid-cols-2 md:items-start lg:grid-cols-1 watch-wall:min-h-0 watch-wall:content-start watch-wall:overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+              className={cn(
+                "grid min-w-0 gap-5 rounded-xl md:grid-cols-2 md:items-start lg:grid-cols-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+                wall && "watch-wall:min-h-0 watch-wall:content-start watch-wall:overflow-y-auto",
+              )}
             >
               <ReaderMatchList
                 title="Up next"
                 headingId="now-up-next"
-                empty={board.upNext.length ? null : "Nothing else is scheduled for this day."}
+                empty={
+                  board.upNext.length
+                    ? null
+                    : status === "completed"
+                      ? "Play has finished. See all results below."
+                      : "Nothing else is scheduled for this day."
+                }
               >
                 {groupByTime(board.upNext).map((group) => (
                   <ReaderTimeGroup
@@ -389,8 +436,8 @@ function MyNextTeaser({
           {whereAndWhen(match, reading)}
         </span>
         <span className="block break-words text-sm">
-          {reading.label(match.teams[0])}{" "}
-          <span className="text-muted-foreground">vs</span> {reading.label(match.teams[1])}
+          {reading.label(match.teams[0])} <span className="text-muted-foreground">vs</span>{" "}
+          {reading.label(match.teams[1])}
         </span>
       </span>
       <span className="text-sm font-semibold text-primary">My matches</span>
