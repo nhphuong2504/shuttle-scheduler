@@ -1,7 +1,8 @@
 /*
  * The front door's world: the organiser's board, one printed sheet per court pinned up for
- * the day. The app's grey ground, white card stock, pen-black ruling and hatching, and one
- * highlighter-magenta circle around the clash the schedule just resolved.
+ * the day on a badminton court drawn in the app's line grey. The app's grey ground, white
+ * card stock, pen-black ruling and hatching, and one highlighter-magenta circle around the
+ * clash the schedule just resolved.
  *
  * Plain CSS, scoped to `.cs-page`, so nothing here reaches the app's own surfaces.
  */
@@ -14,9 +15,14 @@
   --cs-rule: #2a2a2a;
   --cs-mark: #d81b8a;
   --cs-hatch: rgb(17 17 17 / 0.42);
+  --cs-line: #b9c0c4;
   --cs-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* When Court 6's sheet is hit: right away, or once the opening serve lands (below). */
+  --land: 820ms;
 
   min-height: 100svh;
+  /* The court runs wider than the board; it may bleed to the edge but never scrolls the page. */
+  overflow-x: clip;
   background: var(--cs-wall);
   color: var(--cs-ink);
   font-family: var(--font-body);
@@ -45,6 +51,28 @@
 @media (min-width: 640px) {
   .cs-header {
     padding: 1rem 1rem;
+  }
+}
+.cs-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+/* What Tournova is, beside the name; below 960px the hero's eyebrow says it instead. */
+.cs-tagline {
+  display: none;
+  padding-left: 0.875rem;
+  border-left: 1px solid var(--cs-line);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+@media (min-width: 960px) {
+  .cs-tagline {
+    display: inline;
   }
 }
 .cs-logo {
@@ -107,7 +135,8 @@
 .cs-hero {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
+  /* Room above the board for the portrait court's far baseline. */
+  padding: 4.5rem 1rem 4rem;
   text-align: center;
 }
 @media (min-width: 640px) {
@@ -115,9 +144,16 @@
     padding: 2rem 1.5rem 5rem;
   }
 }
+@media (min-width: 960px) {
+  .cs-hero {
+    /* Room above the board for the landscape court's far sideline. */
+    padding-top: 5.75rem;
+  }
+}
 
 /* The board: four sheets across, two hung lower with the clash between them. */
 .cs-board {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem 0.75rem;
@@ -212,6 +248,42 @@
   }
 }
 
+/* ---------- the court behind the board ---------- */
+/* Landscape behind the four-across board, portrait behind the phone's two columns, and none
+   on a tablet, where three-and-three sheets do not sit on a court. */
+.cs-court {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+  stroke: var(--cs-line);
+}
+.cs-court path {
+  vector-effect: non-scaling-stroke;
+}
+.cs-court-land {
+  display: none;
+  top: -90px;
+  left: -7.75%;
+  width: 115.5%;
+  height: calc(100% + 150px);
+}
+.cs-court-port {
+  top: -72px;
+  left: -16px;
+  width: calc(100% + 32px);
+  height: calc(100% + 141px);
+}
+@media (min-width: 640px) {
+  .cs-court-port {
+    display: none;
+  }
+}
+@media (min-width: 960px) {
+  .cs-court-land {
+    display: block;
+  }
+}
+
 /* ---------- a court sheet ---------- */
 .cs-card {
   --tilt: 0deg;
@@ -222,8 +294,9 @@
   border-radius: 3px;
   box-shadow:
     0 1px 0 rgb(0 0 0 / 0.04),
-    0 8px 18px -6px rgb(0 0 0 / 0.18),
-    0 2px 4px rgb(0 0 0 / 0.06);
+    0 10px 22px -6px rgb(0 0 0 / 0.32),
+    0 2px 4px rgb(0 0 0 / 0.08);
+  color: var(--cs-ink);
   transform: translateY(var(--lift)) rotate(var(--tilt));
   transition:
     transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
@@ -233,8 +306,8 @@
   transform: translateY(calc(var(--lift) - 4px)) rotate(var(--tilt));
   box-shadow:
     0 1px 0 rgb(0 0 0 / 0.04),
-    0 16px 28px -10px rgb(0 0 0 / 0.24),
-    0 3px 6px rgb(0 0 0 / 0.07);
+    0 16px 30px -10px rgb(0 0 0 / 0.36),
+    0 3px 6px rgb(0 0 0 / 0.09);
 }
 .cs-card-1 {
   --tilt: -2.2deg;
@@ -258,13 +331,24 @@
   --tilt: 1.8deg;
 }
 
+/* A scoreboard header: the word small, the court number big, both in the numeral face. */
 .cs-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  height: 1.125rem;
   margin: 0 0 0.375rem 0.125rem;
-  font-family: var(--font-display);
-  font-size: 0.9375rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-family: var(--font-numeral);
+  font-size: 1.0625rem;
+  font-weight: 800;
+  line-height: 1.125rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+.cs-num {
+  font-size: 1.875rem;
+  line-height: 1.125rem;
+  letter-spacing: 0;
 }
 
 .cs-grid {
@@ -357,20 +441,30 @@
   text-align: left;
   box-shadow: 0 6px 16px -8px rgb(216 27 138 / 0.4);
 }
+/* No fill of its own: a patch of ground grey shows as a box over the shadows around it. */
 .cs-clash-shift {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin: 0;
+  padding: 0.25rem 0.375rem;
+  color: var(--cs-ink);
   font-size: 0.875rem;
   font-weight: 600;
   white-space: nowrap;
+}
+.cs-shift-label {
+  font-family: var(--font-numeral);
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 .cs-clash-arrow {
   width: 3rem;
   height: 1.25rem;
   fill: none;
-  stroke: var(--cs-ink);
+  stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -387,9 +481,30 @@
 }
 
 /* ---------- copy ---------- */
+/* The header's tagline, said in the hero wherever the header has no room for it. */
+.cs-eyebrow {
+  margin: 6.5rem auto 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+@media (min-width: 640px) {
+  .cs-eyebrow {
+    margin-top: 2.75rem;
+    font-size: 0.8125rem;
+    letter-spacing: 0.14em;
+  }
+}
+@media (min-width: 960px) {
+  .cs-eyebrow {
+    display: none;
+  }
+}
 .cs-title {
   font-family: var(--font-body);
-  margin: 2.75rem auto 0;
+  margin: 0.875rem auto 0;
   font-size: clamp(2rem, 5.2vw, 3.5rem);
   font-weight: 600;
   line-height: 1.04;
@@ -398,7 +513,7 @@
 }
 @media (min-width: 960px) {
   .cs-title {
-    margin-top: 1.5rem;
+    margin-top: 4.5rem;
   }
 }
 .cs-actions {
@@ -453,17 +568,93 @@
 }
 
 /* ---------- arrival ---------- */
+/*
+ * The opening serve: a shuttle arcs in from the left and lands on Court 6 (desktop only).
+ * Every part of the flight is a transform, so it runs on the compositor and stays smooth
+ * while the page is still hydrating. The outer layer is a track as wide as the board, so
+ * its translateX percentages are fractions of the board; the shuttle rides at its left edge.
+ */
+.cs-serve {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 72%;
+  width: 100%;
+  height: 28px;
+  margin-top: -14px;
+  pointer-events: none;
+  transform: translateX(77.5%);
+}
+.cs-serve-y {
+  margin-left: -14px;
+}
+.cs-serve-y,
+.cs-serve svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+  overflow: visible;
+}
+
+.cs-card-1 { --i: 0; }
+.cs-card-2 { --i: 1; }
+.cs-card-3 { --i: 2; }
+.cs-card-4 { --i: 3; }
+.cs-card-5 { --i: 4; }
+.cs-card-6 { --i: 5; }
+.cs-time-moved {
+  --strike-at: calc(var(--land) + 80ms);
+}
+.cs-time-moved ~ .cs-time-moved {
+  --strike-at: calc(var(--land) + 260ms);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .cs-card {
     animation: cs-pin 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: calc(var(--i) * 60ms);
   }
-  .cs-card-2 { animation-delay: 60ms; }
-  .cs-card-3 { animation-delay: 120ms; }
-  .cs-card-4 { animation-delay: 180ms; }
-  .cs-card-5 { animation-delay: 240ms; }
-  .cs-card-6 { animation-delay: 300ms; }
+  /* The old time is struck by hand, then the new one is written in beside it. */
+  .cs-time-moved s {
+    text-decoration: none;
+    background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 100% 1.5px;
+    animation: cs-strike 260ms ease-out var(--strike-at) both;
+  }
+  .cs-time-moved .cs-new {
+    display: inline-block;
+    animation: cs-newtime 300ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(var(--strike-at) + 220ms)
+      both;
+  }
   .cs-clash {
-    animation: cs-circle 420ms 620ms ease-out both;
+    animation: cs-circle 420ms cubic-bezier(0.3, 1.35, 0.5, 1) both;
+    animation-delay: calc(var(--land) + 720ms);
+  }
+}
+@media (min-width: 960px) and (prefers-reduced-motion: no-preference) {
+  .cs-page {
+    --land: 1150ms;
+  }
+  .cs-serve {
+    display: block;
+    z-index: 2;
+    will-change: transform, opacity;
+    animation:
+      serve-x 950ms linear 200ms both,
+      serve-fade 240ms ease-in 1190ms both;
+  }
+  .cs-serve-y {
+    will-change: transform;
+    animation:
+      serve-y 950ms 200ms both,
+      serve-shrink 240ms ease-in 1190ms both;
+  }
+  .cs-serve svg {
+    animation: serve-spin 950ms ease-in-out 200ms both;
+  }
+  .cs-card-6 {
+    animation:
+      cs-pin 520ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(var(--i) * 60ms) both,
+      cs-jolt 380ms ease-out var(--land);
   }
 }
 @keyframes cs-pin {
@@ -475,6 +666,73 @@
 @keyframes cs-circle {
   from {
     opacity: 0;
-    transform: scale(0.94);
+    transform: scale(0.9);
+  }
+}
+@keyframes cs-jolt {
+  0%,
+  100% {
+    transform: translateY(var(--lift)) rotate(var(--tilt));
+  }
+  35% {
+    transform: translateY(calc(var(--lift) + 4px)) rotate(calc(var(--tilt) - 1.4deg));
+  }
+  70% {
+    transform: translateY(calc(var(--lift) - 1px)) rotate(calc(var(--tilt) + 0.5deg));
+  }
+}
+@keyframes cs-strike {
+  from {
+    background-size: 0% 1.5px;
+    color: var(--cs-ink-soft);
+  }
+}
+@keyframes cs-newtime {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes serve-fade {
+  to {
+    opacity: 0;
+  }
+}
+/* `scale` composes with the arc's own transform rather than replacing it. */
+@keyframes serve-shrink {
+  to {
+    scale: 0.5;
+  }
+}
+@keyframes serve-x {
+  from {
+    transform: translateX(-5%);
+  }
+  to {
+    transform: translateX(77.5%);
+  }
+}
+@keyframes serve-y {
+  0% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.25, 0.6, 0.55, 1);
+  }
+  45% {
+    transform: translateY(-310px);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.75, 0.45);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes serve-spin {
+  0% {
+    transform: rotate(-140deg);
+  }
+  45% {
+    transform: rotate(-95deg);
+  }
+  100% {
+    transform: rotate(-15deg);
   }
 }

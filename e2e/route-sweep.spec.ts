@@ -17,6 +17,7 @@ import {
   tabThrough,
 } from "./fixtures/probes";
 import { routes } from "./fixtures/routes";
+import { settleAnimations } from "./fixtures/settle";
 
 /**
  * Everything measured on a route, taken from one load of it.
@@ -86,6 +87,9 @@ for (const route of ROUTES) {
     expect.soft(mismatches, `hydration mismatches on ${route}`).toEqual([]);
 
     /* ---- axe: baseline, and contrast headroom from the same scan ---- */
+    // Scanned once entrance animations have finished: the landing pins its sheets and circles
+    // its clash over about two seconds, and mid-fade text is measured blended with the ground.
+    await settleAnimations(page, "body");
     const results = await runAxe(page);
     const rules = results.violations.map((violation) => violation.id).sort();
     recorded[route] = { rules };
