@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Info, Lock, Mail } from "lucide-react";
+import { ArrowRight, LoaderCircle } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -47,7 +47,8 @@ export const Route = createFileRoute("/auth")({
       { title: "Sign in | Tournova Tournament Ops" },
       {
         name: "description",
-        content: "Sign in or create an account to register for a tournament or run your own on Tournova.",
+        content:
+          "Sign in or create an account to register for a tournament or run your own on Tournova.",
       },
     ],
   }),
@@ -110,6 +111,9 @@ function AuthPage() {
     setMissing({});
     setConfirmEmail(null);
     setAdultConfirmed(false);
+    setEmail("");
+    setPassword("");
+    setShowPassword(false);
     setTermsAccepted(false);
   };
 
@@ -121,7 +125,9 @@ function AuthPage() {
     setMissing(gaps);
     setProblem(null);
     if (!signingIn && (!adultConfirmed || !termsAccepted)) {
-      setProblem("Confirm you are at least 18 and agree to the pilot terms before creating an account.");
+      setProblem(
+        "Confirm you are at least 18 and agree to the pilot terms before creating an account.",
+      );
       return;
     }
     if (gaps.email || gaps.password) return;
@@ -166,97 +172,24 @@ function AuthPage() {
   };
 
   const fieldClass = (hasProblem: boolean) =>
-    hasProblem
-      ? "h-12 rounded-[10px] border-2 border-danger-foreground"
-      : "h-12 rounded-[10px]";
+    hasProblem ? "h-12 rounded-[10px] border-2 border-danger-foreground" : "h-12 rounded-[10px]";
 
   return (
-    <PublicShell
-      title={signingIn ? "Sign in to Tournova" : "Create your account"}
-      subtitle={
-        signingIn
-          ? "An account lets you register for a tournament, or run your own. Watching a tournament never needs one."
-          : "Accounts are for adults aged 18 or older. Children can participate through an authorised adult organiser."
-      }
-    >
-      <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:gap-10">
-        <aside className="flex flex-col justify-between gap-6 rounded-2xl border border-hairline bg-surface p-6 shadow-sm sm:p-8">
-          {search.redirect ? (
-            <p className="inline-flex self-start rounded-full bg-info-surface px-3.5 py-1.5 text-sm font-semibold text-info-foreground">
-              {search.intent ? signInIntentText(search.intent) : "You'll go back to the page you were on."}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-display text-2xl font-bold">What an account is for</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                One account, three ways to take part.
-              </p>
-            </div>
-            <span className="whitespace-nowrap rounded-full border border-info-border bg-info-surface px-3 py-1 text-sm font-semibold text-info-foreground">
-              Adults 18+
-            </span>
-          </div>
-          <ol className="space-y-3">
-            {[
-              {
-                title: "Register for a tournament",
-                tag: "Players",
-                text: "Send your entry and follow the decision on your request.",
-              },
-              {
-                title: "Run your own tournament",
-                tag: "Organisers",
-                text: "Set up events, build the schedule and add editors to help.",
-              },
-              {
-                title: "Work a court",
-                tag: "Court staff",
-                text: "Start matches and enter scores once an organiser adds you as an editor.",
-              },
-            ].map((item, index) => (
-              <li
-                key={item.title}
-                className="flex items-start gap-4 rounded-xl border border-hairline bg-background p-4"
-              >
-                <span
-                  aria-hidden="true"
-                  className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-info-surface font-display text-base font-bold tabular-nums text-info-foreground"
-                >
-                  {index + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="mb-1 flex flex-wrap items-center gap-2">
-                    <strong className="text-sm font-semibold">{item.title}</strong>
-                    <span
-                      className="rounded-full border border-hairline bg-muted px-2.5 py-0.5 text-sm font-medium text-foreground"
-                    >
-                      {item.tag}
-                    </span>
-                  </p>
-                  <p className="text-sm text-muted-foreground">{item.text}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-          <p className="flex items-center gap-2 border-t border-hairline pt-4 text-sm text-muted-foreground">
-            <Info aria-hidden="true" className="size-[18px] shrink-0" />
-            Adults can create an account. Helping run somebody else's tournament needs its owner to
-            add you.
-          </p>
-        </aside>
-
+    <PublicShell bare>
+      <div className="mx-auto w-full max-w-[29rem] px-4 py-6 sm:py-12">
         <section
-          aria-label={signingIn ? "Sign in" : "Create account"}
-          className="flex flex-col rounded-2xl border border-hairline bg-surface p-6 shadow-sm sm:p-8"
+          aria-labelledby="auth-title"
+          className="rounded-2xl border border-hairline bg-surface p-5 shadow-panel sm:p-8"
         >
           {confirmEmail ? (
             <div role="status" className="space-y-3">
-              <h2 className="font-display text-2xl font-bold">Check your email</h2>
+              <h1 id="auth-title" className="font-display text-3xl font-bold">
+                Check your email
+              </h1>
               <p className="text-base text-muted-foreground">
                 We sent a confirmation link to{" "}
-                <strong className="text-foreground">{confirmEmail}</strong>. Open it, then come
-                back and sign in.
+                <strong className="break-words text-foreground">{confirmEmail}</strong>. Open it,
+                then come back and sign in.
               </p>
               <Button className="h-12 w-full text-base" onClick={() => switchMode("signin")}>
                 Go to sign in
@@ -293,17 +226,30 @@ function AuthPage() {
               </div>
 
               <div className="mb-6">
-                <h2 className="font-display text-2xl font-bold">
-                  {signingIn ? "Welcome back" : "Get started"}
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {signingIn
-                    ? "Sign in with your email and password."
-                    : "Confirm your eligibility before entering account details."}
-                </p>
+                <h1 id="auth-title" className="font-display text-3xl font-bold">
+                  {signingIn ? "Sign in to Tournova" : "Create your account"}
+                </h1>
+                {!signingIn ? (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Accounts are for people aged 18 or older. Players of all ages can take part
+                    through an authorised adult organiser.
+                  </p>
+                ) : null}
+                {search.redirect ? (
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    {search.intent
+                      ? signInIntentText(search.intent)
+                      : "You'll go back to the page you were on."}
+                  </p>
+                ) : null}
               </div>
 
-              <form onSubmit={(event) => void submit(event)} noValidate className="mb-6 space-y-4">
+              <form
+                onSubmit={(event) => void submit(event)}
+                noValidate
+                aria-busy={busy}
+                className="mb-6 space-y-5"
+              >
                 {problem ? (
                   <div
                     role="alert"
@@ -312,100 +258,140 @@ function AuthPage() {
                     <strong className="text-danger-foreground">{problem}</strong>
                   </div>
                 ) : null}
-  
+
                 {!signingIn ? (
                   <fieldset className="space-y-3 border-b border-hairline pb-4">
-                    <legend className="mb-2 text-sm font-semibold">Before creating an account</legend>
+                    <legend className="mb-2 text-sm font-semibold">
+                      Before creating an account
+                    </legend>
                     <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm leading-6">
-                      <input type="checkbox" checked={adultConfirmed} disabled={busy} className="mt-1.5 size-4 shrink-0 accent-primary" onChange={(event) => setAdultConfirmed(event.target.checked)} />
+                      <input
+                        type="checkbox"
+                        checked={adultConfirmed}
+                        disabled={busy}
+                        className="mt-1.5 size-4 shrink-0 accent-primary"
+                        onChange={(event) => setAdultConfirmed(event.target.checked)}
+                      />
                       <span>I am at least 18 years old.</span>
                     </label>
-                    <p className="text-sm text-muted-foreground">Under 18? Do not enter your email here. Ask an adult organiser to arrange your tournament entry.</p>
+                    <p className="text-sm text-muted-foreground">
+                      Under 18? You can still play. Ask your parent or guardian to arrange your
+                      entry with the organiser. Do not create an account or enter your email here.
+                    </p>
                     <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm leading-6">
-                      <input type="checkbox" checked={termsAccepted} disabled={busy} className="mt-1.5 size-4 shrink-0 accent-primary" onChange={(event) => setTermsAccepted(event.target.checked)} />
-                      <span>I agree to the <Link to="/terms" className="font-semibold underline underline-offset-4">pilot Terms</Link>. I have read the <Link to="/privacy" className="font-semibold underline underline-offset-4">Privacy Policy</Link>.</span>
+                      <input
+                        type="checkbox"
+                        checked={termsAccepted}
+                        disabled={busy}
+                        className="mt-1.5 size-4 shrink-0 accent-primary"
+                        onChange={(event) => setTermsAccepted(event.target.checked)}
+                      />
+                      <span>
+                        I agree to the{" "}
+                        <Link to="/terms" className="font-semibold underline underline-offset-4">
+                          pilot Terms
+                        </Link>
+                        . I have read the{" "}
+                        <Link to="/privacy" className="font-semibold underline underline-offset-4">
+                          Privacy Policy
+                        </Link>
+                        .
+                      </span>
                     </label>
                   </fieldset>
                 ) : null}
 
-                {signingIn || adultConfirmed ? <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
-                  <div className="relative">
-                  <Mail
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground"
-                  />
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="name@example.com"
-                    value={email}
-                    disabled={busy}
-                    aria-invalid={!!missing.email}
-                    aria-describedby={missing.email ? "email-error" : undefined}
-                    className={`${fieldClass(!!missing.email)} pl-11`}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                  </div>
-                  {missing.email ? (
-                    <p id="email-error" className="text-sm font-semibold text-danger-foreground">
-                      {missing.email}
-                    </p>
-                  ) : null}
-                </div>
-  
-                <div className="space-y-1.5">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Lock
-                      aria-hidden="true"
-                      className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground"
-                    />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      autoComplete={signingIn ? "current-password" : "new-password"}
-                      value={password}
-                      disabled={busy}
-                      aria-invalid={!!missing.password}
-                      aria-describedby={
-                        missing.password ? "password-error" : signingIn ? undefined : "password-hint"
-                      }
-                      className={`${fieldClass(!!missing.password)} pl-11 pr-20`}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      aria-pressed={showPassword}
-                      onClick={() => setShowPassword((value) => !value)}
-                      className="absolute right-1 top-1 min-h-10 rounded-md px-3 text-sm font-semibold text-primary-ink hover:bg-muted"
-                    >
-                      {showPassword ? "Hide" : "Show"}
-                    </button>
-                  </div>
-                  {missing.password ? (
-                    <p id="password-error" className="text-sm font-semibold text-danger-foreground">
-                      {missing.password}
-                    </p>
-                  ) : signingIn ? null : (
-                    <p id="password-hint" className="text-sm text-muted-foreground">
-                      Choose a password you don't use anywhere else.
-                    </p>
-                  )}
-                </div>
-  
-                </> : null}
+                {signingIn || adultConfirmed ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="email">Email</Label>
+                      <div className="relative">
+                        <Input
+                          id="email"
+                          type="email"
+                          autoComplete="email"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          placeholder="name@example.com"
+                          value={email}
+                          disabled={busy}
+                          aria-invalid={!!missing.email}
+                          aria-describedby={missing.email ? "email-error" : undefined}
+                          className={`${fieldClass(!!missing.email)} text-base`}
+                          onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
+                      {missing.email ? (
+                        <p
+                          id="email-error"
+                          className="text-sm font-semibold text-danger-foreground"
+                        >
+                          {missing.email}
+                        </p>
+                      ) : null}
+                    </div>
 
-                <Button type="submit" disabled={!interactive || busy} className="mt-2 h-12 w-full gap-2 rounded-[10px] text-base font-semibold">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          autoComplete={signingIn ? "current-password" : "new-password"}
+                          value={password}
+                          disabled={busy}
+                          aria-invalid={!!missing.password}
+                          aria-describedby={
+                            missing.password
+                              ? "password-error"
+                              : signingIn
+                                ? undefined
+                                : "password-hint"
+                          }
+                          className={`${fieldClass(!!missing.password)} pr-20 text-base`}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          aria-pressed={showPassword}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                          disabled={busy}
+                          onClick={() => setShowPassword((value) => !value)}
+                          className="absolute right-0.5 top-0.5 min-h-11 rounded-md px-3 text-sm font-semibold text-primary-ink hover:bg-muted"
+                        >
+                          {showPassword ? "Hide" : "Show"}
+                        </button>
+                      </div>
+                      {missing.password ? (
+                        <p
+                          id="password-error"
+                          className="text-sm font-semibold text-danger-foreground"
+                        >
+                          {missing.password}
+                        </p>
+                      ) : signingIn ? null : (
+                        <p id="password-hint" className="text-sm text-muted-foreground">
+                          Choose a password you don't use anywhere else.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+
+                <Button
+                  type="submit"
+                  disabled={!interactive || busy}
+                  className="mt-2 h-12 w-full gap-2 rounded-[10px] text-base font-semibold"
+                >
                   {busy ? (
-                    signingIn ? (
-                      "Signing in…"
-                    ) : (
-                      "Creating account…"
-                    )
+                    <>
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="size-[18px] animate-spin motion-reduce:animate-none"
+                      />
+                      {signingIn ? "Signing in…" : "Creating account…"}
+                    </>
                   ) : (
                     <>
                       {signingIn ? "Sign in" : "Create account"}
@@ -414,8 +400,8 @@ function AuthPage() {
                   )}
                 </Button>
               </form>
-  
-              <p className="mt-auto border-t border-hairline pt-4 text-sm text-muted-foreground">
+
+              <p className="border-t border-hairline pt-5 text-center text-sm leading-6 text-muted-foreground">
                 Just want to look around?{" "}
                 <Link to="/explore" className="font-semibold text-primary-ink underline">
                   Browse tournaments
@@ -425,6 +411,25 @@ function AuthPage() {
             </>
           )}
         </section>
+        <details className="mt-4 text-sm text-muted-foreground">
+          <summary className="min-h-11 cursor-pointer rounded-md py-3 text-center font-medium hover:text-foreground">
+            What can I do with an account?
+          </summary>
+          <ul className="space-y-3 px-2 pb-3 leading-6">
+            <li>
+              <strong className="font-semibold text-foreground">Register for a tournament.</strong>{" "}
+              Send your entry and follow the decision on your request.
+            </li>
+            <li>
+              <strong className="font-semibold text-foreground">Run your own tournament.</strong>{" "}
+              Set up events, build the schedule and add editors to help.
+            </li>
+            <li>
+              <strong className="font-semibold text-foreground">Work a court.</strong> Start matches
+              and enter scores once an organiser adds you as an editor.
+            </li>
+          </ul>
+        </details>
       </div>
     </PublicShell>
   );

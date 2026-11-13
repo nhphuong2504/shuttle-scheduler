@@ -25,7 +25,16 @@ describe("pilot policy acceptance, enforced by the real Auth insert", () => {
   it("rejects missing, false and obsolete acknowledgements without creating a profile", async () => {
     const invalid = [
       {},
+      { pilot_adult_confirmed: true, pilot_terms_version: "2026-11-11-pilot-draft" },
+      { ...pilotSignupMetadata(), pilot_terms_version: "2026-11-13-adult-pilot-draft" },
+      { ...pilotSignupMetadata(), pilot_age_band: "under_13" },
+      { ...pilotSignupMetadata(), pilot_age_band: null },
+      { ...pilotSignupMetadata(), pilot_age_band: "unknown" },
       { ...pilotSignupMetadata(), pilot_adult_confirmed: false },
+      { ...pilotSignupMetadata(), pilot_adult_confirmed: "true" },
+      { ...pilotSignupMetadata(), pilot_guardian_permission_confirmed: true },
+      { ...pilotSignupMetadata(), pilot_age_band: "13_17", pilot_guardian_permission_confirmed: true },
+      { pilot_age_band: "13_17", pilot_terms_version: PILOT_TERMS_VERSION },
       { ...pilotSignupMetadata(), pilot_terms_version: "old" },
     ];
     for (const [index, metadata] of invalid.entries()) {
@@ -62,6 +71,24 @@ describe("pilot policy acceptance, enforced by the real Auth insert", () => {
     expect(profile.data).toEqual([]);
   });
 
+  it("rejects minor public signup even with a guardian-permission statement", async () => {
+    for (const [index, data] of [
+      { ...pilotSignupMetadata(), pilot_age_band: "under_13" },
+      { ...pilotSignupMetadata(), pilot_adult_confirmed: false },
+      { pilot_age_band: "13_17", pilot_guardian_permission_confirmed: true, pilot_terms_version: "2026-11-13-pilot-draft" },
+    ].entries()) {
+      const email = `${tag}-public-invalid-${index}@tournova.test`;
+      profileEmails.push(email);
+      const result = await anonClient().auth.signUp({ email, password, options: { data } });
+      if (result.data.user) userIds.push(result.data.user.id);
+      expect(result.error).not.toBeNull();
+      expect(result.data.user).toBeNull();
+      const profile = await admin.from("profiles").select("id").eq("email", email);
+      expect(profile.error).toBeNull();
+      expect(profile.data).toEqual([]);
+    }
+  });
+
   it("has no privileged app-metadata exception for missing acknowledgement", async () => {
     const email = `${tag}-no-exception@tournova.test`;
     profileEmails.push(email);
@@ -96,6 +123,8 @@ describe("pilot policy acceptance, enforced by the real Auth insert", () => {
       user_id: userId,
       terms_version: PILOT_TERMS_VERSION,
       adult_confirmed: true,
+      age_band: "18_plus",
+      guardian_permission_confirmed: false,
     });
     expect(Date.parse(row.data!.accepted_at)).toBeGreaterThanOrEqual(started - 1000);
     expect(Date.parse(row.data!.accepted_at)).toBeLessThanOrEqual(Date.now() + 1000);
@@ -113,6 +142,7 @@ describe("pilot policy acceptance, enforced by the real Auth insert", () => {
         user_id: crypto.randomUUID(),
         terms_version: PILOT_TERMS_VERSION,
         adult_confirmed: true,
+        age_band: "18_plus",
       });
     expect(inserted.error).not.toBeNull();
     expect(
@@ -121,7 +151,7 @@ describe("pilot policy acceptance, enforced by the real Auth insert", () => {
     expect(
       (
         await client.auth.updateUser({
-          data: { pilot_terms_version: "changed", pilot_adult_confirmed: false },
+          data: { pilot_terms_version: "changed", pilot_age_band: "under_13" },
         })
       ).error,
     ).toBeNull();
@@ -145,6 +175,24 @@ describe("pilot policy acceptance, enforced by the real Auth insert", () => {
       .eq("user_id", userId);
     expect(privateRead.error).toBeNull();
     expect(privateRead.data).toEqual([]);
+  });
+
+  it("refuses a guardian-permitted teen on the current terms without recording acceptance", async () => {
+    const email = `${tag}-teen@tournova.test`;
+    profileEmails.push(email);
+    const result = await anonClient().auth.signUp({
+      email, password, options: { data: {
+        pilot_age_band: "13_17",
+        pilot_guardian_permission_confirmed: true,
+        pilot_terms_version: PILOT_TERMS_VERSION,
+      } },
+    });
+    if (result.data.user) userIds.push(result.data.user.id);
+    expect(result.error).not.toBeNull();
+    expect(result.data.user).toBeNull();
+    const profile = await admin.from("profiles").select("id").eq("email", email);
+    expect(profile.error).toBeNull();
+    expect(profile.data).toEqual([]);
   });
 });
 

@@ -46,8 +46,15 @@ integration. Mocked Playwright requests cannot validate backend permissions.
 ## Pilot privacy defaults
 
 `20261111000000_pilot_privacy.sql` and `20261111010000_pilot_provisioning.sql`
-add server-recorded adult/Terms acknowledgement on new Auth identities, with no
-provisioning bypass. Existing identities are not retroactively marked accepted.
+originally added server-recorded adult/Terms acknowledgement on new Auth identities.
+`20261113000000_account_age_policy.sql` introduced a teen declaration contract;
+`20261113010000_adult_account_policy.sql` supersedes it with adult-only accounts and
+`20261113020000_policy_version_one.sql` sets the current Terms version to `1.0`,
+with no provisioning bypass. Historical evidence
+is preserved, not relabelled as adult assent. Tournament participation remains open
+to all ages subject to each event's rules; authorised adult organisers enter minors
+with parental permission and adult contact details. Existing identities are not
+retroactively marked accepted.
 `tournament_players` returns generated labels/no gender for non-operators of real
 tournaments, including withdrawn entries; demo names remain fictional. `search_players`
 is limited to entries in its specified tournament. These controls do not verify age,
