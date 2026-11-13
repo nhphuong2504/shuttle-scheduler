@@ -5,7 +5,6 @@ import { toast } from "sonner";
 
 import { Page, EmptyState, Panel, StatTile } from "@/components/app-shell";
 import { PlayerPicker } from "@/components/player-picker";
-import { EntryDataNotice } from "@/components/entry-data-notice";
 import { compareEventOrder } from "@/lib/tournament/event-order";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -341,7 +340,6 @@ function EntriesPage() {
         {canEdit ? (
         <div className="space-y-4">
           <Panel title="Add player">
-            <EntryDataNotice organiser />
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="pname">Name</Label>
