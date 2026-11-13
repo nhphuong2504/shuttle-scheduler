@@ -1,0 +1,25 @@
+.public-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--background);
+  box-shadow:
+    0 1px 0 transparent,
+    0 8px 20px -16px transparent;
+  transition:
+    background-color 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+.public-header[data-scrolled="true"] {
+  background: var(--surface);
+  box-shadow:
+    0 1px 0 var(--border),
+    0 8px 20px -16px rgb(0 0 0 / 0.24);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-header {
+    transition: none;
+  }
+}
