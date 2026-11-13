@@ -30,6 +30,7 @@ Three audiences, and the address says which one it belongs to:
 | `/me/tournaments` | The caller's own: **Owned by me** and **Shared with me**. A visitor is sent to `/auth` first, as on the create flow |
 | `/tournaments/new` | The create flow — the same four-step wizard Setup hosts, held in the browser until the last step creates the tournament in one call. A visitor is sent to `/auth` first, carrying this address back and the `create` errand, rather than being shown a form whose submit the database would refuse |
 | `/auth` | Sign in / sign up. Accepts a validated `redirect` search param and returns there |
+| `/story` | Why Tournova exists, in the founder's first person under the founder's byline (the one public page that names the operator); linked from the footer of both shells. Its claims about the product follow the same rule as the landing: shipped behaviour only, with plans worded as plans |
 | `/privacy`, `/terms`, `/contact` | Public pilot policy drafts and the operator's support/data-request contact; linked from both shells and the landing footer |
 | `/tournaments/$tournamentId/` | One tournament's participant page: the card, and the Register panel. Reached from **Register** on an Explore card — which is the one action on that card that leads here rather than into the read-only workspace — and from the public-nav sweeps. Explore's reading trip opens a card in the read-only workspace instead (see `readerHomeFor` below), so a visitor who only came to read never sees this page |
 
@@ -119,7 +120,7 @@ Two shells, and which one a page draws is decided by whether it is about one tou
   (name, lifecycle status, the section nav, and — for a caller who may edit — the workspace
   switcher) and the caller's access-aware actions. No page below it renders a shell of its own;
   a page composes `Page`, which puts a title row over the page's own content.
-- **`PublicShell`** — drawn by each of the five public routes above, since no layout knows what
+- **`PublicShell`** — drawn by each of the public routes above, since no layout knows what
   to put in a header outside a tournament. It carries the public nav, which is one entry
   (**Browse tournaments**, at `/explore`): a bar a signed-out visitor reads should not be a
   list of the caller's own work, and what is left does not change with the session, so the row

@@ -331,6 +331,7 @@ function SiteFooter() {
         <nav aria-label="Site information" className="flex flex-wrap gap-x-5 gap-y-1">
           {(
             [
+              ["/story", "Our story"],
               ["/privacy", "Privacy"],
               ["/terms", "Terms"],
               ["/contact", "Contact"],
@@ -1221,8 +1222,8 @@ export function PublicShell(
     | { title: string; subtitle?: string | undefined; actions?: ReactNode; children: ReactNode }
     /**
      * A page that draws its own full-width sections and its own h1, inside the same header
-     * and footer. Only the visitor's front door uses it: everywhere else the shell owns the
-     * page title so every page reads the same way.
+     * and footer. The visitor's front door and the founder's story use it: everywhere else the
+     * shell owns the page title so every page reads the same way.
      */
     | { bare: true; children: ReactNode }
     /**
