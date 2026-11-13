@@ -18,7 +18,7 @@ const BASE_URL = process.env["PLAYWRIGHT_BASE_URL"] ?? `http://localhost:${PORT}
 export default defineConfig({
   testDir: "./e2e",
   // Playwright cleans its outputDir on start; keep runner evidence in a sibling.
-  outputDir: "./test-results/browser",
+  outputDir: process.env["PLAYWRIGHT_OUTPUT_DIR"] ?? "./test-results/browser",
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   // A stray `test.only` would silently shrink the gate in CI.

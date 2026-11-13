@@ -247,8 +247,10 @@ test("Now switches to an empty day and back without carrying live courts across 
   page,
 }) => {
   const day = (deskFixture("layout").tables["tournament_days"] as Record<string, unknown>[])[0]!;
+  const nextDate = new Date(`${day.date as string}T00:00:00Z`);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
   await page.route("**/rest/v1/tournament_days?*", (route) =>
-    route.fulfill({ json: [day, { ...day, id: "empty-day", day_number: 2, date: "2026-11-13" }] }),
+    route.fulfill({ json: [day, { ...day, id: "empty-day", day_number: 2, date: nextDate.toISOString().slice(0, 10) }] }),
   );
   await openCell(page, routes.now, MATRIX_CELLS[0]!);
   const days = page.getByRole("group", { name: "Day", exact: true }).getByRole("button");
