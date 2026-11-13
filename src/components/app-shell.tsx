@@ -1,5 +1,7 @@
 import { useTournamentRegistrationQueue } from "@/lib/tournament/registration/review";
 import { MatchNotifications } from "@/components/match-notifications";
+import { PublicHeader } from "@/components/public-header";
+import { HeaderDisclosure } from "@/components/header-disclosure";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Plus } from "lucide-react";
 import {
@@ -20,7 +22,12 @@ import { InfoNote } from "@/components/ui/info-note";
 import { useSession } from "@/hooks/useSession";
 import { useViewMode, type ViewMode } from "@/hooks/useViewMode";
 import { useTournamentSummary } from "@/lib/tournament/data";
-import { isReminderPhase, phaseLabel, tournamentPhase, type TournamentPhase } from "@/lib/tournament/phase";
+import {
+  isReminderPhase,
+  phaseLabel,
+  tournamentPhase,
+  type TournamentPhase,
+} from "@/lib/tournament/phase";
 import { shortDays } from "@/lib/tournament/summary-format";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -37,9 +44,7 @@ import {
   type RegistrationDecision,
   type RegistrationState,
 } from "@/lib/tournament/registration-state";
-import {
-  useTournamentContext,
-} from "@/lib/tournament/data";
+import { useTournamentContext } from "@/lib/tournament/data";
 import {
   BYE_NOTE,
   displayStateFor,
@@ -182,7 +187,14 @@ const EDITOR_SECTIONS = [
  * attached to a section that has no number behind it.
  */
 /** The pages the next-step card is drawn on: where an organiser prepares, not where matches run. */
-const ORGANISER_PAGES = ["/registrations", "/entries", "/placement", "/schedule", "/settings", "/access"];
+const ORGANISER_PAGES = [
+  "/registrations",
+  "/entries",
+  "/placement",
+  "/schedule",
+  "/settings",
+  "/access",
+];
 
 const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as const;
 
@@ -206,9 +218,7 @@ const PENDING_REGISTRATIONS_PATH = "/tournaments/$tournamentId/registrations" as
  * `short` is what a phone narrower than 23rem draws: the whole bar used to wrap there, and its
  * second row put the tournament a further 60px down. The full label stays the link's name.
  */
-const PUBLIC_SECTIONS = [
-  { label: "Browse tournaments", short: "Browse", to: "/explore" },
-] as const;
+const PUBLIC_SECTIONS = [{ label: "Browse tournaments", short: "Browse", to: "/explore" }] as const;
 
 /**
  * The same bar for somebody signed in, with the place their own tournaments live.
@@ -221,28 +231,27 @@ const SIGNED_IN_SECTIONS = [
   { label: "My tournaments", to: "/me/tournaments" },
 ] as const;
 const NEW_TOURNAMENT_CLASS =
-  "inline-flex min-h-11 items-center gap-1.5 px-2.5 max-sm:hidden text-sm font-semibold text-foreground decoration-[1.5px] underline-offset-4 hover:underline";
+  "header-nav-item inline-flex min-h-11 items-center gap-1.5 px-2.5 max-sm:hidden text-sm font-semibold text-foreground";
 
 /**
  * Shared so the two nav branches cannot drift into two different-looking navs.
  *
- * Plain words on the page's own ground, an underline on hover, and the open one marked by a
- * standing underline and weight. The app's bar sits a step behind the tournament it frames:
+ * A light hover surface and a persistent selected surface keep focus and location distinct.
+ * The app's bar sits a step behind the tournament it frames:
  * muted ink at rest, so the tournament's name and its sections read first.
  */
 const NAV_ITEM_CLASS =
-  "inline-flex min-h-11 items-center px-2.5 text-sm font-medium text-muted-foreground decoration-[1.5px] underline-offset-4 transition-colors hover:text-foreground hover:underline";
+  "header-nav-item inline-flex min-h-11 items-center px-2.5 text-sm font-medium text-muted-foreground";
 /**
  * `activeProps` appends to the item's classes rather than merging them, so the open link's ink is
  * marked important: without it the item's own muted ink wins on stylesheet order.
  */
-const NAV_ACTIVE_CLASS = "font-semibold !text-foreground underline";
+const NAV_ACTIVE_CLASS = "font-semibold !text-foreground";
 /**
- * The sections of one tournament, as tabs on a rule rather than as pills.
+ * The sections of one tournament, with the same selected surface as the public bar.
  *
  * A tournament's sections are places inside one thing, so they read as a row of tabs under the
- * tournament's name, with the open one marked by a line on the row's own edge. The pill
- * treatment above stays for the public bar, where the entries are separate destinations.
+ * tournament's name. A persistent fill marks location, independently of keyboard focus.
  */
 /**
  * The section row on a screen too narrow for it: the current section kept in view, and a fade
@@ -292,7 +301,7 @@ function useSectionRowScroll(pathname: string, sectionCount: number) {
 }
 
 const TAB_ITEM_CLASS =
-  "inline-flex min-h-12 shrink-0 items-center border-b-[3px] border-transparent px-3.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground";
+  "header-nav-item inline-flex min-h-12 shrink-0 items-center px-3.5 text-sm font-medium text-muted-foreground";
 /**
  * The count of work waiting, beside its section.
  *
@@ -320,17 +329,27 @@ function SiteFooter() {
           <span>© {new Date().getFullYear()} Tournova. All rights reserved.</span>
         </p>
         <nav aria-label="Site information" className="flex flex-wrap gap-x-5 gap-y-1">
-        {([
-          ["/privacy", "Privacy"], ["/terms", "Terms"], ["/contact", "Contact"],
-        ] as const).map(([to, label]) => (
-          <Link key={to} to={to} className="inline-flex min-h-11 items-center font-semibold underline-offset-4 hover:underline">{label}</Link>
-        ))}
-        <Link
-          to="/explore"
-          className="inline-flex min-h-11 items-center rounded-lg font-semibold transition-colors hover:text-foreground"
-        >
-          Find a tournament
-        </Link>
+          {(
+            [
+              ["/privacy", "Privacy"],
+              ["/terms", "Terms"],
+              ["/contact", "Contact"],
+            ] as const
+          ).map(([to, label]) => (
+            <Link
+              key={to}
+              to={to}
+              className="inline-flex min-h-11 items-center font-semibold underline-offset-4 hover:underline"
+            >
+              {label}
+            </Link>
+          ))}
+          <Link
+            to="/explore"
+            className="inline-flex min-h-11 items-center rounded-lg font-semibold transition-colors hover:text-foreground"
+          >
+            Find a tournament
+          </Link>
         </nav>
       </div>
     </footer>
@@ -345,7 +364,9 @@ function BrandMark() {
       <TournovaMark className="h-5 w-auto shrink-0 text-primary" />
       {/* On a phone the mark alone carries the brand, so the header fits on one row. The
           links around it are named "Tournova" for that reason. */}
-      <span className="hidden font-body text-lg font-semibold tracking-[-0.02em] text-foreground sm:inline">Tournova</span>
+      <span className="hidden font-body text-lg font-semibold tracking-[-0.02em] text-foreground sm:inline">
+        Tournova
+      </span>
     </>
   );
 }
@@ -386,6 +407,7 @@ function SessionBlock() {
       <button
         type="button"
         className={NAV_ITEM_CLASS}
+        aria-current={href.split(/[?#]/)[0] === "/auth" ? "page" : undefined}
         onClick={() => navigate({ to: "/auth", search: signInSearch(href) })}
       >
         Sign in
@@ -409,7 +431,7 @@ function SessionBlock() {
 }
 
 const MENU_ITEM_CLASS =
-  "flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "header-menu-item flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
  * The signed-in caller's own menu: who they are, how they view the app, and how to leave.
@@ -470,7 +492,7 @@ function AccountMenu({
         aria-controls={panelId}
         onClick={() => setOpen((was) => !was)}
         title={email ?? undefined}
-        className="inline-flex min-h-11 items-center gap-1 rounded-full px-1 text-muted-foreground transition-colors hover:text-foreground"
+        className="header-action inline-flex min-h-11 items-center gap-1 rounded-full px-1 text-muted-foreground"
       >
         <span
           aria-hidden="true"
@@ -478,44 +500,46 @@ function AccountMenu({
         >
           {initial}
         </span>
-        <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", open && "rotate-180")} />
+        <ChevronDown
+          aria-hidden="true"
+          className={cn("header-chevron size-4", open && "rotate-180")}
+        />
         <span className="sr-only">Account</span>
       </button>
 
-      {open ? (
-        <div
-          id={panelId}
-          className="absolute right-0 top-full z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
-        >
-          <p className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-muted-foreground">
-            {/* The presence mark: see the note on `SessionBlock`. Decorative; the email carries it. */}
-            <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-presence-ink" />
-            <span className="min-w-0 truncate" title={email ?? undefined}>
-              {email}
-            </span>
-          </p>
-          <div className="border-t border-hairline py-1 sm:hidden">
-            <Link to="/me/tournaments" className={MENU_ITEM_CLASS}>
-              My tournaments
-            </Link>
-            <Link to="/tournaments/new" className={MENU_ITEM_CLASS}>
-              <Plus aria-hidden="true" className="size-4" />
-              New tournament
-            </Link>
-          </div>
-          {isPlatformAdmin ? (
-            <div className="flex items-center justify-between gap-2 border-t border-hairline px-2.5 py-2">
-              <span className="text-sm text-muted-foreground">View as</span>
-              <ViewModeSwitch />
-            </div>
-          ) : null}
-          <div className="border-t border-hairline pt-1">
-            <button type="button" className={MENU_ITEM_CLASS} onClick={() => void onSignOut()}>
-              Sign out
-            </button>
-          </div>
+      <HeaderDisclosure
+        open={open}
+        id={panelId}
+        className="absolute right-0 top-full z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover p-1 text-popover-foreground shadow-raise"
+      >
+        <p className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-muted-foreground">
+          {/* The presence mark: see the note on `SessionBlock`. Decorative; the email carries it. */}
+          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-presence-ink" />
+          <span className="min-w-0 truncate" title={email ?? undefined}>
+            {email}
+          </span>
+        </p>
+        <div className="border-t border-hairline py-1 sm:hidden">
+          <Link to="/me/tournaments" className={MENU_ITEM_CLASS}>
+            My tournaments
+          </Link>
+          <Link to="/tournaments/new" className={MENU_ITEM_CLASS}>
+            <Plus aria-hidden="true" className="size-4" />
+            New tournament
+          </Link>
         </div>
-      ) : null}
+        {isPlatformAdmin ? (
+          <div className="flex items-center justify-between gap-2 border-t border-hairline px-2.5 py-2">
+            <span className="text-sm text-muted-foreground">View as</span>
+            <ViewModeSwitch />
+          </div>
+        ) : null}
+        <div className="border-t border-hairline pt-1">
+          <button type="button" className={MENU_ITEM_CLASS} onClick={() => void onSignOut()}>
+            Sign out
+          </button>
+        </div>
+      </HeaderDisclosure>
     </div>
   );
 }
@@ -985,9 +1009,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
    */
   const summary = useTournamentSummary(tournamentId).data;
   const meta = summary
-    ? [shortDays(summary.starts_at, summary.ends_at), summary.venue_name]
-        .filter(Boolean)
-        .join(", ")
+    ? [shortDays(summary.starts_at, summary.ends_at), summary.venue_name].filter(Boolean).join(", ")
     : null;
   const pendingRegistrations = registrationQueue.data?.pending.length ?? 0;
 
@@ -1011,8 +1033,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             setup wizard's fields closer to their sticky action bar. */}
         {/* A hairline under the app's bar, so it reads as a tier of its own above the tournament. */}
         <div className="border-b border-hairline">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
-          {/*
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+            {/*
             The brand goes to the tournament you are looking at, never to `/`. It used to
             point at `/` always, which after the workspace move would send an operator
             working in tournament B to whatever their pointer happened to name - possibly
@@ -1021,17 +1043,22 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             offered, so a read-only reader lands on Entries rather than on a Desk their nav
             does not carry.
           */}
-          {tournamentId && homeKnown ? (
-            <Link to={homeSection} params={{ tournamentId }} aria-label="Tournova" className="flex min-h-11 items-center gap-2">
-              <BrandMark />
-            </Link>
-          ) : (
-            <span className="flex items-center gap-2.5">
-              <BrandMark />
-            </span>
-          )}
+            {tournamentId && homeKnown ? (
+              <Link
+                to={homeSection}
+                params={{ tournamentId }}
+                aria-label="Tournova"
+                className="flex min-h-11 items-center gap-2"
+              >
+                <BrandMark />
+              </Link>
+            ) : (
+              <span className="flex items-center gap-2.5">
+                <BrandMark />
+              </span>
+            )}
 
-          {/*
+            {/*
             The app's own navigation, for everybody, in the position `PublicShell` puts it:
             immediately after the brand. It is not a section of this tournament, so it does not
             belong inside the sections landmark below. An operator gets the same Browse, My
@@ -1039,11 +1066,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             tournament must not take the rest of the app away - and a reader who arrived from
             Explore finds the way back where the list they came from had it.
           */}
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-1 gap-y-1">
-            <PrimaryNav signedIn={signedIn} marked={false} />
-            <SessionBlock />
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-x-1 gap-y-1">
+              <PrimaryNav signedIn={signedIn} marked={false} />
+              <SessionBlock />
+            </div>
           </div>
-        </div>
         </div>
 
         {/* `relative` so the switcher's list anchors to the identity block, under the name. */}
@@ -1065,66 +1092,70 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             {tournament?.is_demo ? <DemoPill /> : null}
           </div>
           {meta ? (
-            <p className="mt-1 break-words text-sm text-muted-foreground watch-short:hidden">{meta}</p>
+            <p className="mt-1 break-words text-sm text-muted-foreground watch-short:hidden">
+              {meta}
+            </p>
           ) : null}
         </div>
 
         <div>
-        {/* Tournament sections stay separate from the identity and switcher above. */}
-        <div className="relative mx-auto flex max-w-[1400px] items-center gap-2 border-t border-hairline px-4">
-          <nav
-            ref={sectionRow.ref}
-            aria-label="Tournament sections"
-            className={cn(
-              // The fade says the row scrolls, so the bar under it is only noise.
-              "-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-              sectionRow.fade,
-            )}
-          >
-            {tournamentId
-              ? sections.map((item, index) => {
-                  const waiting =
-                    item.scoped === PENDING_REGISTRATIONS_PATH ? pendingRegistrations : 0;
-                  // A rule between the operator's groups; the administration group is pushed to
-                  // the row's far end. The reader's sections carry no group and draw no rule.
-                  const group = "group" in item ? item.group : undefined;
-                  const previous = sections[index - 1];
-                  const previousGroup = previous && "group" in previous ? previous.group : undefined;
-                  const opensGroup = group !== undefined && previousGroup !== undefined && group !== previousGroup;
-                  return (
-                    <Fragment key={item.scoped}>
-                    {opensGroup ? (
-                      <span
-                        aria-hidden="true"
-                        className={cn("mx-1.5 h-5 w-px shrink-0 bg-hairline", group === "admin" && "ml-auto")}
-                      />
-                    ) : null}
-                    <Link
-                      to={item.scoped}
-                      params={{ tournamentId }}
-                      className={TAB_ITEM_CLASS}
-                    >
-                      {item.label}
-                      {waiting > 0 ? (
-                        <>
-                          <span aria-hidden="true" className={NAV_BADGE_CLASS}>
-                            {waiting}
-                          </span>
-                          <span className="sr-only">, {waiting} awaiting a decision</span>
-                        </>
-                      ) : null}
-                    </Link>
-                    </Fragment>
-                  );
-                })
-              : null}
-          </nav>
-        </div>
+          {/* Tournament sections stay separate from the identity and switcher above. */}
+          <div className="relative mx-auto flex max-w-[1400px] items-center gap-2 border-t border-hairline px-4">
+            <nav
+              ref={sectionRow.ref}
+              aria-label="Tournament sections"
+              className={cn(
+                // The fade says the row scrolls, so the bar under it is only noise.
+                "-mb-px flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                sectionRow.fade,
+              )}
+            >
+              {tournamentId
+                ? sections.map((item, index) => {
+                    const waiting =
+                      item.scoped === PENDING_REGISTRATIONS_PATH ? pendingRegistrations : 0;
+                    // A rule between the operator's groups; the administration group is pushed to
+                    // the row's far end. The reader's sections carry no group and draw no rule.
+                    const group = "group" in item ? item.group : undefined;
+                    const previous = sections[index - 1];
+                    const previousGroup =
+                      previous && "group" in previous ? previous.group : undefined;
+                    const opensGroup =
+                      group !== undefined && previousGroup !== undefined && group !== previousGroup;
+                    return (
+                      <Fragment key={item.scoped}>
+                        {opensGroup ? (
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "mx-1.5 h-5 w-px shrink-0 bg-hairline",
+                              group === "admin" && "ml-auto",
+                            )}
+                          />
+                        ) : null}
+                        <Link to={item.scoped} params={{ tournamentId }} className={TAB_ITEM_CLASS}>
+                          {item.label}
+                          {waiting > 0 ? (
+                            <>
+                              <span aria-hidden="true" className={NAV_BADGE_CLASS}>
+                                {waiting}
+                              </span>
+                              <span className="sr-only">, {waiting} awaiting a decision</span>
+                            </>
+                          ) : null}
+                        </Link>
+                      </Fragment>
+                    );
+                  })
+                : null}
+            </nav>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 watch-short:py-3">
-        {readOnly && !READER_PAGES.some((page) => pathname.endsWith(page) || pathname.includes(`${page}/`)) ? (
+        {readOnly &&
+        !READER_PAGES.some((page) => pathname.endsWith(page) || pathname.includes(`${page}/`)) ? (
           <ReadOnlyNotice signedIn={signedIn} />
         ) : null}
         {/*
@@ -1143,17 +1174,21 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           means "the moment this snapshot describes", never "updating now".
         */}
         {tournament?.is_demo ? (
-          <Notice tone="info" data-testid="demo-notice" className="watch-short:mb-2 watch-short:py-1.5">
+          <Notice
+            tone="info"
+            data-testid="demo-notice"
+            className="watch-short:mb-2 watch-short:py-1.5"
+          >
             <strong className="font-bold">Sample tournament.</strong> Not a real event.{" "}
             <InfoNote label="About the sample tournament" className="align-middle">
               <p>
-                Tournova ships a few example tournaments so you can see how the app works.
-                Nothing here is happening on a real court - the entries, scores and standings are
+                Tournova ships a few example tournaments so you can see how the app works. Nothing
+                here is happening on a real court - the entries, scores and standings are
                 demonstration data.
               </p>
               <p>
-                A tournament shown as in progress is a snapshot of a moment during play, so
-                nothing on the page updates on its own.
+                A tournament shown as in progress is a snapshot of a moment during play, so nothing
+                on the page updates on its own.
               </p>
             </InfoNote>
           </Notice>
@@ -1208,7 +1243,7 @@ export function PublicShell(
   }
   return (
     <div className="flex min-h-screen flex-col bg-background font-body text-foreground">
-      <header className="sticky top-0 z-30 bg-background">
+      <PublicHeader>
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:py-4">
           <Link to="/" aria-label="Tournova" className="flex min-h-11 items-center gap-2">
             <BrandMark />
@@ -1218,7 +1253,7 @@ export function PublicShell(
             <SessionBlock />
           </div>
         </div>
-      </header>
+      </PublicHeader>
 
       {"bare" in props ? (
         <main className="w-full flex-1">{props.children}</main>
@@ -1257,7 +1292,9 @@ function PageHeader({
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>
-        {subtitle ? <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{subtitle}</p> : null}
+        {subtitle ? (
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{subtitle}</p>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">{actions}</div>
     </div>
@@ -1373,7 +1410,10 @@ export function StatTile({
       <p className="mt-1 font-score text-t1 font-semibold leading-none tracking-tight">
         {value === null ? (
           <>
-            <span aria-hidden className="inline-block h-[1em] w-10 animate-pulse rounded bg-muted" />
+            <span
+              aria-hidden
+              className="inline-block h-[1em] w-10 animate-pulse rounded bg-muted"
+            />
             <span className="sr-only">Loading</span>
           </>
         ) : (

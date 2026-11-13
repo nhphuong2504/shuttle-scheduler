@@ -22,6 +22,7 @@
  */
 
 import { afterAll, describe, expect, it } from "vitest";
+import { pilotSignupMetadata } from "../src/lib/legal/policy";
 
 import {
   createIdentity,
@@ -107,7 +108,7 @@ describe("deleting an auth identity leaves its profile re-linkable", () => {
       email: first.email,
       password,
       email_confirm: true,
-      user_metadata: { pilot_adult_confirmed: true, pilot_terms_version: "2026-11-11-pilot-draft" },
+      user_metadata: pilotSignupMetadata(),
     });
     if (secondError) throw new Error(`recreating the identity failed: ${secondError.message}`);
     if (!second.user) throw new Error("recreating the identity returned no user");
@@ -207,7 +208,7 @@ describe("membership and participation outlive the identity", () => {
       email: editor.email,
       password,
       email_confirm: true,
-      user_metadata: { pilot_adult_confirmed: true, pilot_terms_version: "2026-11-11-pilot-draft" },
+      user_metadata: pilotSignupMetadata(),
     });
     if (recreateError) throw new Error(`recreating the editor failed: ${recreateError.message}`);
     if (!replacement.user) throw new Error("recreating the editor returned no user");
@@ -242,7 +243,7 @@ describe("membership and participation outlive the identity", () => {
         email: owner.email,
         password: ownerPassword,
         email_confirm: true,
-        user_metadata: { pilot_adult_confirmed: true, pilot_terms_version: "2026-11-11-pilot-draft" },
+        user_metadata: pilotSignupMetadata(),
       });
     if (ownerRecreateError) {
       throw new Error(`recreating the owner failed: ${ownerRecreateError.message}`);

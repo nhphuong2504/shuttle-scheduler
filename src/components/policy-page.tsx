@@ -31,8 +31,8 @@ export function PolicyPage({ title, children }: { title: string; children: React
           </Link>
         </nav>
         <p className="text-muted-foreground">
-          These pilot policies are drafts and have not been reviewed by a lawyer. Version:{" "}
-          {PILOT_TERMS_VERSION}.
+          Version {PILOT_TERMS_VERSION}. These pilot policies are drafts and may change before
+          general release.
         </p>
         {children}
       </div>

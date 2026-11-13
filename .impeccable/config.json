@@ -1,0 +1,15 @@
+{
+  "buildPath": "comp",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "roboto",
+        "createdAt": "2026-11-09T17:10:00.145Z",
+        "reason": "agent decision: Roboto Condensed is font-match's top-ranked face for the approved comp's form lettering (call-value region, .impeccable/build/spec.json); used only in src/components/landing/call-slip.css"
+      }
+    ]
+  }
+}

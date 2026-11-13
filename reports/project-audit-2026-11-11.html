@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tournova · Rà soát dự án 2026-11-11</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --surface: #fff; --ink: #14181f; --muted: #5b6472; --line: #dfe3ea;
+    --accent: #1f3a8a; --ok: #17663a; --ok-bg: #e6f4ea; --warn: #8a5a00; --warn-bg: #fdf1d8;
+    --hi: #a11a1a; --hi-bg: #fbe4e4; --code: #eef0f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --surface: #1a1e25; --ink: #e8ebf0; --muted: #9aa3b2; --line: #2c323c;
+      --accent: #9db4ff; --ok: #7fd6a0; --ok-bg: #173324; --warn: #f0c36a; --warn-bg: #3a2e12;
+      --hi: #ff9c9c; --hi-bg: #3d1a1a; --code: #252a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 120px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 15px; margin: 0; }
+  p { margin: 6px 0; }
+  .sub { color: var(--muted); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: 13px;
+    font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 18px 0; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px; margin: 10px 0; }
+  .card.fixed { border-color: var(--ok); }
+  .head { display: flex; gap: 10px; align-items: flex-start; }
+  .head input { margin-top: 4px; width: 17px; height: 17px; flex: none; }
+  .id { font-family: ui-monospace, monospace; color: var(--accent); font-weight: 700; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin-left: 6px; white-space: nowrap; }
+  .hi { background: var(--hi-bg); color: var(--hi); }
+  .mid { background: var(--warn-bg); color: var(--warn); }
+  .lo { background: var(--code); color: var(--muted); }
+  .done { background: var(--ok-bg); color: var(--ok); }
+  dl { display: grid; grid-template-columns: 92px 1fr; gap: 4px 12px; margin: 10px 0 0; }
+  dt { color: var(--muted); font-size: 13px; }
+  dd { margin: 0; }
+  ul { margin: 4px 0; padding-left: 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface);
+    border-top: 1px solid var(--line); padding: 10px 16px; }
+  .bar div { max-width: 980px; margin: 0 auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  button { font: inherit; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--accent);
+    background: var(--accent); color: var(--surface); cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); }
+  #out { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  @media (max-width: 560px) { dl { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Rà soát dự án Tournova</h1>
+  <p class="sub">Ngày 2026-11-11 · nhánh <code>main</code> @ <code>9cebc2a</code> · chưa commit gì. Cập nhật sau khi bạn yêu cầu “sửa tất cả”: mỗi đề xuất bên dưới có dòng trạng thái.</p>
+
+  <div class="stats">
+    <div class="stat"><b>0</b><span>mục còn chờ bạn (A5 quyết định không làm)</span></div>
+    <div class="stat"><b>16 + 2</b><span>đề xuất đã làm trọn / một phần</span></div>
+    <div class="stat"><b>1422 / 1422</b><span>unit test qua (trước khi sửa)</span></div>
+    <div class="stat"><b>0</b><span>lỗi typecheck</span></div>
+  </div>
+
+  <h2>Phạm vi và giới hạn</h2>
+  <div class="card">
+    <ul>
+      <li><b>Đã đọc kỹ:</b> <code>AGENTS.md</code> gốc và 5 file con, <code>docs/agent-workflow.md</code>, <code>docs/verification.md</code>, <code>docs/cleanup-deferred.md</code>, toàn bộ <code>scripts/agent/</code>, 3 workflow CI, mọi file cấu hình build/test, hook và cấu hình skill, <code>PRODUCT.md</code>, landing.</li>
+      <li><b>Đã quét tự động toàn repo:</b> typecheck, 1422 unit test, 20 agent contract test, ESLint (tách riêng lỗi thật khỏi lỗi định dạng), tìm module mồ côi, dependency không dùng, đường dẫn/link/script hỏng trong mọi file Markdown, độ phủ của <code>areas.json</code> trên 546 file được track.</li>
+      <li><b>Chỉ lấy mẫu, chưa đọc từng dòng:</b> ~47.000 dòng mã ứng dụng, 78 migration SQL, các tài liệu tham chiếu dài (<code>docs/reference/*</code>, <code>DESIGN.md</code>). Luật tính điểm (21 điểm, cách 2, trần 30) mình kiểm tra thấy đúng; thuật toán xếp lịch và RLS chưa được review sâu.</li>
+      <li><b>Skill:</b> <code>impeccable</code> v4.8.0 là skill bên thứ ba nên mình không sửa nội dung, chỉ đánh giá cách cài đặt. <code>hallmark</code> nằm ngoài repo (thư mục người dùng), không xét.</li>
+    </ul>
+  </div>
+
+  <h2>Đã sửa (6)</h2>
+  <p class="sub">Tất cả còn nằm trong working tree, chưa commit. Kết quả kiểm tra: <span id="verify">gate checkpoint trên 6 file đã sửa đều qua: typecheck, 20 agent contract, 1422 unit test, 257 test Playwright (0 skip), build production. Chưa chạy: integration cục bộ (các vùng đã sửa không yêu cầu) và <code>agent:verify</code> ở mức đóng phase.</span></p>
+
+  <div class="card fixed">
+    <h3><span class="id">F1</span> Ba <code>useMemo</code> ở trình xếp lịch thiếu dependency <code>venueZone</code> <span class="tag done">lỗi tiềm ẩn</span></h3>
+    <p><code>src/components/schedule/placement-scheduler.tsx</code> (giờ đóng chính thức, sức chứa sân‑giờ, ngày đang hiển thị). Tournament và danh sách ngày tải bằng hai query riêng: nếu ngày về trước, ba giá trị này được tính bằng múi giờ mặc định và không tính lại khi múi giờ thật của địa điểm về sau. Đã thêm <code>venueZone</code> vào cả ba mảng dependency.</p>
+  </div>
+  <div class="card fixed">
+    <h3><span class="id">F2</span> Desk tính lại bản đồ xung đột ở mọi lần render <span class="tag done">hiệu năng</span></h3>
+    <p><code>desk.tsx</code>: <code>conflictsQuery.data ?? []</code> tạo mảng mới mỗi lần render khi chưa có dữ liệu, làm <code>useMemo</code> vô tác dụng và các ô sân nhận prop mới liên tục. Đã chuyển <code>?? []</code> vào trong memo.</p>
+  </div>
+  <div class="card fixed">
+    <h3><span class="id">F3</span> <code>areas.json</code>: pattern chết và file Markdown ở gốc bị coi là “vùng lạ” <span class="tag done">lãng phí</span></h3>
+    <p>Xoá <code>src/index.css</code> (file không tồn tại). Pattern <code>**/*.md</code> của script không khớp file ở thư mục gốc, nên sửa <code>DESIGN.md</code> hay <code>PRODUCT.md</code> bị yêu cầu chạy toàn bộ gate + integration. Thay hai mục liệt kê tay bằng <code>*.md</code>, và thêm <code>.prettier*</code> vào vùng tooling (cùng loại với <code>.nvmrc</code>, <code>.gitignore</code>).</p>
+  </div>
+  <div class="card fixed">
+    <h3><span class="id">F4</span> Đoạn “Phase-close scope” lặp nguyên văn ở hai tài liệu <span class="tag done">token</span></h3>
+    <p>Cùng 5 dòng nằm trong cả <code>docs/agent-workflow.md</code> và <code>docs/verification.md</code>, và cả hai đều được nạp cho vùng tooling. Giữ bản ở verification, bản kia thay bằng một câu dẫn link.</p>
+  </div>
+  <div class="card fixed">
+    <h3><span class="id">F5</span> <code>.prettierignore</code> không loại trừ thư mục công cụ agent <span class="tag done">an toàn</span></h3>
+    <p><code>npm run format</code> là <code>prettier --write .</code> và sẽ ghi đè cả skill bên thứ ba lẫn <code>.impeccable/</code>. Đã thêm <code>.agents</code>, <code>.claude</code>, <code>.codex</code>, <code>.github/{agents,hooks,skills}</code>, <code>.impeccable</code>, <code>test-results</code>.</p>
+  </div>
+  <div class="card fixed">
+    <h3><span class="id">F6</span> <code>AGENTS.md</code> chỉ nêu Cursor và Codex <span class="tag done">nhất quán</span></h3>
+    <p>Claude Code cũng đọc chính file này (và repo đã có <code>.claude/</code>). Sửa thành “Cursor, Codex and Claude Code share these rules”. Vẫn trong ngân sách 500–700 từ mà test ép.</p>
+  </div>
+
+  <h2>Đề xuất và trạng thái</h2>
+  <p class="sub">Kiểm tra sau đợt sửa thứ hai: <code>agent:verify --integration</code> qua trọn 6 bước trên toàn bộ thay đổi: typecheck, 21 agent contract, 1414 unit test, 257 test Playwright (0 skip), build production và 161 test integration trên Supabase cục bộ. Sau đó <code>integration/.env</code> được xoá lại (ban đầu không tồn tại) và stack cục bộ được dừng.</p>
+
+  <h3 style="margin-top:20px">A · Công cụ agent, skill và chi phí token</h3>
+
+  <div class="card"><div class="head"><input type="checkbox" value="A1"><div>
+    <h3><span class="id">A1</span> 180 MB thư mục agent chưa track khiến mọi lần kiểm tra thành “full gate + integration” <span class="tag hi">ưu tiên cao</span></h3>
+    <p><span class="tag mid" style="margin-left:0">Làm một phần</span> Đã ignore phần sinh ra (<code>.impeccable/{build,review,mocks,decision,surfaces,questions}</code>, binary của skill) và thêm vùng <code>agent-tooling</code> vào map. Không xoá bản skill nào vì AGENTS.md nêu cả Cursor, Codex và Claude Code; cũng chưa commit thư mục nào.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>.agents/</code>, <code>.claude/skills/</code>, <code>.github/skills/</code> mỗi nơi một bản <code>impeccable</code> 22 MB (20 MB là binary), cộng <code>.impeccable/</code> 114 MB (review 69, build 27, mocks 19). Tất cả untracked và không bị ignore. <code>agent:check --changed</code> tính cả file untracked, không vùng nào khớp, nên kế hoạch luôn là 5 bước + integration kể cả khi chỉ sửa một dòng tài liệu.</dd>
+      <dt>Đề xuất</dt><dd>(1) Chỉ giữ bản cho công cụ bạn thật sự dùng; nếu không dùng Copilot agent và Codex thì xoá <code>.github/{skills,agents,hooks}</code>, <code>.agents/</code>, <code>.codex/</code>. (2) Ignore phần sinh ra: <code>.impeccable/{build,review,mocks,decision,surfaces,questions}</code> và <code>**/skills/impeccable/scripts/bin/</code>. (3) Commit phần cấu hình nhỏ còn lại và thêm vùng <code>agent-tooling</code> (rủi ro standard, không integration) vào <code>areas.json</code>.</dd>
+      <dt>Cần bạn quyết</dt><dd>Giữ công cụ nào, và skill có nên nằm trong repo hay chỉ cài theo máy.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="A2" disabled><div>
+    <h3><span class="id">A2</span> 63 file được track không thuộc vùng nào trong <code>areas.json</code> <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Thêm vùng <code>app-shell</code>, <code>static</code>, <code>analysis</code>; mở rộng <code>tooling</code> và <code>database</code>. 546/546 file được track giờ đều thuộc một vùng.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>Gồm mã thật: 6 hook (<code>useMyMatchNotifications</code>, <code>useMyPlayer</code>, <code>useReaderMatches</code>, <code>useScrollable</code>, <code>useSignInRedirect</code>, <code>useViewMode</code>), <code>src/lib/{routing,security,legal}/</code>, <code>error-capture.ts</code>, <code>error-page.ts</code>, <code>utils.ts</code>, <code>src/server.ts</code>, <code>src/start.ts</code>, <code>workers/</code>, <code>public/</code>, <code>supabase/config.toml</code>, <code>analysis/</code>. Agent sửa các file này không được chỉ tới tài liệu hay test nào, và bị đòi integration dù không liên quan backend.</dd>
+      <dt>Đề xuất</dt><dd>Thêm vùng: <code>reader</code> (hook đọc + <code>src/components/reader</code>), <code>app-shell</code> (server/start/error/routing/security, rủi ro cao), <code>static</code> (public, workers), <code>analysis</code> (standard). Mình cần bạn xác nhận mức rủi ro cho từng vùng vì nó thay đổi chính sách kiểm tra.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="A3" disabled><div>
+    <h3><span class="id">A3</span> Quy tắc “landing scheduling demo” trỏ tới thứ landing không còn hiển thị <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Sửa quy tắc ở <code>AGENTS.md</code>, <code>src/lib/scheduling/AGENTS.md</code>, <code>PRODUCT.md</code> và mô tả <code>/</code> trong information-architecture.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>AGENTS.md</code>, <code>src/lib/scheduling/AGENTS.md</code>, <code>PRODUCT.md</code> và <code>docs/information-architecture.md</code> (dòng 28) đều yêu cầu cập nhật “Desk wording and scheduling demo” của landing. Từ commit <code>4d84f0f</code> landing là bảng 6 tờ sân tĩnh, không còn demo xếp lịch hay Desk preview. Agent đọc quy tắc này sẽ đi tìm và sửa một demo đã chết (xem B1).</dd>
+      <dt>Đề xuất</dt><dd>Đổi thành: “các khẳng định trên landing (dời lịch khi trễ, bảo vệ thời gian nghỉ) phải khớp hành vi thật”, và sửa mô tả <code>/</code> trong information-architecture. Nếu bạn định đưa demo trở lại thì giữ nguyên và bỏ qua B1.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="A4" disabled><div>
+    <h3><span class="id">A4</span> Kế hoạch đã hoàn tất vẫn nằm trong <code>docs/plans/</code> <span class="tag lo">thấp</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Xoá <code>docs/plans/agent-workflow-implementation.md</code>.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>docs/plans/agent-workflow-implementation.md</code>, 282 dòng, “Status: complete” từ 2026-10-27. Chính <code>agent-workflow.md</code> quy định: xong thì chuyển quyết định bền vững đi và xoá trạng thái cũ.</dd>
+      <dt>Đề xuất</dt><dd>Xoá file (Git vẫn giữ lịch sử). <code>docs/agent-workflow-evaluation.md</code> giữ lại vì là bằng chứng đo.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="A5"><div>
+    <h3><span class="id">A5</span> Hook impeccable chạy ở SessionStart, mọi Edit/Write và Stop <span class="tag lo">thấp</span></h3>
+    <p><span class="tag lo" style="margin-left:0">Không làm</span> Bạn quyết định giữ nguyên các hook.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>Mỗi lần sửa file UI, hook chèn thêm một đoạn ngữ cảnh vào hội thoại; hook Stop có timeout 30 giây ở mỗi lượt. <code>.codex/hooks.json</code> lại gọi qua biến <code>CLAUDE_PROJECT_DIR</code> và đường dẫn <code>.claude/</code>; nếu Codex không đặt biến này thì hook âm thầm không chạy (mình chưa kiểm chứng được trên Codex).</dd>
+      <dt>Đề xuất</dt><dd>Giữ PostToolUse, bỏ Stop nếu bạn thấy chậm. Kiểm tra lại hook Codex hoặc xoá theo A1.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="A6" disabled><div>
+    <h3><span class="id">A6</span> Máy đang chạy Node 24, repo yêu cầu Node 22 <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Thêm <code>engines.node = 22.x</code> vào <code>package.json</code> và lockfile, README ghi rõ Node 22. Máy vẫn đang chạy Node 24: cần <code>nvm use</code>.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>agent:doctor</code> báo <code>missing: node</code>. CI dùng <code>.nvmrc</code> (22). <code>package.json</code> không có <code>engines</code>, README chỉ ghi “Node.js with npm”.</dd>
+      <dt>Đề xuất</dt><dd>Thêm <code>"engines": {"node": "22.x"}</code> và ghi rõ phiên bản trong README; trên máy chạy <code>nvm use</code>. Hoặc nếu bạn muốn lên 24 thì đổi <code>.nvmrc</code> và để CI xác nhận.</dd>
+    </dl></div></div></div>
+
+  <h3 style="margin-top:28px">B · Mã nguồn</h3>
+
+  <div class="card"><div class="head"><input type="checkbox" value="B1" disabled><div>
+    <h3><span class="id">B1</span> ~960 dòng landing cũ và một adapter không còn ai import <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Xoá 5 file landing và <code>scheduling/badminton.ts</code>; ghi lại trong <code>cleanup-deferred.md</code>.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>src/components/landing/desk-preview.tsx</code> (183), <code>reader-preview.tsx</code> (100), <code>schedule-demo.tsx</code> (419) không được import ở đâu; <code>schedule-demo-data.ts</code> (169) và test của nó (91) chỉ phục vụ <code>schedule-demo.tsx</code>. <code>src/lib/tournament/scheduling/badminton.ts</code> cũng không có nơi import nào trong <code>src</code>, <code>e2e</code>, <code>integration</code>, <code>scripts</code>.</dd>
+      <dt>Đề xuất</dt><dd>Xoá 5 file landing. Với <code>badminton.ts</code>: xác nhận lại rồi xoá, hoặc ghi rõ nó là điểm mở rộng có chủ đích.</dd>
+      <dt>Vì sao chưa làm</dt><dd>Ghi nhớ của bạn nói landing chưa hoàn thiện, nên có thể bạn còn muốn dùng lại demo. Vùng scheduling cũng đòi full gate.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="B2" disabled><div>
+    <h3><span class="id">B2</span> Xử lý xuống dòng CRLF trong bộ đọc env của integration <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Cả hai bộ đọc giờ nhận cả kiểu xuống dòng CRLF lẫn LF.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>docs/cleanup-deferred.md</code> đã ghi: <code>integration/env.ts</code> và <code>scripts/integration-target.mjs</code> tách dòng bằng <code>\n</code>; với file CRLF mọi giá trị dính <code>\r</code> và suite tự báo “not configured”. Máy này là Windows với <code>core.autocrlf=true</code> nên rủi ro là thật.</dd>
+      <dt>Đề xuất</dt><dd>Sửa thành <code>/\r?\n/</code> và chạy integration cục bộ để chứng minh. Docker trên máy này đang sẵn sàng (<code>agent:doctor --integration</code> báo <code>ready: docker</code>), nên lý do hoãn trước đây không còn.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="B3" disabled><div>
+    <h3><span class="id">B3</span> <code>npm run lint</code> bị 4.318 lỗi định dạng che mất 19 cảnh báo thật <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm (phương án gọn)</span> ESLint không còn chạy Prettier. <code>npm run lint</code> từ 4.337 xuống 12 mục: 2 lỗi regex ký tự điều khiển có chủ đích và 10 cảnh báo fast-refresh. Chưa đưa lint vào gate.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>Lỗi Prettier ở 159/327 file. Trong số 19 cảnh báo thật mình đã sửa 4 (F1, F2). Còn lại: <code>scores.tsx:483</code> (<code>groupByDraw</code> thiếu trong dependency, hiện vô hại), <code>e2e/fixtures/app.ts:74</code> (báo nhầm vì fixture Playwright tên <code>use</code>), một <code>eslint-disable</code> thừa ở <code>integration/setup-guard.ts:78</code>, 10 cảnh báo fast-refresh, 2 regex ký tự điều khiển có chủ đích.</dd>
+      <dt>Đề xuất</dt><dd>Phương án gọn: bỏ <code>eslint-plugin-prettier</code> khỏi ESLint để <code>lint</code> chỉ báo lỗi thật và có thể đưa vào gate; định dạng để Prettier lo riêng. Phương án đầy đủ: một commit format toàn repo rồi bật lint trong CI.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="B4" disabled><div>
+    <h3><span class="id">B4</span> Script trong <code>package.json</code> lệch với chính quy tắc của repo <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> <code>db:link</code> chạy qua <code>scripts/db-link.mjs</code>; xoá <code>test:all</code> và <code>deploy:dry</code>; <code>format</code> chỉ nhận đường dẫn cụ thể. README đã cập nhật.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>
+        <ul>
+          <li><code>db:link</code> dùng <code>"$SUPABASE_PROJECT_ID"</code> kiểu POSIX. Trên Windows npm chạy qua <code>cmd.exe</code> nên CLI nhận nguyên chuỗi đó; cùng loại lỗi mà <code>scripts/e2e-final.mjs</code> được viết ra để tránh.</li>
+          <li><code>format</code> = <code>prettier --write .</code> trong khi AGENTS.md cấm format toàn repo.</li>
+          <li><code>test:all</code> chạy E2E không nghiêm ngặt, trái với hướng dẫn chỉ dùng <code>test:e2e:final</code>.</li>
+          <li><code>deploy:dry</code> chỉ là bí danh của <code>deploy:check</code>.</li>
+        </ul></dd>
+      <dt>Đề xuất</dt><dd>Viết <code>db:link</code> qua một script Node nhỏ; xoá <code>test:all</code> và <code>deploy:dry</code> (sửa README dòng 190); đổi <code>format</code> thành nhận đường dẫn cụ thể.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="B5"><div>
+    <h3><span class="id">B5</span> Hai mục tồn đọng nhỏ đã ghi trong <code>cleanup-deferred.md</code> <span class="tag lo">thấp</span></h3>
+    <p><span class="tag mid" style="margin-left:0">Làm một phần</span> <code>DrawTier</code> còn một định nghĩa. Chưa chuyển <code>@tanstack/router-plugin</code> sang <code>overrides</code> vì phải sinh lại lockfile, việc đó nên làm dưới Node 22.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>DrawTier</code> khai báo hai lần (<code>competition-format.ts</code>, <code>draws.ts</code>). <code>@tanstack/router-plugin</code> là dependency trực tiếp nhưng không file nào import (mình xác nhận lại: không có tham chiếu nào).</dd>
+      <dt>Đề xuất</dt><dd>Gộp <code>DrawTier</code> về một nơi. Với router-plugin: nếu là ghim phiên bản thì chuyển sang <code>overrides</code> cho đúng ý nghĩa.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="B6" disabled><div>
+    <h3><span class="id">B6</span> Cấu hình TypeScript/Vitest có ba chỗ nói sai thực tế <span class="tag lo">thấp</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Bỏ <code>vitest/globals</code> và dòng include thừa; sửa chú thích trong cấu hình integration.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>
+        <ul>
+          <li><code>tsconfig.json</code> khai <code>types: ["vitest/globals"]</code> nhưng Vitest không bật <code>globals</code> và mọi test đều import từ <code>vitest</code>. Một test quên import sẽ qua typecheck rồi hỏng lúc chạy.</li>
+          <li><code>include</code> có <code>eslint.config.js</code> nhưng không bật <code>allowJs</code>, nên dòng đó không có tác dụng.</li>
+          <li><code>vitest.integration.config.ts</code>: chú thích nói <code>integration/</code> “holds only this suite's own .env”, vài dòng sau lại nói “has no .env”.</li>
+        </ul></dd>
+      <dt>Đề xuất</dt><dd>Bỏ <code>vitest/globals</code>, bỏ dòng include thừa, sửa chú thích. Mình chưa sửa vì file cấu hình integration thuộc vùng bắt buộc chạy integration cục bộ.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="B7" disabled><div>
+    <h3><span class="id">B7</span> Số liệu trên hình landing không tự khớp nhau <span class="tag lo">thấp</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Bạn chốt landing là bản chính. Ví dụ giờ chỉ có một sân và một con số: Sân 6 đang trễ 12 phút, hai trận sau dời 10:40 → 10:52 và 11:05 → 11:17; ghi chú và mũi tên “+12 min” nằm ngay cạnh tờ sân đó. Bản chỉ có 6 tờ sân đã thử và bị loại. Đã cập nhật <code>aria-label</code>, <code>DESIGN.md</code> và <code>.impeccable/design.json</code>.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>Năm tờ sân dùng lưới 25 phút (… 10:40, 11:05) nhưng trận bị dời ở Sân 6 ghi “trước đó 11:10”. Ghi chú “L. Tran plays 11:10 and 11:22” đọc như sau khi dời vẫn còn trùng, trong khi ý là trận được dời 12 phút để hết trùng. <code>PRODUCT.md</code> yêu cầu dữ liệu minh hoạ phản ánh hành vi thật.</dd>
+      <dt>Đề xuất</dt><dd>Đổi “was” thành 11:05 (dời 17 phút) hoặc đổi lưới; viết lại ghi chú thành hai trận của cùng người chơi ở hai sân. Mình chưa đụng vì bạn đã dặn landing đang dang dở.</dd>
+    </dl></div></div></div>
+
+  <h3 style="margin-top:28px">C · Vệ sinh repo</h3>
+
+  <div class="card"><div class="head"><input type="checkbox" value="C1" disabled><div>
+    <h3><span class="id">C1</span> File rác ở thư mục gốc <span class="tag lo">thấp</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Xoá 9 file log và thư mục <code>assets/</code> rỗng. Giữ <code>.benchmark/</code>.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>9 file <code>desk-*.log</code> từ 19/10 (~215 KB, đã bị ignore), thư mục <code>assets/</code> rỗng, <code>.benchmark/</code> với báo cáo từ tháng 9–10.</dd>
+      <dt>Đề xuất</dt><dd>Xoá log và <code>assets/</code>. Mình chưa xoá vì đây là file ngoài Git, xoá rồi không khôi phục được.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="C2" disabled><div>
+    <h3><span class="id">C2</span> <code>test-results/</code> phình dần: 47 MB, 549 file, 63 lần chạy agent <span class="tag lo">thấp</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Runner giữ 10 lần chạy mới nhất, có test đi kèm (21/21 agent test qua).</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>Mỗi lần <code>agent:check --run</code> hoặc <code>agent:verify</code> tạo một thư mục <code>test-results/agent/&lt;run-id&gt;/</code> và không có gì dọn. Tài liệu nói rõ kết quả cũ không bao giờ được dùng lại.</dd>
+      <dt>Đề xuất</dt><dd>Cho runner giữ N lần chạy gần nhất (ví dụ 10), có test đi kèm.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="C3" disabled><div>
+    <h3><span class="id">C3</span> <code>src/routeTree.gen.ts</code> luôn hiện “modified” dù nội dung không đổi <span class="tag lo">thấp</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Thêm <code>.gitattributes</code>. File vẫn hiện M cho tới khi <code>.gitattributes</code> được commit.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd>File được sinh lại với LF trong khi <code>core.autocrlf=true</code>; <code>git diff</code> rỗng nhưng <code>git status</code> vẫn báo M, và nó làm bẩn “dirty fingerprint” của runner. Repo không có <code>.gitattributes</code>.</dd>
+      <dt>Đề xuất</dt><dd>Thêm <code>.gitattributes</code> với <code>src/routeTree.gen.ts text eol=lf</code>. Cân nhắc <code>* text=auto eol=lf</code> cho cả repo trong một commit riêng.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="C4"><div>
+    <h3><span class="id">C4</span> Xác nhận 40 tên người chơi trong <code>analysis/viet-nam-open-2026</code> là dữ liệu giả <span class="tag mid">trung bình</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Bạn xác nhận là tên giả; đã ghi rõ trong README của bộ dữ liệu.</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>players.csv</code> và <code>tournament.json</code> chứa tên và giới tính, <code>is_demo=false</code>. README của bộ Aloha ghi rõ “Player identities are synthetic”; README của Viet Nam Open chỉ ghi nguồn là staging, không nói về danh tính. Repo đang private.</dd>
+      <dt>Đề xuất</dt><dd>Nếu là tên giả: thêm một dòng vào README. Nếu là người thật: ẩn danh hoá, vì AGENTS.md cấm commit dữ liệu giải đấu thật.</dd>
+    </dl></div></div></div>
+
+  <div class="card"><div class="head"><input type="checkbox" value="C5" disabled><div>
+    <h3><span class="id">C5</span> Ghi chú pháp lý tiếng Việt nằm ở hai thư mục gốc riêng <span class="tag lo">thấp</span></h3>
+    <p><span class="tag done" style="margin-left:0">Đã làm</span> Chuyển 4 file về <code>docs/research/us-legal/</code> bằng <code>git mv</code> (đang ở trạng thái staged).</p>
+    <dl>
+      <dt>Hiện trạng</dt><dd><code>reports/</code> (1 file) và <code>research_notes/</code> (3 file) đều về “Pháp lý Tournova tại Mỹ”, đường dẫn có dấu và khoảng trắng.</dd>
+      <dt>Đề xuất</dt><dd>Gom về <code>docs/research/us-legal/</code> với tên ASCII, hoặc đưa ra khỏi repo sản phẩm. File báo cáo này cũng đang nằm tạm trong <code>reports/</code>, xem xong có thể xoá.</dd>
+    </dl></div></div></div>
+
+  <h2>Những thứ đã kiểm tra và thấy ổn</h2>
+  <div class="card">
+    <table>
+      <tr><th>Hạng mục</th><th>Kết quả</th></tr>
+      <tr><td>Typecheck</td><td>0 lỗi</td></tr>
+      <tr><td>Unit test (Vitest)</td><td>73 file, 1422/1422 qua, 7,2 giây</td></tr>
+      <tr><td>Agent contract test</td><td>20/20 qua, kể cả sau khi sửa <code>areas.json</code></td></tr>
+      <tr><td>Link và anchor trong Markdown</td><td>Không link hỏng; các đường dẫn “thiếu” đều là ví dụ hoặc file bị ignore có chủ đích</td></tr>
+      <tr><td>Luật điểm ván đấu</td><td>Đúng: thắng tại đích khi đối thủ chưa tới deuce, đúng cách biệt sau đích, trần 30–29</td></tr>
+      <tr><td>CI</td><td>Không chứa secret; workflow integration và vùng <code>integration: true</code> trong map khớp nhau</td></tr>
+      <tr><td>Marker tồn đọng</td><td>Không có TODO/FIXME/@deprecated trong mã</td></tr>
+    </table>
+  </div>
+</main>
+
+<div class="bar"><div>
+  <button id="copy">Sao chép mã đã chọn</button>
+  <button id="all" class="ghost">Chọn tất cả</button>
+  <span id="out">Chưa chọn đề xuất nào.</span>
+</div></div>
+
+<script>
+  const boxes = [...document.querySelectorAll('input[type=checkbox]')];
+  const out = document.getElementById('out');
+  const picked = () => boxes.filter(b => b.checked).map(b => b.value);
+  const show = () => { const p = picked(); out.textContent = p.length ? 'Đã chọn: ' + p.join(', ') : 'Chưa chọn đề xuất nào.'; };
+  boxes.forEach(b => b.addEventListener('change', show));
+  document.getElementById('all').addEventListener('click', () => {
+    const on = boxes.some(b => !b.checked); boxes.forEach(b => b.checked = on); show();
+  });
+  document.getElementById('copy').addEventListener('click', async () => {
+    const text = 'Duyệt: ' + (picked().join(', ') || '(không có)');
+    try { await navigator.clipboard.writeText(text); out.textContent = 'Đã sao chép: ' + text; }
+    catch { out.textContent = text; }
+  });
+</script>
+</body>
+</html>

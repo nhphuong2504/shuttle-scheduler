@@ -5,11 +5,15 @@ operating instructions, not a legal opinion or evidence that deployment is appro
 
 ## Release scope and limits
 
-- Adults 18+ may create accounts after acknowledging the current draft Terms and
-  Privacy notice. This is self-attestation, not verified age or parental consent.
-- No child accounts or child self-service registration. An adult organiser may enter
-  a child after arranging appropriate parental authority and notice. Use an adult's
-  contact details. The participant request form is for an adult entering themselves;
+- Accounts and self-service registration are for adults aged 18 or older after
+  acknowledging the current draft Terms and Privacy notice. This is self-attestation,
+  not verified age or verified parental consent. The signup guard rejects the previous
+  teen-permission payload, even if it names the current Terms version.
+- Tournament participation is for all ages subject to each event's rules. No accounts
+  or self-service registration for players under 18. A parent or guardian arranges a
+  child's entry with an authorised adult organiser, who enters the player after
+  arranging appropriate parental authority and notice. Use an adult's contact details.
+  The participant request form is for an adult account holder entering themselves;
   it must not be repurposed to link a parent's account to a child's identity.
 - Real tournament spectators, including unrelated signed-in users, receive generated
   player labels and no gender through `tournament_players`. Editors/admins receive names
@@ -23,7 +27,8 @@ operating instructions, not a legal opinion or evidence that deployment is appro
   Never describe an organiser's checkbox as legally verified parental consent.
 - Existing accounts are not retroactively marked adult or accepted. Before pilot
   access, inventory existing holders, confirm adult eligibility and provide current
-  draft policies. Stop child account use and handle it as a privacy request. Automatic
+  draft policies. Stop under-18 account use and handle it as a privacy request. Historical
+  teen declarations remain evidence of what was stated, not adult acceptance. Automatic
   re-acceptance gating of existing accounts is not included in this phase.
 
 ## Before public deployment
@@ -31,7 +36,10 @@ operating instructions, not a legal opinion or evidence that deployment is appro
 The website policies are expressly labelled pilot drafts. Do not remove that label
 or represent this checkout as legal clearance. The owner must confirm these facts:
 
-- This contact inbox is monitored; publishing the supplied email/name is intentional.
+- This contact inbox is monitored; publishing the supplied support email is intentional.
+  Public policy pages use the service name Tournova, not the owner's personal name.
+  This branding does not establish a registered entity or resolve any required legal
+  operator disclosure; confirm the correct disclosure before public release.
   It forwards through Cloudflare Email Routing to the owner's inbox.
 - Inspect actual Supabase/Cloudflare regions, access logs, backup expiry, subprocessors
   and contracts. Root configuration was not read out or changed to test hosted systems.
@@ -46,8 +54,12 @@ or represent this checkout as legal clearance. The owner must confirm these fact
 - Get appropriately qualified help for the remaining COPPA/minor contract/waiver and
   state-law questions if needed. The engineering controls do not resolve those questions.
 
-Apply both new migrations in order with the normal deployment procedure only after
-review. The second removes every provisioning exception. No hosted migration or deploy
+Apply pending migrations in order with the normal deployment procedure only after
+review. `20261113010000_adult_account_policy.sql` restores the adult-only signup guard
+after `20261113000000_account_age_policy.sql`; the earlier migration is immutable.
+`20261113020000_policy_version_one.sql` sets the current policy version to `1.0`.
+Deploy pending migrations with the matching signup client and policy version. Old clients must refresh
+before signing up. No hosted migration or deploy
 is authorised merely by a passing local test.
 
 ## Requests without an account
@@ -102,6 +114,7 @@ a universal US notification deadline or assume a names-only exposure is harmless
 Real local integration must cover missing/false/obsolete acknowledgement, metadata
 forgery, client writes to acceptance evidence, cross-user reads, profile recovery,
 spectator versus operator names, withdrawn entrants, demo names and cross-tournament
-search. Browser tests cover adult-first signup, terms payload, links, keyboard operation,
+search. Browser tests cover adult-first signup, minor account exclusion, all-age participation wording,
+terms payload, links, keyboard operation,
 mobile overflow and axe checks. Full `agent:verify` plus integration is required.
 Neither browser transport mocks nor successful builds prove legal compliance.

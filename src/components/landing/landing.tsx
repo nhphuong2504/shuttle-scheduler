@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 
 import { PublicShell } from "@/components/app-shell";
+import { PublicHeader } from "@/components/public-header";
 import { TournovaMark } from "@/components/brand/tournova-mark";
 import { signInSearch } from "@/lib/routing/redirect";
 
@@ -147,8 +148,6 @@ export function Landing() {
             Follow a tournament
           </Link>
         </div>
-
-        <p className="cs-sub">When a match runs late, the rest of the day keeps up.</p>
       </section>
     </PublicShell>
   );
@@ -162,7 +161,12 @@ function CourtLines({ portrait }: { portrait: boolean }) {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <path d={courtPath(COURT_LINES, portrait)} strokeWidth="2" strokeLinecap="square" fill="none" />
+      <path
+        d={courtPath(COURT_LINES, portrait)}
+        strokeWidth="2"
+        strokeLinecap="square"
+        fill="none"
+      />
       <path d={courtPath(COURT_NET, portrait)} strokeWidth="3" />
       <path d={courtPath(COURT_POSTS, portrait)} strokeWidth="9" />
     </svg>
@@ -193,25 +197,27 @@ function CourtCard({ sheet }: { sheet: CourtSheet }) {
 /** The same mark, name and ways in as the app's own header. */
 function BoardHeader({ signIn }: { signIn: ReturnType<typeof signInSearch> }) {
   return (
-    <header className="cs-header">
-      <div className="cs-brand">
-        <Link to="/" aria-label="Tournova" className="cs-logo">
-          <TournovaMark className="cs-logo-mark" />
-          <span>Tournova</span>
-        </Link>
-        <span className="cs-tagline">Tournament Management &amp; Scheduling Software</span>
+    <PublicHeader>
+      <div className="cs-header">
+        <div className="cs-brand">
+          <Link to="/" aria-label="Tournova" className="cs-logo">
+            <TournovaMark className="cs-logo-mark" />
+            <span>Tournova</span>
+          </Link>
+          <span className="cs-tagline">Tournament Management &amp; Scheduling Software</span>
+        </div>
+        <nav aria-label="Primary" className="cs-nav">
+          <Link to="/explore" className="header-nav-item">
+            <span aria-hidden="true" className="cs-nav-short">
+              Browse
+            </span>
+            <span className="cs-nav-full">Browse tournaments</span>
+          </Link>
+          <Link to="/auth" search={signIn} className="header-nav-item">
+            Sign in
+          </Link>
+        </nav>
       </div>
-      <nav aria-label="Primary" className="cs-nav">
-        <Link to="/explore">
-          <span aria-hidden="true" className="cs-nav-short">
-            Browse
-          </span>
-          <span className="cs-nav-full">Browse tournaments</span>
-        </Link>
-        <Link to="/auth" search={signIn}>
-          Sign in
-        </Link>
-      </nav>
-    </header>
+    </PublicHeader>
   );
 }

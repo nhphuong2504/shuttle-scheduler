@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { myMatchNotificationsKey, useMyMatchNotifications } from "@/hooks/useMyMatchNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import "./header-interactions.css";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +35,7 @@ export function MatchNotifications() {
     <>
       <Button
         variant="ghost"
-        className="relative size-11 shrink-0 rounded-full p-0 text-muted-foreground hover:text-foreground [&_svg]:size-5"
+        className="header-action relative size-11 shrink-0 rounded-full p-0 text-muted-foreground [&_svg]:size-5"
         aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -58,7 +59,7 @@ export function MatchNotifications() {
         {unread ? `${unread} unread match notifications` : ""}
       </span>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="header-notification-dialog max-h-[85dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Notifications</DialogTitle>
             <DialogDescription>
@@ -83,13 +84,25 @@ export function MatchNotifications() {
               <li key={n.id} className="space-y-2 rounded-lg border border-hairline p-3">
                 <div className="flex items-start justify-between gap-3">
                   <p className="min-w-0 font-semibold">{n.tournament_name}</p>
-                  {!n.read_at ? <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-sm font-medium">Unread</span> : null}
+                  {!n.read_at ? (
+                    <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-sm font-medium">
+                      Unread
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <span>Court {n.court_number}</span>
-                  <time dateTime={n.created_at}>{new Intl.DateTimeFormat(undefined, {
-                    month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZoneName: "short",
-                  }).format(new Date(n.created_at))}</time>
+                  <time dateTime={n.created_at}>
+                    {new Intl.DateTimeFormat(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                      timeZoneName: "short",
+                    }).format(new Date(n.created_at))}
+                  </time>
                 </div>
                 <p className="whitespace-pre-wrap break-words">{n.message}</p>
                 {n.outdated ? (

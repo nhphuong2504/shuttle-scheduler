@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
+import { pilotSignupMetadata } from "../src/lib/legal/policy";
 
 /**
  * Configuration and safety guard for the integration suite.
@@ -244,7 +245,7 @@ export async function createIdentity(role: PlatformRole, label: string): Promise
     // Confirmed so sign-in works regardless of the project's confirmation setting.
     email_confirm: true,
     // Synthetic adult fixture, never a real person's acknowledgement.
-    user_metadata: { pilot_adult_confirmed: true, pilot_terms_version: "2026-11-11-pilot-draft" },
+    user_metadata: pilotSignupMetadata(),
   });
   if (userError) throw new Error(`creating the auth user failed: ${userError.message}`);
 

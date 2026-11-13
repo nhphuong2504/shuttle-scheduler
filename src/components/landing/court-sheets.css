@@ -92,7 +92,7 @@
   flex-shrink: 0;
   color: var(--primary);
 }
-/* The app header's nav: muted at rest, ink and an underline on hover. */
+/* The app header's nav: muted at rest, ink on hover. */
 .cs-nav {
   display: flex;
   align-items: center;
@@ -108,11 +108,6 @@
   color: var(--muted-foreground);
   text-decoration-thickness: 1.5px;
   text-underline-offset: 4px;
-  transition: color 150ms ease-out;
-}
-.cs-nav > a:hover {
-  color: var(--foreground);
-  text-decoration: underline;
 }
 .cs-nav-short {
   display: none;
@@ -397,18 +392,10 @@
     var(--hatch);
 }
 .cs-hatch-diag {
-  --hatch: repeating-linear-gradient(
-    -55deg,
-    transparent 0 13px,
-    var(--cs-hatch) 13px 14px
-  );
+  --hatch: repeating-linear-gradient(-55deg, transparent 0 13px, var(--cs-hatch) 13px 14px);
 }
 .cs-hatch-lines {
-  --hatch: repeating-linear-gradient(
-    -45deg,
-    transparent 0 4px,
-    rgb(17 17 17 / 0.28) 4px 5px
-  );
+  --hatch: repeating-linear-gradient(-45deg, transparent 0 4px, rgb(17 17 17 / 0.28) 4px 5px);
 }
 .cs-hatch-cross {
   --hatch:
@@ -596,12 +583,24 @@
   overflow: visible;
 }
 
-.cs-card-1 { --i: 0; }
-.cs-card-2 { --i: 1; }
-.cs-card-3 { --i: 2; }
-.cs-card-4 { --i: 3; }
-.cs-card-5 { --i: 4; }
-.cs-card-6 { --i: 5; }
+.cs-card-1 {
+  --i: 0;
+}
+.cs-card-2 {
+  --i: 1;
+}
+.cs-card-3 {
+  --i: 2;
+}
+.cs-card-4 {
+  --i: 3;
+}
+.cs-card-5 {
+  --i: 4;
+}
+.cs-card-6 {
+  --i: 5;
+}
 .cs-time-moved {
   --strike-at: calc(var(--land) + 80ms);
 }
@@ -622,8 +621,7 @@
   }
   .cs-time-moved .cs-new {
     display: inline-block;
-    animation: cs-newtime 300ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(var(--strike-at) + 220ms)
-      both;
+    animation: cs-newtime 300ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(var(--strike-at) + 220ms) both;
   }
   .cs-clash {
     animation: cs-circle 420ms cubic-bezier(0.3, 1.35, 0.5, 1) both;
