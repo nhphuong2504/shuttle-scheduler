@@ -93,7 +93,9 @@ test("public headers keep their size while adding scroll depth and respect reduc
     await browse.hover();
     expect(await browse.evaluate((link) => getComputedStyle(link).textDecorationLine)).toBe("none");
     expect(await browse.evaluate((link) => getComputedStyle(link).backgroundImage)).toBe("none");
-    await expect.poll(() => browse.evaluate((link) => getComputedStyle(link).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+    await expect
+      .poll(() => browse.evaluate((link) => getComputedStyle(link).backgroundColor))
+      .not.toBe("rgba(0, 0, 0, 0)");
     await browse.focus();
     await expect(browse).toBeFocused();
     expect(await browse.evaluate((link) => getComputedStyle(link).backgroundImage)).toBe("none");
@@ -237,4 +239,27 @@ test("adult accounts and all-age participation stay distinct on mobile", async (
   await expect(page.getByText(/Players of all ages may participate/)).toBeVisible();
   await page.goto("/privacy");
   await expect(page.getByText(/this is an account restriction, not a minimum/)).toBeVisible();
+});
+
+test("the story page reads on a phone and is reachable from the footer", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/contact");
+  await page
+    .getByRole("navigation", { name: "Site information" })
+    .getByRole("link", { name: "Our story", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/story$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "The story behind Tournova" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "The problem" })).toBeVisible();
+  // The one public page that names the operator, at the founder's request.
+  await expect(page.getByRole("main").getByText("Founder, Tournova")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  expect(
+    (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze())
+      .violations,
+  ).toEqual([]);
 });

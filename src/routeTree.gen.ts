@@ -22,6 +22,7 @@ import { Route as RegistrationRouteImport } from './routes/registration'
 import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as StaffRouteImport } from './routes/staff'
+import { Route as StoryRouteImport } from './routes/story'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as MeTournamentsRouteImport } from './routes/me/tournaments'
 import { Route as TournamentsTournamentIdRouteRouteImport } from './routes/tournaments/$tournamentId/route'
@@ -107,6 +108,11 @@ const SetupRoute = SetupRouteImport.update({
 const StaffRoute = StaffRouteImport.update({
   id: '/staff',
   path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoryRoute = StoryRouteImport.update({
+  id: '/story',
+  path: '/story',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -247,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/story': typeof StoryRoute
   '/terms': typeof TermsRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRouteRouteWithChildren
   '/me/tournaments': typeof MeTournamentsRoute
@@ -283,6 +290,7 @@ export interface FileRoutesByTo {
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/story': typeof StoryRoute
   '/terms': typeof TermsRoute
   '/me/tournaments': typeof MeTournamentsRoute
   '/tournaments/new': typeof TournamentsNewRoute
@@ -319,6 +327,7 @@ export interface FileRoutesById {
   '/schedule': typeof ScheduleRoute
   '/setup': typeof SetupRoute
   '/staff': typeof StaffRoute
+  '/story': typeof StoryRoute
   '/terms': typeof TermsRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRouteRouteWithChildren
   '/me/tournaments': typeof MeTournamentsRoute
@@ -357,6 +366,7 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/story'
     | '/terms'
     | '/tournaments/$tournamentId'
     | '/me/tournaments'
@@ -393,6 +403,7 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/story'
     | '/terms'
     | '/me/tournaments'
     | '/tournaments/new'
@@ -428,6 +439,7 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/setup'
     | '/staff'
+    | '/story'
     | '/terms'
     | '/tournaments/$tournamentId'
     | '/me/tournaments'
@@ -465,6 +477,7 @@ export interface RootRouteChildren {
   ScheduleRoute: typeof ScheduleRoute
   SetupRoute: typeof SetupRoute
   StaffRoute: typeof StaffRoute
+  StoryRoute: typeof StoryRoute
   TermsRoute: typeof TermsRoute
   TournamentsTournamentIdRouteRoute: typeof TournamentsTournamentIdRouteRouteWithChildren
   MeTournamentsRoute: typeof MeTournamentsRoute
@@ -562,6 +575,13 @@ declare module '@tanstack/react-router' {
       path: '/staff'
       fullPath: '/staff'
       preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/story': {
+      id: '/story'
+      path: '/story'
+      fullPath: '/story'
+      preLoaderRoute: typeof StoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -779,6 +799,7 @@ const rootRouteChildren: RootRouteChildren = {
   ScheduleRoute: ScheduleRoute,
   SetupRoute: SetupRoute,
   StaffRoute: StaffRoute,
+  StoryRoute: StoryRoute,
   TermsRoute: TermsRoute,
   TournamentsTournamentIdRouteRoute:
     TournamentsTournamentIdRouteRouteWithChildren,

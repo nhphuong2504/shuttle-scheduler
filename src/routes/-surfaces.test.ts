@@ -880,6 +880,7 @@ describe("the workspace chrome is mounted once, by the layout", () => {
     join("routes", "explore.tsx"),
     join("routes", "index.tsx"),
     join("routes", "me", "tournaments.tsx"),
+    join("routes", "story.tsx"),
     join("routes", "tournaments", "new.tsx"),
   ];
 
